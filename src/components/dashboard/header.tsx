@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sidebar } from "./sidebar";
+import { NexliLogo } from "@/components/ui/nexli-logo";
 
 interface HeaderProps {
   isAdmin: boolean;
@@ -15,14 +16,7 @@ export function MobileHeader({ isAdmin, userName }: HeaderProps) {
     <>
       {/* Mobile top bar */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 glass-nav px-4 py-3 flex items-center justify-between">
-        <span
-          className="text-lg font-bold"
-          style={{ fontFamily: "'Syne', sans-serif" }}
-        >
-          <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
-            Nexli
-          </span>
-        </span>
+        <NexliLogo iconSize="w-6 h-6" textSize="text-sm" gradientId="logo-grad-mobile" />
 
         <button
           onClick={() => setMenuOpen(!menuOpen)}

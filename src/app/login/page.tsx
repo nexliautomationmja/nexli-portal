@@ -1,4 +1,5 @@
 import { LoginForm } from "@/components/auth/login-form";
+import { NexliLogo } from "@/components/ui/nexli-logo";
 
 export const metadata = {
   title: "Sign In | Nexli Dashboard",
@@ -23,17 +24,10 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <h1
-            className="text-2xl font-bold tracking-tight"
-            style={{ fontFamily: "'Syne', sans-serif" }}
-          >
-            <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
-              Nexli
-            </span>
-          </h1>
+        <div className="flex flex-col items-center mb-8">
+          <NexliLogo iconSize="w-10 h-10" textSize="text-2xl" />
           <p
-            className="mt-2 text-sm"
+            className="mt-3 text-sm"
             style={{ color: "var(--text-muted)" }}
           >
             Sign in to your dashboard

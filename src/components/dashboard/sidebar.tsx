@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "@/components/theme-provider";
+import { NexliLogo } from "@/components/ui/nexli-logo";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -31,16 +32,9 @@ export function Sidebar({ isAdmin, userName, onClose }: SidebarProps) {
   return (
     <aside className="h-full flex flex-col glass-nav rounded-2xl p-4">
       {/* Logo */}
-      <div className="px-2 mb-8">
-        <Link
-          href="/dashboard"
-          className="text-xl font-bold tracking-tight"
-          style={{ fontFamily: "'Syne', sans-serif" }}
-          onClick={onClose}
-        >
-          <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
-            Nexli
-          </span>
+      <div className="px-2 mb-8 flex items-center">
+        <Link href="/dashboard" onClick={onClose}>
+          <NexliLogo iconSize="w-7 h-7" textSize="text-lg" gradientId="logo-grad-sidebar" />
         </Link>
         {isAdmin && (
           <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] bg-blue-500/10 border border-blue-500/20 text-blue-400">
