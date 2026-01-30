@@ -1,14 +1,88 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { dailyStats } from "@/db/schema";
+import { eq, and, gte, lt, sql } from "drizzle-orm";
 import { SectionBadge } from "@/components/ui/section-badge";
 import { StatCard } from "@/components/ui/stat-card";
-import { GlassCard } from "@/components/ui/glass-card";
+import { compactNumber } from "@/lib/format";
+import { OverviewClient } from "./overview-client";
 
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   const firstName = session.user.name?.split(" ")[0] || "there";
+  const userId = session.user.id!;
+
+  // Date ranges: current 7d and previous 7d
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  const start = new Date(now);
+  start.setDate(start.getDate() - 7);
+  start.setHours(0, 0, 0, 0);
+
+  const prevEnd = new Date(start);
+  const prevStart = new Date(start);
+  prevStart.setDate(prevStart.getDate() - 7);
+
+  // Current period totals
+  const [current] = await db
+    .select({
+      pageViews: sql<number>`coalesce(sum(${dailyStats.pageViewsCount}), 0)::int`,
+      uniqueVisitors: sql<number>`coalesce(sum(${dailyStats.uniqueVisitorsCount}), 0)::int`,
+    })
+    .from(dailyStats)
+    .where(
+      and(
+        eq(dailyStats.clientId, userId),
+        gte(dailyStats.date, start),
+        lt(dailyStats.date, end)
+      )
+    );
+
+  // Previous period totals for deltas
+  const [prev] = await db
+    .select({
+      pageViews: sql<number>`coalesce(sum(${dailyStats.pageViewsCount}), 0)::int`,
+      uniqueVisitors: sql<number>`coalesce(sum(${dailyStats.uniqueVisitorsCount}), 0)::int`,
+    })
+    .from(dailyStats)
+    .where(
+      and(
+        eq(dailyStats.clientId, userId),
+        gte(dailyStats.date, prevStart),
+        lt(dailyStats.date, prevEnd)
+      )
+    );
+
+  // Daily breakdown for chart
+  const dailyData = await db
+    .select({
+      date: dailyStats.date,
+      pageViews: dailyStats.pageViewsCount,
+      uniqueVisitors: dailyStats.uniqueVisitorsCount,
+    })
+    .from(dailyStats)
+    .where(
+      and(
+        eq(dailyStats.clientId, userId),
+        gte(dailyStats.date, start),
+        lt(dailyStats.date, end)
+      )
+    )
+    .orderBy(dailyStats.date);
+
+  const pvDelta = calcDelta(current.pageViews, prev.pageViews);
+  const uvDelta = calcDelta(current.uniqueVisitors, prev.uniqueVisitors);
+
+  const chartData = dailyData.map((d) => ({
+    date: d.date.toISOString(),
+    pageViews: d.pageViews,
+    uniqueVisitors: d.uniqueVisitors,
+  }));
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -26,106 +100,35 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Stat Cards */}
+      {/* Analytics Stat Cards (server-rendered) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Page Views"
-          value="--"
-          delta="--"
-          deltaType="neutral"
+          value={compactNumber(current.pageViews)}
+          delta={pvDelta.value}
+          deltaType={pvDelta.type}
         />
         <StatCard
           label="Unique Visitors"
-          value="--"
-          delta="--"
-          deltaType="neutral"
-        />
-        <StatCard
-          label="New Leads"
-          value="--"
-          delta="--"
-          deltaType="neutral"
-        />
-        <StatCard
-          label="Automations Run"
-          value="--"
-          delta="--"
-          deltaType="neutral"
+          value={compactNumber(current.uniqueVisitors)}
+          delta={uvDelta.value}
+          deltaType={uvDelta.type}
         />
       </div>
 
-      {/* Placeholder charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <GlassCard>
-          <h3
-            className="text-sm font-bold mb-4"
-            style={{ color: "var(--text-main)" }}
-          >
-            Website Traffic
-          </h3>
-          <div
-            className="h-48 rounded-xl flex items-center justify-center border border-[var(--glass-border)]"
-            style={{ background: "var(--glass-bg)" }}
-          >
-            <p
-              className="text-xs font-medium"
-              style={{ color: "var(--text-muted)", opacity: 0.5 }}
-            >
-              Connect Vercel Analytics to view traffic data
-            </p>
-          </div>
-        </GlassCard>
-
-        <GlassCard>
-          <h3
-            className="text-sm font-bold mb-4"
-            style={{ color: "var(--text-main)" }}
-          >
-            Lead Generation
-          </h3>
-          <div
-            className="h-48 rounded-xl flex items-center justify-center border border-[var(--glass-border)]"
-            style={{ background: "var(--glass-bg)" }}
-          >
-            <p
-              className="text-xs font-medium"
-              style={{ color: "var(--text-muted)", opacity: 0.5 }}
-            >
-              Connect GoHighLevel to view lead data
-            </p>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Recent activity placeholder */}
-      <GlassCard>
-        <h3
-          className="text-sm font-bold mb-4"
-          style={{ color: "var(--text-main)" }}
-        >
-          Recent Activity
-        </h3>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="flex items-center gap-4 py-3 border-b border-[var(--glass-border)] last:border-0"
-            >
-              <div className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20" />
-              <div className="flex-1">
-                <div
-                  className="h-3 w-32 rounded-full"
-                  style={{ background: "var(--glass-border)" }}
-                />
-                <div
-                  className="h-2 w-20 rounded-full mt-2"
-                  style={{ background: "var(--glass-border)", opacity: 0.5 }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
+      {/* Client-rendered: GHL stats + charts + leads */}
+      <OverviewClient chartData={chartData} />
     </div>
   );
+}
+
+function calcDelta(current: number, previous: number) {
+  if (previous === 0)
+    return current > 0
+      ? { value: "+100%", type: "positive" as const }
+      : { value: "0%", type: "neutral" as const };
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct > 0) return { value: `+${pct}%`, type: "positive" as const };
+  if (pct < 0) return { value: `${pct}%`, type: "negative" as const };
+  return { value: "0%", type: "neutral" as const };
 }

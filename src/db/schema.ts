@@ -8,6 +8,7 @@ import {
   pgEnum,
   index,
   uniqueIndex,
+  integer,
 } from "drizzle-orm/pg-core";
 
 // ── Enums ──────────────────────────────────────────────
@@ -116,6 +117,50 @@ export const analyticsSnapshots = pgTable(
       table.source,
       table.periodStart
     ),
+  ]
+);
+
+// ── Page Views (raw tracking events) ─────────────────
+export const pageViews = pgTable(
+  "page_views",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    pageUrl: text("page_url").notNull(),
+    referrer: text("referrer"),
+    userAgent: text("user_agent"),
+    country: text("country"),
+    deviceType: text("device_type"), // 'desktop' | 'mobile' | 'tablet'
+    sessionId: text("session_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("page_views_client_idx").on(table.clientId),
+    index("page_views_client_date_idx").on(table.clientId, table.createdAt),
+    index("page_views_session_idx").on(table.sessionId),
+  ]
+);
+
+// ── Daily Stats (pre-aggregated) ─────────────────────
+export const dailyStats = pgTable(
+  "daily_stats",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: timestamp("date").notNull(),
+    pageViewsCount: integer("page_views_count").default(0).notNull(),
+    uniqueVisitorsCount: integer("unique_visitors_count").default(0).notNull(),
+    topPages: jsonb("top_pages"), // Array<{ url: string; count: number }>
+    topReferrers: jsonb("top_referrers"), // Array<{ referrer: string; count: number }>
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("daily_stats_client_date_idx").on(table.clientId, table.date),
+    uniqueIndex("daily_stats_unique_idx").on(table.clientId, table.date),
   ]
 );
 
