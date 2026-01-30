@@ -1,28 +1,30 @@
-import { auth } from "@/auth";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Check for session token (NextAuth JWT cookie)
+  const token =
+    req.cookies.get("__Secure-authjs.session-token") ||
+    req.cookies.get("authjs.session-token");
+
+  const isLoggedIn = !!token;
   const isOnDashboard = pathname.startsWith("/dashboard");
-  const isOnAdmin = pathname.startsWith("/dashboard/admin");
   const isOnLogin = pathname === "/login";
 
   // Redirect unauthenticated users to login
   if (isOnDashboard && !isLoggedIn) {
-    return Response.redirect(new URL("/login", req.nextUrl));
+    return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Redirect authenticated users away from login page
+  // Redirect authenticated users away from login
   if (isOnLogin && isLoggedIn) {
-    return Response.redirect(new URL("/dashboard", req.nextUrl));
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  // Block non-admin users from admin routes
-  if (isOnAdmin && req.auth?.user?.role !== "admin") {
-    return Response.redirect(new URL("/dashboard", req.nextUrl));
-  }
-});
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: ["/dashboard/:path*", "/login"],
