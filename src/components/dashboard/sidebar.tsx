@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { useTheme } from "@/components/theme-provider";
 import { NexliLogo } from "@/components/ui/nexli-logo";
 import { cn } from "@/lib/utils";
@@ -97,15 +98,13 @@ export function Sidebar({ isAdmin, userName, onClose }: SidebarProps) {
         )}
 
         {/* Sign out */}
-        <form action="/api/auth/signout" method="POST">
-          <button
-            type="submit"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium w-full transition-all duration-200 hover:bg-red-500/10 text-red-400"
-          >
-            <LogOutIcon className="w-4 h-4" />
-            Sign Out
-          </button>
-        </form>
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium w-full transition-all duration-200 hover:bg-red-500/10 text-red-400"
+        >
+          <LogOutIcon className="w-4 h-4" />
+          Sign Out
+        </button>
       </div>
     </aside>
   );
