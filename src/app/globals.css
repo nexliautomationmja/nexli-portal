@@ -125,6 +125,20 @@ html {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* ── Logo Theme Switching ── */
+.logo-icon-dark {
+  display: none;
+}
+.logo-icon-light {
+  display: block;
+}
+.dark .logo-icon-dark {
+  display: block;
+}
+.dark .logo-icon-light {
+  display: none;
+}
+
 /* ── Keyframe Animations ── */
 @keyframes shimmer {
   0% { transform: rotate(0deg); }
