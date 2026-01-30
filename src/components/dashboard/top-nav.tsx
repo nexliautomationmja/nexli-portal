@@ -60,12 +60,12 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
           {/* Logo chip */}
           <Link
             href="/dashboard"
-            className="shrink-0 px-4 py-2 rounded-full border border-[var(--glass-border)]"
+            className="shrink-0 inline-flex items-center px-5 py-2.5 rounded-full border border-[var(--glass-border)]"
             style={{ background: "var(--glass-bg)" }}
           >
             <NexliLogo
-              iconSize="w-5 h-5"
-              textSize="text-sm"
+              iconSize="w-6 h-6"
+              textSize="text-lg"
               gradientId="logo-grad-topnav"
             />
           </Link>
