@@ -43,9 +43,9 @@ export function NexliLogo({
       />
 
       <span
-        className={`${textSize} font-extrabold tracking-wide`}
+        className={`${textSize} font-black tracking-tighter`}
         style={{
-          fontFamily: "var(--font-outfit), 'Outfit', sans-serif",
+          fontFamily: "var(--font-syne), 'Syne', sans-serif",
           color: "var(--text-main)",
         }}
       >
