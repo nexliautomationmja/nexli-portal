@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { StatCard } from "@/components/ui/stat-card";
+import { ClientListCard } from "@/components/dashboard/admin/client-list-card";
+import { ClientDetailPanel } from "@/components/dashboard/admin/client-detail-panel";
 import { compactNumber } from "@/lib/format";
 
 interface ClientRow {
@@ -15,6 +17,7 @@ interface ClientRow {
   createdAt: string;
   active: boolean;
   pageViews30d: number;
+  uniqueVisitors30d: number;
 }
 
 interface AdminData {
@@ -22,11 +25,27 @@ interface AdminData {
   totalClients: number;
   activeSubscriptions: number;
   totalPageViews: number;
+  totalUniqueVisitors: number;
+}
+
+function SearchIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
 }
 
 export default function AdminPage() {
   const [data, setData] = useState<AdminData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const selectedClientId = searchParams.get("client");
 
   useEffect(() => {
     fetch("/api/dashboard/admin/clients")
@@ -36,149 +55,158 @@ export default function AdminPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  function selectClient(clientId: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("client", clientId);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  const selectedClient = data?.clients.find((c) => c.id === selectedClientId) ?? null;
+
+  const filteredClients =
+    data?.clients.filter((c) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        c.companyName?.toLowerCase().includes(q) ||
+        c.name?.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q)
+      );
+    }) ?? [];
+
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="max-w-[1600px] mx-auto">
       {/* Header */}
-      <div>
-        <h1
-          className="text-2xl md:text-3xl font-bold"
-          style={{ color: "var(--text-main)" }}
-        >
+      <div className="mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text-main)" }}>
           Client Overview
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-          Monitor all client websites and automation metrics from one view.
+          Monitor all client websites and analytics from one view.
         </p>
       </div>
 
       {/* Aggregate stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <StatCard
           label="Total Clients"
           value={loading ? "..." : String(data?.totalClients ?? 0)}
           accent="blue"
         />
         <StatCard
-          label="Active Subscriptions"
+          label="Active Subs"
           value={loading ? "..." : String(data?.activeSubscriptions ?? 0)}
           accent="emerald"
         />
         <StatCard
-          label="Total Page Views"
+          label="Page Views"
           value={loading ? "..." : compactNumber(data?.totalPageViews ?? 0)}
-          delta="last 30 days"
+          delta="30 days"
           deltaType="neutral"
           accent="cyan"
         />
-        <StatCard label="Total Leads" value="--" delta="GHL" deltaType="neutral" accent="teal" />
+        <StatCard
+          label="Visitors"
+          value={loading ? "..." : compactNumber(data?.totalUniqueVisitors ?? 0)}
+          delta="30 days"
+          deltaType="neutral"
+          accent="teal"
+        />
       </div>
 
-      {/* Client list */}
-      <GlassCard>
-        <h3
-          className="text-sm font-bold mb-4"
-          style={{ color: "var(--text-main)" }}
+      {/* Mobile client selector (shown below lg) */}
+      <div className="lg:hidden mb-6">
+        <select
+          value={selectedClientId || ""}
+          onChange={(e) => e.target.value && selectClient(e.target.value)}
+          className="w-full px-4 py-3 rounded-xl text-sm font-medium border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50"
+          style={{
+            background: "var(--glass-bg)",
+            color: "var(--text-main)",
+          }}
         >
-          Clients
-        </h3>
+          <option value="">Select a client...</option>
+          {(data?.clients ?? []).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.companyName || c.name || c.email}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-14 rounded-xl animate-pulse"
-                style={{ background: "var(--glass-border)" }}
+      {/* Two-panel layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* LEFT: Client list (hidden on mobile — replaced by dropdown above) */}
+        <aside className="hidden lg:block lg:col-span-4 xl:col-span-3">
+          <GlassCard>
+            {/* Search input */}
+            <div className="relative mb-4">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
+              <input
+                type="text"
+                placeholder="Search clients..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 rounded-xl text-xs border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50 transition-colors"
+                style={{
+                  background: "var(--glass-bg)",
+                  color: "var(--text-main)",
+                }}
               />
-            ))}
-          </div>
-        ) : !data?.clients.length ? (
-          <div
-            className="text-sm py-12 text-center"
-            style={{ color: "var(--text-muted)" }}
-          >
-            No clients yet. Clients are auto-created when they subscribe via
-            Stripe.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr
-                  className="border-b border-[var(--glass-border)]"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em]">
-                    Client
-                  </th>
-                  <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em]">
-                    Website
-                  </th>
-                  <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em]">
-                    Status
-                  </th>
-                  <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-[0.2em]">
-                    Views (30d)
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.clients.map((client) => (
-                  <tr
+            </div>
+
+            {/* Client cards */}
+            <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto pr-1" style={{ scrollbarWidth: "thin" }}>
+              {loading ? (
+                [1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-20 rounded-2xl animate-pulse"
+                    style={{ background: "var(--glass-border)" }}
+                  />
+                ))
+              ) : filteredClients.length === 0 ? (
+                <p className="text-xs text-center py-8" style={{ color: "var(--text-muted)" }}>
+                  {search ? "No clients match your search." : "No clients yet."}
+                </p>
+              ) : (
+                filteredClients.map((client) => (
+                  <ClientListCard
                     key={client.id}
-                    className="border-b border-[var(--glass-border)] last:border-0 hover:bg-[var(--glass-bg)] transition-colors"
-                  >
-                    <td className="py-3 px-4">
-                      <Link
-                        href={`/dashboard/admin/clients/${client.id}`}
-                        className="hover:text-blue-400 transition-colors"
-                      >
-                        <span
-                          className="font-medium block"
-                          style={{ color: "var(--text-main)" }}
-                        >
-                          {client.name || client.companyName || "Unnamed"}
-                        </span>
-                        <span
-                          className="text-xs"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {client.email}
-                        </span>
-                      </Link>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className="text-xs truncate max-w-[150px] inline-block"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {client.websiteUrl || "--"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] border ${
-                          client.active
-                            ? "bg-green-500/10 border-green-500/20 text-green-400"
-                            : "bg-yellow-500/10 border-yellow-500/20 text-yellow-400"
-                        }`}
-                      >
-                        {client.active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td
-                      className="py-3 px-4 text-right font-bold"
-                      style={{ color: "var(--text-main)" }}
-                    >
-                      {compactNumber(client.pageViews30d)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </GlassCard>
+                    client={client}
+                    isSelected={client.id === selectedClientId}
+                    onClick={() => selectClient(client.id)}
+                  />
+                ))
+              )}
+            </div>
+          </GlassCard>
+        </aside>
+
+        {/* RIGHT: Detail panel */}
+        <main className="lg:col-span-8 xl:col-span-9">
+          {selectedClient ? (
+            <ClientDetailPanel client={selectedClient} />
+          ) : (
+            <GlassCard>
+              <div className="py-24 text-center">
+                <div
+                  className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.1), rgba(6,182,212,0.1))" }}
+                >
+                  <SearchIcon className="w-6 h-6" style={{ color: "var(--text-muted)" }} />
+                </div>
+                <p className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
+                  Select a client
+                </p>
+                <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>
+                  Choose a client from the list to view their analytics dashboard.
+                </p>
+              </div>
+            </GlassCard>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

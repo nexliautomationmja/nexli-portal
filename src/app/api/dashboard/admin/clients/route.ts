@@ -43,6 +43,7 @@ export async function GET() {
     .select({
       clientId: dailyStats.clientId,
       pageViews: sql<number>`coalesce(sum(${dailyStats.pageViewsCount}), 0)::int`,
+      uniqueVisitors: sql<number>`coalesce(sum(${dailyStats.uniqueVisitorsCount}), 0)::int`,
     })
     .from(dailyStats)
     .where(
@@ -50,12 +51,15 @@ export async function GET() {
     )
     .groupBy(dailyStats.clientId);
 
-  const statsMap = new Map(statsRows.map((s) => [s.clientId, s.pageViews]));
+  const statsMap = new Map(
+    statsRows.map((s) => [s.clientId, { pageViews: s.pageViews, uniqueVisitors: s.uniqueVisitors }])
+  );
 
-  // Total page views across all clients
+  // Totals across all clients
   const [totals] = await db
     .select({
       totalPageViews: sql<number>`coalesce(sum(${dailyStats.pageViewsCount}), 0)::int`,
+      totalUniqueVisitors: sql<number>`coalesce(sum(${dailyStats.uniqueVisitorsCount}), 0)::int`,
     })
     .from(dailyStats)
     .where(
@@ -65,7 +69,8 @@ export async function GET() {
   const result = clients.map((c) => ({
     ...c,
     active: activeSubMap.has(c.id),
-    pageViews30d: statsMap.get(c.id) || 0,
+    pageViews30d: statsMap.get(c.id)?.pageViews || 0,
+    uniqueVisitors30d: statsMap.get(c.id)?.uniqueVisitors || 0,
   }));
 
   return NextResponse.json({
@@ -73,5 +78,6 @@ export async function GET() {
     totalClients: clients.length,
     activeSubscriptions: activeSubs.length,
     totalPageViews: totals.totalPageViews,
+    totalUniqueVisitors: totals.totalUniqueVisitors,
   });
 }
