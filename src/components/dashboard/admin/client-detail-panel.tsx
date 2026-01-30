@@ -73,6 +73,7 @@ export function ClientDetailPanel({ client }: ClientDetailPanelProps) {
             business={business}
             websiteUrl={client.websiteUrl}
             isActive={client.active}
+            clientId={client.id}
           />
         </aside>
 

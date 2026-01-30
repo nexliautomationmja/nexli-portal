@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
-import { MapPin, Briefcase, Calendar, Globe, MoreHorizontal } from "lucide-react";
+import { MapPin, Briefcase, Calendar, Globe, MoreHorizontal, Code, Copy, Check } from "lucide-react";
 import Image from "next/image";
 
 interface ProfileSidebarProps {
@@ -15,9 +16,23 @@ interface ProfileSidebarProps {
     };
     websiteUrl?: string | null;
     isActive?: boolean;
+    clientId?: string;
 }
 
-export function ProfileSidebar({ business, websiteUrl, isActive }: ProfileSidebarProps) {
+export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: ProfileSidebarProps) {
+    const [copied, setCopied] = useState(false);
+
+    const trackingSnippet = clientId
+        ? `<script defer src="https://portal.nexli.net/t.js" data-client-id="${clientId}"></script>`
+        : null;
+
+    function copySnippet() {
+        if (!trackingSnippet) return;
+        navigator.clipboard.writeText(trackingSnippet).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    }
     return (
         <div className="space-y-6">
             {/* Main Profile Card */}
@@ -102,6 +117,42 @@ export function ProfileSidebar({ business, websiteUrl, isActive }: ProfileSideba
                     </button>
                 </div>
             </GlassCard>
+
+            {/* Tracking Script */}
+            {trackingSnippet && (
+                <GlassCard variant="compact">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Code size={16} className="text-blue-500" />
+                        <p className="text-sm font-bold text-[var(--text-main)]">Tracking Script</p>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)] mb-3">
+                        Add this to the client&apos;s website <code className="text-blue-400">&lt;head&gt;</code> tag.
+                    </p>
+                    <div
+                        className="rounded-xl p-3 text-[10px] font-mono break-all leading-relaxed border border-[var(--glass-border)]"
+                        style={{ background: "var(--glass-bg)", color: "var(--text-muted)" }}
+                    >
+                        {trackingSnippet}
+                    </div>
+                    <button
+                        onClick={copySnippet}
+                        className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold border border-[var(--glass-border)] hover:border-blue-500/30 transition-all"
+                        style={{ background: "var(--glass-bg)", color: "var(--text-main)" }}
+                    >
+                        {copied ? (
+                            <>
+                                <Check size={14} className="text-green-400" />
+                                Copied!
+                            </>
+                        ) : (
+                            <>
+                                <Copy size={14} />
+                                Copy Snippet
+                            </>
+                        )}
+                    </button>
+                </GlassCard>
+            )}
         </div>
     );
 }
