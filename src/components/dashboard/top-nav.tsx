@@ -56,18 +56,25 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 glass-topnav">
-        <div className="max-w-7xl mx-auto h-16 px-4 md:px-6 flex items-center">
-          {/* Logo */}
-          <Link href="/dashboard" className="shrink-0 mr-8">
+        <div className="max-w-7xl mx-auto h-16 px-4 md:px-6 flex items-center justify-between">
+          {/* Logo chip */}
+          <Link
+            href="/dashboard"
+            className="shrink-0 px-4 py-2 rounded-full border border-[var(--glass-border)]"
+            style={{ background: "var(--glass-bg)" }}
+          >
             <NexliLogo
-              iconSize="w-6 h-6"
-              textSize="text-base"
+              iconSize="w-5 h-5"
+              textSize="text-sm"
               gradientId="logo-grad-topnav"
             />
           </Link>
 
-          {/* Desktop nav links */}
-          <nav className="hidden md:flex items-center gap-1 flex-1">
+          {/* Desktop nav pill */}
+          <nav
+            className="hidden md:flex items-center rounded-full border border-[var(--glass-border)] px-2 py-1"
+            style={{ background: "var(--glass-bg)" }}
+          >
             {navItems.map((item) => {
               const isActive =
                 item.href === "/dashboard"
@@ -79,23 +86,19 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "relative px-3 py-2 text-sm font-medium transition-colors duration-200",
+                    "relative px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200",
                     isActive
-                      ? "text-blue-400"
+                      ? "text-white"
                       : "hover:text-[var(--text-main)]"
                   )}
-                  style={{ color: isActive ? undefined : "var(--text-muted)" }}
+                  style={{
+                    color: isActive ? undefined : "var(--text-muted)",
+                    background: isActive
+                      ? "linear-gradient(135deg, rgba(37,99,235,0.3), rgba(6,182,212,0.3))"
+                      : undefined,
+                  }}
                 >
                   {item.label}
-                  {isActive && (
-                    <span
-                      className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full"
-                      style={{
-                        background:
-                          "linear-gradient(90deg, #2563EB, #06B6D4)",
-                      }}
-                    />
-                  )}
                 </Link>
               );
             })}
@@ -106,8 +109,8 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
-              className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-[var(--glass-bg)] border border-transparent hover:border-[var(--glass-border)] transition-all duration-200"
-              style={{ color: "var(--text-muted)" }}
+              className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--glass-border)] transition-all duration-200 hover:border-blue-500/30"
+              style={{ color: "var(--text-muted)", background: "var(--glass-bg)" }}
               title={theme === "dark" ? "Light mode" : "Dark mode"}
             >
               {theme === "dark" ? (
@@ -121,10 +124,11 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
             <div className="relative">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl hover:bg-[var(--glass-bg)] border border-transparent hover:border-[var(--glass-border)] transition-all duration-200"
+                className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full border border-[var(--glass-border)] transition-all duration-200 hover:border-blue-500/30"
+                style={{ background: "var(--glass-bg)" }}
               >
                 <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
                   style={{
                     background: "linear-gradient(135deg, #2563EB, #06B6D4)",
                     color: "white",
@@ -133,7 +137,7 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
                   {initials}
                 </div>
                 {isAdmin && (
-                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-blue-400">
                     Admin
                   </span>
                 )}
@@ -145,7 +149,7 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
                     className="fixed inset-0 z-40"
                     onClick={() => setUserMenuOpen(false)}
                   />
-                  <div className="absolute right-0 top-full mt-2 z-50 w-48 rounded-xl glass-card p-2 space-y-1">
+                  <div className="absolute right-0 top-full mt-2 z-50 w-48 rounded-2xl glass-card p-2 space-y-1">
                     {userName && (
                       <div className="px-3 py-2 border-b border-[var(--glass-border)]">
                         <p
@@ -158,7 +162,7 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
                     )}
                     <button
                       onClick={() => signOut({ callbackUrl: "/login" })}
-                      className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                      className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-colors"
                     >
                       <LogOutIcon className="w-4 h-4" />
                       Sign Out
@@ -173,7 +177,7 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
           <div className="md:hidden ml-auto">
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center border border-[var(--glass-border)]"
+              className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--glass-border)]"
               style={{ color: "var(--text-muted)", background: "var(--glass-bg)" }}
             >
               {mobileOpen ? (
