@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SectionBadge } from "@/components/ui/section-badge";
 import { GlassCard } from "@/components/ui/glass-card";
 import { compactNumber } from "@/lib/format";
 
@@ -26,17 +25,16 @@ export default function ReportsPage() {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div>
-        <SectionBadge>Reports</SectionBadge>
         <h1
-          className="text-3xl md:text-4xl font-bold mt-4"
+          className="text-2xl md:text-3xl font-bold"
           style={{ color: "var(--text-main)" }}
         >
           Monthly Reports
         </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
           Review your performance month-over-month.
         </p>
       </div>

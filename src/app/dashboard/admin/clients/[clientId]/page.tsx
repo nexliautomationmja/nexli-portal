@@ -1,8 +1,8 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useAnalytics } from "@/lib/hooks/use-analytics";
-import { SectionBadge } from "@/components/ui/section-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { DateRangePicker } from "@/components/dashboard/date-range-picker";
@@ -18,19 +18,25 @@ export default function ClientDetailPage() {
   const { data, loading } = useAnalytics(range, clientId);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <SectionBadge>Admin &gt; Client</SectionBadge>
+          <div className="flex items-center gap-2 text-sm mb-2" style={{ color: "var(--text-muted)" }}>
+            <Link href="/dashboard/admin" className="hover:text-blue-400 transition-colors">
+              All Clients
+            </Link>
+            <span>/</span>
+            <span style={{ color: "var(--text-main)" }}>Client Analytics</span>
+          </div>
           <h1
-            className="text-3xl md:text-4xl font-bold mt-4"
+            className="text-2xl md:text-3xl font-bold"
             style={{ color: "var(--text-main)" }}
           >
             Client Analytics
           </h1>
           <p
-            className="mt-2 text-xs font-mono"
+            className="mt-1 text-xs font-mono"
             style={{ color: "var(--text-muted)" }}
           >
             {clientId}
@@ -46,12 +52,14 @@ export default function ClientDetailPage() {
           value={loading ? "..." : compactNumber(data?.pageViews ?? 0)}
           delta={loading ? "--" : data?.pageViewsDelta.value ?? "0%"}
           deltaType={loading ? "neutral" : data?.pageViewsDelta.type ?? "neutral"}
+          accent="blue"
         />
         <StatCard
           label="Unique Visitors"
           value={loading ? "..." : compactNumber(data?.uniqueVisitors ?? 0)}
           delta={loading ? "--" : data?.uniqueVisitorsDelta.value ?? "0%"}
           deltaType={loading ? "neutral" : data?.uniqueVisitorsDelta.type ?? "neutral"}
+          accent="cyan"
         />
       </div>
 

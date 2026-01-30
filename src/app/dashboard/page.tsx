@@ -3,10 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { dailyStats } from "@/db/schema";
 import { eq, and, gte, lt, sql } from "drizzle-orm";
-import { SectionBadge } from "@/components/ui/section-badge";
-import { StatCard } from "@/components/ui/stat-card";
-import { compactNumber } from "@/lib/format";
-import { OverviewClient } from "./overview-client";
+import { DashboardClient } from "./dashboard-client";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -85,39 +82,27 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Header */}
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Compact greeting */}
       <div>
-        <SectionBadge>Dashboard</SectionBadge>
         <h1
-          className="text-3xl md:text-4xl font-bold mt-4"
+          className="text-2xl md:text-3xl font-bold"
           style={{ color: "var(--text-main)" }}
         >
           Welcome back, {firstName}
         </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
-          Here&apos;s an overview of your website and automation performance.
+        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+          Your website and automation overview.
         </p>
       </div>
 
-      {/* Analytics Stat Cards (server-rendered) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Page Views"
-          value={compactNumber(current.pageViews)}
-          delta={pvDelta.value}
-          deltaType={pvDelta.type}
-        />
-        <StatCard
-          label="Unique Visitors"
-          value={compactNumber(current.uniqueVisitors)}
-          delta={uvDelta.value}
-          deltaType={uvDelta.type}
-        />
-      </div>
-
-      {/* Client-rendered: GHL stats + charts + leads */}
-      <OverviewClient chartData={chartData} />
+      <DashboardClient
+        pageViews={current.pageViews}
+        uniqueVisitors={current.uniqueVisitors}
+        pvDelta={pvDelta}
+        uvDelta={uvDelta}
+        chartData={chartData}
+      />
     </div>
   );
 }

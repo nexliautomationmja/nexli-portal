@@ -9,7 +9,7 @@ const RANGES = [
   { label: "90d", value: "90d" },
 ];
 
-export function DateRangePicker() {
+export function DateRangePicker({ className }: { className?: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -22,7 +22,7 @@ export function DateRangePicker() {
   }
 
   return (
-    <div className="inline-flex rounded-xl border border-[var(--glass-border)] overflow-hidden">
+    <div className={cn("inline-flex rounded-xl border border-[var(--glass-border)] overflow-hidden", className)}>
       {RANGES.map((r) => (
         <button
           key={r.value}

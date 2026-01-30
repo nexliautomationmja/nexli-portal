@@ -2,7 +2,6 @@
 
 import { useSearchParams } from "next/navigation";
 import { useAnalytics } from "@/lib/hooks/use-analytics";
-import { SectionBadge } from "@/components/ui/section-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { DateRangePicker } from "@/components/dashboard/date-range-picker";
@@ -17,18 +16,17 @@ export default function AnalyticsPage() {
   const { data, loading } = useAnalytics(range);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <SectionBadge>Analytics</SectionBadge>
           <h1
-            className="text-3xl md:text-4xl font-bold mt-4"
+            className="text-2xl md:text-3xl font-bold"
             style={{ color: "var(--text-main)" }}
           >
             Website Analytics
           </h1>
-          <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
             Track your website traffic and visitor behavior.
           </p>
         </div>
@@ -42,12 +40,14 @@ export default function AnalyticsPage() {
           value={loading ? "..." : compactNumber(data?.pageViews ?? 0)}
           delta={loading ? "--" : data?.pageViewsDelta.value ?? "0%"}
           deltaType={loading ? "neutral" : data?.pageViewsDelta.type ?? "neutral"}
+          accent="blue"
         />
         <StatCard
           label="Unique Visitors"
           value={loading ? "..." : compactNumber(data?.uniqueVisitors ?? 0)}
           delta={loading ? "--" : data?.uniqueVisitorsDelta.value ?? "0%"}
           deltaType={loading ? "neutral" : data?.uniqueVisitorsDelta.type ?? "neutral"}
+          accent="cyan"
         />
         <StatCard
           label="Avg. Views/Day"
@@ -63,12 +63,14 @@ export default function AnalyticsPage() {
                 )
           }
           deltaType="neutral"
+          accent="teal"
         />
         <StatCard
           label="Bounce Rate"
           value="--"
           delta="coming soon"
           deltaType="neutral"
+          accent="purple"
         />
       </div>
 

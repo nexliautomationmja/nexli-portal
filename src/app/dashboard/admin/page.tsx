@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { SectionBadge } from "@/components/ui/section-badge";
 import { GlassCard } from "@/components/ui/glass-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { compactNumber } from "@/lib/format";
@@ -38,17 +37,16 @@ export default function AdminPage() {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div>
-        <SectionBadge>Admin</SectionBadge>
         <h1
-          className="text-3xl md:text-4xl font-bold mt-4"
+          className="text-2xl md:text-3xl font-bold"
           style={{ color: "var(--text-main)" }}
         >
           Client Overview
         </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
           Monitor all client websites and automation metrics from one view.
         </p>
       </div>
@@ -58,18 +56,21 @@ export default function AdminPage() {
         <StatCard
           label="Total Clients"
           value={loading ? "..." : String(data?.totalClients ?? 0)}
+          accent="blue"
         />
         <StatCard
           label="Active Subscriptions"
           value={loading ? "..." : String(data?.activeSubscriptions ?? 0)}
+          accent="emerald"
         />
         <StatCard
           label="Total Page Views"
           value={loading ? "..." : compactNumber(data?.totalPageViews ?? 0)}
           delta="last 30 days"
           deltaType="neutral"
+          accent="cyan"
         />
-        <StatCard label="Total Leads" value="--" delta="GHL" deltaType="neutral" />
+        <StatCard label="Total Leads" value="--" delta="GHL" deltaType="neutral" accent="teal" />
       </div>
 
       {/* Client list */}

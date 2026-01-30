@@ -35,6 +35,24 @@
   --glass-border: rgba(15, 23, 42, 0.1);
   --nav-bg: rgba(255, 255, 255, 0.8);
   --footer-bg: #f8fafc;
+
+  /* Category accent palette */
+  --accent-blue: #2563EB;
+  --accent-cyan: #06B6D4;
+  --accent-teal: #14B8A6;
+  --accent-purple: #8B5CF6;
+  --accent-emerald: #10B981;
+
+  --accent-blue-bg: rgba(37, 99, 235, 0.08);
+  --accent-blue-border: rgba(37, 99, 235, 0.15);
+  --accent-cyan-bg: rgba(6, 182, 212, 0.08);
+  --accent-cyan-border: rgba(6, 182, 212, 0.15);
+  --accent-teal-bg: rgba(20, 184, 166, 0.08);
+  --accent-teal-border: rgba(20, 184, 166, 0.15);
+  --accent-purple-bg: rgba(139, 92, 246, 0.08);
+  --accent-purple-border: rgba(139, 92, 246, 0.15);
+  --accent-emerald-bg: rgba(16, 185, 129, 0.08);
+  --accent-emerald-border: rgba(16, 185, 129, 0.15);
 }
 
 .dark {
@@ -45,6 +63,18 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --nav-bg: rgba(2, 6, 23, 0.7);
   --footer-bg: #020617;
+
+  /* Category accent palette (dark — stronger alpha) */
+  --accent-blue-bg: rgba(37, 99, 235, 0.12);
+  --accent-blue-border: rgba(37, 99, 235, 0.2);
+  --accent-cyan-bg: rgba(6, 182, 212, 0.12);
+  --accent-cyan-border: rgba(6, 182, 212, 0.2);
+  --accent-teal-bg: rgba(20, 184, 166, 0.12);
+  --accent-teal-border: rgba(20, 184, 166, 0.2);
+  --accent-purple-bg: rgba(139, 92, 246, 0.12);
+  --accent-purple-border: rgba(139, 92, 246, 0.2);
+  --accent-emerald-bg: rgba(16, 185, 129, 0.12);
+  --accent-emerald-border: rgba(16, 185, 129, 0.2);
 }
 
 /* ── Base Typography ── */
@@ -99,6 +129,13 @@ html {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
+}
+
+.glass-topnav {
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 /* ── Form Inputs (matching marketing site) ── */

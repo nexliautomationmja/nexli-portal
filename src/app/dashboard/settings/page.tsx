@@ -1,6 +1,5 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { SectionBadge } from "@/components/ui/section-badge";
 import { GlassCard } from "@/components/ui/glass-card";
 import { PasswordForm } from "@/components/dashboard/settings/password-form";
 import { TrackingSnippet } from "@/components/dashboard/settings/tracking-snippet";
@@ -13,14 +12,13 @@ export default async function SettingsPage() {
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Header */}
       <div>
-        <SectionBadge>Settings</SectionBadge>
         <h1
-          className="text-3xl md:text-4xl font-bold mt-4"
+          className="text-2xl md:text-3xl font-bold"
           style={{ color: "var(--text-main)" }}
         >
           Account Settings
         </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
           Manage your profile, security, and tracking configuration.
         </p>
       </div>
