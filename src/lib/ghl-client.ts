@@ -98,3 +98,85 @@ export interface GHLOpportunitiesResponse {
   opportunities: GHLOpportunity[];
   total: number;
 }
+
+// ── Calendar types ────────────────────────────────────
+
+export interface GHLCalendarEvent {
+  id: string;
+  calendarId: string;
+  title?: string;
+  status: string;
+  contactId: string;
+  startTime: string;
+  endTime: string;
+  createdAt?: string;
+}
+
+export interface GHLCalendarEventsResponse {
+  events: GHLCalendarEvent[];
+}
+
+// ── Conversation types ────────────────────────────────
+
+export interface GHLConversation {
+  id: string;
+  contactId: string;
+  locationId: string;
+  dateAdded: string;
+  lastMessageDate?: string;
+}
+
+export interface GHLConversationsSearchResponse {
+  conversations: GHLConversation[];
+  total: number;
+}
+
+export interface GHLMessage {
+  id: string;
+  conversationId: string;
+  contactId: string;
+  direction: "inbound" | "outbound";
+  type: string;
+  dateAdded: string;
+  body?: string;
+  messageType?: string;
+}
+
+export interface GHLConversationMessagesResponse {
+  messages: GHLMessage[];
+  nextPage?: string;
+}
+
+// ── Calendar / Conversation API functions ─────────────
+
+export async function getCalendarEvents(
+  locationId: string,
+  startDate: string,
+  endDate: string
+) {
+  return ghlFetch<GHLCalendarEventsResponse>("/calendars/events", {
+    locationId,
+    startTime: startDate,
+    endTime: endDate,
+  });
+}
+
+export async function searchConversations(
+  locationId: string,
+  limit = 50
+) {
+  return ghlFetch<GHLConversationsSearchResponse>("/conversations/search", {
+    locationId,
+    limit: String(limit),
+  });
+}
+
+export async function getConversationMessages(
+  conversationId: string,
+  limit = 50
+) {
+  return ghlFetch<GHLConversationMessagesResponse>(
+    `/conversations/${conversationId}/messages`,
+    { limit: String(limit) }
+  );
+}

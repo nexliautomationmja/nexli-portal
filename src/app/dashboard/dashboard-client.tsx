@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useGHL } from "@/lib/hooks/use-ghl";
 import { useAnalytics } from "@/lib/hooks/use-analytics";
-import { compactNumber, formatCurrency } from "@/lib/format";
+import { useGHLMetrics } from "@/lib/hooks/use-ghl-metrics";
+import { compactNumber, formatCurrency, formatDuration, formatConversionRate } from "@/lib/format";
 import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { CategoryTabs } from "@/components/dashboard/category-tabs";
@@ -12,6 +13,11 @@ import { DateRangePicker } from "@/components/dashboard/date-range-picker";
 import { TrafficChart } from "@/components/dashboard/charts/traffic-chart";
 import { TopPagesChart } from "@/components/dashboard/charts/top-pages-chart";
 import { DeviceChart } from "@/components/dashboard/charts/device-chart";
+import { ConversionFunnel } from "@/components/dashboard/charts/conversion-funnel";
+import { BenchmarkGauge } from "@/components/dashboard/charts/benchmark-gauge";
+import { ResponseTimeChart } from "@/components/dashboard/charts/response-time-chart";
+import { PerformanceIndicator } from "@/components/dashboard/charts/performance-indicator";
+import { AiHumanSplit } from "@/components/dashboard/charts/ai-human-split";
 import { RecentLeads } from "@/components/dashboard/recent-leads";
 import { ChartIcon, UsersIcon } from "@/components/ui/icons";
 
@@ -41,6 +47,26 @@ function DollarIcon({ className }: { className?: string }) {
   );
 }
 
+const emptyConversion = {
+  totalLeads: 0,
+  respondedLeads: 0,
+  bookedConsultations: 0,
+  conversionRate: 0,
+  previousConversionRate: null,
+  benchmarkLow: 30,
+  benchmarkHigh: 50,
+};
+
+const emptySpeed = {
+  averageResponseMinutes: 0,
+  medianResponseMinutes: 0,
+  distribution: { under5min: 0, from5to30min: 0, over30min: 0 },
+  performanceRating: "green" as const,
+  aiResponses: 0,
+  humanResponses: 0,
+  totalMeasured: 0,
+};
+
 export function DashboardClient({
   pageViews,
   uniqueVisitors,
@@ -53,10 +79,110 @@ export function DashboardClient({
   const searchParams = useSearchParams();
   const range = searchParams.get("range") || "7d";
   const { data: analytics, loading: analyticsLoading } = useAnalytics(range);
+  const { data: metrics, loading: metricsLoading } = useGHLMetrics(range);
+
+  const rangeLabel = range === "30d" ? "30 days" : range === "90d" ? "90 days" : "7 days";
 
   return (
     <div className="space-y-6">
-      {/* Hero: 4 colorful stat cards */}
+      {/* Hero: Two core metric cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Conversion Rate Card */}
+        <GlassCard>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
+              Lead-to-Consultation Rate
+            </h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
+              Last {rangeLabel}
+            </span>
+          </div>
+
+          {metricsLoading ? (
+            <div className="h-[280px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
+          ) : (
+            <>
+              <p
+                className="text-4xl md:text-5xl font-bold tracking-tight mb-1"
+                style={{ color: "var(--text-main)" }}
+              >
+                {formatConversionRate(metrics?.conversion.conversionRate ?? 0)}
+              </p>
+              <p className="text-xs mb-5" style={{ color: "var(--text-muted)" }}>
+                {metrics?.conversion.bookedConsultations ?? 0} consultations from {metrics?.conversion.totalLeads ?? 0} leads
+              </p>
+
+              <ConversionFunnel data={metrics?.conversion ?? emptyConversion} />
+
+              <div className="pt-4 mt-4 border-t border-[var(--glass-border)]">
+                <p
+                  className="text-[10px] font-black uppercase tracking-[0.2em] mb-2"
+                  style={{ color: "var(--text-muted)", opacity: 0.5 }}
+                >
+                  Industry Benchmark
+                </p>
+                <BenchmarkGauge
+                  value={metrics?.conversion.conversionRate ?? 0}
+                  benchmarkLow={30}
+                  benchmarkHigh={50}
+                />
+              </div>
+            </>
+          )}
+        </GlassCard>
+
+        {/* Speed to Lead Card */}
+        <GlassCard>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
+              Speed to Lead
+            </h3>
+            {!metricsLoading && (
+              <PerformanceIndicator
+                rating={metrics?.speedToLead.performanceRating ?? "green"}
+              />
+            )}
+          </div>
+
+          {metricsLoading ? (
+            <div className="h-[280px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
+          ) : (
+            <>
+              <p
+                className="text-4xl md:text-5xl font-bold tracking-tight mb-1"
+                style={{ color: "var(--text-main)" }}
+              >
+                {formatDuration(metrics?.speedToLead.averageResponseMinutes ?? 0)}
+              </p>
+              <p className="text-xs mb-5" style={{ color: "var(--text-muted)" }}>
+                avg. first response
+                {(metrics?.speedToLead.totalMeasured ?? 0) > 0 && (
+                  <> (median: {formatDuration(metrics?.speedToLead.medianResponseMinutes ?? 0)})</>
+                )}
+              </p>
+
+              <ResponseTimeChart data={metrics?.speedToLead ?? emptySpeed} />
+
+              {(metrics?.speedToLead.totalMeasured ?? 0) > 0 && (
+                <div className="pt-4 mt-4 border-t border-[var(--glass-border)]">
+                  <p
+                    className="text-[10px] font-black uppercase tracking-[0.2em] mb-2"
+                    style={{ color: "var(--text-muted)", opacity: 0.5 }}
+                  >
+                    Response Breakdown
+                  </p>
+                  <AiHumanSplit
+                    aiCount={metrics?.speedToLead.aiResponses ?? 0}
+                    humanCount={metrics?.speedToLead.humanResponses ?? 0}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </GlassCard>
+      </div>
+
+      {/* 4 stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Page Views"
