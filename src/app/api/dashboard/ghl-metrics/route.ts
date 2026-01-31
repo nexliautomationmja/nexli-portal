@@ -191,12 +191,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
+  const clientIdParam = req.nextUrl.searchParams.get("clientId");
+
+  // Admin can view any client; clients can only view their own
+  let targetUserId = session.user.id;
+  if (clientIdParam && session.user.role === "admin") {
+    targetUserId = clientIdParam;
+  }
 
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.id, userId))
+    .where(eq(users.id, targetUserId))
     .limit(1);
 
   if (!user?.ghlLocationId) {
@@ -209,7 +215,7 @@ export async function GET(req: NextRequest) {
     .from(analyticsSnapshots)
     .where(
       and(
-        eq(analyticsSnapshots.userId, userId),
+        eq(analyticsSnapshots.userId, targetUserId),
         eq(analyticsSnapshots.source, "ghl-metrics")
       )
     )
@@ -258,7 +264,7 @@ export async function GET(req: NextRequest) {
 
     // Cache the result
     await db.insert(analyticsSnapshots).values({
-      userId,
+      userId: targetUserId,
       source: "ghl-metrics",
       periodStart: start,
       periodEnd: end,
