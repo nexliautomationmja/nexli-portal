@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, subscriptions, dailyStats } from "@/db/schema";
+import { users, subscriptions, dailyStats, leadNotifications } from "@/db/schema";
 import { eq, sql, and, gte, lt } from "drizzle-orm";
 
 export async function GET() {
@@ -66,6 +66,22 @@ export async function GET() {
       and(gte(dailyStats.date, thirtyDaysAgo), lt(dailyStats.date, now))
     );
 
+  // Total leads across all businesses (last 30 days)
+  const [leadTotals] = await db
+    .select({
+      totalLeads: sql<number>`count(*)::int`,
+      businessesWithLeads: sql<number>`count(distinct ${leadNotifications.userId})::int`,
+    })
+    .from(leadNotifications)
+    .where(gte(leadNotifications.createdAt, thirtyDaysAgo));
+
+  // Include admin's business in the count (+1)
+  const totalBusinesses = clients.length + 1;
+  const avgLeadsPerBusiness =
+    totalBusinesses > 0
+      ? Math.round((leadTotals.totalLeads / totalBusinesses) * 10) / 10
+      : 0;
+
   const result = clients.map((c) => ({
     ...c,
     active: activeSubMap.has(c.id),
@@ -79,5 +95,7 @@ export async function GET() {
     activeSubscriptions: activeSubs.length,
     totalPageViews: totals.totalPageViews,
     totalUniqueVisitors: totals.totalUniqueVisitors,
+    totalLeads: leadTotals.totalLeads,
+    avgLeadsPerBusiness,
   });
 }

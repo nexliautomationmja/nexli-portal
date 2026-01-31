@@ -26,6 +26,8 @@ interface AdminData {
   activeSubscriptions: number;
   totalPageViews: number;
   totalUniqueVisitors: number;
+  totalLeads: number;
+  avgLeadsPerBusiness: number;
 }
 
 function SearchIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
@@ -99,15 +101,15 @@ export default function AdminPage() {
           accent="emerald"
         />
         <StatCard
-          label="Page Views"
-          value={loading ? "..." : compactNumber(data?.totalPageViews ?? 0)}
-          delta="30 days"
+          label="Total Leads"
+          value={loading ? "..." : compactNumber(data?.totalLeads ?? 0)}
+          delta="all businesses"
           deltaType="neutral"
           accent="cyan"
         />
         <StatCard
-          label="Visitors"
-          value={loading ? "..." : compactNumber(data?.totalUniqueVisitors ?? 0)}
+          label="Avg Leads / Biz"
+          value={loading ? "..." : String(data?.avgLeadsPerBusiness ?? 0)}
           delta="30 days"
           deltaType="neutral"
           accent="teal"
