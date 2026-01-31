@@ -2,8 +2,78 @@
 
 import { useState } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
-import { MapPin, Briefcase, Calendar, Globe, MoreHorizontal, Code, Copy, Check } from "lucide-react";
 import Image from "next/image";
+
+function MapPinIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+            <circle cx="12" cy="10" r="3" />
+        </svg>
+    );
+}
+
+function BriefcaseIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+            <rect width="20" height="14" x="2" y="6" rx="2" />
+        </svg>
+    );
+}
+
+function CalendarIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 2v4" /><path d="M16 2v4" />
+            <rect width="18" height="18" x="3" y="4" rx="2" />
+            <path d="M3 10h18" />
+        </svg>
+    );
+}
+
+function GlobeIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+            <path d="M2 12h20" />
+        </svg>
+    );
+}
+
+function MoreHorizontalIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
+        </svg>
+    );
+}
+
+function CodeIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+        </svg>
+    );
+}
+
+function CopyIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </svg>
+    );
+}
+
+function CheckIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+        </svg>
+    );
+}
 
 interface ProfileSidebarProps {
     business: {
@@ -74,7 +144,7 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: Pro
                 </p>
 
                 <div className="flex items-center justify-center gap-1 text-xs text-[var(--text-muted)] mb-6">
-                    <MapPin size={12} />
+                    <MapPinIcon size={12} />
                     <span className="truncate max-w-[180px]">{business.location}</span>
                 </div>
 
@@ -85,7 +155,7 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: Pro
                         rel="noopener noreferrer"
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
                     >
-                        <Globe size={16} />
+                        <GlobeIcon size={16} />
                         Open Website
                     </a>
                 )}
@@ -95,14 +165,14 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: Pro
             <GlassCard variant="compact">
                 <div className="space-y-4">
                     <div className="flex items-start gap-3">
-                        <Briefcase size={18} className="text-blue-500 mt-0.5" />
+                        <BriefcaseIcon size={18} className="text-blue-500 mt-0.5" />
                         <div>
                             <p className="text-sm font-bold text-[var(--text-main)]">Business Type</p>
                             <p className="text-xs text-[var(--text-muted)]">{business.type}</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-3">
-                        <Calendar size={18} className="text-cyan-500 mt-0.5" />
+                        <CalendarIcon size={18} className="text-cyan-500 mt-0.5" />
                         <div>
                             <p className="text-sm font-bold text-[var(--text-main)]">Member Since</p>
                             <p className="text-xs text-[var(--text-muted)]">{business.joinedDate}</p>
@@ -113,7 +183,7 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: Pro
                 <div className="mt-6 pt-6 border-t border-[var(--glass-border)]">
                     <button className="w-full group flex items-center justify-between text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors">
                         <span>View All Details</span>
-                        <MoreHorizontal size={14} className="group-hover:translate-x-1 transition-transform" />
+                        <MoreHorizontalIcon size={14} className="group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
             </GlassCard>
@@ -122,7 +192,7 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: Pro
             {trackingSnippet && (
                 <GlassCard variant="compact">
                     <div className="flex items-center gap-2 mb-3">
-                        <Code size={16} className="text-blue-500" />
+                        <CodeIcon size={16} className="text-blue-500" />
                         <p className="text-sm font-bold text-[var(--text-main)]">Tracking Script</p>
                     </div>
                     <p className="text-[10px] text-[var(--text-muted)] mb-3">
@@ -141,12 +211,12 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: Pro
                     >
                         {copied ? (
                             <>
-                                <Check size={14} className="text-green-400" />
+                                <CheckIcon size={14} className="text-green-400" />
                                 Copied!
                             </>
                         ) : (
                             <>
-                                <Copy size={14} />
+                                <CopyIcon size={14} />
                                 Copy Snippet
                             </>
                         )}
