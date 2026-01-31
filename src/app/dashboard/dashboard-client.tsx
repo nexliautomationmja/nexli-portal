@@ -19,6 +19,7 @@ import { ResponseTimeChart } from "@/components/dashboard/charts/response-time-c
 import { PerformanceIndicator } from "@/components/dashboard/charts/performance-indicator";
 import { AiHumanSplit } from "@/components/dashboard/charts/ai-human-split";
 import { RecentLeads } from "@/components/dashboard/recent-leads";
+import { AIInsightsCard } from "@/components/dashboard/ai-insights-card";
 import { ChartIcon, UsersIcon } from "@/components/ui/icons";
 
 interface DashboardClientProps {
@@ -85,6 +86,9 @@ export function DashboardClient({
 
   return (
     <div className="space-y-6">
+      {/* AI Insights */}
+      <AIInsightsCard range={range} />
+
       {/* Hero: Two core metric cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Conversion Rate Card */}

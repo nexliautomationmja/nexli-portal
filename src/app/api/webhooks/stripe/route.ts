@@ -46,11 +46,13 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-  const customerEmail = session.customer_details?.email;
+  const rawEmail = session.customer_details?.email;
   const customerId = session.customer as string;
   const subscriptionId = session.subscription as string;
 
-  if (!customerEmail) return;
+  if (!rawEmail) return;
+
+  const customerEmail = rawEmail.toLowerCase().trim();
 
   // Check for existing user
   const existing = await db

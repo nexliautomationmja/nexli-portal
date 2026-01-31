@@ -17,6 +17,7 @@ import { ResponseTimeChart } from "@/components/dashboard/charts/response-time-c
 import { PerformanceIndicator } from "@/components/dashboard/charts/performance-indicator";
 import { AiHumanSplit } from "@/components/dashboard/charts/ai-human-split";
 import { GlassCard } from "@/components/ui/glass-card";
+import { AIInsightsCard } from "@/components/dashboard/ai-insights-card";
 import { compactNumber, formatDateFull, formatDuration, formatConversionRate } from "@/lib/format";
 
 interface ClientDetailPanelProps {
@@ -313,6 +314,9 @@ export function ClientDetailPanel({ client }: ClientDetailPanelProps) {
               </div>
             </div>
           </GlassCard>
+
+          {/* AI Insights */}
+          <AIInsightsCard range={range} clientId={client.id} />
 
           {/* Recent Activity */}
           <RecentActivityFeed
