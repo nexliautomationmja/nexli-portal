@@ -86,37 +86,37 @@ export function DashboardClient({
   return (
     <div className="space-y-6">
       {/* Hero: Two core metric cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Conversion Rate Card */}
-        <GlassCard>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
+        <GlassCard variant="compact">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold" style={{ color: "var(--text-main)" }}>
               Lead-to-Consultation Rate
             </h3>
-            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
+            <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
               Last {rangeLabel}
             </span>
           </div>
 
           {metricsLoading ? (
-            <div className="h-[280px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
+            <div className="h-[200px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
           ) : (
             <>
               <p
-                className="text-4xl md:text-5xl font-bold tracking-tight mb-1"
+                className="text-3xl md:text-4xl font-bold tracking-tight mb-0.5"
                 style={{ color: "var(--text-main)" }}
               >
                 {formatConversionRate(metrics?.conversion.conversionRate ?? 0)}
               </p>
-              <p className="text-xs mb-5" style={{ color: "var(--text-muted)" }}>
+              <p className="text-[10px] mb-4" style={{ color: "var(--text-muted)" }}>
                 {metrics?.conversion.bookedConsultations ?? 0} consultations from {metrics?.conversion.totalLeads ?? 0} leads
               </p>
 
               <ConversionFunnel data={metrics?.conversion ?? emptyConversion} />
 
-              <div className="pt-4 mt-4 border-t border-[var(--glass-border)]">
+              <div className="pt-3 mt-3 border-t border-[var(--glass-border)]">
                 <p
-                  className="text-[10px] font-black uppercase tracking-[0.2em] mb-2"
+                  className="text-[9px] font-black uppercase tracking-[0.2em] mb-1.5"
                   style={{ color: "var(--text-muted)", opacity: 0.5 }}
                 >
                   Industry Benchmark
@@ -132,9 +132,9 @@ export function DashboardClient({
         </GlassCard>
 
         {/* Speed to Lead Card */}
-        <GlassCard>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
+        <GlassCard variant="compact">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold" style={{ color: "var(--text-main)" }}>
               Speed to Lead
             </h3>
             {!metricsLoading && (
@@ -145,16 +145,16 @@ export function DashboardClient({
           </div>
 
           {metricsLoading ? (
-            <div className="h-[280px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
+            <div className="h-[200px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
           ) : (
             <>
               <p
-                className="text-4xl md:text-5xl font-bold tracking-tight mb-1"
+                className="text-3xl md:text-4xl font-bold tracking-tight mb-0.5"
                 style={{ color: "var(--text-main)" }}
               >
                 {formatDuration(metrics?.speedToLead.averageResponseMinutes ?? 0)}
               </p>
-              <p className="text-xs mb-5" style={{ color: "var(--text-muted)" }}>
+              <p className="text-[10px] mb-4" style={{ color: "var(--text-muted)" }}>
                 avg. first response
                 {(metrics?.speedToLead.totalMeasured ?? 0) > 0 && (
                   <> (median: {formatDuration(metrics?.speedToLead.medianResponseMinutes ?? 0)})</>
@@ -164,9 +164,9 @@ export function DashboardClient({
               <ResponseTimeChart data={metrics?.speedToLead ?? emptySpeed} />
 
               {(metrics?.speedToLead.totalMeasured ?? 0) > 0 && (
-                <div className="pt-4 mt-4 border-t border-[var(--glass-border)]">
+                <div className="pt-3 mt-3 border-t border-[var(--glass-border)]">
                   <p
-                    className="text-[10px] font-black uppercase tracking-[0.2em] mb-2"
+                    className="text-[9px] font-black uppercase tracking-[0.2em] mb-1.5"
                     style={{ color: "var(--text-muted)", opacity: 0.5 }}
                   >
                     Response Breakdown
