@@ -15,6 +15,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
     "@neondatabase/serverless": "^1.0.2",
+    "@supabase/supabase-js": "^2.93.3",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.1",
     "lucide-react": "^0.563.0",

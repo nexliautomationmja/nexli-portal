@@ -14,6 +14,13 @@ import {
 // ── Enums ──────────────────────────────────────────────
 export const userRoleEnum = pgEnum("user_role", ["admin", "client"]);
 
+export const brandFileCategoryEnum = pgEnum("brand_file_category", [
+  "logo",
+  "brand_guideline",
+  "photo",
+  "design_file",
+]);
+
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "active",
   "past_due",
@@ -181,5 +188,30 @@ export const leadNotifications = pgTable(
   },
   (table) => [
     index("lead_notifications_user_idx").on(table.userId),
+  ]
+);
+
+// ── Brand Files ─────────────────────────────────────────
+export const brandFiles = pgTable(
+  "brand_files",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    fileName: text("file_name").notNull(),
+    fileSize: integer("file_size").notNull(),
+    mimeType: text("mime_type").notNull(),
+    category: brandFileCategoryEnum("category").notNull(),
+    storagePath: text("storage_path").notNull(),
+    storageUrl: text("storage_url").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("brand_files_client_idx").on(table.clientId),
+    index("brand_files_client_category_idx").on(table.clientId, table.category),
   ]
 );
