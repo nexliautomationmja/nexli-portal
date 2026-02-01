@@ -18,6 +18,7 @@ import { PerformanceIndicator } from "@/components/dashboard/charts/performance-
 import { AiHumanSplit } from "@/components/dashboard/charts/ai-human-split";
 import { GlassCard } from "@/components/ui/glass-card";
 import { AIInsightsCard } from "@/components/dashboard/ai-insights-card";
+import { BrandFilesSection } from "@/components/dashboard/admin/brand-files-section";
 import { compactNumber, formatDateFull, formatDuration, formatConversionRate } from "@/lib/format";
 
 interface ClientDetailPanelProps {
@@ -360,6 +361,9 @@ export function ClientDetailPanel({ client }: ClientDetailPanelProps) {
               )}
             </GlassCard>
           </div>
+
+          {/* Brand Files */}
+          <BrandFilesSection clientId={client.id} />
         </main>
       </div>
     </div>

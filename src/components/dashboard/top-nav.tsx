@@ -18,6 +18,7 @@ import {
   LogOutIcon,
   HamburgerIcon,
   XIcon,
+  ImageIcon,
 } from "@/components/ui/icons";
 
 interface TopNavProps {
@@ -29,6 +30,7 @@ const clientNav = [
   { href: "/dashboard", label: "Overview", icon: LayoutIcon },
   { href: "/dashboard/analytics", label: "Analytics", icon: ChartIcon },
   { href: "/dashboard/reports", label: "Reports", icon: FileIcon },
+  { href: "/dashboard/brand-files", label: "Brand Files", icon: ImageIcon },
   { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
 ];
 
