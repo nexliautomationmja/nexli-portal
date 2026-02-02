@@ -26,22 +26,22 @@ export async function PATCH(
 
   const trimmed = locationId.trim();
 
-  // Test the connection
-  try {
-    await getContacts(trimmed, 1);
-  } catch {
-    return NextResponse.json(
-      { error: "Could not connect to GoHighLevel with this Location ID." },
-      { status: 422 }
-    );
-  }
-
+  // Save the Location ID
   await db
     .update(users)
     .set({ ghlLocationId: trimmed, updatedAt: new Date() })
     .where(eq(users.id, clientId));
 
-  return NextResponse.json({ ok: true });
+  // Non-blocking test — warn but don't block the save
+  let verified = false;
+  try {
+    await getContacts(trimmed, 1);
+    verified = true;
+  } catch (err) {
+    console.warn("[GHL] Connection test failed for client", clientId, "location", trimmed, err);
+  }
+
+  return NextResponse.json({ ok: true, verified });
 }
 
 export async function DELETE(

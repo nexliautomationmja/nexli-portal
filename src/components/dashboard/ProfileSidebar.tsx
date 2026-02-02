@@ -123,8 +123,12 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId, ghlLo
         });
 
         if (res.ok) {
-            setGhlStatus("success");
+            const data = await res.json();
             setGhlConnected(true);
+            setGhlStatus("success");
+            if (!data.verified) {
+                setGhlError("Saved, but GHL API could not verify this ID yet.");
+            }
         } else {
             const data = await res.json();
             setGhlError(data.error || "Failed to connect");
@@ -268,8 +272,11 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId, ghlLo
                             />
                         </div>
 
-                        {ghlStatus === "success" && (
+                        {ghlStatus === "success" && !ghlError && (
                             <p className="text-[11px] text-green-400">Connected successfully.</p>
+                        )}
+                        {ghlStatus === "success" && ghlError && (
+                            <p className="text-[11px] text-yellow-400">{ghlError}</p>
                         )}
                         {ghlStatus === "error" && (
                             <p className="text-[11px] text-red-400">{ghlError}</p>
