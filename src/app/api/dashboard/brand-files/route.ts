@@ -72,6 +72,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // "self" means the admin is uploading to their own profile
+  const resolvedClientId = clientId === "self" ? session.user.id : clientId;
+
   if (!ALLOWED_TYPES.has(file.type)) {
     return NextResponse.json({ error: "File type not allowed" }, { status: 400 });
   }
@@ -81,7 +84,7 @@ export async function POST(req: NextRequest) {
   }
 
   const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const storagePath = `${clientId}/${randomUUID()}-${sanitized}`;
+  const storagePath = `${resolvedClientId}/${randomUUID()}-${sanitized}`;
 
   const supabase = getSupabase();
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -110,7 +113,7 @@ export async function POST(req: NextRequest) {
     [inserted] = await db
       .insert(brandFiles)
       .values({
-        clientId,
+        clientId: resolvedClientId,
         uploadedBy: session.user.id,
         fileName: file.name,
         fileSize: file.size,

@@ -102,6 +102,7 @@ export default async function DashboardPage() {
         pvDelta={pvDelta}
         uvDelta={uvDelta}
         chartData={chartData}
+        isAdmin={session.user.role === "admin"}
       />
     </div>
   );
