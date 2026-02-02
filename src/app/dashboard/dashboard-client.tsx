@@ -29,6 +29,7 @@ interface DashboardClientProps {
   pvDelta: { value: string; type: "positive" | "negative" | "neutral" };
   uvDelta: { value: string; type: "positive" | "negative" | "neutral" };
   chartData: { date: string; pageViews: number; uniqueVisitors: number }[];
+  isAdmin: boolean;
 }
 
 function EyeIcon({ className }: { className?: string }) {
@@ -75,6 +76,7 @@ export function DashboardClient({
   pvDelta,
   uvDelta,
   chartData,
+  isAdmin,
 }: DashboardClientProps) {
   const [activeTab, setActiveTab] = useState("analytics");
   const { data: ghl, loading: ghlLoading } = useGHL();
@@ -223,8 +225,8 @@ export function DashboardClient({
         />
       </div>
 
-      {/* Logo Files */}
-      <LogoFilesWidget />
+      {/* Brand Files */}
+      <LogoFilesWidget isAdmin={isAdmin} />
 
       {/* Tabs + date range picker */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
