@@ -28,8 +28,14 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
     });
 
     if (res.ok) {
-      setStatus("success");
+      const data = await res.json();
       setConnected(true);
+      if (data.verified) {
+        setStatus("success");
+      } else {
+        setStatus("success");
+        setError("Saved, but the GHL API test could not verify this Location ID. Data will appear once the ID is correct.");
+      }
     } else {
       const data = await res.json();
       setError(data.error || "Failed to connect");
@@ -107,10 +113,13 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
           />
         </div>
 
-        {status === "success" && (
+        {status === "success" && !error && (
           <p className="text-sm text-green-400">
             GoHighLevel connected successfully.
           </p>
+        )}
+        {status === "success" && error && (
+          <p className="text-sm text-yellow-400">{error}</p>
         )}
         {status === "error" && (
           <p className="text-sm text-red-400">{error}</p>
