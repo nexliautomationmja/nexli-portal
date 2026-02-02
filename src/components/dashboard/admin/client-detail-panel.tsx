@@ -28,6 +28,7 @@ interface ClientDetailPanelProps {
     email: string;
     companyName: string | null;
     websiteUrl: string | null;
+    ghlLocationId?: string | null;
     createdAt: string;
     active: boolean;
     pageViews30d: number;
@@ -121,6 +122,7 @@ export function ClientDetailPanel({ client }: ClientDetailPanelProps) {
             websiteUrl={client.websiteUrl}
             isActive={client.active}
             clientId={client.id}
+            ghlLocationId={client.ghlLocationId}
           />
         </aside>
 

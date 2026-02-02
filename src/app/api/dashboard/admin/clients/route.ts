@@ -18,6 +18,7 @@ export async function GET() {
       email: users.email,
       companyName: users.companyName,
       websiteUrl: users.websiteUrl,
+      ghlLocationId: users.ghlLocationId,
       createdAt: users.createdAt,
     })
     .from(users)
