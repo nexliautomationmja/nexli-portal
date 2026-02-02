@@ -20,6 +20,7 @@ import { PerformanceIndicator } from "@/components/dashboard/charts/performance-
 import { AiHumanSplit } from "@/components/dashboard/charts/ai-human-split";
 import { RecentLeads } from "@/components/dashboard/recent-leads";
 import { AIInsightsCard } from "@/components/dashboard/ai-insights-card";
+import { LogoFilesWidget } from "@/components/dashboard/logo-files-widget";
 import { ChartIcon, UsersIcon } from "@/components/ui/icons";
 
 interface DashboardClientProps {
@@ -221,6 +222,9 @@ export function DashboardClient({
           icon={<DollarIcon className="w-4 h-4" />}
         />
       </div>
+
+      {/* Logo Files */}
+      <LogoFilesWidget />
 
       {/* Tabs + date range picker */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
