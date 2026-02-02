@@ -1,12 +1,21 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { GlassCard } from "@/components/ui/glass-card";
 import { PasswordForm } from "@/components/dashboard/settings/password-form";
+import { GHLConnection } from "@/components/dashboard/settings/ghl-connection";
 import { TrackingSnippet } from "@/components/dashboard/settings/tracking-snippet";
 
 export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const [user] = await db
+    .select({ ghlLocationId: users.ghlLocationId })
+    .from(users)
+    .where(eq(users.id, session.user.id!));
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -77,6 +86,17 @@ export default async function SettingsPage() {
           Change Password
         </h3>
         <PasswordForm />
+      </GlassCard>
+
+      {/* GoHighLevel Integration */}
+      <GlassCard>
+        <h3
+          className="text-sm font-bold mb-4"
+          style={{ color: "var(--text-main)" }}
+        >
+          GoHighLevel
+        </h3>
+        <GHLConnection currentLocationId={user?.ghlLocationId ?? null} />
       </GlassCard>
 
       {/* Tracking Snippet */}
