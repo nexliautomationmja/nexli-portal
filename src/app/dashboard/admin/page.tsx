@@ -14,6 +14,7 @@ interface ClientRow {
   email: string;
   companyName: string | null;
   websiteUrl: string | null;
+  ghlLocationId: string | null;
   createdAt: string;
   active: boolean;
   pageViews30d: number;

@@ -75,6 +75,15 @@ function CheckIcon({ size, className }: { size: number; className?: string }) {
     );
 }
 
+function LinkIcon({ size, className }: { size: number; className?: string }) {
+    return (
+        <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+    );
+}
+
 interface ProfileSidebarProps {
     business: {
         name: string;
@@ -87,14 +96,61 @@ interface ProfileSidebarProps {
     websiteUrl?: string | null;
     isActive?: boolean;
     clientId?: string;
+    ghlLocationId?: string | null;
 }
 
-export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: ProfileSidebarProps) {
+export function ProfileSidebar({ business, websiteUrl, isActive, clientId, ghlLocationId }: ProfileSidebarProps) {
     const [copied, setCopied] = useState(false);
+    const [ghlId, setGhlId] = useState(ghlLocationId ?? "");
+    const [ghlConnected, setGhlConnected] = useState(!!ghlLocationId);
+    const [ghlStatus, setGhlStatus] = useState<"idle" | "saving" | "success" | "error" | "disconnecting">("idle");
+    const [ghlError, setGhlError] = useState("");
 
     const trackingSnippet = clientId
         ? `<script defer src="https://portal.nexli.net/t.js" data-client-id="${clientId}"></script>`
         : null;
+
+    async function saveGhl(e: React.FormEvent) {
+        e.preventDefault();
+        if (!clientId || !ghlId.trim()) return;
+        setGhlStatus("saving");
+        setGhlError("");
+
+        const res = await fetch(`/api/dashboard/admin/clients/${clientId}/ghl`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ locationId: ghlId.trim() }),
+        });
+
+        if (res.ok) {
+            setGhlStatus("success");
+            setGhlConnected(true);
+        } else {
+            const data = await res.json();
+            setGhlError(data.error || "Failed to connect");
+            setGhlStatus("error");
+        }
+    }
+
+    async function disconnectGhl() {
+        if (!clientId) return;
+        if (!confirm("Disconnect GoHighLevel for this client?")) return;
+        setGhlStatus("disconnecting");
+        setGhlError("");
+
+        const res = await fetch(`/api/dashboard/admin/clients/${clientId}/ghl`, {
+            method: "DELETE",
+        });
+
+        if (res.ok) {
+            setGhlId("");
+            setGhlConnected(false);
+            setGhlStatus("idle");
+        } else {
+            setGhlError("Failed to disconnect");
+            setGhlStatus("error");
+        }
+    }
 
     function copySnippet() {
         if (!trackingSnippet) return;
@@ -187,6 +243,60 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId }: Pro
                     </button>
                 </div>
             </GlassCard>
+
+            {/* GHL Connection */}
+            {clientId && (
+                <GlassCard variant="compact">
+                    <div className="flex items-center gap-2 mb-3">
+                        <LinkIcon size={16} className="text-purple-500" />
+                        <p className="text-sm font-bold text-[var(--text-main)]">GoHighLevel</p>
+                        <div className={`w-2 h-2 rounded-full ml-auto ${ghlConnected ? "bg-green-400" : "bg-gray-500"}`} />
+                    </div>
+
+                    <form onSubmit={saveGhl} className="space-y-3">
+                        <div>
+                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "var(--text-muted)" }}>
+                                Location ID
+                            </label>
+                            <input
+                                type="text"
+                                value={ghlId}
+                                onChange={(e) => setGhlId(e.target.value)}
+                                placeholder="e.g. yamjttuJWWdstfF9N0zu"
+                                className="w-full px-3 py-2 rounded-xl border border-[var(--glass-border)] bg-transparent text-xs outline-none focus:border-blue-500 transition-colors"
+                                style={{ color: "var(--text-main)" }}
+                            />
+                        </div>
+
+                        {ghlStatus === "success" && (
+                            <p className="text-[11px] text-green-400">Connected successfully.</p>
+                        )}
+                        {ghlStatus === "error" && (
+                            <p className="text-[11px] text-red-400">{ghlError}</p>
+                        )}
+
+                        <div className="flex gap-2">
+                            <button
+                                type="submit"
+                                disabled={ghlStatus === "saving" || ghlStatus === "disconnecting" || !ghlId.trim()}
+                                className="flex-1 py-2 px-3 rounded-xl text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-all"
+                            >
+                                {ghlStatus === "saving" ? "Testing..." : ghlConnected ? "Update" : "Connect"}
+                            </button>
+                            {ghlConnected && (
+                                <button
+                                    type="button"
+                                    onClick={disconnectGhl}
+                                    disabled={ghlStatus === "saving" || ghlStatus === "disconnecting"}
+                                    className="py-2 px-3 rounded-xl text-[11px] font-bold text-red-400 border border-red-500/30 hover:bg-red-500/10 disabled:opacity-50 transition-all"
+                                >
+                                    {ghlStatus === "disconnecting" ? "..." : "Disconnect"}
+                                </button>
+                            )}
+                        </div>
+                    </form>
+                </GlassCard>
+            )}
 
             {/* Tracking Script */}
             {trackingSnippet && (
