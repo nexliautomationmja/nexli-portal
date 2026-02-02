@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useBrandFiles, type BrandFile } from "@/lib/hooks/use-brand-files";
 import { GlassCard } from "@/components/ui/glass-card";
 import {
@@ -146,13 +147,17 @@ export function LogoFilesWidget({ isAdmin }: LogoFilesWidgetProps) {
   );
 
   const handlePreview = useCallback(async (file: BrandFile) => {
-    // Get a fresh signed URL for preview
-    const res = await fetch(
-      `/api/dashboard/brand-files/${file.id}/download`
-    );
-    const data = await res.json();
-    if (data.url) {
-      setPreviewFile({ ...file, storageUrl: data.url });
+    try {
+      const res = await fetch(
+        `/api/dashboard/brand-files/${file.id}/download`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.url) {
+        setPreviewFile({ ...file, storageUrl: data.url });
+      }
+    } catch {
+      // Silently fail - preview just won't open
     }
   }, []);
 
@@ -430,9 +435,22 @@ function PreviewModal({
   const isImage = IMAGE_TYPES.has(file.mimeType);
   const isPdf = file.mimeType === "application/pdf";
 
-  return (
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  const modal = (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ zIndex: 9999 }}
       onClick={onClose}
     >
       {/* Backdrop */}
@@ -440,8 +458,8 @@ function PreviewModal({
 
       {/* Modal content */}
       <div
-        className="relative z-10 w-full max-w-4xl max-h-[90vh] rounded-2xl overflow-hidden border border-[var(--glass-border)]"
-        style={{ background: "var(--glass-bg)" }}
+        className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl overflow-hidden border border-[var(--glass-border)]"
+        style={{ background: "var(--glass-bg)", zIndex: 10000 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal header */}
@@ -520,6 +538,8 @@ function PreviewModal({
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }
 
 function EyeIcon({ className }: { className?: string }) {
