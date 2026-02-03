@@ -100,6 +100,16 @@ export interface GHLOpportunitiesResponse {
 
 // ── Calendar types ────────────────────────────────────
 
+export interface GHLCalendar {
+  id: string;
+  name: string;
+  locationId: string;
+}
+
+export interface GHLCalendarsResponse {
+  calendars: GHLCalendar[];
+}
+
 export interface GHLCalendarEvent {
   id: string;
   calendarId: string;
@@ -141,23 +151,55 @@ export interface GHLMessage {
   messageType?: string;
 }
 
-export interface GHLConversationMessagesResponse {
-  messages: GHLMessage[];
-  nextPage?: string;
+// The GHL API returns { messages: { messages: [...], nextPage, lastMessageId } }
+interface GHLConversationMessagesRawResponse {
+  messages: {
+    messages: GHLMessage[];
+    nextPage?: boolean;
+    lastMessageId?: string;
+  };
 }
 
 // ── Calendar / Conversation API functions ─────────────
 
+export async function getCalendars(locationId: string) {
+  return ghlFetch<GHLCalendarsResponse>("/calendars/", {
+    locationId,
+  });
+}
+
 export async function getCalendarEvents(
   locationId: string,
+  calendarId: string,
   startDate: string,
   endDate: string
 ) {
   return ghlFetch<GHLCalendarEventsResponse>("/calendars/events", {
     locationId,
+    calendarId,
     startTime: startDate,
     endTime: endDate,
   });
+}
+
+/** Fetch events from ALL calendars in a location. */
+export async function getAllCalendarEvents(
+  locationId: string,
+  startDate: string,
+  endDate: string
+): Promise<GHLCalendarEvent[]> {
+  const { calendars } = await getCalendars(locationId);
+  if (!calendars.length) return [];
+
+  const results = await Promise.all(
+    calendars.map((cal) =>
+      getCalendarEvents(locationId, cal.id, startDate, endDate).catch(() => ({
+        events: [],
+      }))
+    )
+  );
+
+  return results.flatMap((r) => r.events ?? []);
 }
 
 export async function searchConversations(
@@ -173,9 +215,13 @@ export async function searchConversations(
 export async function getConversationMessages(
   conversationId: string,
   limit = 50
-) {
-  return ghlFetch<GHLConversationMessagesResponse>(
+): Promise<{ messages: GHLMessage[] }> {
+  const raw = await ghlFetch<GHLConversationMessagesRawResponse>(
     `/conversations/${conversationId}/messages`,
     { limit: String(limit) }
   );
+
+  // GHL nests messages inside messages: { messages: [...] }
+  const msgs = raw?.messages?.messages ?? [];
+  return { messages: msgs };
 }

@@ -6,7 +6,7 @@ import { eq, and, desc, gte, lt, sql } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   getContacts,
-  getCalendarEvents,
+  getAllCalendarEvents,
   searchConversations,
   getPipelines,
   getOpportunities,
@@ -171,9 +171,9 @@ export async function GET(req: NextRequest) {
 
     if (user.ghlLocationId) {
       try {
-        const [contactsRes, calendarRes, conversationsRes] = await Promise.all([
+        const [contactsRes, calendarEvents, conversationsRes] = await Promise.all([
           getContacts(user.ghlLocationId, 100),
-          getCalendarEvents(user.ghlLocationId, start.toISOString(), end.toISOString()),
+          getAllCalendarEvents(user.ghlLocationId, start.toISOString(), end.toISOString()),
           searchConversations(user.ghlLocationId, 100),
         ]);
 
@@ -184,7 +184,7 @@ export async function GET(req: NextRequest) {
 
         const conversion = computeConversionFunnel(
           periodContacts,
-          calendarRes.events ?? [],
+          calendarEvents,
           conversationsRes.conversations ?? []
         );
 
