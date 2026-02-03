@@ -5,7 +5,7 @@ import { users, analyticsSnapshots } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import {
   getContacts,
-  getCalendarEvents,
+  getAllCalendarEvents,
   searchConversations,
 } from "@/lib/ghl-client";
 import {
@@ -75,9 +75,9 @@ export async function GET(req: NextRequest) {
   const { start, end } = getDateRange(range);
 
   try {
-    const [contactsRes, calendarRes, conversationsRes] = await Promise.all([
+    const [contactsRes, calendarEvents, conversationsRes] = await Promise.all([
       getContacts(user.ghlLocationId, 100),
-      getCalendarEvents(
+      getAllCalendarEvents(
         user.ghlLocationId,
         start.toISOString(),
         end.toISOString()
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
 
     const conversion = computeConversionFunnel(
       periodContacts,
-      calendarRes.events ?? [],
+      calendarEvents,
       conversationsRes.conversations ?? []
     );
 
