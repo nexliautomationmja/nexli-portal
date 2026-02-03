@@ -114,7 +114,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json(data);
-  } catch {
+  } catch (err) {
+    console.error("[GHL Metrics] Failed to fetch:", err);
     if (cached) return NextResponse.json(cached.data);
     return NextResponse.json(emptyMetrics());
   }
