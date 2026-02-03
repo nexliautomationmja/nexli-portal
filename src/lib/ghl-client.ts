@@ -38,7 +38,6 @@ export async function getContacts(locationId: string, limit = 20) {
     locationId,
     limit: String(limit),
     sortBy: "date_added",
-    sortOrder: "desc",
   });
 }
 
