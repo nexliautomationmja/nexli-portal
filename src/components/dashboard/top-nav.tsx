@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useTheme } from "@/components/theme-provider";
-import { NexliLogo } from "@/components/ui/nexli-logo";
 import { cn } from "@/lib/utils";
 import {
   LayoutIcon,
@@ -59,17 +58,40 @@ export function TopNav({ isAdmin, userName }: TopNavProps) {
     <>
       <header className="fixed top-0 left-0 right-0 z-50 glass-topnav">
         <div className="max-w-7xl mx-auto h-16 px-4 md:px-6 flex items-center justify-between">
-          {/* Logo chip */}
+          {/* Logo chip — matches nexli.net main site exactly */}
           <Link
             href="/dashboard"
-            className="shrink-0 inline-flex items-center px-5 py-2.5 rounded-full border border-[var(--glass-border)]"
-            style={{ background: "var(--glass-bg)" }}
+            className={`shrink-0 flex items-center gap-2 cursor-pointer backdrop-blur-md px-4 py-2 rounded-full border no-underline transition-colors duration-300 ${
+              theme === "dark"
+                ? "bg-black/20 border-white/5"
+                : "bg-[var(--glass-bg)] border-[var(--glass-border)]"
+            }`}
           >
-            <NexliLogo
-              iconSize="w-6 h-6"
-              textSize="text-lg"
-              gradientId="logo-grad-topnav"
-            />
+            {theme === "dark" ? (
+              <svg className="w-8 h-8" viewBox="0 0 48 48" fill="none">
+                <defs>
+                  <linearGradient id="logo-grad-topnav" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#2563EB" />
+                    <stop offset="100%" stopColor="#06B6D4" />
+                  </linearGradient>
+                </defs>
+                <path d="M4 36L20 24L4 12L4 20L12 24L4 28L4 36Z" fill="#2563EB" />
+                <path d="M12 36L28 24L12 12L12 18L18 24L12 30L12 36Z" fill="url(#logo-grad-topnav)" />
+                <path d="M20 36L44 24L20 12L20 18L32 24L20 30L20 36Z" fill="#06B6D4" />
+              </svg>
+            ) : (
+              <img
+                src="/logos/icon-light.svg"
+                alt="Nexli"
+                className="w-8 h-8"
+              />
+            )}
+            <span
+              className="text-xl font-black tracking-tighter text-[var(--text-main)]"
+              style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
+            >
+              NEXLI
+            </span>
           </Link>
 
           {/* Desktop nav pill */}
