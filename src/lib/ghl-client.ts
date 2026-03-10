@@ -225,3 +225,82 @@ export async function getConversationMessages(
   const msgs = raw?.messages?.messages ?? [];
   return { messages: msgs };
 }
+
+// ── Extended API functions for GHL Wrapper Portal ─────
+
+export async function searchContacts(
+  locationId: string,
+  query: string,
+  limit = 20,
+  startAfterId?: string
+) {
+  const params: Record<string, string> = {
+    locationId,
+    limit: String(limit),
+    query,
+  };
+  if (startAfterId) params.startAfterId = startAfterId;
+  return ghlFetch<GHLContactsResponse>("/contacts/", params);
+}
+
+export async function getContactById(locationId: string, contactId: string) {
+  return ghlFetch<{ contact: GHLContact }>(`/contacts/${contactId}`, {});
+}
+
+export async function updateOpportunityStage(
+  opportunityId: string,
+  stageId: string,
+  pipelineId: string
+) {
+  const url = new URL(
+    `/opportunities/${opportunityId}`,
+    GHL_BASE_URL
+  );
+
+  const res = await fetch(url.toString(), {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${getApiKey()}`,
+      "Content-Type": "application/json",
+      Version: "2021-07-28",
+    },
+    body: JSON.stringify({ pipelineStageId: stageId, pipelineId }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`GHL API error: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function sendMessage(
+  conversationId: string,
+  message: string,
+  type: string = "SMS"
+) {
+  const url = new URL(
+    `/conversations/messages`,
+    GHL_BASE_URL
+  );
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getApiKey()}`,
+      "Content-Type": "application/json",
+      Version: "2021-07-28",
+    },
+    body: JSON.stringify({
+      type,
+      conversationId,
+      message,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`GHL API error: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}

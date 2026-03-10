@@ -4,6 +4,16 @@ import type { NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Public routes that don't require authentication
+  if (
+    pathname.startsWith("/upload/") ||
+    pathname.startsWith("/esign/") ||
+    pathname.startsWith("/api/upload/") ||
+    pathname.startsWith("/api/esign/")
+  ) {
+    return NextResponse.next();
+  }
+
   // Check for session token (NextAuth JWT cookie)
   const token =
     req.cookies.get("__Secure-authjs.session-token") ||
@@ -27,5 +37,12 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: [
+    "/dashboard/:path*",
+    "/login",
+    "/upload/:path*",
+    "/esign/:path*",
+    "/api/upload/:path*",
+    "/api/esign/:path*",
+  ],
 };

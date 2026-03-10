@@ -15,6 +15,13 @@
       "when": 1773157133325,
       "tag": "0001_windy_goliath",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773168390748,
+      "tag": "0002_woozy_mesmero",
+      "breakpoints": true
     }
   ]
 }

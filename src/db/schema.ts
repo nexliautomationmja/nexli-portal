@@ -255,3 +255,198 @@ export const brandFiles = pgTable(
     index("brand_files_client_category_idx").on(table.clientId, table.category),
   ]
 );
+
+// ══════════════════════════════════════════════════════════
+// ══  DOCUMENT PORTAL TABLES  ═════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+// ── Document Portal Enums ────────────────────────────────
+export const documentStatusEnum = pgEnum("document_status", [
+  "new",
+  "reviewed",
+  "archived",
+]);
+
+export const documentLinkStatusEnum = pgEnum("document_link_status", [
+  "active",
+  "expired",
+  "revoked",
+]);
+
+export const eSignStatusEnum = pgEnum("esign_status", [
+  "pending",
+  "sent",
+  "viewed",
+  "signed",
+  "declined",
+  "expired",
+]);
+
+export const auditActionEnum = pgEnum("audit_action", [
+  "uploaded",
+  "viewed",
+  "downloaded",
+  "reviewed",
+  "archived",
+  "deleted",
+  "link_created",
+  "link_accessed",
+  "esign_sent",
+  "esign_signed",
+  "esign_declined",
+]);
+
+// ── Document Links (secure upload links for clients) ─────
+export const documentLinks = pgTable(
+  "document_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    clientName: text("client_name"),
+    clientEmail: text("client_email"),
+    clientPhone: text("client_phone"),
+    message: text("message"),
+    requiredDocuments: jsonb("required_documents"), // string[]
+    maxUploads: integer("max_uploads").default(10),
+    uploadCount: integer("upload_count").default(0),
+    status: documentLinkStatusEnum("status").default("active").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    lastAccessedAt: timestamp("last_accessed_at"),
+    deliveryMethod: text("delivery_method"), // "sms" | "email" | "manual"
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_links_token_idx").on(table.token),
+    index("document_links_owner_idx").on(table.ownerId),
+    index("document_links_expires_idx").on(table.expiresAt),
+  ]
+);
+
+// ── Documents ────────────────────────────────────────────
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientName: text("client_name"),
+    clientEmail: text("client_email"),
+    clientPhone: text("client_phone"),
+    linkId: uuid("link_id").references(() => documentLinks.id, {
+      onDelete: "set null",
+    }),
+    fileName: text("file_name").notNull(),
+    fileSize: integer("file_size").notNull(),
+    mimeType: text("mime_type").notNull(),
+    storagePath: text("storage_path").notNull(),
+    storageUrl: text("storage_url"),
+    status: documentStatusEnum("status").default("new").notNull(),
+    category: text("category"), // "W-2", "1099", "Bank Statement", etc.
+    taxYear: text("tax_year"),
+    notes: text("notes"),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedBy: uuid("reviewed_by").references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("documents_owner_idx").on(table.ownerId),
+    index("documents_owner_status_idx").on(table.ownerId, table.status),
+    index("documents_link_idx").on(table.linkId),
+    index("documents_client_email_idx").on(table.clientEmail),
+  ]
+);
+
+// ── Document Audit Log ───────────────────────────────────
+export const documentAuditLog = pgTable(
+  "document_audit_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    documentId: uuid("document_id").references(() => documents.id, {
+      onDelete: "cascade",
+    }),
+    linkId: uuid("link_id").references(() => documentLinks.id, {
+      onDelete: "cascade",
+    }),
+    action: auditActionEnum("action").notNull(),
+    actorId: uuid("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    actorName: text("actor_name"),
+    actorIp: text("actor_ip"),
+    actorUserAgent: text("actor_user_agent"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("audit_log_document_idx").on(table.documentId),
+    index("audit_log_link_idx").on(table.linkId),
+    index("audit_log_actor_idx").on(table.actorId),
+    index("audit_log_created_idx").on(table.createdAt),
+  ]
+);
+
+// ── E-Signatures ─────────────────────────────────────────
+export const eSignatures = pgTable(
+  "e_signatures",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    signerName: text("signer_name").notNull(),
+    signerEmail: text("signer_email").notNull(),
+    status: eSignStatusEnum("status").default("pending").notNull(),
+    token: text("token").notNull().unique(),
+    signedAt: timestamp("signed_at"),
+    signatureData: text("signature_data"), // Base64 SVG/PNG
+    signatureIp: text("signature_ip"),
+    signatureUserAgent: text("signature_user_agent"),
+    expiresAt: timestamp("expires_at").notNull(),
+    sentAt: timestamp("sent_at"),
+    viewedAt: timestamp("viewed_at"),
+    declinedAt: timestamp("declined_at"),
+    declineReason: text("decline_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("esignatures_token_idx").on(table.token),
+    index("esignatures_document_idx").on(table.documentId),
+    index("esignatures_owner_idx").on(table.ownerId),
+    index("esignatures_signer_email_idx").on(table.signerEmail),
+  ]
+);
+
+// ── Tax Form Submissions ─────────────────────────────────
+export const taxFormSubmissions = pgTable(
+  "tax_form_submissions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    formId: text("form_id").notNull(), // References TaxForm.id from data/taxForms.ts
+    formNumber: text("form_number").notNull(), // e.g., "1040"
+    clientName: text("client_name"),
+    clientEmail: text("client_email"),
+    taxYear: text("tax_year").notNull(),
+    formData: jsonb("form_data").notNull(), // Filled field values
+    status: text("status").default("draft").notNull(), // "draft" | "completed" | "submitted"
+    pdfStoragePath: text("pdf_storage_path"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("tax_form_submissions_owner_idx").on(table.ownerId),
+    index("tax_form_submissions_client_idx").on(table.clientName),
+  ]
+);

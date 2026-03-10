@@ -1,304 +1,331 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useGHL } from "@/lib/hooks/use-ghl";
-import { useAnalytics } from "@/lib/hooks/use-analytics";
 import { useGHLMetrics } from "@/lib/hooks/use-ghl-metrics";
-import { compactNumber, formatCurrency, formatDuration, formatConversionRate } from "@/lib/format";
-import { StatCard } from "@/components/ui/stat-card";
-import { GlassCard } from "@/components/ui/glass-card";
-import { CategoryTabs } from "@/components/dashboard/category-tabs";
-import { DateRangePicker } from "@/components/dashboard/date-range-picker";
-import { TrafficChart } from "@/components/dashboard/charts/traffic-chart";
-import { TopPagesChart } from "@/components/dashboard/charts/top-pages-chart";
-import { DeviceChart } from "@/components/dashboard/charts/device-chart";
-import { ConversionFunnel } from "@/components/dashboard/charts/conversion-funnel";
-import { BenchmarkGauge } from "@/components/dashboard/charts/benchmark-gauge";
-import { ResponseTimeChart } from "@/components/dashboard/charts/response-time-chart";
-import { PerformanceIndicator } from "@/components/dashboard/charts/performance-indicator";
-import { AiHumanSplit } from "@/components/dashboard/charts/ai-human-split";
-import { RecentLeads } from "@/components/dashboard/recent-leads";
-import { AIInsightsCard } from "@/components/dashboard/ai-insights-card";
-import { LogoFilesWidget } from "@/components/dashboard/logo-files-widget";
-import { ChartIcon, UsersIcon } from "@/components/ui/icons";
+import {
+  FileIcon,
+  UsersIcon,
+  CalendarIcon,
+  KanbanIcon,
+} from "@/components/ui/icons";
 
-interface DashboardClientProps {
-  pageViews: number;
-  uniqueVisitors: number;
-  pvDelta: { value: string; type: "positive" | "negative" | "neutral" };
-  uvDelta: { value: string; type: "positive" | "negative" | "neutral" };
-  chartData: { date: string; pageViews: number; uniqueVisitors: number }[];
+interface OverviewProps {
+  docStats: {
+    total: number;
+    new: number;
+    reviewed: number;
+    archived: number;
+  };
   isAdmin: boolean;
 }
 
-function EyeIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function DollarIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" x2="12" y1="2" y2="22" />
-      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-    </svg>
-  );
-}
-
-const emptyConversion = {
-  totalLeads: 0,
-  respondedLeads: 0,
-  bookedConsultations: 0,
-  conversionRate: 0,
-  previousConversionRate: null,
-  benchmarkLow: 30,
-  benchmarkHigh: 50,
-};
-
-const emptySpeed = {
-  averageResponseMinutes: 0,
-  medianResponseMinutes: 0,
-  distribution: { under5min: 0, from5to30min: 0, over30min: 0 },
-  performanceRating: "green" as const,
-  aiResponses: 0,
-  humanResponses: 0,
-  totalMeasured: 0,
-};
-
-export function DashboardClient({
-  pageViews,
-  uniqueVisitors,
-  pvDelta,
-  uvDelta,
-  chartData,
-  isAdmin,
-}: DashboardClientProps) {
-  const [activeTab, setActiveTab] = useState("analytics");
-  const { data: ghl, loading: ghlLoading } = useGHL();
-  const searchParams = useSearchParams();
-  const range = searchParams.get("range") || "7d";
-  const { data: analytics, loading: analyticsLoading } = useAnalytics(range);
-  const { data: metrics, loading: metricsLoading } = useGHLMetrics(range);
-
-  const rangeLabel = range === "30d" ? "30 days" : range === "90d" ? "90 days" : "7 days";
+export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
+  const { data: ghlData, loading: ghlLoading } = useGHL();
+  const { data: ghlMetrics, loading: metricsLoading } = useGHLMetrics("7d");
 
   return (
     <div className="space-y-6">
-      {/* AI Insights */}
-      <AIInsightsCard range={range} />
-
-      {/* Hero: Two core metric cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* Conversion Rate Card */}
-        <GlassCard variant="compact">
+      {/* Top stat cards — 4 pillars */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Documents pending */}
+        <Link href="/dashboard/documents" className="glass-card rounded-2xl p-4 hover:border-blue-500/30 transition-colors no-underline">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold" style={{ color: "var(--text-main)" }}>
-              Lead-to-Consultation Rate
-            </h3>
-            <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
-              Last {rangeLabel}
-            </span>
-          </div>
-
-          {metricsLoading ? (
-            <div className="h-[200px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
-          ) : (
-            <>
-              <p
-                className="text-3xl md:text-4xl font-bold tracking-tight mb-0.5"
-                style={{ color: "var(--text-main)" }}
-              >
-                {formatConversionRate(metrics?.conversion.conversionRate ?? 0)}
-              </p>
-              <p className="text-[10px] mb-4" style={{ color: "var(--text-muted)" }}>
-                {metrics?.conversion.bookedConsultations ?? 0} consultations from {metrics?.conversion.totalLeads ?? 0} leads
-              </p>
-
-              <ConversionFunnel data={metrics?.conversion ?? emptyConversion} />
-
-              <div className="pt-3 mt-3 border-t border-[var(--glass-border)]">
-                <p
-                  className="text-[9px] font-black uppercase tracking-[0.2em] mb-1.5"
-                  style={{ color: "var(--text-muted)", opacity: 0.5 }}
-                >
-                  Industry Benchmark
-                </p>
-                <BenchmarkGauge
-                  value={metrics?.conversion.conversionRate ?? 0}
-                  benchmarkLow={30}
-                  benchmarkHigh={50}
-                />
-              </div>
-            </>
-          )}
-        </GlassCard>
-
-        {/* Speed to Lead Card */}
-        <GlassCard variant="compact">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold" style={{ color: "var(--text-main)" }}>
-              Speed to Lead
-            </h3>
-            {!metricsLoading && (
-              <PerformanceIndicator
-                rating={metrics?.speedToLead.performanceRating ?? "green"}
-              />
-            )}
-          </div>
-
-          {metricsLoading ? (
-            <div className="h-[200px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
-          ) : (
-            <>
-              <p
-                className="text-3xl md:text-4xl font-bold tracking-tight mb-0.5"
-                style={{ color: "var(--text-main)" }}
-              >
-                {formatDuration(metrics?.speedToLead.averageResponseMinutes ?? 0)}
-              </p>
-              <p className="text-[10px] mb-4" style={{ color: "var(--text-muted)" }}>
-                avg. first response
-                {(metrics?.speedToLead.totalMeasured ?? 0) > 0 && (
-                  <> (median: {formatDuration(metrics?.speedToLead.medianResponseMinutes ?? 0)})</>
-                )}
-              </p>
-
-              <ResponseTimeChart data={metrics?.speedToLead ?? emptySpeed} />
-
-              {(metrics?.speedToLead.totalMeasured ?? 0) > 0 && (
-                <div className="pt-3 mt-3 border-t border-[var(--glass-border)]">
-                  <p
-                    className="text-[9px] font-black uppercase tracking-[0.2em] mb-1.5"
-                    style={{ color: "var(--text-muted)", opacity: 0.5 }}
-                  >
-                    Response Breakdown
-                  </p>
-                  <AiHumanSplit
-                    aiCount={metrics?.speedToLead.aiResponses ?? 0}
-                    humanCount={metrics?.speedToLead.humanResponses ?? 0}
-                  />
-                </div>
-              )}
-            </>
-          )}
-        </GlassCard>
-      </div>
-
-      {/* 4 stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Page Views"
-          value={compactNumber(pageViews)}
-          delta={pvDelta.value}
-          deltaType={pvDelta.type}
-          accent="blue"
-          icon={<EyeIcon className="w-4 h-4" />}
-        />
-        <StatCard
-          label="Unique Visitors"
-          value={compactNumber(uniqueVisitors)}
-          delta={uvDelta.value}
-          deltaType={uvDelta.type}
-          accent="cyan"
-          icon={<UsersIcon className="w-4 h-4" />}
-        />
-        <StatCard
-          label="New Leads"
-          value={ghlLoading ? "..." : compactNumber(ghl?.leadsCount ?? 0)}
-          delta={ghlLoading ? "--" : ghl?.leadsCount ? "from GHL" : "0"}
-          deltaType="neutral"
-          accent="teal"
-          icon={<ChartIcon className="w-4 h-4" />}
-        />
-        <StatCard
-          label="Pipeline Value"
-          value={ghlLoading ? "..." : formatCurrency(ghl?.pipelineValue ?? 0)}
-          delta={ghlLoading ? "--" : ghl?.pipelineValue ? "total open" : "$0"}
-          deltaType="neutral"
-          accent="purple"
-          icon={<DollarIcon className="w-4 h-4" />}
-        />
-      </div>
-
-      {/* Brand Files */}
-      <LogoFilesWidget isAdmin={isAdmin} />
-
-      {/* Tabs + date range picker */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <CategoryTabs activeTab={activeTab} onTabChange={setActiveTab} />
-        <DateRangePicker />
-      </div>
-
-      {/* Tab content */}
-      {activeTab === "analytics" && (
-        <div className="space-y-4">
-          <GlassCard>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
-                Website Traffic
-              </h3>
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Last {range}
-              </span>
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <FileIcon className="w-4 h-4 text-blue-400" />
             </div>
-            {analyticsLoading ? (
-              <div className="h-[240px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
-            ) : (
-              <TrafficChart data={analytics?.dailyData ?? chartData} />
+            {docStats.new > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400">
+                {docStats.new} new
+              </span>
             )}
-          </GlassCard>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <GlassCard>
-              <h3 className="text-sm font-bold mb-4" style={{ color: "var(--text-main)" }}>
-                Top Pages
-              </h3>
-              {analyticsLoading ? (
-                <div className="h-[200px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
-              ) : (
-                <TopPagesChart data={analytics?.topPages ?? []} />
-              )}
-            </GlassCard>
-            <GlassCard>
-              <h3 className="text-sm font-bold mb-4" style={{ color: "var(--text-main)" }}>
-                Device Breakdown
-              </h3>
-              {analyticsLoading ? (
-                <div className="h-[120px] rounded-xl animate-pulse" style={{ background: "var(--glass-border)" }} />
-              ) : (
-                <DeviceChart data={analytics?.deviceBreakdown ?? []} />
-              )}
-            </GlassCard>
           </div>
-        </div>
-      )}
+          <p className="text-2xl font-black" style={{ color: "var(--text-main)" }}>
+            {docStats.total}
+          </p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-1" style={{ color: "var(--text-muted)" }}>
+            Documents
+          </p>
+        </Link>
 
-      {activeTab === "leads" && (
-        <GlassCard>
-          <h3 className="text-sm font-bold mb-4" style={{ color: "var(--text-main)" }}>
-            Recent Leads
+        {/* Leads */}
+        <Link href="/dashboard/contacts" className="glass-card rounded-2xl p-4 hover:border-blue-500/30 transition-colors no-underline">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+              <UsersIcon className="w-4 h-4 text-cyan-400" />
+            </div>
+          </div>
+          <p className="text-2xl font-black" style={{ color: "var(--text-main)" }}>
+            {ghlLoading ? "—" : ghlData?.leadsCount || 0}
+          </p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-1" style={{ color: "var(--text-muted)" }}>
+            Contacts
+          </p>
+        </Link>
+
+        {/* Pipeline value */}
+        <Link href="/dashboard/pipeline" className="glass-card rounded-2xl p-4 hover:border-blue-500/30 transition-colors no-underline">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <KanbanIcon className="w-4 h-4 text-green-400" />
+            </div>
+          </div>
+          <p className="text-2xl font-black" style={{ color: "var(--text-main)" }}>
+            {ghlLoading
+              ? "—"
+              : `$${((ghlData?.pipelineValue || 0) / 1000).toFixed(1)}k`}
+          </p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-1" style={{ color: "var(--text-muted)" }}>
+            Pipeline Value
+          </p>
+        </Link>
+
+        {/* Conversion rate */}
+        <Link href="/dashboard/contacts" className="glass-card rounded-2xl p-4 hover:border-blue-500/30 transition-colors no-underline">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+              <CalendarIcon className="w-4 h-4 text-purple-400" />
+            </div>
+          </div>
+          <p className="text-2xl font-black" style={{ color: "var(--text-main)" }}>
+            {metricsLoading ? "—" : `${ghlMetrics?.conversion?.conversionRate || 0}%`}
+          </p>
+          <p className="text-[10px] font-bold uppercase tracking-widest mt-1" style={{ color: "var(--text-muted)" }}>
+            Conversion Rate
+          </p>
+        </Link>
+      </div>
+
+      {/* Middle row: Conversion Funnel + Speed to Lead */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Conversion Funnel */}
+        <div className="glass-card rounded-2xl p-5">
+          <h3 className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: "var(--text-muted)" }}>
+            Conversion Funnel
           </h3>
-          <RecentLeads />
-        </GlassCard>
-      )}
+          {metricsLoading ? (
+            <div className="h-32 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : ghlMetrics?.conversion ? (
+            <div className="space-y-3">
+              <FunnelBar
+                label="Total Leads"
+                value={ghlMetrics.conversion.totalLeads}
+                max={ghlMetrics.conversion.totalLeads}
+                color="from-blue-600 to-blue-500"
+              />
+              <FunnelBar
+                label="Responded"
+                value={ghlMetrics.conversion.respondedLeads}
+                max={ghlMetrics.conversion.totalLeads}
+                color="from-cyan-600 to-cyan-500"
+              />
+              <FunnelBar
+                label="Booked"
+                value={ghlMetrics.conversion.bookedConsultations}
+                max={ghlMetrics.conversion.totalLeads}
+                color="from-green-600 to-green-500"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>
+              Connect GoHighLevel in Settings to see funnel data.
+            </p>
+          )}
+        </div>
 
-      {activeTab === "pipeline" && (
-        <GlassCard>
-          <div className="py-12 text-center">
-            <p className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>
-              Pipeline visualization coming soon.
+        {/* Speed to Lead */}
+        <div className="glass-card rounded-2xl p-5">
+          <h3 className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: "var(--text-muted)" }}>
+            Speed to Lead
+          </h3>
+          {metricsLoading ? (
+            <div className="h-32 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : ghlMetrics?.speedToLead ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="text-center flex-1">
+                  <p className="text-3xl font-black" style={{ color: "var(--text-main)" }}>
+                    {ghlMetrics.speedToLead.averageResponseMinutes}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                    Avg Minutes
+                  </p>
+                </div>
+                <div className="text-center flex-1">
+                  <p className="text-3xl font-black" style={{ color: "var(--text-main)" }}>
+                    {ghlMetrics.speedToLead.medianResponseMinutes}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                    Median Minutes
+                  </p>
+                </div>
+                <div className="text-center flex-1">
+                  <div
+                    className={`w-4 h-4 rounded-full mx-auto mb-1 ${
+                      ghlMetrics.speedToLead.performanceRating === "green"
+                        ? "bg-green-400"
+                        : ghlMetrics.speedToLead.performanceRating === "yellow"
+                        ? "bg-yellow-400"
+                        : "bg-red-400"
+                    }`}
+                  />
+                  <p className="text-[10px] uppercase tracking-widest capitalize" style={{ color: "var(--text-muted)" }}>
+                    {ghlMetrics.speedToLead.performanceRating}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 text-xs">
+                <span className="px-2 py-1 rounded-lg bg-green-500/10 text-green-400">
+                  &lt;5m: {ghlMetrics.speedToLead.distribution.under5min}
+                </span>
+                <span className="px-2 py-1 rounded-lg bg-yellow-500/10 text-yellow-400">
+                  5-30m: {ghlMetrics.speedToLead.distribution.from5to30min}
+                </span>
+                <span className="px-2 py-1 rounded-lg bg-red-500/10 text-red-400">
+                  &gt;30m: {ghlMetrics.speedToLead.distribution.over30min}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>
+              Connect GoHighLevel in Settings to see response metrics.
             </p>
-            <p className="text-xs mt-2" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
-              Connect GoHighLevel in Settings to view pipeline data.
-            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom row: Recent Documents + Recent Leads */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Recent Documents */}
+        <div className="glass-card rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+              Recent Documents
+            </h3>
+            <Link
+              href="/dashboard/documents"
+              className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:underline"
+            >
+              View All
+            </Link>
           </div>
-        </GlassCard>
-      )}
+          {docStats.total === 0 ? (
+            <div className="py-6 text-center">
+              <FileIcon className="w-6 h-6 mx-auto mb-2 opacity-30" />
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                No documents yet. Create a secure link to get started.
+              </p>
+              <Link
+                href="/dashboard/documents/links"
+                className="inline-block mt-3 px-4 py-1.5 rounded-lg text-xs font-bold text-blue-400 border border-blue-500/30 hover:bg-blue-500/10 transition-colors"
+              >
+                Create Secure Link
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between py-2 px-2 rounded-lg">
+                <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                  {docStats.new} pending review
+                </span>
+                <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                  {docStats.reviewed} reviewed
+                </span>
+              </div>
+              <Link
+                href="/dashboard/documents"
+                className="block w-full text-center py-2 rounded-lg text-xs font-bold text-blue-400 hover:bg-blue-500/5 transition-colors"
+              >
+                Open Document Manager
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Recent Leads */}
+        <div className="glass-card rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+              Recent Leads
+            </h3>
+            <Link
+              href="/dashboard/contacts"
+              className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:underline"
+            >
+              View All
+            </Link>
+          </div>
+          {ghlLoading ? (
+            <div className="py-6 flex justify-center">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : ghlData?.recentLeads && ghlData.recentLeads.length > 0 ? (
+            <div className="space-y-2">
+              {ghlData.recentLeads.slice(0, 5).map((lead) => (
+                <div
+                  key={lead.id}
+                  className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-blue-500/5 transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                      {lead.firstName} {lead.lastName}
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {lead.email || lead.phone || "No contact info"}
+                    </p>
+                  </div>
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    {lead.source || "Direct"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-6 text-center">
+              <UsersIcon className="w-6 h-6 mx-auto mb-2 opacity-30" />
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Connect GoHighLevel in Settings to see leads.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FunnelBar({
+  label,
+  value,
+  max,
+  color,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+}) {
+  const pct = max > 0 ? Math.max(4, (value / max) * 100) : 4;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-medium" style={{ color: "var(--text-main)" }}>
+          {label}
+        </span>
+        <span className="text-xs font-bold" style={{ color: "var(--text-main)" }}>
+          {value}
+        </span>
+      </div>
+      <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
+        <div
+          className={`h-full rounded-full bg-gradient-to-r ${color} transition-all duration-700`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
