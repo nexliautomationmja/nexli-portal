@@ -7,6 +7,8 @@ import { getSupabase } from "@/lib/supabase";
 import { randomUUID } from "crypto";
 import { fal } from "@fal-ai/client";
 
+fal.config({ credentials: process.env.FAL_KEY });
+
 export const maxDuration = 60;
 
 // GET — poll video generation status, finalize if fal.ai is done
