@@ -305,7 +305,11 @@ export function MarketingClient({ userId }: MarketingClientProps) {
 
       if (!res.ok) {
         const data = await res.json();
-        setGenerateError(data.error || "Video generation failed");
+        setGenerateError(
+          data.detail
+            ? `${data.error}: ${data.detail}`
+            : data.error || "Video generation failed"
+        );
         setGenerating(false);
         return;
       }
