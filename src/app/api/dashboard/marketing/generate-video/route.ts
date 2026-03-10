@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
         image_url: avatarUrl,
         audio_url: audioUrl,
         prompt,
+        resolution: resolution || "480p",
       },
     });
 
