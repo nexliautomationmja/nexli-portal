@@ -18,6 +18,7 @@ import {
   HamburgerIcon,
   XIcon,
   ImageIcon,
+  VideoIcon,
 } from "@/components/ui/icons";
 
 interface TopNavProps {
@@ -34,6 +35,7 @@ const clientNav = [
 ];
 
 const adminNav = [
+  { href: "/dashboard/marketing", label: "Marketing", icon: VideoIcon },
   { href: "/dashboard/admin", label: "All Clients", icon: UsersIcon },
 ];
 

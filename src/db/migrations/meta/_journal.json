@@ -8,6 +8,13 @@
       "when": 1769959681160,
       "tag": "0000_eager_white_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773157133325,
+      "tag": "0001_windy_goliath",
+      "breakpoints": true
     }
   ]
 }
