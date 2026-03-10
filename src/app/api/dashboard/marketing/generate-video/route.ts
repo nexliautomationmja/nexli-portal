@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { marketingVideos } from "@/db/schema";
 import { fal } from "@fal-ai/client";
 
+fal.config({ credentials: process.env.FAL_KEY });
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id || session.user.role !== "admin") {
