@@ -8,17 +8,19 @@ import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 import {
   LayoutIcon,
-  ChartIcon,
-  FileIcon,
-  GearIcon,
   UsersIcon,
+  KanbanIcon,
+  CalendarIcon,
+  MessageIcon,
+  FileIcon,
+  FormIcon,
+  GearIcon,
+  ShieldIcon,
   SunIcon,
   MoonIcon,
   LogOutIcon,
   HamburgerIcon,
   XIcon,
-  ImageIcon,
-  VideoIcon,
 } from "@/components/ui/icons";
 
 interface TopNavProps {
@@ -28,15 +30,17 @@ interface TopNavProps {
 
 const clientNav = [
   { href: "/dashboard", label: "Overview", icon: LayoutIcon },
-  { href: "/dashboard/analytics", label: "Analytics", icon: ChartIcon },
-  { href: "/dashboard/reports", label: "Reports", icon: FileIcon },
-  { href: "/dashboard/brand-files", label: "Brand Files", icon: ImageIcon },
+  { href: "/dashboard/contacts", label: "Contacts", icon: UsersIcon },
+  { href: "/dashboard/pipeline", label: "Pipeline", icon: KanbanIcon },
+  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon },
+  { href: "/dashboard/messages", label: "Messages", icon: MessageIcon },
+  { href: "/dashboard/documents", label: "Documents", icon: FileIcon },
+  { href: "/dashboard/tax-forms", label: "Tax Forms", icon: FormIcon },
   { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
 ];
 
 const adminNav = [
-  { href: "/dashboard/marketing", label: "Marketing", icon: VideoIcon },
-  { href: "/dashboard/admin", label: "All Clients", icon: UsersIcon },
+  { href: "/dashboard/admin", label: "All Clients", icon: ShieldIcon },
 ];
 
 export function TopNav({ isAdmin, userName }: TopNavProps) {
