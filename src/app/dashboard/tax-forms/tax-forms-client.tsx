@@ -8,10 +8,33 @@ import {
   formCategories,
   allStates,
   getFormFields,
+  getPdfUrl,
+  getInstructionsUrl,
+  getStateTaxUrl,
   type TaxForm,
   type FormField,
 } from "@/lib/tax-forms-data";
 import { SearchIcon, FormIcon, XIcon, PenIcon } from "@/components/ui/icons";
+
+function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
 
 type Scope = "federal" | "state";
 
@@ -114,7 +137,39 @@ export function TaxFormsClient() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Download PDF button */}
+              {(() => {
+                const pdfUrl = getPdfUrl(selectedForm);
+                const stateUrl = getStateTaxUrl(selectedForm);
+                const instrUrl = getInstructionsUrl(selectedForm);
+                const url = pdfUrl || stateUrl;
+                return url ? (
+                  <>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                    >
+                      <DownloadIcon className="w-3.5 h-3.5" />
+                      {pdfUrl ? "Download PDF" : "State Forms"}
+                    </a>
+                    {instrUrl && (
+                      <a
+                        href={instrUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-[var(--glass-border)] hover:border-blue-500/30 transition-colors"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        <ExternalLinkIcon className="w-3.5 h-3.5" />
+                        Instructions
+                      </a>
+                    )}
+                  </>
+                ) : null;
+              })()}
               <div className="flex items-center gap-1 p-1 rounded-xl border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
                 <button
                   onClick={() => setView("edit")}
@@ -305,38 +360,57 @@ export function TaxFormsClient() {
 
           {/* Forms Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredForms.slice(0, 60).map((form) => (
-              <button
-                key={form.id}
-                onClick={() => selectForm(form)}
-                className="glass-card rounded-xl p-4 text-left hover:border-blue-500/30 transition-colors group"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                      <FormIcon className="w-4 h-4 text-blue-400" />
+            {filteredForms.slice(0, 60).map((form) => {
+              const pdfLink = getPdfUrl(form) || getStateTaxUrl(form);
+              return (
+                <div
+                  key={form.id}
+                  className="glass-card rounded-xl p-4 text-left hover:border-blue-500/30 transition-colors group relative"
+                >
+                  <button
+                    onClick={() => selectForm(form)}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                          <FormIcon className="w-4 h-4 text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
+                            {form.number}
+                          </p>
+                          {form.state && (
+                            <span className="text-[10px] font-bold text-cyan-400">
+                              {form.state}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <PenIcon className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-blue-400 transition-opacity" />
                     </div>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
-                        {form.number}
-                      </p>
-                      {form.state && (
-                        <span className="text-[10px] font-bold text-cyan-400">
-                          {form.state}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <PenIcon className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-blue-400 transition-opacity" />
+                    <p className="text-xs font-medium mb-1 line-clamp-1" style={{ color: "var(--text-main)" }}>
+                      {form.name}
+                    </p>
+                    <p className="text-[10px] line-clamp-2" style={{ color: "var(--text-muted)" }}>
+                      {form.description}
+                    </p>
+                  </button>
+                  {pdfLink && (
+                    <a
+                      href={pdfLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute bottom-3 right-3 p-1.5 rounded-lg border border-emerald-500/20 text-emerald-400 opacity-0 group-hover:opacity-100 hover:bg-emerald-500/10 transition-all"
+                      title="Download official PDF"
+                    >
+                      <DownloadIcon className="w-3.5 h-3.5" />
+                    </a>
+                  )}
                 </div>
-                <p className="text-xs font-medium mb-1 line-clamp-1" style={{ color: "var(--text-main)" }}>
-                  {form.name}
-                </p>
-                <p className="text-[10px] line-clamp-2" style={{ color: "var(--text-muted)" }}>
-                  {form.description}
-                </p>
-              </button>
-            ))}
+              );
+            })}
           </div>
 
           {filteredForms.length > 60 && (

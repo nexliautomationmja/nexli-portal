@@ -7,6 +7,116 @@ export interface TaxForm {
     description: string;
     category: string;
     state?: string; // only for state forms
+    pdfUrl?: string; // direct link to official IRS/state PDF
+}
+
+// Generate IRS PDF URL from form number
+// IRS convention: https://www.irs.gov/pub/irs-pdf/f{number}.pdf
+const PDF_OVERRIDES: Record<string, string> = {
+    'Schedule 1': 'f1040s1.pdf',
+    'Schedule 2': 'f1040s2.pdf',
+    'Schedule 3': 'f1040s3.pdf',
+    'Schedule A': 'f1040sa.pdf',
+    'Schedule B': 'f1040sb.pdf',
+    'Schedule C': 'f1040sc.pdf',
+    'Schedule D': 'f1040sd.pdf',
+    'Schedule E': 'f1040se.pdf',
+    'Schedule F': 'f1040sf.pdf',
+    'Schedule H': 'f1040sh.pdf',
+    'Schedule J': 'f1040sj.pdf',
+    'Schedule R': 'f1040sr.pdf', // Note: different from Form 1040-SR
+    'Schedule SE': 'f1040sse.pdf',
+    'Schedule 8812': 'f1040s8.pdf',
+    'Schedule K-1 (1065)': 'f1065sk1.pdf',
+    'Schedule K-1 (1120-S)': 'f1120ssk.pdf',
+    'Schedule K-1 (1041)': 'f1041sk1.pdf',
+    'Form 8995': 'f8995.pdf',
+    'I-9': '', // Not an IRS form (DHS/USCIS)
+    'FinCEN 114': '', // Filed via BSA E-Filing, not IRS.gov
+    '1040-PR': 'f1040pr.pdf',
+};
+
+export function getPdfUrl(form: TaxForm): string {
+    if (form.state) return ''; // State forms handled separately
+    const num = form.number;
+    if (PDF_OVERRIDES[num] !== undefined) {
+        return PDF_OVERRIDES[num] ? `https://www.irs.gov/pub/irs-pdf/${PDF_OVERRIDES[num]}` : '';
+    }
+    // Standard: remove hyphens/spaces/parens, lowercase, prefix with f
+    const cleaned = num.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    return `https://www.irs.gov/pub/irs-pdf/f${cleaned}.pdf`;
+}
+
+// Generate IRS instructions URL
+export function getInstructionsUrl(form: TaxForm): string {
+    if (form.state) return '';
+    const num = form.number;
+    if (num.startsWith('Schedule') || num === 'I-9' || num === 'FinCEN 114') return '';
+    const cleaned = num.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    return `https://www.irs.gov/pub/irs-pdf/i${cleaned}.pdf`;
+}
+
+// ── STATE TAX DEPARTMENT URLS ───────────────────────────────────
+// Maps state abbreviation to official tax department forms/downloads page
+const STATE_TAX_URLS: Record<string, string> = {
+    AL: 'https://www.revenue.alabama.gov/individual-corporate/taxes-individual-income-tax-forms/',
+    AK: 'https://tax.alaska.gov/programs/whatsnew.aspx',
+    AZ: 'https://azdor.gov/forms',
+    AR: 'https://www.dfa.arkansas.gov/income-tax/individual-income-tax-forms/',
+    CA: 'https://www.ftb.ca.gov/forms/',
+    CO: 'https://tax.colorado.gov/individual-income-tax-filing-guide',
+    CT: 'https://portal.ct.gov/DRS/DRS-Forms/Current-Year-Forms',
+    DE: 'https://revenue.delaware.gov/frequently-used-forms/',
+    DC: 'https://otr.cfo.dc.gov/page/individual-income-tax-forms',
+    FL: 'https://floridarevenue.com/taxes/taxesfees/Pages/corporate.aspx',
+    GA: 'https://dor.georgia.gov/individual-income-tax-forms',
+    HI: 'https://tax.hawaii.gov/forms/',
+    ID: 'https://tax.idaho.gov/forms/',
+    IL: 'https://tax.illinois.gov/forms.html',
+    IN: 'https://www.in.gov/dor/tax-forms/',
+    IA: 'https://tax.iowa.gov/forms',
+    KS: 'https://www.ksrevenue.gov/forms-indiv.html',
+    KY: 'https://revenue.ky.gov/Individual/Pages/Forms.aspx',
+    LA: 'https://revenue.louisiana.gov/Forms',
+    ME: 'https://www.maine.gov/revenue/tax-return-forms',
+    MD: 'https://www.marylandtaxes.gov/individual/income/income-forms-index.php',
+    MA: 'https://www.mass.gov/info-details/dor-personal-income-tax-forms',
+    MI: 'https://www.michigan.gov/taxes/iit/tax-forms',
+    MN: 'https://www.revenue.state.mn.us/individual-income-tax-forms-instructions',
+    MS: 'https://www.dor.ms.gov/individual/tax-forms',
+    MO: 'https://dor.mo.gov/forms/',
+    MT: 'https://mtrevenue.gov/taxes/individual-income-tax/individual-income-tax-forms/',
+    NE: 'https://revenue.nebraska.gov/individuals/individual-income-tax-forms',
+    NV: 'https://tax.nv.gov/Forms/',
+    NH: 'https://www.revenue.nh.gov/forms/',
+    NJ: 'https://www.nj.gov/treasury/taxation/prntgit.shtml',
+    NM: 'https://www.tax.newmexico.gov/individuals/tax-forms-and-tables/',
+    NY: 'https://www.tax.ny.gov/forms/income_cur_forms.htm',
+    NC: 'https://www.ncdor.gov/taxes-forms/individual-income-tax/individual-income-tax-forms-instructions',
+    ND: 'https://www.tax.nd.gov/forms',
+    OH: 'https://tax.ohio.gov/individual/resources/annual-tax-forms',
+    OK: 'https://oklahoma.gov/tax/individuals/income-tax/income-tax-filing/forms.html',
+    OR: 'https://www.oregon.gov/dor/forms/Pages/default.aspx',
+    PA: 'https://www.revenue.pa.gov/FormsandPublications/FormsforIndividuals/PIT/Pages/default.aspx',
+    RI: 'https://tax.ri.gov/forms',
+    SC: 'https://dor.sc.gov/forms-site/Forms/IITFormsList.aspx',
+    SD: 'https://dor.sd.gov/businesses/taxes/',
+    TN: 'https://www.tn.gov/revenue/tax-resources/forms.html',
+    TX: 'https://comptroller.texas.gov/taxes/franchise/forms/',
+    UT: 'https://incometax.utah.gov/forms',
+    VT: 'https://tax.vermont.gov/individuals/income-tax-returns/forms',
+    VA: 'https://www.tax.virginia.gov/forms',
+    WA: 'https://dor.wa.gov/forms-publications',
+    WV: 'https://tax.wv.gov/Individuals/ElectronicFiling/Pages/IndividualsTaxForms.aspx',
+    WI: 'https://www.revenue.wi.gov/Pages/HTML/formpub.aspx',
+    WY: 'https://revenue.wyo.gov/tax-types',
+};
+
+export function getStateTaxUrl(form: TaxForm): string {
+    if (!form.state) return '';
+    const entry = Object.entries(stateFormData).find(([state]) => state === form.state);
+    if (!entry) return '';
+    return STATE_TAX_URLS[entry[1].abbr] || '';
 }
 
 export const formCategories = [
@@ -755,7 +865,7 @@ export function getFormFields(form: TaxForm): FormField[] {
     const cat = form.category;
     const num = form.number;
 
-    // Common taxpayer info section
+    // ── Reusable field blocks ──
     const taxpayerInfo: FormField[] = [
         { id: 'first_name', label: 'First Name', type: 'text', placeholder: 'John', section: 'Taxpayer Information' },
         { id: 'last_name', label: 'Last Name', type: 'text', placeholder: 'Smith', section: 'Taxpayer Information' },
@@ -766,22 +876,633 @@ export function getFormFields(form: TaxForm): FormField[] {
         { id: 'zip', label: 'ZIP Code', type: 'text', placeholder: '78701', section: 'Taxpayer Information' },
     ];
 
+    const spouseInfo: FormField[] = [
+        { id: 'spouse_first', label: "Spouse's First Name", type: 'text', placeholder: 'Jane', section: 'Spouse Information' },
+        { id: 'spouse_last', label: "Spouse's Last Name", type: 'text', placeholder: 'Smith', section: 'Spouse Information' },
+        { id: 'spouse_ssn', label: "Spouse's SSN", type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Spouse Information' },
+    ];
+
     const businessInfo: FormField[] = [
         { id: 'biz_name', label: 'Business Name', type: 'text', placeholder: 'Acme Corp', section: 'Business Information' },
         { id: 'ein', label: 'Employer Identification Number', type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Business Information' },
         { id: 'biz_address', label: 'Business Address', type: 'text', placeholder: '456 Commerce Blvd', section: 'Business Information' },
-        { id: 'biz_type', label: 'Business Type', type: 'select', options: ['Sole Proprietorship', 'Partnership', 'Corporation', 'S Corporation', 'LLC'], section: 'Business Information' },
+        { id: 'biz_city', label: 'City', type: 'text', placeholder: 'Dallas', section: 'Business Information' },
+        { id: 'biz_state', label: 'State', type: 'text', placeholder: 'TX', section: 'Business Information' },
+        { id: 'biz_zip', label: 'ZIP Code', type: 'text', placeholder: '75201', section: 'Business Information' },
         { id: 'fiscal_year', label: 'Tax Year Ending', type: 'date', placeholder: '12/31/2025', section: 'Business Information' },
     ];
 
-    // Individual tax forms
-    if (cat === 'Individual Tax' || num.includes('1040')) {
+    const payerRecipient: FormField[] = [
+        { id: 'payer_name', label: "Payer's Name", type: 'text', placeholder: 'ABC Financial Services', section: 'Payer Information' },
+        { id: 'payer_tin', label: "Payer's TIN", type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Payer Information' },
+        { id: 'payer_address', label: "Payer's Address", type: 'text', placeholder: '789 Finance Ave', section: 'Payer Information' },
+        { id: 'recipient_name', label: "Recipient's Name", type: 'text', placeholder: 'John Smith', section: 'Recipient Information' },
+        { id: 'recipient_tin', label: "Recipient's TIN", type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Recipient Information' },
+        { id: 'recipient_address', label: "Recipient's Address", type: 'text', placeholder: '123 Main St', section: 'Recipient Information' },
+    ];
+
+    // ══════════════════════════════════════════════════════════════
+    //  FORM-SPECIFIC FIELDS — matching actual IRS form lines
+    // ══════════════════════════════════════════════════════════════
+
+    // ── Form 1040: U.S. Individual Income Tax Return ──
+    if (num === '1040' || num === '1040-SR') {
+        return [
+            ...taxpayerInfo,
+            ...spouseInfo,
+            { id: 'filing_status', label: 'Filing Status', type: 'select', options: ['Single', 'Married Filing Jointly', 'Married Filing Separately', 'Head of Household', 'Qualifying Surviving Spouse'], section: 'Filing Status' },
+            { id: 'digital_assets', label: 'Digital Asset Transactions (Yes/No)', type: 'select', options: ['No', 'Yes'], section: 'Filing Status' },
+            { id: 'yourself_dependent', label: 'Can someone claim you as a dependent?', type: 'checkbox', section: 'Standard Deduction' },
+            { id: 'are_born_before', label: 'Born before Jan 2, 1960?', type: 'checkbox', section: 'Standard Deduction' },
+            { id: 'are_blind', label: 'Are you blind?', type: 'checkbox', section: 'Standard Deduction' },
+            // Dependents
+            { id: 'dep1_name', label: 'Dependent 1 — Name', type: 'text', placeholder: 'Child A. Smith', section: 'Dependents' },
+            { id: 'dep1_ssn', label: 'Dependent 1 — SSN', type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Dependents' },
+            { id: 'dep1_rel', label: 'Dependent 1 — Relationship', type: 'text', placeholder: 'Son', section: 'Dependents' },
+            { id: 'dep1_ctc', label: 'Dependent 1 — Child Tax Credit?', type: 'checkbox', section: 'Dependents' },
+            { id: 'dep2_name', label: 'Dependent 2 — Name', type: 'text', placeholder: '', section: 'Dependents' },
+            { id: 'dep2_ssn', label: 'Dependent 2 — SSN', type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Dependents' },
+            { id: 'dep2_rel', label: 'Dependent 2 — Relationship', type: 'text', placeholder: '', section: 'Dependents' },
+            { id: 'dep2_ctc', label: 'Dependent 2 — Child Tax Credit?', type: 'checkbox', section: 'Dependents' },
+            // Income (Lines 1–11)
+            { id: 'line1a', label: 'Line 1a — Wages, salaries, tips (W-2 box 1)', type: 'number', placeholder: '75,000', section: 'Income' },
+            { id: 'line1b', label: 'Line 1b — Household employee income', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line1c', label: 'Line 1c — Tip income not on W-2', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line1d', label: 'Line 1d — Medicaid waiver payments excluded', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line1e', label: 'Line 1e — Dependent care benefits (W-2 box 10)', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line1f', label: 'Line 1f — Employer-provided adoption benefits (8839)', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line1g', label: 'Line 1g — Form 8919 wages', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line1h', label: 'Line 1h — Strike benefits', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line1i', label: 'Line 1i — Stock option(s)', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line1z', label: 'Line 1z — Add lines 1a through 1i', type: 'number', placeholder: '75,000', section: 'Income' },
+            { id: 'line2a', label: 'Line 2a — Tax-exempt interest', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line2b', label: 'Line 2b — Taxable interest', type: 'number', placeholder: '250', section: 'Income' },
+            { id: 'line3a', label: 'Line 3a — Qualified dividends', type: 'number', placeholder: '800', section: 'Income' },
+            { id: 'line3b', label: 'Line 3b — Ordinary dividends', type: 'number', placeholder: '1,200', section: 'Income' },
+            { id: 'line4a', label: 'Line 4a — IRA distributions', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line4b', label: 'Line 4b — Taxable IRA amount', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line5a', label: 'Line 5a — Pensions and annuities', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line5b', label: 'Line 5b — Taxable pension amount', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line6a', label: 'Line 6a — Social Security benefits', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line6b', label: 'Line 6b — Taxable SS amount', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line6c', label: 'Line 6c — Election to exclude lump-sum?', type: 'checkbox', section: 'Income' },
+            { id: 'line7', label: 'Line 7 — Capital gain/loss (Schedule D)', type: 'number', placeholder: '3,500', section: 'Income' },
+            { id: 'line8', label: 'Line 8 — Other income (Schedule 1, line 10)', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line9', label: 'Line 9 — Total income', type: 'number', placeholder: '79,950', section: 'Income' },
+            { id: 'line10', label: 'Line 10 — Adjustments (Schedule 1, line 26)', type: 'number', placeholder: '0', section: 'Adjustments' },
+            { id: 'line11', label: 'Line 11 — Adjusted Gross Income (AGI)', type: 'number', placeholder: '79,950', section: 'Adjustments' },
+            // Deductions (Lines 12–15)
+            { id: 'line12', label: 'Line 12 — Standard or Itemized Deductions', type: 'number', placeholder: '14,600', section: 'Deductions' },
+            { id: 'line13', label: 'Line 13 — Qualified Business Income Deduction (8995)', type: 'number', placeholder: '0', section: 'Deductions' },
+            { id: 'line14', label: 'Line 14 — Total deductions', type: 'number', placeholder: '14,600', section: 'Deductions' },
+            { id: 'line15', label: 'Line 15 — Taxable income', type: 'number', placeholder: '65,350', section: 'Deductions' },
+            // Tax and Credits (Lines 16–24)
+            { id: 'line16', label: 'Line 16 — Tax (from Tax Table or Sch D)', type: 'number', placeholder: '9,574', section: 'Tax and Credits' },
+            { id: 'line17', label: 'Line 17 — Amount from Schedule 2, Part I, line 4', type: 'number', placeholder: '0', section: 'Tax and Credits' },
+            { id: 'line19', label: 'Line 19 — Child tax credit / other dep credit (8812)', type: 'number', placeholder: '0', section: 'Tax and Credits' },
+            { id: 'line21', label: 'Line 21 — Other credits (Schedule 3, line 8)', type: 'number', placeholder: '0', section: 'Tax and Credits' },
+            { id: 'line22', label: 'Line 22 — Total credits', type: 'number', placeholder: '0', section: 'Tax and Credits' },
+            { id: 'line24', label: 'Line 24 — Total tax', type: 'number', placeholder: '9,574', section: 'Tax and Credits' },
+            // Payments (Lines 25–33)
+            { id: 'line25a', label: 'Line 25a — W-2 federal tax withheld', type: 'number', placeholder: '12,000', section: 'Payments' },
+            { id: 'line25b', label: 'Line 25b — 1099 federal tax withheld', type: 'number', placeholder: '0', section: 'Payments' },
+            { id: 'line25c', label: 'Line 25c — Other withholding (W-2G, 1042-S)', type: 'number', placeholder: '0', section: 'Payments' },
+            { id: 'line26', label: 'Line 26 — Estimated tax payments', type: 'number', placeholder: '0', section: 'Payments' },
+            { id: 'line27', label: 'Line 27 — Earned Income Credit (EIC)', type: 'number', placeholder: '0', section: 'Payments' },
+            { id: 'line28', label: 'Line 28 — Additional child tax credit (8812)', type: 'number', placeholder: '0', section: 'Payments' },
+            { id: 'line29', label: 'Line 29 — American Opportunity Credit (8863)', type: 'number', placeholder: '0', section: 'Payments' },
+            { id: 'line33', label: 'Line 33 — Total payments', type: 'number', placeholder: '12,000', section: 'Payments' },
+            // Refund or Amount Owed
+            { id: 'line34', label: 'Line 34 — Overpayment (refund)', type: 'number', placeholder: '2,426', section: 'Refund / Amount Owed' },
+            { id: 'line35a', label: 'Line 35a — Refunded to you', type: 'number', placeholder: '2,426', section: 'Refund / Amount Owed' },
+            { id: 'routing', label: 'Line 35b — Routing number', type: 'text', placeholder: '021000021', section: 'Refund / Amount Owed' },
+            { id: 'account', label: 'Line 35d — Account number', type: 'text', placeholder: '', section: 'Refund / Amount Owed' },
+            { id: 'acct_type', label: 'Account type', type: 'select', options: ['Checking', 'Savings'], section: 'Refund / Amount Owed' },
+            { id: 'line37', label: 'Line 37 — Amount you owe', type: 'number', placeholder: '0', section: 'Refund / Amount Owed' },
+            { id: 'line38', label: 'Line 38 — Estimated tax penalty', type: 'number', placeholder: '0', section: 'Refund / Amount Owed' },
+            // Preparer
+            { id: 'preparer_name', label: "Paid Preparer's Name", type: 'text', placeholder: '', section: 'Third Party / Preparer' },
+            { id: 'preparer_ptin', label: 'PTIN', type: 'text', placeholder: 'P01234567', section: 'Third Party / Preparer' },
+            { id: 'firm_name', label: 'Firm Name', type: 'text', placeholder: '', section: 'Third Party / Preparer' },
+            { id: 'firm_ein', label: 'Firm EIN', type: 'ein', placeholder: '', section: 'Third Party / Preparer' },
+        ];
+    }
+
+    // ── Schedule A: Itemized Deductions ──
+    if (num === 'Schedule A') {
+        return [
+            ...taxpayerInfo,
+            { id: 'med_dental', label: 'Line 1 — Medical and dental expenses', type: 'number', placeholder: '8,500', section: 'Medical and Dental' },
+            { id: 'agi_schedule_a', label: 'Line 2 — Enter AGI from Form 1040, line 11', type: 'number', placeholder: '79,950', section: 'Medical and Dental' },
+            { id: 'med_pct', label: 'Line 3 — Multiply line 2 by 7.5%', type: 'number', placeholder: '5,996', section: 'Medical and Dental' },
+            { id: 'med_deduction', label: 'Line 4 — Subtract line 3 from line 1 (if > 0)', type: 'number', placeholder: '2,504', section: 'Medical and Dental' },
+            { id: 'state_local_tax', label: 'Line 5a — State/local income or sales taxes', type: 'number', placeholder: '5,000', section: 'Taxes You Paid' },
+            { id: 'real_estate_tax', label: 'Line 5b — Real estate taxes', type: 'number', placeholder: '4,200', section: 'Taxes You Paid' },
+            { id: 'personal_prop_tax', label: 'Line 5c — Personal property taxes', type: 'number', placeholder: '500', section: 'Taxes You Paid' },
+            { id: 'salt_total', label: 'Line 5d — Total (5a+5b+5c)', type: 'number', placeholder: '9,700', section: 'Taxes You Paid' },
+            { id: 'salt_capped', label: 'Line 5e — SALT deduction (max $10,000)', type: 'number', placeholder: '9,700', section: 'Taxes You Paid' },
+            { id: 'other_taxes', label: 'Line 6 — Other taxes', type: 'number', placeholder: '0', section: 'Taxes You Paid' },
+            { id: 'home_mortgage', label: 'Line 8a — Home mortgage interest (1098)', type: 'number', placeholder: '12,000', section: 'Interest You Paid' },
+            { id: 'points_paid', label: 'Line 8b — Points not reported on 1098', type: 'number', placeholder: '0', section: 'Interest You Paid' },
+            { id: 'invest_interest', label: 'Line 9 — Investment interest (Form 4952)', type: 'number', placeholder: '0', section: 'Interest You Paid' },
+            { id: 'charity_cash', label: 'Line 11 — Gifts by cash or check', type: 'number', placeholder: '3,000', section: 'Gifts to Charity' },
+            { id: 'charity_noncash', label: 'Line 12 — Other than cash (attach 8283 if >$500)', type: 'number', placeholder: '500', section: 'Gifts to Charity' },
+            { id: 'charity_carryover', label: 'Line 13 — Carryover from prior year', type: 'number', placeholder: '0', section: 'Gifts to Charity' },
+            { id: 'casualty_loss', label: 'Line 15 — Casualty and theft losses (Form 4684)', type: 'number', placeholder: '0', section: 'Casualty and Theft Losses' },
+            { id: 'other_deductions', label: 'Line 16 — Other itemized deductions', type: 'number', placeholder: '0', section: 'Other Deductions' },
+            { id: 'total_itemized', label: 'Line 17 — Total itemized deductions', type: 'number', placeholder: '28,004', section: 'Total' },
+        ];
+    }
+
+    // ── Schedule C: Profit or Loss from Business ──
+    if (num === 'Schedule C') {
+        return [
+            ...taxpayerInfo,
+            { id: 'biz_name_c', label: 'A — Business name', type: 'text', placeholder: 'Smith Consulting', section: 'Business Identification' },
+            { id: 'principal_code', label: 'B — Principal business code', type: 'text', placeholder: '541611', section: 'Business Identification' },
+            { id: 'biz_ein_c', label: 'D — EIN (if any)', type: 'ein', placeholder: '', section: 'Business Identification' },
+            { id: 'biz_address_c', label: 'E — Business address', type: 'text', placeholder: '100 Consulting Way', section: 'Business Identification' },
+            { id: 'accounting_method', label: 'F — Accounting method', type: 'select', options: ['Cash', 'Accrual', 'Other'], section: 'Business Identification' },
+            { id: 'material_participation', label: 'G — Material participation?', type: 'select', options: ['Yes', 'No'], section: 'Business Identification' },
+            { id: 'started_acquired', label: 'H — Started or acquired this year?', type: 'select', options: ['No', 'Yes'], section: 'Business Identification' },
+            // Income
+            { id: 'line1_gross', label: 'Line 1 — Gross receipts or sales', type: 'number', placeholder: '120,000', section: 'Income' },
+            { id: 'line2_returns', label: 'Line 2 — Returns and allowances', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line4_cogs', label: 'Line 4 — Cost of goods sold (from line 42)', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line5_gross_profit', label: 'Line 5 — Gross profit', type: 'number', placeholder: '120,000', section: 'Income' },
+            { id: 'line6_other', label: 'Line 6 — Other income', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line7_gross_income', label: 'Line 7 — Gross income', type: 'number', placeholder: '120,000', section: 'Income' },
+            // Expenses
+            { id: 'line8_advertising', label: 'Line 8 — Advertising', type: 'number', placeholder: '2,400', section: 'Expenses' },
+            { id: 'line9_car', label: 'Line 9 — Car and truck expenses', type: 'number', placeholder: '4,800', section: 'Expenses' },
+            { id: 'line10_commissions', label: 'Line 10 — Commissions and fees', type: 'number', placeholder: '0', section: 'Expenses' },
+            { id: 'line11_contract', label: 'Line 11 — Contract labor', type: 'number', placeholder: '15,000', section: 'Expenses' },
+            { id: 'line13_depreciation', label: 'Line 13 — Depreciation (Form 4562)', type: 'number', placeholder: '3,000', section: 'Expenses' },
+            { id: 'line15_insurance', label: 'Line 15 — Insurance (other than health)', type: 'number', placeholder: '2,400', section: 'Expenses' },
+            { id: 'line16a_mortgage', label: 'Line 16a — Mortgage interest', type: 'number', placeholder: '0', section: 'Expenses' },
+            { id: 'line17_legal', label: 'Line 17 — Legal and professional services', type: 'number', placeholder: '1,500', section: 'Expenses' },
+            { id: 'line18_office', label: 'Line 18 — Office expense', type: 'number', placeholder: '1,200', section: 'Expenses' },
+            { id: 'line20a_rent_vehicle', label: 'Line 20a — Rent — vehicles, equipment', type: 'number', placeholder: '0', section: 'Expenses' },
+            { id: 'line20b_rent_property', label: 'Line 20b — Rent — other property', type: 'number', placeholder: '12,000', section: 'Expenses' },
+            { id: 'line22_supplies', label: 'Line 22 — Supplies', type: 'number', placeholder: '800', section: 'Expenses' },
+            { id: 'line23_taxes', label: 'Line 23 — Taxes and licenses', type: 'number', placeholder: '500', section: 'Expenses' },
+            { id: 'line24a_travel', label: 'Line 24a — Travel', type: 'number', placeholder: '3,200', section: 'Expenses' },
+            { id: 'line24b_meals', label: 'Line 24b — Deductible meals', type: 'number', placeholder: '1,800', section: 'Expenses' },
+            { id: 'line25_utilities', label: 'Line 25 — Utilities', type: 'number', placeholder: '600', section: 'Expenses' },
+            { id: 'line27a_other', label: 'Line 27a — Other expenses (attach list)', type: 'number', placeholder: '2,000', section: 'Expenses' },
+            { id: 'line28_total_exp', label: 'Line 28 — Total expenses', type: 'number', placeholder: '51,200', section: 'Expenses' },
+            { id: 'line30_home_office', label: 'Line 30 — Business use of home (Form 8829)', type: 'number', placeholder: '4,000', section: 'Expenses' },
+            { id: 'line31_net_profit', label: 'Line 31 — Net profit or (loss)', type: 'number', placeholder: '64,800', section: 'Net Profit' },
+        ];
+    }
+
+    // ── Schedule D: Capital Gains and Losses ──
+    if (num === 'Schedule D') {
+        return [
+            ...taxpayerInfo,
+            { id: 'st_desc1', label: 'Short-term — Description of property 1', type: 'text', placeholder: '100 shares AAPL', section: 'Part I — Short-Term (held 1 year or less)' },
+            { id: 'st_acquired1', label: 'Date acquired', type: 'date', placeholder: '03/15/2025', section: 'Part I — Short-Term (held 1 year or less)' },
+            { id: 'st_sold1', label: 'Date sold', type: 'date', placeholder: '09/20/2025', section: 'Part I — Short-Term (held 1 year or less)' },
+            { id: 'st_proceeds1', label: 'Sales price', type: 'number', placeholder: '18,500', section: 'Part I — Short-Term (held 1 year or less)' },
+            { id: 'st_basis1', label: 'Cost basis', type: 'number', placeholder: '15,000', section: 'Part I — Short-Term (held 1 year or less)' },
+            { id: 'st_gain1', label: 'Gain or (loss)', type: 'number', placeholder: '3,500', section: 'Part I — Short-Term (held 1 year or less)' },
+            { id: 'line7_st_total', label: 'Line 7 — Net short-term capital gain/loss', type: 'number', placeholder: '3,500', section: 'Part I — Short-Term (held 1 year or less)' },
+            { id: 'lt_desc1', label: 'Long-term — Description of property 1', type: 'text', placeholder: '50 shares MSFT', section: 'Part II — Long-Term (held more than 1 year)' },
+            { id: 'lt_acquired1', label: 'Date acquired', type: 'date', placeholder: '01/10/2023', section: 'Part II — Long-Term (held more than 1 year)' },
+            { id: 'lt_sold1', label: 'Date sold', type: 'date', placeholder: '06/15/2025', section: 'Part II — Long-Term (held more than 1 year)' },
+            { id: 'lt_proceeds1', label: 'Sales price', type: 'number', placeholder: '22,000', section: 'Part II — Long-Term (held more than 1 year)' },
+            { id: 'lt_basis1', label: 'Cost basis', type: 'number', placeholder: '16,000', section: 'Part II — Long-Term (held more than 1 year)' },
+            { id: 'lt_gain1', label: 'Gain or (loss)', type: 'number', placeholder: '6,000', section: 'Part II — Long-Term (held more than 1 year)' },
+            { id: 'line15_lt_total', label: 'Line 15 — Net long-term capital gain/loss', type: 'number', placeholder: '6,000', section: 'Part II — Long-Term (held more than 1 year)' },
+            { id: 'line16_combined', label: 'Line 16 — Combined gain/loss (line 7 + 15)', type: 'number', placeholder: '9,500', section: 'Part III — Summary' },
+        ];
+    }
+
+    // ── Form 1120: C Corporation Income Tax Return ──
+    if (num === '1120') {
+        return [
+            ...businessInfo,
+            { id: 'date_incorporated', label: 'Date incorporated', type: 'date', placeholder: '01/15/2020', section: 'Corporate Info' },
+            { id: 'total_assets', label: 'Total assets at end of year', type: 'number', placeholder: '2,500,000', section: 'Corporate Info' },
+            { id: 'line1a_gross_receipts', label: 'Line 1a — Gross receipts or sales', type: 'number', placeholder: '5,200,000', section: 'Income' },
+            { id: 'line1b_returns', label: 'Line 1b — Returns and allowances', type: 'number', placeholder: '50,000', section: 'Income' },
+            { id: 'line2_cogs', label: 'Line 2 — Cost of goods sold (Schedule A)', type: 'number', placeholder: '2,100,000', section: 'Income' },
+            { id: 'line3_gross_profit', label: 'Line 3 — Gross profit', type: 'number', placeholder: '3,050,000', section: 'Income' },
+            { id: 'line4_dividends', label: 'Line 4 — Dividends (Schedule C)', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line5_interest', label: 'Line 5 — Interest', type: 'number', placeholder: '15,000', section: 'Income' },
+            { id: 'line6_rents', label: 'Line 6 — Gross rents', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line7_royalties', label: 'Line 7 — Gross royalties', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line8_cap_gain', label: 'Line 8 — Capital gain net income', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line10_other', label: 'Line 10 — Other income', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line11_total_income', label: 'Line 11 — Total income', type: 'number', placeholder: '3,065,000', section: 'Income' },
+            // Deductions
+            { id: 'line12_officers_comp', label: 'Line 12 — Compensation of officers', type: 'number', placeholder: '400,000', section: 'Deductions' },
+            { id: 'line13_salaries', label: 'Line 13 — Salaries and wages', type: 'number', placeholder: '1,200,000', section: 'Deductions' },
+            { id: 'line14_repairs', label: 'Line 14 — Repairs and maintenance', type: 'number', placeholder: '25,000', section: 'Deductions' },
+            { id: 'line16_rents', label: 'Line 16 — Rents', type: 'number', placeholder: '120,000', section: 'Deductions' },
+            { id: 'line17_taxes', label: 'Line 17 — Taxes and licenses', type: 'number', placeholder: '85,000', section: 'Deductions' },
+            { id: 'line18_interest', label: 'Line 18 — Interest', type: 'number', placeholder: '45,000', section: 'Deductions' },
+            { id: 'line19_charitable', label: 'Line 19 — Charitable contributions', type: 'number', placeholder: '25,000', section: 'Deductions' },
+            { id: 'line20_depreciation', label: 'Line 20 — Depreciation (Form 4562)', type: 'number', placeholder: '150,000', section: 'Deductions' },
+            { id: 'line26_other', label: 'Line 26 — Other deductions (attach statement)', type: 'number', placeholder: '50,000', section: 'Deductions' },
+            { id: 'line27_total_ded', label: 'Line 27 — Total deductions', type: 'number', placeholder: '2,100,000', section: 'Deductions' },
+            { id: 'line28_taxable', label: 'Line 28 — Taxable income', type: 'number', placeholder: '965,000', section: 'Tax Computation' },
+            { id: 'line30_total_tax', label: 'Line 30 — Total tax', type: 'number', placeholder: '202,650', section: 'Tax Computation' },
+            { id: 'line33_estimated', label: 'Line 33 — Estimated tax payments', type: 'number', placeholder: '200,000', section: 'Tax Computation' },
+            { id: 'line35_amount_owed', label: 'Line 35 — Amount owed', type: 'number', placeholder: '2,650', section: 'Tax Computation' },
+        ];
+    }
+
+    // ── Form 1120-S: S Corporation Income Tax Return ──
+    if (num === '1120-S') {
+        return [
+            ...businessInfo,
+            { id: 'date_s_election', label: 'Date S election effective', type: 'date', placeholder: '01/01/2020', section: 'S Corp Info' },
+            { id: 'date_incorporated_s', label: 'Date incorporated', type: 'date', placeholder: '12/15/2019', section: 'S Corp Info' },
+            { id: 'num_shareholders', label: 'Number of shareholders', type: 'number', placeholder: '3', section: 'S Corp Info' },
+            { id: 'line1a_s_gross', label: 'Line 1a — Gross receipts or sales', type: 'number', placeholder: '1,800,000', section: 'Income' },
+            { id: 'line2_s_cogs', label: 'Line 2 — Cost of goods sold', type: 'number', placeholder: '600,000', section: 'Income' },
+            { id: 'line3_s_gross_profit', label: 'Line 3 — Gross profit', type: 'number', placeholder: '1,200,000', section: 'Income' },
+            { id: 'line4_s_gain', label: 'Line 4 — Net gain/loss (Form 4797)', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line5_s_other', label: 'Line 5 — Other income', type: 'number', placeholder: '5,000', section: 'Income' },
+            { id: 'line6_s_total', label: 'Line 6 — Total income', type: 'number', placeholder: '1,205,000', section: 'Income' },
+            { id: 'line7_s_officers', label: 'Line 7 — Compensation of officers', type: 'number', placeholder: '250,000', section: 'Deductions' },
+            { id: 'line8_s_salaries', label: 'Line 8 — Salaries and wages', type: 'number', placeholder: '400,000', section: 'Deductions' },
+            { id: 'line10_s_repairs', label: 'Line 10 — Repairs and maintenance', type: 'number', placeholder: '15,000', section: 'Deductions' },
+            { id: 'line12_s_rents', label: 'Line 12 — Rents', type: 'number', placeholder: '60,000', section: 'Deductions' },
+            { id: 'line13_s_taxes', label: 'Line 13 — Taxes and licenses', type: 'number', placeholder: '40,000', section: 'Deductions' },
+            { id: 'line14_s_interest', label: 'Line 14 — Interest', type: 'number', placeholder: '20,000', section: 'Deductions' },
+            { id: 'line15_s_depreciation', label: 'Line 15 — Depreciation (Form 4562)', type: 'number', placeholder: '75,000', section: 'Deductions' },
+            { id: 'line19_s_other', label: 'Line 19 — Other deductions', type: 'number', placeholder: '30,000', section: 'Deductions' },
+            { id: 'line20_s_total_ded', label: 'Line 20 — Total deductions', type: 'number', placeholder: '890,000', section: 'Deductions' },
+            { id: 'line21_s_income', label: 'Line 21 — Ordinary business income/loss', type: 'number', placeholder: '315,000', section: 'Income Summary' },
+        ];
+    }
+
+    // ── Form 1065: Partnership Return ──
+    if (num === '1065') {
+        return [
+            ...businessInfo,
+            { id: 'partnership_type', label: 'Type of partnership', type: 'select', options: ['General', 'Limited', 'Limited Liability', 'Limited Liability Partnership'], section: 'Partnership Info' },
+            { id: 'num_partners', label: 'Number of Schedules K-1', type: 'number', placeholder: '4', section: 'Partnership Info' },
+            { id: 'date_formed', label: 'Date business started', type: 'date', placeholder: '03/01/2018', section: 'Partnership Info' },
+            { id: 'line1a_p_gross', label: 'Line 1a — Gross receipts or sales', type: 'number', placeholder: '2,400,000', section: 'Income' },
+            { id: 'line2_p_cogs', label: 'Line 2 — Cost of goods sold', type: 'number', placeholder: '900,000', section: 'Income' },
+            { id: 'line3_p_gross_profit', label: 'Line 3 — Gross profit', type: 'number', placeholder: '1,500,000', section: 'Income' },
+            { id: 'line4_p_interest', label: 'Line 4 — Ordinary income from other partnerships', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'line7_p_other', label: 'Line 7 — Other income', type: 'number', placeholder: '10,000', section: 'Income' },
+            { id: 'line8_p_total', label: 'Line 8 — Total income', type: 'number', placeholder: '1,510,000', section: 'Income' },
+            { id: 'line9_p_salaries', label: 'Line 9 — Salaries and wages', type: 'number', placeholder: '500,000', section: 'Deductions' },
+            { id: 'line10_p_guaranteed', label: 'Line 10 — Guaranteed payments to partners', type: 'number', placeholder: '300,000', section: 'Deductions' },
+            { id: 'line11_p_repairs', label: 'Line 11 — Repairs and maintenance', type: 'number', placeholder: '20,000', section: 'Deductions' },
+            { id: 'line14_p_rents', label: 'Line 14 — Rents', type: 'number', placeholder: '72,000', section: 'Deductions' },
+            { id: 'line15_p_taxes', label: 'Line 15 — Taxes and licenses', type: 'number', placeholder: '35,000', section: 'Deductions' },
+            { id: 'line16a_p_depreciation', label: 'Line 16a — Depreciation (Form 4562)', type: 'number', placeholder: '80,000', section: 'Deductions' },
+            { id: 'line20_p_other', label: 'Line 20 — Other deductions', type: 'number', placeholder: '40,000', section: 'Deductions' },
+            { id: 'line21_p_total_ded', label: 'Line 21 — Total deductions', type: 'number', placeholder: '1,047,000', section: 'Deductions' },
+            { id: 'line22_p_income', label: 'Line 22 — Ordinary business income/loss', type: 'number', placeholder: '463,000', section: 'Income Summary' },
+        ];
+    }
+
+    // ── Form 941: Employer's Quarterly Federal Tax Return ──
+    if (num === '941') {
+        return [
+            ...businessInfo,
+            { id: 'quarter', label: 'Report for Quarter', type: 'select', options: ['1 — January, February, March', '2 — April, May, June', '3 — July, August, September', '4 — October, November, December'], section: 'Quarter' },
+            { id: 'line1_employees', label: 'Line 1 — Number of employees who received wages', type: 'number', placeholder: '25', section: 'Part 1' },
+            { id: 'line2_wages', label: 'Line 2 — Wages, tips, and other compensation', type: 'number', placeholder: '312,500', section: 'Part 1' },
+            { id: 'line3_fed_withheld', label: 'Line 3 — Federal income tax withheld', type: 'number', placeholder: '46,875', section: 'Part 1' },
+            { id: 'line5a_taxable_ss', label: 'Line 5a — Taxable Social Security wages', type: 'number', placeholder: '312,500', section: 'Part 1' },
+            { id: 'line5a_tax', label: 'Line 5a — Tax (col 1 × 0.124)', type: 'number', placeholder: '38,750', section: 'Part 1' },
+            { id: 'line5b_ss_tips', label: 'Line 5b — Taxable Social Security tips', type: 'number', placeholder: '0', section: 'Part 1' },
+            { id: 'line5c_medicare', label: 'Line 5c — Taxable Medicare wages', type: 'number', placeholder: '312,500', section: 'Part 1' },
+            { id: 'line5c_tax', label: 'Line 5c — Tax (col 1 × 0.029)', type: 'number', placeholder: '9,063', section: 'Part 1' },
+            { id: 'line5d_addl_medicare', label: 'Line 5d — Additional Medicare (wages > $200K)', type: 'number', placeholder: '0', section: 'Part 1' },
+            { id: 'line5e_total_ss_med', label: 'Line 5e — Total Social Security and Medicare taxes', type: 'number', placeholder: '47,813', section: 'Part 1' },
+            { id: 'line6_total_taxes', label: 'Line 6 — Total taxes before adjustments', type: 'number', placeholder: '94,688', section: 'Part 1' },
+            { id: 'line10_total_after', label: 'Line 10 — Total after adjustments', type: 'number', placeholder: '94,688', section: 'Part 1' },
+            { id: 'line11_qualified_credit', label: 'Line 11a — Qualified small business payroll tax credit', type: 'number', placeholder: '0', section: 'Part 1' },
+            { id: 'line12_total_tax', label: 'Line 12 — Total taxes after credits', type: 'number', placeholder: '94,688', section: 'Part 1' },
+            { id: 'line13_deposits', label: 'Line 13a — Total deposits for this quarter', type: 'number', placeholder: '94,688', section: 'Part 1' },
+            { id: 'line14_balance', label: 'Line 14 — Balance due', type: 'number', placeholder: '0', section: 'Part 1' },
+            { id: 'deposit_schedule', label: 'Line 16 — Deposit schedule', type: 'select', options: ['Line a — $2,500 or less for quarter', 'Line b — Monthly depositor', 'Line c — Semiweekly depositor (attach Schedule B)'], section: 'Part 2 — Deposit Schedule' },
+        ];
+    }
+
+    // ── W-2: Wage and Tax Statement ──
+    if (num === 'W-2' || num === 'W-2C') {
+        return [
+            { id: 'emp_ein', label: "a — Employer's EIN", type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Employer Information' },
+            { id: 'emp_name', label: "c — Employer's name", type: 'text', placeholder: 'Acme Corp', section: 'Employer Information' },
+            { id: 'emp_address', label: "c — Employer's address", type: 'text', placeholder: '456 Commerce Blvd, Dallas TX 75201', section: 'Employer Information' },
+            { id: 'control_number', label: 'd — Control number', type: 'text', placeholder: '', section: 'Employer Information' },
+            { id: 'ee_ssn', label: "e — Employee's SSN", type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Employee Information' },
+            { id: 'ee_first', label: "e — Employee's first name", type: 'text', placeholder: 'John', section: 'Employee Information' },
+            { id: 'ee_last', label: "e — Employee's last name", type: 'text', placeholder: 'Smith', section: 'Employee Information' },
+            { id: 'ee_address', label: "f — Employee's address", type: 'text', placeholder: '123 Main St, Austin TX 78701', section: 'Employee Information' },
+            { id: 'box1', label: 'Box 1 — Wages, tips, other compensation', type: 'number', placeholder: '75,000', section: 'Wage and Tax Data' },
+            { id: 'box2', label: 'Box 2 — Federal income tax withheld', type: 'number', placeholder: '12,000', section: 'Wage and Tax Data' },
+            { id: 'box3', label: 'Box 3 — Social Security wages', type: 'number', placeholder: '75,000', section: 'Wage and Tax Data' },
+            { id: 'box4', label: 'Box 4 — Social Security tax withheld', type: 'number', placeholder: '4,650', section: 'Wage and Tax Data' },
+            { id: 'box5', label: 'Box 5 — Medicare wages and tips', type: 'number', placeholder: '75,000', section: 'Wage and Tax Data' },
+            { id: 'box6', label: 'Box 6 — Medicare tax withheld', type: 'number', placeholder: '1,088', section: 'Wage and Tax Data' },
+            { id: 'box7', label: 'Box 7 — Social Security tips', type: 'number', placeholder: '0', section: 'Wage and Tax Data' },
+            { id: 'box8', label: 'Box 8 — Allocated tips', type: 'number', placeholder: '0', section: 'Wage and Tax Data' },
+            { id: 'box10', label: 'Box 10 — Dependent care benefits', type: 'number', placeholder: '0', section: 'Wage and Tax Data' },
+            { id: 'box11', label: 'Box 11 — Nonqualified plans', type: 'number', placeholder: '0', section: 'Wage and Tax Data' },
+            { id: 'box12a_code', label: 'Box 12a — Code', type: 'text', placeholder: 'DD', section: 'Box 12 Codes' },
+            { id: 'box12a_amt', label: 'Box 12a — Amount', type: 'number', placeholder: '8,400', section: 'Box 12 Codes' },
+            { id: 'box12b_code', label: 'Box 12b — Code', type: 'text', placeholder: 'D', section: 'Box 12 Codes' },
+            { id: 'box12b_amt', label: 'Box 12b — Amount', type: 'number', placeholder: '6,500', section: 'Box 12 Codes' },
+            { id: 'box13_statutory', label: 'Box 13 — Statutory employee', type: 'checkbox', section: 'Box 13' },
+            { id: 'box13_retirement', label: 'Box 13 — Retirement plan', type: 'checkbox', section: 'Box 13' },
+            { id: 'box13_sick_pay', label: 'Box 13 — Third-party sick pay', type: 'checkbox', section: 'Box 13' },
+            { id: 'box15_state', label: 'Box 15 — State', type: 'text', placeholder: 'TX', section: 'State / Local' },
+            { id: 'box15_state_id', label: "Box 15 — Employer's state ID", type: 'text', placeholder: '', section: 'State / Local' },
+            { id: 'box16', label: 'Box 16 — State wages, tips', type: 'number', placeholder: '75,000', section: 'State / Local' },
+            { id: 'box17', label: 'Box 17 — State income tax', type: 'number', placeholder: '0', section: 'State / Local' },
+            { id: 'box18', label: 'Box 18 — Local wages, tips', type: 'number', placeholder: '0', section: 'State / Local' },
+            { id: 'box19', label: 'Box 19 — Local income tax', type: 'number', placeholder: '0', section: 'State / Local' },
+            { id: 'box20', label: 'Box 20 — Locality name', type: 'text', placeholder: '', section: 'State / Local' },
+        ];
+    }
+
+    // ── W-4: Employee's Withholding Certificate ──
+    if (num === 'W-4') {
+        return [
+            ...taxpayerInfo,
+            { id: 'step1c_status', label: 'Step 1(c) — Filing status', type: 'select', options: ['Single or Married filing separately', 'Married filing jointly', 'Head of household'], section: 'Step 1 — Personal Info' },
+            { id: 'step2_multiple_jobs', label: 'Step 2 — Multiple jobs or spouse works?', type: 'checkbox', section: 'Step 2 — Multiple Jobs' },
+            { id: 'step3_dependents_under17', label: 'Step 3 — # children under 17 (× $2,000)', type: 'number', placeholder: '2', section: 'Step 3 — Dependents' },
+            { id: 'step3_other_dependents', label: 'Step 3 — # other dependents (× $500)', type: 'number', placeholder: '0', section: 'Step 3 — Dependents' },
+            { id: 'step3_total', label: 'Step 3 — Total claim amount', type: 'number', placeholder: '4,000', section: 'Step 3 — Dependents' },
+            { id: 'step4a_other_income', label: 'Step 4(a) — Other income (not jobs)', type: 'number', placeholder: '0', section: 'Step 4 — Other Adjustments' },
+            { id: 'step4b_deductions', label: 'Step 4(b) — Deductions (if > standard)', type: 'number', placeholder: '0', section: 'Step 4 — Other Adjustments' },
+            { id: 'step4c_extra_withholding', label: 'Step 4(c) — Extra withholding per pay period', type: 'number', placeholder: '0', section: 'Step 4 — Other Adjustments' },
+        ];
+    }
+
+    // ── W-9: Request for TIN ──
+    if (num === 'W-9') {
+        return [
+            { id: 'name_w9', label: 'Line 1 — Name (as shown on income tax return)', type: 'text', placeholder: 'John A. Smith', section: 'Identification' },
+            { id: 'biz_name_w9', label: 'Line 2 — Business name / disregarded entity name', type: 'text', placeholder: 'Smith Consulting LLC', section: 'Identification' },
+            { id: 'tax_class', label: 'Line 3 — Federal tax classification', type: 'select', options: ['Individual/sole proprietor or single-member LLC', 'C Corporation', 'S Corporation', 'Partnership', 'Trust/estate', 'LLC — C corporation', 'LLC — S corporation', 'LLC — Partnership', 'Other'], section: 'Tax Classification' },
+            { id: 'exempt_payee', label: 'Line 4 — Exempt payee code (if applicable)', type: 'text', placeholder: '', section: 'Exemptions' },
+            { id: 'fatca_code', label: 'Line 4 — FATCA reporting code (if applicable)', type: 'text', placeholder: '', section: 'Exemptions' },
+            { id: 'w9_address', label: 'Line 5 — Address', type: 'text', placeholder: '123 Main St', section: 'Address' },
+            { id: 'w9_city_state_zip', label: 'Line 6 — City, state, ZIP', type: 'text', placeholder: 'Austin, TX 78701', section: 'Address' },
+            { id: 'w9_account', label: 'Line 7 — Account number(s) (optional)', type: 'text', placeholder: '', section: 'Address' },
+            { id: 'tin_ssn', label: 'Part I — SSN', type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Taxpayer Identification Number' },
+            { id: 'tin_ein', label: 'Part I — OR Employer ID Number', type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Taxpayer Identification Number' },
+        ];
+    }
+
+    // ── 1099-NEC: Nonemployee Compensation ──
+    if (num === '1099-NEC') {
+        return [
+            ...payerRecipient,
+            { id: 'box1_nec', label: 'Box 1 — Nonemployee compensation', type: 'number', placeholder: '45,000', section: 'Income' },
+            { id: 'box2_payer_direct', label: 'Box 2 — Payer made direct sales ≥$5,000?', type: 'checkbox', section: 'Income' },
+            { id: 'box4_fed_withheld', label: 'Box 4 — Federal income tax withheld', type: 'number', placeholder: '0', section: 'Withholding' },
+            { id: 'box5_state_withheld', label: 'Box 5 — State tax withheld', type: 'number', placeholder: '0', section: 'State' },
+            { id: 'box6_state', label: 'Box 6 — State/Payer state no.', type: 'text', placeholder: 'TX', section: 'State' },
+            { id: 'box7_state_income', label: 'Box 7 — State income', type: 'number', placeholder: '45,000', section: 'State' },
+        ];
+    }
+
+    // ── 1099-MISC: Miscellaneous Information ──
+    if (num === '1099-MISC') {
+        return [
+            ...payerRecipient,
+            { id: 'box1_rents', label: 'Box 1 — Rents', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box2_royalties', label: 'Box 2 — Royalties', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box3_other_income', label: 'Box 3 — Other income', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box4_fed_withheld', label: 'Box 4 — Federal income tax withheld', type: 'number', placeholder: '0', section: 'Withholding' },
+            { id: 'box5_fishing', label: 'Box 5 — Fishing boat proceeds', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box6_medical', label: 'Box 6 — Medical/health care payments', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box7_payer_direct', label: 'Box 7 — Payer made direct sales ≥$5,000?', type: 'checkbox', section: 'Income' },
+            { id: 'box8_substitute', label: 'Box 8 — Substitute payments in lieu of dividends', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box9_crop_insurance', label: 'Box 9 — Crop insurance proceeds', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box10_attorney', label: 'Box 10 — Gross proceeds paid to attorney', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box11_fish_price', label: 'Box 11 — Fish purchased for resale', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box12_409a', label: 'Box 12 — Section 409A deferrals', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box14_attorney_proceeds', label: 'Box 14 — Excess golden parachute payments', type: 'number', placeholder: '0', section: 'Income' },
+            { id: 'box15_409a_income', label: 'Box 15 — Section 409A income', type: 'number', placeholder: '0', section: 'Income' },
+        ];
+    }
+
+    // ── 1099-INT: Interest Income ──
+    if (num === '1099-INT') {
+        return [
+            ...payerRecipient,
+            { id: 'box1_interest', label: 'Box 1 — Interest income', type: 'number', placeholder: '1,250', section: 'Interest' },
+            { id: 'box2_early_penalty', label: 'Box 2 — Early withdrawal penalty', type: 'number', placeholder: '0', section: 'Interest' },
+            { id: 'box3_savings_bond', label: 'Box 3 — Interest on U.S. savings bonds/Treasury obligations', type: 'number', placeholder: '0', section: 'Interest' },
+            { id: 'box4_fed_withheld', label: 'Box 4 — Federal income tax withheld', type: 'number', placeholder: '0', section: 'Withholding' },
+            { id: 'box5_invest_expenses', label: 'Box 5 — Investment expenses', type: 'number', placeholder: '0', section: 'Interest' },
+            { id: 'box6_foreign_tax', label: 'Box 6 — Foreign tax paid', type: 'number', placeholder: '0', section: 'Interest' },
+            { id: 'box8_exempt_interest', label: 'Box 8 — Tax-exempt interest', type: 'number', placeholder: '0', section: 'Interest' },
+            { id: 'box9_private_activity', label: 'Box 9 — Private activity bond interest', type: 'number', placeholder: '0', section: 'Interest' },
+            { id: 'box10_market_discount', label: 'Box 10 — Market discount', type: 'number', placeholder: '0', section: 'Interest' },
+            { id: 'box11_premium', label: 'Box 11 — Bond premium', type: 'number', placeholder: '0', section: 'Interest' },
+        ];
+    }
+
+    // ── 1099-DIV: Dividends and Distributions ──
+    if (num === '1099-DIV') {
+        return [
+            ...payerRecipient,
+            { id: 'box1a_ordinary', label: 'Box 1a — Total ordinary dividends', type: 'number', placeholder: '2,500', section: 'Dividends' },
+            { id: 'box1b_qualified', label: 'Box 1b — Qualified dividends', type: 'number', placeholder: '1,800', section: 'Dividends' },
+            { id: 'box2a_cap_gain', label: 'Box 2a — Total capital gain distributions', type: 'number', placeholder: '500', section: 'Capital Gains' },
+            { id: 'box2b_28pct', label: 'Box 2b — Unrecaptured Section 1250 gain', type: 'number', placeholder: '0', section: 'Capital Gains' },
+            { id: 'box2c_1202', label: 'Box 2c — Section 1202 gain', type: 'number', placeholder: '0', section: 'Capital Gains' },
+            { id: 'box2d_collectibles', label: 'Box 2d — Collectibles (28%) gain', type: 'number', placeholder: '0', section: 'Capital Gains' },
+            { id: 'box3_nondiv', label: 'Box 3 — Nondividend distributions', type: 'number', placeholder: '0', section: 'Distributions' },
+            { id: 'box4_fed_withheld', label: 'Box 4 — Federal income tax withheld', type: 'number', placeholder: '0', section: 'Withholding' },
+            { id: 'box5_199a', label: 'Box 5 — Section 199A dividends', type: 'number', placeholder: '0', section: 'Dividends' },
+            { id: 'box6_invest_exp', label: 'Box 6 — Investment expenses', type: 'number', placeholder: '0', section: 'Dividends' },
+            { id: 'box7_foreign_tax', label: 'Box 7 — Foreign tax paid', type: 'number', placeholder: '0', section: 'Foreign Tax' },
+            { id: 'box11_exempt_div', label: 'Box 11 — Exempt-interest dividends', type: 'number', placeholder: '0', section: 'Exempt Dividends' },
+            { id: 'box12_private_activity', label: 'Box 12 — Private activity bond interest dividends', type: 'number', placeholder: '0', section: 'Exempt Dividends' },
+        ];
+    }
+
+    // ── 1099-R: Distributions from Retirement ──
+    if (num === '1099-R') {
+        return [
+            ...payerRecipient,
+            { id: 'box1_gross', label: 'Box 1 — Gross distribution', type: 'number', placeholder: '25,000', section: 'Distribution' },
+            { id: 'box2a_taxable', label: 'Box 2a — Taxable amount', type: 'number', placeholder: '25,000', section: 'Distribution' },
+            { id: 'box2b_not_determined', label: 'Box 2b — Taxable amount not determined', type: 'checkbox', section: 'Distribution' },
+            { id: 'box2b_total', label: 'Box 2b — Total distribution', type: 'checkbox', section: 'Distribution' },
+            { id: 'box3_cap_gain', label: 'Box 3 — Capital gain (Form 4972)', type: 'number', placeholder: '0', section: 'Distribution' },
+            { id: 'box4_fed_withheld', label: 'Box 4 — Federal income tax withheld', type: 'number', placeholder: '5,000', section: 'Withholding' },
+            { id: 'box5_ee_contrib', label: 'Box 5 — Employee contributions / designated Roth', type: 'number', placeholder: '0', section: 'Distribution' },
+            { id: 'box6_securities', label: 'Box 6 — Net unrealized appreciation', type: 'number', placeholder: '0', section: 'Distribution' },
+            { id: 'box7_dist_code', label: 'Box 7 — Distribution code(s)', type: 'text', placeholder: '7', section: 'Distribution Codes' },
+            { id: 'box7_ira_sep', label: 'Box 7 — IRA/SEP/SIMPLE', type: 'checkbox', section: 'Distribution Codes' },
+            { id: 'box9a_pct', label: 'Box 9a — Your percentage of distribution', type: 'text', placeholder: '', section: 'Distribution' },
+            { id: 'box9b_total_contrib', label: 'Box 9b — Total employee contributions', type: 'number', placeholder: '0', section: 'Distribution' },
+            { id: 'box14_state_withheld', label: 'Box 14 — State tax withheld', type: 'number', placeholder: '0', section: 'State' },
+            { id: 'box15_state', label: 'Box 15 — State/Payer state no.', type: 'text', placeholder: '', section: 'State' },
+            { id: 'box16_state_dist', label: 'Box 16 — State distribution', type: 'number', placeholder: '0', section: 'State' },
+        ];
+    }
+
+    // ── Form 2848: Power of Attorney ──
+    if (num === '2848') {
+        return [
+            ...taxpayerInfo,
+            { id: 'spouse_name_2848', label: "Spouse's Name (if joint)", type: 'text', placeholder: '', section: 'Taxpayer Information' },
+            { id: 'spouse_ssn_2848', label: "Spouse's SSN", type: 'ssn', placeholder: '', section: 'Taxpayer Information' },
+            { id: 'daytime_phone', label: 'Daytime telephone number', type: 'phone', placeholder: '(555) 123-4567', section: 'Taxpayer Information' },
+            // Representative 1
+            { id: 'rep1_name', label: 'Representative 1 — Name', type: 'text', placeholder: 'Jane A. CPA', section: 'Part I — Representative(s)' },
+            { id: 'rep1_ptin', label: 'Representative 1 — PTIN / CAF No.', type: 'text', placeholder: 'P01234567', section: 'Part I — Representative(s)' },
+            { id: 'rep1_phone', label: 'Representative 1 — Telephone', type: 'phone', placeholder: '(555) 987-6543', section: 'Part I — Representative(s)' },
+            { id: 'rep1_address', label: 'Representative 1 — Address', type: 'text', placeholder: '100 CPA Lane, Suite 200', section: 'Part I — Representative(s)' },
+            { id: 'rep1_designation', label: 'Representative 1 — Designation', type: 'select', options: ['CPA', 'Attorney', 'Enrolled Agent', 'Officer', 'Full-Time Employee', 'Family Member', 'Enrolled Actuary', 'Unenrolled Return Preparer'], section: 'Part I — Representative(s)' },
+            // Tax matters
+            { id: 'tax_matter1_type', label: 'Tax matter 1 — Type of tax', type: 'select', options: ['Income', 'Employment', 'Excise', 'Estate', 'Gift', 'Payroll', 'Penalty', 'Trust Fund Recovery', 'Civil Penalty'], section: 'Part I — Tax Matters' },
+            { id: 'tax_matter1_form', label: 'Tax matter 1 — Tax form number', type: 'text', placeholder: '1040', section: 'Part I — Tax Matters' },
+            { id: 'tax_matter1_years', label: 'Tax matter 1 — Year(s) or period(s)', type: 'text', placeholder: '2022, 2023, 2024', section: 'Part I — Tax Matters' },
+            { id: 'tax_matter2_type', label: 'Tax matter 2 — Type of tax', type: 'text', placeholder: '', section: 'Part I — Tax Matters' },
+            { id: 'tax_matter2_form', label: 'Tax matter 2 — Tax form number', type: 'text', placeholder: '', section: 'Part I — Tax Matters' },
+            { id: 'tax_matter2_years', label: 'Tax matter 2 — Year(s) or period(s)', type: 'text', placeholder: '', section: 'Part I — Tax Matters' },
+            // Acts authorized
+            { id: 'specific_acts', label: 'Line 5 — Additional acts authorized', type: 'text', placeholder: 'Sign returns, access transcripts, represent at hearings', section: 'Part I — Acts Authorized' },
+            { id: 'retention_revocation', label: 'Line 6 — Retention/revocation of prior POA(s)', type: 'select', options: ['Retain — do NOT revoke prior POA(s)', 'Revoke all prior POA(s)'], section: 'Part I — Acts Authorized' },
+        ];
+    }
+
+    // ── Form 8821: Tax Information Authorization ──
+    if (num === '8821' || num === '8821-A') {
+        return [
+            ...taxpayerInfo,
+            { id: 'daytime_phone_8821', label: 'Daytime telephone number', type: 'phone', placeholder: '(555) 123-4567', section: 'Taxpayer Information' },
+            { id: 'appointee_name', label: 'Appointee name', type: 'text', placeholder: 'Jane CPA', section: 'Part I — Appointee' },
+            { id: 'appointee_caf', label: 'CAF Number', type: 'text', placeholder: '', section: 'Part I — Appointee' },
+            { id: 'appointee_ptin', label: 'PTIN', type: 'text', placeholder: 'P01234567', section: 'Part I — Appointee' },
+            { id: 'appointee_phone', label: 'Telephone', type: 'phone', placeholder: '(555) 987-6543', section: 'Part I — Appointee' },
+            { id: 'appointee_address', label: 'Address', type: 'text', placeholder: '100 CPA Lane, Suite 200', section: 'Part I — Appointee' },
+            { id: 'tia_type1', label: 'Tax information 1 — Type of tax', type: 'text', placeholder: 'Income', section: 'Part II — Tax Information' },
+            { id: 'tia_form1', label: 'Tax information 1 — Form number', type: 'text', placeholder: '1040', section: 'Part II — Tax Information' },
+            { id: 'tia_years1', label: 'Tax information 1 — Year(s) or period(s)', type: 'text', placeholder: '2022, 2023, 2024', section: 'Part II — Tax Information' },
+            { id: 'tia_info1', label: 'Tax information 1 — Specific info', type: 'text', placeholder: 'Return transcripts, account transcripts', section: 'Part II — Tax Information' },
+        ];
+    }
+
+    // ── SS-4: Application for EIN ──
+    if (num === 'SS-4') {
+        return [
+            { id: 'legal_name', label: 'Line 1 — Legal name of entity', type: 'text', placeholder: 'Smith Consulting LLC', section: 'Entity Information' },
+            { id: 'trade_name', label: 'Line 2 — Trade name (DBA)', type: 'text', placeholder: '', section: 'Entity Information' },
+            { id: 'executor_name', label: 'Line 3 — Executor/trustee/care of name', type: 'text', placeholder: 'John Smith', section: 'Entity Information' },
+            { id: 'mailing_address', label: 'Lines 4a-4b — Mailing address', type: 'text', placeholder: '123 Main St, Austin TX 78701', section: 'Entity Information' },
+            { id: 'street_address', label: 'Lines 5a-5b — Street address (if different)', type: 'text', placeholder: '', section: 'Entity Information' },
+            { id: 'county_state', label: 'Line 6 — County and state of principal business', type: 'text', placeholder: 'Travis, TX', section: 'Entity Information' },
+            { id: 'responsible_party', label: 'Line 7a — Name of responsible party', type: 'text', placeholder: 'John A. Smith', section: 'Responsible Party' },
+            { id: 'responsible_ssn', label: 'Line 7b — SSN, ITIN, or EIN', type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Responsible Party' },
+            { id: 'is_llc', label: 'Line 8a — Is this entity an LLC?', type: 'select', options: ['Yes', 'No'], section: 'Entity Type' },
+            { id: 'llc_members', label: 'Line 8b — Number of LLC members', type: 'number', placeholder: '1', section: 'Entity Type' },
+            { id: 'entity_type', label: 'Line 9a — Type of entity', type: 'select', options: ['Sole proprietor (SSN)', 'Partnership', 'Corporation', 'Personal service corp', 'Church or church-controlled org', 'Other nonprofit', 'Estate (SSN of decedent)', 'Trust (SSN of grantor)', 'Plan administrator', 'National Guard', 'Farmers cooperative', 'REMIC', 'State/local government', 'Federal government/military', 'Indian tribal'], section: 'Entity Type' },
+            { id: 'reason', label: 'Line 10 — Reason for applying', type: 'select', options: ['Started new business', 'Hired employees', 'Compliance with withholding', 'Banking purpose only', 'Changed type of organization', 'Purchased going business', 'Created a trust', 'Created a pension plan', 'Other'], section: 'Reason' },
+            { id: 'date_started', label: 'Line 11 — Date business started or acquired', type: 'date', placeholder: '01/15/2025', section: 'Dates' },
+            { id: 'closing_month', label: 'Line 12 — Closing month of accounting year', type: 'select', options: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], section: 'Dates' },
+            { id: 'highest_employees', label: 'Line 13 — Highest number of employees expected in 12 months', type: 'number', placeholder: '5', section: 'Employment Info' },
+            { id: 'first_wages_date', label: 'Line 14 — First date wages were/will be paid', type: 'date', placeholder: '02/01/2025', section: 'Employment Info' },
+            { id: 'principal_activity', label: 'Line 16 — Principal activity', type: 'text', placeholder: 'Management consulting', section: 'Business Description' },
+            { id: 'principal_product', label: 'Line 17 — Principal product or service', type: 'text', placeholder: 'Consulting services', section: 'Business Description' },
+            { id: 'applied_before', label: 'Line 18 — Has entity applied for EIN before?', type: 'select', options: ['No', 'Yes'], section: 'Prior EIN' },
+        ];
+    }
+
+    // ── Form 9465: Installment Agreement Request ──
+    if (num === '9465') {
+        return [
+            ...taxpayerInfo,
+            { id: 'spouse_name_9465', label: "Spouse's Name (if joint liability)", type: 'text', placeholder: '', section: 'Taxpayer Information' },
+            { id: 'spouse_ssn_9465', label: "Spouse's SSN", type: 'ssn', placeholder: '', section: 'Taxpayer Information' },
+            { id: 'phone_9465', label: 'Daytime phone', type: 'phone', placeholder: '(555) 123-4567', section: 'Taxpayer Information' },
+            { id: 'employer', label: "Your employer's name", type: 'text', placeholder: '', section: 'Employment' },
+            { id: 'employer_address', label: "Employer's address", type: 'text', placeholder: '', section: 'Employment' },
+            { id: 'line7_balance', label: 'Line 7 — Total amount you owe', type: 'number', placeholder: '25,000', section: 'Balance Owed' },
+            { id: 'line8_additions', label: 'Line 8 — Amount of increase to balance', type: 'number', placeholder: '0', section: 'Balance Owed' },
+            { id: 'line9_payment', label: 'Line 9 — Amount you can pay now', type: 'number', placeholder: '2,000', section: 'Payment Terms' },
+            { id: 'line10_monthly', label: 'Line 10 — Monthly payment amount', type: 'number', placeholder: '500', section: 'Payment Terms' },
+            { id: 'line11_day', label: 'Line 11 — Day of month for payment (1-28)', type: 'number', placeholder: '15', section: 'Payment Terms' },
+            { id: 'payment_method', label: 'Payment method', type: 'select', options: ['Direct debit (DDIA)', 'Check or money order', 'Payroll deduction', 'Online payment agreement'], section: 'Payment Terms' },
+            { id: 'routing_9465', label: 'Routing number (for direct debit)', type: 'text', placeholder: '021000021', section: 'Bank Information' },
+            { id: 'account_9465', label: 'Account number', type: 'text', placeholder: '', section: 'Bank Information' },
+        ];
+    }
+
+    // ── Form 656: Offer in Compromise ──
+    if (num === '656') {
+        return [
+            ...taxpayerInfo,
+            { id: 'oic_phone', label: 'Telephone number', type: 'phone', placeholder: '(555) 123-4567', section: 'Taxpayer Information' },
+            { id: 'oic_ein', label: 'EIN (if applicable)', type: 'ein', placeholder: '', section: 'Taxpayer Information' },
+            { id: 'oic_tax_type', label: 'Tax type(s)', type: 'text', placeholder: 'Form 1040 — Income Tax', section: 'Tax Liability' },
+            { id: 'oic_tax_periods', label: 'Tax period(s)', type: 'text', placeholder: '2020, 2021, 2022', section: 'Tax Liability' },
+            { id: 'oic_total_owed', label: 'Total amount owed (including penalties/interest)', type: 'number', placeholder: '85,000', section: 'Tax Liability' },
+            { id: 'oic_reason', label: 'Reason for offer', type: 'select', options: ['Doubt as to Collectibility', 'Doubt as to Liability', 'Effective Tax Administration'], section: 'Basis for Compromise' },
+            { id: 'oic_lump_sum', label: 'Lump sum offer amount', type: 'number', placeholder: '15,000', section: 'Offer Amount' },
+            { id: 'oic_initial_payment', label: 'Initial payment (20% of lump sum)', type: 'number', placeholder: '3,000', section: 'Offer Amount' },
+            { id: 'oic_periodic', label: 'OR: Periodic payment offer amount', type: 'number', placeholder: '', section: 'Offer Amount' },
+            { id: 'oic_monthly_payment', label: 'Monthly payment amount', type: 'number', placeholder: '', section: 'Offer Amount' },
+            { id: 'oic_months', label: 'Total months to pay', type: 'number', placeholder: '', section: 'Offer Amount' },
+            // Financial summary
+            { id: 'oic_monthly_income', label: 'Monthly gross household income', type: 'number', placeholder: '5,500', section: 'Financial Summary' },
+            { id: 'oic_monthly_expenses', label: 'Monthly allowable expenses', type: 'number', placeholder: '5,200', section: 'Financial Summary' },
+            { id: 'oic_bank_balance', label: 'Bank account balances', type: 'number', placeholder: '2,500', section: 'Assets' },
+            { id: 'oic_vehicles', label: 'Vehicle equity', type: 'number', placeholder: '8,000', section: 'Assets' },
+            { id: 'oic_real_estate', label: 'Real estate equity', type: 'number', placeholder: '35,000', section: 'Assets' },
+            { id: 'oic_retirement', label: 'Retirement accounts', type: 'number', placeholder: '45,000', section: 'Assets' },
+            { id: 'oic_other_assets', label: 'Other asset value', type: 'number', placeholder: '2,000', section: 'Assets' },
+        ];
+    }
+
+    // ── Form 4868: Extension for Individual ──
+    if (num === '4868') {
+        return [
+            ...taxpayerInfo,
+            ...spouseInfo,
+            { id: 'est_tax_liability', label: 'Line 4 — Estimate of total tax liability', type: 'number', placeholder: '15,000', section: 'Estimated Tax' },
+            { id: 'total_payments', label: 'Line 5 — Total payments', type: 'number', placeholder: '14,000', section: 'Estimated Tax' },
+            { id: 'balance_due', label: 'Line 6 — Balance due (line 4 minus line 5)', type: 'number', placeholder: '1,000', section: 'Estimated Tax' },
+            { id: 'amount_paying', label: 'Line 7 — Amount you are paying', type: 'number', placeholder: '1,000', section: 'Payment' },
+            { id: 'out_of_country', label: 'Line 8 — Out of the country?', type: 'checkbox', section: 'Special Situations' },
+            { id: 'filing_1040nr', label: 'Line 9 — Filing Form 1040-NR?', type: 'checkbox', section: 'Special Situations' },
+        ];
+    }
+
+    // ── Form 7004: Extension for Business ──
+    if (num === '7004') {
+        return [
+            ...businessInfo,
+            { id: 'form_being_extended', label: 'Line 1 — Form code being extended', type: 'select', options: ['04 — Form 1041', '05 — Form 1065', '12 — Form 1120', '18 — Form 1120-S', '25 — Form 990', '26 — Form 990-EZ', '27 — Form 990-T'], section: 'Extension Details' },
+            { id: 'est_tax_7004', label: 'Line 4 — Tentative total tax', type: 'number', placeholder: '0', section: 'Tax Estimate' },
+            { id: 'est_payments_7004', label: 'Line 5 — Total payments and credits', type: 'number', placeholder: '0', section: 'Tax Estimate' },
+            { id: 'balance_7004', label: 'Line 6 — Balance due', type: 'number', placeholder: '0', section: 'Tax Estimate' },
+            { id: 'short_year', label: 'Is this for a short tax year?', type: 'select', options: ['No', 'Yes'], section: 'Additional Info' },
+        ];
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  CATEGORY-BASED FALLBACK for forms without specific mappings
+    // ════════════════════════════════════════════════════════════════
+
+    // Other individual tax forms (Schedules, etc.)
+    if (cat === 'Individual Tax') {
         return [
             ...taxpayerInfo,
             { id: 'filing_status', label: 'Filing Status', type: 'select', options: ['Single', 'Married Filing Jointly', 'Married Filing Separately', 'Head of Household', 'Qualifying Surviving Spouse'], section: 'Filing Information' },
             { id: 'dob', label: 'Date of Birth', type: 'date', placeholder: '01/15/1980', section: 'Filing Information' },
             { id: 'occupation', label: 'Occupation', type: 'text', placeholder: 'Software Engineer', section: 'Filing Information' },
-            { id: 'wages', label: 'Wages, Salaries, Tips (Box 1 W-2)', type: 'number', placeholder: '75,000', section: 'Income' },
+            { id: 'wages', label: 'Wages, Salaries, Tips (W-2 Box 1)', type: 'number', placeholder: '75,000', section: 'Income' },
             { id: 'interest', label: 'Taxable Interest', type: 'number', placeholder: '250', section: 'Income' },
             { id: 'dividends', label: 'Ordinary Dividends', type: 'number', placeholder: '1,200', section: 'Income' },
             { id: 'business_income', label: 'Business Income/Loss (Schedule C)', type: 'number', placeholder: '0', section: 'Income' },
@@ -791,7 +1512,7 @@ export function getFormFields(form: TaxForm): FormField[] {
         ];
     }
 
-    // Business forms
+    // Other business forms
     if (cat === 'Business Tax') {
         return [
             ...businessInfo,
@@ -806,32 +1527,8 @@ export function getFormFields(form: TaxForm): FormField[] {
         ];
     }
 
-    // Employment & Payroll
+    // Other employment/payroll forms
     if (cat === 'Employment & Payroll') {
-        if (num.startsWith('W-2') || num === 'W-2') {
-            return [
-                { id: 'emp_ein', label: "Employer's EIN", type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Employer Information' },
-                { id: 'emp_name', label: "Employer's Name", type: 'text', placeholder: 'Acme Corp', section: 'Employer Information' },
-                { id: 'emp_address', label: "Employer's Address", type: 'text', placeholder: '456 Commerce Blvd', section: 'Employer Information' },
-                { id: 'ee_ssn', label: "Employee's SSN", type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Employee Information' },
-                { id: 'ee_name', label: "Employee's Name", type: 'text', placeholder: 'John Smith', section: 'Employee Information' },
-                { id: 'wages_box1', label: 'Box 1: Wages, Tips, Other Compensation', type: 'number', placeholder: '75,000', section: 'Wage & Tax Data' },
-                { id: 'fed_withheld_box2', label: 'Box 2: Federal Income Tax Withheld', type: 'number', placeholder: '12,000', section: 'Wage & Tax Data' },
-                { id: 'ss_wages_box3', label: 'Box 3: Social Security Wages', type: 'number', placeholder: '75,000', section: 'Wage & Tax Data' },
-                { id: 'ss_tax_box4', label: 'Box 4: Social Security Tax Withheld', type: 'number', placeholder: '4,650', section: 'Wage & Tax Data' },
-                { id: 'medicare_wages_box5', label: 'Box 5: Medicare Wages', type: 'number', placeholder: '75,000', section: 'Wage & Tax Data' },
-                { id: 'medicare_tax_box6', label: 'Box 6: Medicare Tax Withheld', type: 'number', placeholder: '1,088', section: 'Wage & Tax Data' },
-            ];
-        }
-        if (num === 'W-9') {
-            return [
-                ...taxpayerInfo,
-                { id: 'tax_class', label: 'Federal Tax Classification', type: 'select', options: ['Individual/Sole Proprietor', 'C Corporation', 'S Corporation', 'Partnership', 'Trust/Estate', 'LLC — C Corp', 'LLC — S Corp', 'LLC — Partnership'], section: 'Tax Classification' },
-                { id: 'exempt_payee', label: 'Exempt Payee Code', type: 'text', placeholder: '', section: 'Exemptions' },
-                { id: 'fatca_code', label: 'FATCA Reporting Code', type: 'text', placeholder: '', section: 'Exemptions' },
-                { id: 'tin', label: 'Taxpayer Identification Number', type: 'ssn', placeholder: 'SSN or EIN', section: 'TIN Certification' },
-            ];
-        }
         return [
             ...businessInfo,
             { id: 'num_employees', label: 'Number of Employees', type: 'number', placeholder: '25', section: 'Employment Data' },
@@ -842,15 +1539,10 @@ export function getFormFields(form: TaxForm): FormField[] {
         ];
     }
 
-    // 1099 series
+    // Other 1099 series
     if (cat === 'Information Returns (1099)') {
         return [
-            { id: 'payer_name', label: "Payer's Name", type: 'text', placeholder: 'ABC Financial Services', section: 'Payer Information' },
-            { id: 'payer_tin', label: "Payer's TIN", type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Payer Information' },
-            { id: 'payer_address', label: "Payer's Address", type: 'text', placeholder: '789 Finance Ave', section: 'Payer Information' },
-            { id: 'recipient_name', label: "Recipient's Name", type: 'text', placeholder: 'John Smith', section: 'Recipient Information' },
-            { id: 'recipient_tin', label: "Recipient's TIN", type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Recipient Information' },
-            { id: 'recipient_address', label: "Recipient's Address", type: 'text', placeholder: '123 Main St', section: 'Recipient Information' },
+            ...payerRecipient,
             { id: 'amount', label: 'Amount Reported', type: 'number', placeholder: '5,000', section: 'Income Reported' },
             { id: 'fed_withheld', label: 'Federal Income Tax Withheld', type: 'number', placeholder: '0', section: 'Income Reported' },
         ];
@@ -901,7 +1593,7 @@ export function getFormFields(form: TaxForm): FormField[] {
         ];
     }
 
-    // Default fields for everything else
+    // Default fields
     return [
         ...taxpayerInfo,
         { id: 'tax_year', label: 'Tax Year', type: 'text', placeholder: '2025', section: 'Form Information' },
