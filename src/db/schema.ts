@@ -191,6 +191,46 @@ export const leadNotifications = pgTable(
   ]
 );
 
+// ── Marketing Video Status ──────────────────────────────
+export const videoStatusEnum = pgEnum("video_status", [
+  "draft",
+  "generating",
+  "completed",
+  "failed",
+]);
+
+// ── Marketing Videos ────────────────────────────────────
+export const marketingVideos = pgTable(
+  "marketing_videos",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    script: text("script").notNull(),
+    visualPrompt: text("visual_prompt"),
+    avatarStoragePath: text("avatar_storage_path"),
+    avatarUrl: text("avatar_url"),
+    audioStoragePath: text("audio_storage_path"),
+    audioUrl: text("audio_url"),
+    videoStoragePath: text("video_storage_path"),
+    videoUrl: text("video_url"),
+    status: videoStatusEnum("status").default("draft").notNull(),
+    durationSeconds: integer("duration_seconds"),
+    resolution: text("resolution").default("480p"),
+    falRequestId: text("fal_request_id"),
+    errorMessage: text("error_message"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("marketing_videos_created_by_idx").on(table.createdBy),
+    index("marketing_videos_status_idx").on(table.status),
+  ]
+);
+
 // ── Brand Files ─────────────────────────────────────────
 export const brandFiles = pgTable(
   "brand_files",
