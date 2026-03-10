@@ -31,12 +31,16 @@ const TONE_OPTIONS = [
 ];
 
 const VOICE_OPTIONS = [
-  { id: "rachel", label: "Rachel", desc: "Female, calm" },
-  { id: "emily", label: "Emily", desc: "Female, soft" },
-  { id: "drew", label: "Drew", desc: "Male, clear" },
-  { id: "josh", label: "Josh", desc: "Male, deep" },
-  { id: "adam", label: "Adam", desc: "Male, bold" },
-  { id: "clyde", label: "Clyde", desc: "Male, rugged" },
+  // Custom / saved voices
+  { id: "jqcCZkN6Knx8BJ5TBdYR", label: "Justine (Zara)", desc: "Female, confident" },
+  { id: "pDxcmDdBPmpAPjBko2mF", label: "Dontae Brown", desc: "Male, casual" },
+  { id: "GbDIo39THauInuigCmPM", label: "Nylo", desc: "Female, calm" },
+  { id: "DLsHlh26Ugcm6ELvS0qi", label: "Ms. Walker", desc: "Female, southern" },
+  { id: "iCrDUkL56s3C8sCRl7wb", label: "Hope", desc: "Female, soothing" },
+  { id: "zubqz6JC54rePKNCKZLG", label: "Lou Berry", desc: "Female, crisp" },
+  { id: "tPzOTlbmuCEa6h67Xb6k", label: "Viktoria", desc: "Female, strong" },
+  { id: "GR4dBIFsYe57TxyrHKXz", label: "Eiko", desc: "Female, Japanese" },
+  { id: "PmgfHCGeS5b7sH90BOOJ", label: "Fumi", desc: "Female, Japanese" },
 ];
 
 export function MarketingClient({ userId }: MarketingClientProps) {
@@ -54,7 +58,7 @@ export function MarketingClient({ userId }: MarketingClientProps) {
   const [scriptError, setScriptError] = useState("");
 
   // Voice / TTS state
-  const [selectedVoice, setSelectedVoice] = useState("rachel");
+  const [selectedVoice, setSelectedVoice] = useState("jqcCZkN6Knx8BJ5TBdYR");
   const [audioUrl, setAudioUrl] = useState("");
   const [audioStoragePath, setAudioStoragePath] = useState("");
   const [generatingVoice, setGeneratingVoice] = useState(false);
