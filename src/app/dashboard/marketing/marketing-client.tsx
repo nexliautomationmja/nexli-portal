@@ -30,6 +30,12 @@ const TONE_OPTIONS = [
   "friendly",
 ];
 
+const PLATFORM_OPTIONS = [
+  { id: "tiktok", label: "TikTok / Reels", ratio: 9 / 16, w: 1080, h: 1920, css: "aspect-[9/16]" },
+  { id: "youtube", label: "YouTube", ratio: 16 / 9, w: 1920, h: 1080, css: "aspect-video" },
+  { id: "instagram", label: "Instagram", ratio: 1, w: 1080, h: 1080, css: "aspect-square" },
+];
+
 const VOICE_OPTIONS = [
   // Custom / saved voices
   { id: "jqcCZkN6Knx8BJ5TBdYR", label: "Justine (Zara)", desc: "Female, confident" },
@@ -64,6 +70,9 @@ export function MarketingClient({ userId }: MarketingClientProps) {
   const [generatingVoice, setGeneratingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState("");
 
+  // Platform state
+  const [platform, setPlatform] = useState("tiktok");
+
   // Asset state (avatar only now)
   const [avatarUrl, setAvatarUrl] = useState("");
   const [avatarStoragePath, setAvatarStoragePath] = useState("");
@@ -97,11 +106,12 @@ export function MarketingClient({ userId }: MarketingClientProps) {
     setCallToAction("");
     setScript("");
     setScriptError("");
-    setSelectedVoice("rachel");
+    setSelectedVoice("jqcCZkN6Knx8BJ5TBdYR");
     setAudioUrl("");
     setAudioStoragePath("");
     setGeneratingVoice(false);
     setVoiceError("");
+    setPlatform("tiktok");
     setAvatarUrl("");
     setAvatarStoragePath("");
     setAvatarFileName("");
@@ -183,14 +193,69 @@ export function MarketingClient({ userId }: MarketingClientProps) {
     }
   }, [script, selectedVoice]);
 
+  // Crop image to target aspect ratio using canvas
+  const cropImageToAspect = useCallback(
+    (file: File, targetW: number, targetH: number): Promise<File> => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const targetRatio = targetW / targetH;
+          const imgRatio = img.width / img.height;
+
+          let sx = 0,
+            sy = 0,
+            sw = img.width,
+            sh = img.height;
+
+          if (imgRatio > targetRatio) {
+            // Image is wider — crop sides
+            sw = img.height * targetRatio;
+            sx = (img.width - sw) / 2;
+          } else {
+            // Image is taller — crop top/bottom
+            sh = img.width / targetRatio;
+            sy = (img.height - sh) / 2;
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
+
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) return reject(new Error("Canvas export failed"));
+              const ext = file.name.split(".").pop() || "jpg";
+              resolve(
+                new File([blob], `avatar-${platform}.${ext}`, {
+                  type: blob.type,
+                })
+              );
+            },
+            file.type || "image/jpeg",
+            0.92
+          );
+        };
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = URL.createObjectURL(file);
+      });
+    },
+    [platform]
+  );
+
   const handleUploadAvatar = useCallback(
     async (file: File) => {
       setUploadingAvatar(true);
       setUploadError("");
 
       try {
+        // Crop to selected platform aspect ratio
+        const plat = PLATFORM_OPTIONS.find((p) => p.id === platform) || PLATFORM_OPTIONS[0];
+        const croppedFile = await cropImageToAspect(file, plat.w, plat.h);
+
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", croppedFile);
 
         const res = await fetch("/api/dashboard/marketing/upload-avatar", {
           method: "POST",
@@ -213,7 +278,7 @@ export function MarketingClient({ userId }: MarketingClientProps) {
         setUploadingAvatar(false);
       }
     },
-    []
+    [platform, cropImageToAspect]
   );
 
   const handleGenerateVideo = useCallback(async () => {
@@ -698,7 +763,60 @@ export function MarketingClient({ userId }: MarketingClientProps) {
 
       {/* ── Step 2: Avatar ───────────────────────────────── */}
       {step === "assets" && (
-        <div className="max-w-md mx-auto space-y-6">
+        <div className="max-w-lg mx-auto space-y-6">
+          {/* Platform selector */}
+          <GlassCard>
+            <div className="space-y-3">
+              <label
+                className="block text-[10px] font-black uppercase tracking-[0.2em]"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Platform
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {PLATFORM_OPTIONS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setPlatform(p.id);
+                      // Clear avatar if platform changes (needs re-crop)
+                      if (avatarUrl) {
+                        setAvatarUrl("");
+                        setAvatarStoragePath("");
+                        setAvatarFileName("");
+                      }
+                    }}
+                    className={cn(
+                      "px-4 py-2 rounded-full text-xs font-medium border transition-all duration-200",
+                      platform === p.id
+                        ? "border-blue-500/30 text-white"
+                        : "border-[var(--glass-border)] hover:border-blue-500/20"
+                    )}
+                    style={{
+                      color: platform === p.id ? undefined : "var(--text-muted)",
+                      background:
+                        platform === p.id
+                          ? "linear-gradient(135deg, rgba(37,99,235,0.3), rgba(6,182,212,0.3))"
+                          : "transparent",
+                    }}
+                  >
+                    {p.label}{" "}
+                    <span style={{ opacity: 0.5 }}>
+                      ({p.w}x{p.h})
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p
+                className="text-[10px]"
+                style={{ color: "var(--text-muted)", opacity: 0.5 }}
+              >
+                Your photo will be auto-cropped to fit the selected platform.
+              </p>
+            </div>
+          </GlassCard>
+
+          {/* Avatar upload */}
           <GlassCard>
             <div className="space-y-4">
               <div>
@@ -730,18 +848,22 @@ export function MarketingClient({ userId }: MarketingClientProps) {
               />
 
               {avatarUrl ? (
-                <div className="relative">
+                <div className="relative mx-auto" style={{ maxWidth: platform === "tiktok" ? "280px" : platform === "youtube" ? "100%" : "320px" }}>
                   <img
                     src={avatarUrl}
                     alt="Avatar preview"
-                    className="w-full aspect-square object-cover rounded-xl border border-[var(--glass-border)]"
+                    className={cn(
+                      "w-full object-cover rounded-xl border border-[var(--glass-border)]",
+                      PLATFORM_OPTIONS.find((p) => p.id === platform)?.css || "aspect-square"
+                    )}
                   />
                   <div className="mt-2 flex items-center justify-between">
                     <span
                       className="text-xs truncate"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      {avatarFileName}
+                      {avatarFileName} — cropped for{" "}
+                      {PLATFORM_OPTIONS.find((p) => p.id === platform)?.label}
                     </span>
                     <button
                       onClick={() => {
@@ -749,7 +871,7 @@ export function MarketingClient({ userId }: MarketingClientProps) {
                         setAvatarStoragePath("");
                         setAvatarFileName("");
                       }}
-                      className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                      className="text-xs text-red-400 hover:text-red-300 transition-colors ml-2 shrink-0"
                     >
                       Remove
                     </button>
@@ -759,7 +881,11 @@ export function MarketingClient({ userId }: MarketingClientProps) {
                 <button
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={uploadingAvatar}
-                  className="w-full aspect-square rounded-xl border-2 border-dashed border-[var(--glass-border)] flex flex-col items-center justify-center gap-2 hover:border-blue-500/30 transition-colors disabled:opacity-50"
+                  className={cn(
+                    "w-full rounded-xl border-2 border-dashed border-[var(--glass-border)] flex flex-col items-center justify-center gap-2 hover:border-blue-500/30 transition-colors disabled:opacity-50 mx-auto",
+                    PLATFORM_OPTIONS.find((p) => p.id === platform)?.css || "aspect-square"
+                  )}
+                  style={{ maxWidth: platform === "tiktok" ? "280px" : platform === "youtube" ? "100%" : "320px" }}
                 >
                   {uploadingAvatar ? (
                     <div className="w-6 h-6 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
@@ -770,13 +896,15 @@ export function MarketingClient({ userId }: MarketingClientProps) {
                     className="text-xs font-medium"
                     style={{ color: "var(--text-muted)" }}
                   >
-                    {uploadingAvatar ? "Uploading..." : "Upload Avatar Photo"}
+                    {uploadingAvatar ? "Cropping & Uploading..." : "Upload Avatar Photo"}
                   </span>
                   <span
                     className="text-[10px]"
                     style={{ color: "var(--text-muted)", opacity: 0.5 }}
                   >
-                    PNG, JPEG, WebP (max 10MB)
+                    PNG, JPEG, WebP (max 10MB) — auto-cropped to{" "}
+                    {PLATFORM_OPTIONS.find((p) => p.id === platform)?.w}x
+                    {PLATFORM_OPTIONS.find((p) => p.id === platform)?.h}
                   </span>
                 </button>
               )}
@@ -929,6 +1057,12 @@ export function MarketingClient({ userId }: MarketingClientProps) {
                 Summary
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span style={{ color: "var(--text-muted)" }}>Platform:</span>{" "}
+                  <span style={{ color: "var(--text-main)" }}>
+                    {PLATFORM_OPTIONS.find((p) => p.id === platform)?.label || "—"}
+                  </span>
+                </div>
                 <div>
                   <span style={{ color: "var(--text-muted)" }}>Avatar:</span>{" "}
                   <span style={{ color: "var(--text-main)" }}>
