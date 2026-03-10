@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   useMarketingVideos,
   type MarketingVideo,
@@ -73,6 +73,7 @@ export function MarketingClient({ userId }: MarketingClientProps) {
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Generate state
+  const [pollingVideoId, setPollingVideoId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [visualPrompt, setVisualPrompt] = useState(
     "4K studio interview, medium close-up, soft key-light, shallow depth of field"
@@ -240,14 +241,15 @@ export function MarketingClient({ userId }: MarketingClientProps) {
       if (!res.ok) {
         const data = await res.json();
         setGenerateError(data.error || "Video generation failed");
+        setGenerating(false);
         return;
       }
 
-      setGenerateSuccess(true);
-      refetch();
+      const data = await res.json();
+      // Start polling for completion
+      setPollingVideoId(data.video?.id || null);
     } catch {
       setGenerateError("Network error — video generation failed.");
-    } finally {
       setGenerating(false);
     }
   }, [
@@ -259,8 +261,41 @@ export function MarketingClient({ userId }: MarketingClientProps) {
     audioStoragePath,
     visualPrompt,
     resolution,
-    refetch,
   ]);
+
+  // Poll for video generation status
+  useEffect(() => {
+    if (!pollingVideoId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/dashboard/marketing/${pollingVideoId}`
+        );
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        if (data.status === "completed") {
+          clearInterval(interval);
+          setPollingVideoId(null);
+          setGenerating(false);
+          setGenerateSuccess(true);
+          refetch();
+        } else if (data.status === "failed") {
+          clearInterval(interval);
+          setPollingVideoId(null);
+          setGenerating(false);
+          setGenerateError(data.errorMessage || "Video generation failed");
+        }
+        // "generating" → keep polling
+      } catch {
+        // Network blip — keep polling
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [pollingVideoId, refetch]);
 
   const handleDeleteVideo = useCallback(
     async (id: string) => {
