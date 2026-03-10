@@ -5,14 +5,7 @@ import { randomUUID } from "crypto";
 
 export const maxDuration = 60; // TTS can take a moment for longer scripts
 
-const VOICE_OPTIONS: Record<string, string> = {
-  rachel: "21m00Tcm4TlvDq8ikWAM", // Female, American, calm
-  drew: "29vD33N1CtxCmqQRPOHJ", // Male, American, well-rounded
-  clyde: "2EiwWnXFnvU5JabPnv8n", // Male, American, war veteran
-  emily: "LcfcDJNUP1GQjkzn1xUU", // Female, American, calm
-  josh: "TxGEqnHWrfWFTfGW9XjX", // Male, American, deep
-  adam: "pNInz6obpgDQGcFmaJgB", // Male, American, deep
-};
+const DEFAULT_VOICE_ID = "jqcCZkN6Knx8BJ5TBdYR"; // Zara (Justine)
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -37,9 +30,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Resolve voice ID — accept a known alias or raw ElevenLabs voice ID
-  const voiceId =
-    VOICE_OPTIONS[rawVoiceId?.toLowerCase()] || rawVoiceId || VOICE_OPTIONS.rachel;
+  // Accept any ElevenLabs voice ID directly
+  const voiceId = rawVoiceId || DEFAULT_VOICE_ID;
 
   try {
     // Call ElevenLabs TTS API
