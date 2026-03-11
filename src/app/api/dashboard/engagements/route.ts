@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
   const engageUrl = `${portalUrl}/engage/${token}`;
   const cpaName = session.user.name || session.user.email || "Your CPA";
 
+  let emailError: string | null = null;
   try {
     const { subject: emailSubject, html } = buildEngagementRequestEmail({
       clientName,
@@ -92,7 +93,11 @@ export async function POST(req: NextRequest) {
     await sendEmail({ to: clientEmail, subject: emailSubject, html });
   } catch (err) {
     console.error("Failed to send engagement email:", err);
+    emailError = err instanceof Error ? err.message : String(err);
   }
 
-  return NextResponse.json({ engagement, engageUrl }, { status: 201 });
+  return NextResponse.json(
+    { engagement, engageUrl, emailError },
+    { status: 201 }
+  );
 }

@@ -102,6 +102,9 @@ export function EngagementsClient() {
           const tmplData = await tmplRes.json();
           setTemplates(tmplData.templates || []);
         }
+        if (data.emailError) {
+          alert(`Engagement created but email failed: ${data.emailError}`);
+        }
       }
       resetForm();
       setShowCompose(false);
