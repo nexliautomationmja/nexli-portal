@@ -13,6 +13,7 @@ import {
   CalendarIcon,
   MessageIcon,
   FileIcon,
+  PenLineIcon,
   FormIcon,
   GearIcon,
   ShieldIcon,
@@ -51,6 +52,7 @@ const clientNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
   { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon },
   { href: "/dashboard/messages", label: "Messages", icon: MessageIcon },
   { href: "/dashboard/documents", label: "Documents", icon: FileIcon },
+  { href: "/dashboard/engagements", label: "Engagements", icon: PenLineIcon },
   { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon },
   { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
 ];

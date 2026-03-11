@@ -216,3 +216,93 @@ export function buildEsignCompletedEmail(params: {
     html,
   };
 }
+
+// ── Engagement Letter Request Email ──────────────────────
+
+export function buildEngagementRequestEmail(params: {
+  clientName: string;
+  cpaName: string;
+  subject: string;
+  engageUrl: string;
+  expiresAt: Date;
+}): { subject: string; html: string } {
+  const { clientName, cpaName, subject, engageUrl, expiresAt } = params;
+  const expDate = expiresAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Engagement Letter</h1>
+    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+      Hi ${clientName}, <strong style="color:#fff;">${cpaName}</strong> has sent you an engagement letter for review and signature.
+    </p>
+    <div style="margin:20px 0;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
+      <p style="margin:0;color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Subject</p>
+      <p style="margin:8px 0 0;color:#fff;font-size:15px;font-weight:600;">${subject}</p>
+    </div>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${engageUrl}" style="${buttonStyle}">Review & Sign</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+        This link expires ${expDate} &bull; No account required
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: `${cpaName} sent you an engagement letter — ${subject}`,
+    html,
+  };
+}
+
+// ── Engagement Signed Email (to CPA) ─────────────────────
+
+export function buildEngagementSignedEmail(params: {
+  cpaName: string;
+  clientName: string;
+  subject: string;
+  signedAt: Date;
+}): { subject: string; html: string } {
+  const { cpaName, clientName, subject, signedAt } = params;
+  const signDate = signedAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Engagement Letter Signed</h1>
+    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+      Hi ${cpaName}, <strong style="color:#10B981;">${clientName}</strong> has signed your engagement letter.
+    </p>
+    <div style="margin:20px 0;padding:16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:12px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Subject</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${subject}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Signed by</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${clientName}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Date</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${signDate}</td>
+        </tr>
+      </table>
+    </div>
+    <p style="margin:24px 0 0;color:rgba(255,255,255,0.4);font-size:12px;text-align:center;">
+      View the signed engagement in your Nexli Portal dashboard.
+    </p>
+  `);
+
+  return {
+    subject: `${clientName} signed your engagement letter — "${subject}"`,
+    html,
+  };
+}

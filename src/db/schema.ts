@@ -450,3 +450,70 @@ export const taxFormSubmissions = pgTable(
     index("tax_form_submissions_client_idx").on(table.clientName),
   ]
 );
+
+// ══════════════════════════════════════════════════════════
+// ══  ENGAGEMENT LETTERS  ═════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const engagementStatusEnum = pgEnum("engagement_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "signed",
+  "declined",
+  "expired",
+]);
+
+// ── Engagement Templates ─────────────────────────────────
+export const engagementTemplates = pgTable(
+  "engagement_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("engagement_templates_owner_idx").on(table.ownerId),
+  ]
+);
+
+// ── Engagements ──────────────────────────────────────────
+export const engagements = pgTable(
+  "engagements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    templateId: uuid("template_id").references(() => engagementTemplates.id, {
+      onDelete: "set null",
+    }),
+    token: text("token").notNull().unique(),
+    clientName: text("client_name").notNull(),
+    clientEmail: text("client_email").notNull(),
+    subject: text("subject").notNull(),
+    content: text("content").notNull(),
+    status: engagementStatusEnum("status").default("draft").notNull(),
+    sentAt: timestamp("sent_at"),
+    viewedAt: timestamp("viewed_at"),
+    signedAt: timestamp("signed_at"),
+    declinedAt: timestamp("declined_at"),
+    declineReason: text("decline_reason"),
+    signatureData: text("signature_data"),
+    signatureIp: text("signature_ip"),
+    signatureUserAgent: text("signature_user_agent"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("engagements_token_idx").on(table.token),
+    index("engagements_owner_idx").on(table.ownerId),
+    index("engagements_status_idx").on(table.status),
+  ]
+);
