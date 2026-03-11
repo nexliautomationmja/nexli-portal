@@ -107,7 +107,7 @@ export function MessagesClient() {
       </div>
 
       {/* Split layout */}
-      <div className="glass-card rounded-2xl overflow-hidden" style={{ height: "calc(100vh - 220px)" }}>
+      <div className="glass-card overflow-hidden" style={{ height: "calc(100vh - 220px)" }}>
         <div className="flex h-full">
           {/* Conversation List (left panel) */}
           <div className="w-full md:w-80 border-r border-[var(--glass-border)] flex flex-col">
@@ -213,13 +213,13 @@ export function MessagesClient() {
                       onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                       placeholder="Type a message..."
                       disabled={sending}
-                      className="flex-1 px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                      className="flex-1 px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                       style={{ color: "var(--text-main)" }}
                     />
                     <button
                       onClick={handleSend}
                       disabled={!replyText.trim() || sending}
-                      className="w-11 h-11 rounded-xl flex items-center justify-center text-white disabled:opacity-50 transition-all shrink-0"
+                      className="w-11 h-11 rounded-lg flex items-center justify-center text-white disabled:opacity-50 transition-all shrink-0"
                       style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
                     >
                       <SendIcon className="w-4 h-4" />

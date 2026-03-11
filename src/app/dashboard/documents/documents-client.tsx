@@ -164,7 +164,7 @@ export function DocumentsClient() {
         </div>
         <Link
           href="/dashboard/documents/links"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
           style={{
             background: "linear-gradient(135deg, #2563EB, #06B6D4)",
           }}
@@ -183,7 +183,7 @@ export function DocumentsClient() {
             { label: "Reviewed", value: stats.reviewed, accent: "#10B981" },
             { label: "This Month", value: stats.thisMonth, accent: "#8B5CF6" },
           ].map((stat) => (
-            <div key={stat.label} className="glass-card-elevated rounded-2xl p-5" style={{ borderLeft: `3px solid ${stat.accent}` }}>
+            <div key={stat.label} className="glass-card p-4">
               <p className="stat-label">
                 {stat.label}
               </p>
@@ -205,13 +205,13 @@ export function DocumentsClient() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by filename or client..."
-            className="w-full pl-11 pr-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+            className="w-full pl-11 pr-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
             style={{ color: "var(--text-main)" }}
           />
         </div>
 
         {/* Status filter */}
-        <div className="flex items-center gap-1 p-1 rounded-xl border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
+        <div className="flex items-center gap-1 p-1 rounded-lg border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
           {["all", "new", "reviewed", "archived"].map((s) => (
             <button
               key={s}
@@ -232,7 +232,7 @@ export function DocumentsClient() {
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-3 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none"
+          className="px-3 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none"
           style={{ color: "var(--text-main)" }}
         >
           <option value="">All Categories</option>
@@ -243,7 +243,7 @@ export function DocumentsClient() {
       </div>
 
       {/* Document Table */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="glass-card overflow-hidden">
         {loading ? (
           <div className="p-16 text-center" style={{ color: "var(--text-muted)" }}>
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -363,7 +363,7 @@ export function DocumentsClient() {
       {showEsignModal && (
         <>
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={() => setShowEsignModal(false)} />
-          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 glass-card rounded-2xl p-6">
+          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 glass-card p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                 Request E-Signature
@@ -383,7 +383,7 @@ export function DocumentsClient() {
                   onChange={(e) => setEsignName(e.target.value)}
                   placeholder="Full name of the signer"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                   style={{ color: "var(--text-main)" }}
                 />
               </div>
@@ -397,7 +397,7 @@ export function DocumentsClient() {
                   onChange={(e) => setEsignEmail(e.target.value)}
                   placeholder="signer@email.com"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                   style={{ color: "var(--text-main)" }}
                 />
               </div>
@@ -407,7 +407,7 @@ export function DocumentsClient() {
               <button
                 type="submit"
                 disabled={esignSending || !esignName || !esignEmail}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:opacity-90"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold text-white disabled:opacity-50 transition-all hover:opacity-90"
                 style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
               >
                 <SendIcon className="w-4 h-4" />
@@ -439,7 +439,7 @@ export function DocumentsClient() {
                 </div>
                 <button
                   onClick={() => setSelectedDoc(null)}
-                  className="p-2 rounded-xl hover:bg-[var(--input-bg)] transition-colors"
+                  className="p-2 rounded-lg hover:bg-[var(--input-bg)] transition-colors"
                 >
                   <XIcon className="w-5 h-5" />
                 </button>
@@ -530,7 +530,7 @@ export function DocumentsClient() {
               {/* Actions */}
               <div className="flex gap-2">
                 <button
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold border border-[var(--glass-border)] hover:border-blue-500/30 transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold border border-[var(--glass-border)] hover:border-blue-500/30 transition-all"
                   style={{ color: "var(--text-main)" }}
                 >
                   <DownloadIcon className="w-4 h-4" />
@@ -538,7 +538,7 @@ export function DocumentsClient() {
                 </button>
                 <button
                   onClick={() => openEsignModal(selectedDoc)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
                   style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
                 >
                   <SendIcon className="w-4 h-4" />
@@ -546,7 +546,7 @@ export function DocumentsClient() {
                 </button>
                 <button
                   onClick={() => handleDelete(selectedDoc.id)}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-rose-400 border border-rose-500/30 hover:bg-rose-500/10 transition-all"
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold text-rose-400 border border-rose-500/30 hover:bg-rose-500/10 transition-all"
                 >
                   <TrashIcon className="w-4 h-4" />
                 </button>
@@ -562,7 +562,7 @@ export function DocumentsClient() {
                     {getEsignsForDoc(selectedDoc.id).map((es) => (
                       <div
                         key={es.id}
-                        className="p-3 rounded-xl border border-[var(--glass-border)]"
+                        className="p-3 rounded-lg border border-[var(--glass-border)]"
                       >
                         <div className="flex items-center justify-between mb-1">
                           <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
@@ -615,7 +615,7 @@ export function DocumentsClient() {
                       updateDocument(selectedDoc.id, { notes: e.target.value });
                     }
                   }}
-                  className="w-full px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 resize-none h-24 transition-colors"
+                  className="w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 resize-none h-24 transition-colors"
                   style={{ color: "var(--text-main)" }}
                 />
               </div>

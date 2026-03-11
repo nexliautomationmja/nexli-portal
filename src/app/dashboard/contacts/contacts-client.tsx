@@ -67,13 +67,13 @@ export function ContactsClient() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search contacts..."
-          className="w-full pl-11 pr-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+          className="w-full pl-11 pr-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
           style={{ color: "var(--text-main)" }}
         />
       </div>
 
       {/* Contact List */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="glass-card overflow-hidden">
         {loading ? (
           <div className="p-16 text-center" style={{ color: "var(--text-muted)" }}>
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -156,7 +156,7 @@ export function ContactsClient() {
                     Added {new Date(selectedContact.dateAdded).toLocaleDateString()}
                   </p>
                 </div>
-                <button onClick={() => setSelectedContact(null)} className="p-2 rounded-xl hover:bg-[var(--input-bg)] transition-colors">
+                <button onClick={() => setSelectedContact(null)} className="p-2 rounded-lg hover:bg-[var(--input-bg)] transition-colors">
                   <XIcon className="w-5 h-5" />
                 </button>
               </div>

@@ -72,7 +72,7 @@ export function PipelineClient() {
         </div>
         <div className="flex items-center gap-3">
           {/* View toggle */}
-          <div className="flex items-center gap-1 p-1 rounded-xl border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
+          <div className="flex items-center gap-1 p-1 rounded-lg border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
             <button
               onClick={() => setView("kanban")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -98,7 +98,7 @@ export function PipelineClient() {
             <select
               value={selectedPipeline}
               onChange={(e) => setSelectedPipeline(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none"
+              className="px-3 py-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none"
               style={{ color: "var(--text-main)" }}
             >
               {pipelines.map((p) => (
@@ -110,12 +110,12 @@ export function PipelineClient() {
       </div>
 
       {loading ? (
-        <div className="glass-card rounded-2xl p-16 text-center" style={{ color: "var(--text-muted)" }}>
+        <div className="glass-card p-16 text-center" style={{ color: "var(--text-muted)" }}>
           <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm">Loading pipeline...</p>
         </div>
       ) : !currentPipeline ? (
-        <div className="glass-card rounded-2xl p-16">
+        <div className="glass-card p-16">
           <div className="empty-state">
             <KanbanIcon className="empty-state-icon" />
             <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>No pipelines found</p>
@@ -160,7 +160,7 @@ export function PipelineClient() {
                 <div className="space-y-2">
                   {stageOpps.length === 0 ? (
                     <div
-                      className="border-2 border-dashed border-[var(--glass-border)] rounded-xl p-6 text-center"
+                      className="border-2 border-dashed border-[var(--glass-border)] rounded-lg p-6 text-center"
                     >
                       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                         No opportunities
@@ -170,7 +170,7 @@ export function PipelineClient() {
                     stageOpps.map((opp) => (
                       <div
                         key={opp.id}
-                        className="glass-card rounded-xl p-4 hover:border-blue-500/20 transition-colors cursor-pointer"
+                        className="glass-card rounded-lg p-4 hover:border-blue-500/20 transition-colors cursor-pointer"
                       >
                         <p className="text-sm font-medium mb-1" style={{ color: "var(--text-main)" }}>
                           {opp.name}
@@ -208,7 +208,7 @@ export function PipelineClient() {
         </div>
       ) : (
         /* List View */
-        <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="glass-card overflow-hidden">
           <table className="data-table">
             <thead>
               <tr>

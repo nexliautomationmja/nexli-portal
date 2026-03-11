@@ -91,7 +91,7 @@ export function CalendarClient() {
       <div className="flex items-center justify-between">
         <button
           onClick={prevMonth}
-          className="px-4 py-2 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm font-semibold hover:border-blue-500/30 transition-colors"
+          className="px-4 py-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm font-semibold hover:border-blue-500/30 transition-colors"
           style={{ color: "var(--text-muted)" }}
         >
           Previous
@@ -101,7 +101,7 @@ export function CalendarClient() {
         </h2>
         <button
           onClick={nextMonth}
-          className="px-4 py-2 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm font-semibold hover:border-blue-500/30 transition-colors"
+          className="px-4 py-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm font-semibold hover:border-blue-500/30 transition-colors"
           style={{ color: "var(--text-muted)" }}
         >
           Next
@@ -109,7 +109,7 @@ export function CalendarClient() {
       </div>
 
       {/* Calendar Grid */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="glass-card overflow-hidden">
         {loading ? (
           <div className="p-16 text-center" style={{ color: "var(--text-muted)" }}>
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -189,7 +189,7 @@ export function CalendarClient() {
 
       {/* Upcoming Events list */}
       {events.length > 0 && (
-        <div className="glass-card rounded-2xl p-6">
+        <div className="glass-card p-6">
           <h3 className="section-header mb-4">
             Upcoming Events
           </h3>
@@ -199,7 +199,7 @@ export function CalendarClient() {
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
               .slice(0, 5)
               .map((evt) => (
-                <div key={evt.id} className="flex items-center gap-4 py-3 px-3 rounded-xl hover:bg-[var(--input-bg)] transition-colors">
+                <div key={evt.id} className="flex items-center gap-4 py-3 px-3 rounded-lg hover:bg-[var(--input-bg)] transition-colors">
                   <div className="w-12 text-center shrink-0">
                     <p className="text-lg font-black leading-none" style={{ color: "var(--text-main)" }}>
                       {new Date(evt.startTime).getDate()}

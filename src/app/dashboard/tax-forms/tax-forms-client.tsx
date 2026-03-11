@@ -106,7 +106,7 @@ export function TaxFormsClient() {
 
       {/* Tab bar */}
       <div
-        className="flex items-center gap-1 p-1 rounded-xl border border-[var(--glass-border)] w-fit"
+        className="flex items-center gap-1 p-1 rounded-lg border border-[var(--glass-border)] w-fit"
         style={{ background: "var(--glass-bg)" }}
       >
         <button
@@ -268,8 +268,8 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
   /* ── Success state ── */
   if (result) {
     return (
-      <div className="glass-card rounded-2xl p-8 max-w-xl mx-auto text-center space-y-6">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
+      <div className="glass-card p-8 max-w-xl mx-auto text-center space-y-6">
+        <div className="w-16 h-16 rounded-lg bg-emerald-500/10 flex items-center justify-center mx-auto">
           <CheckIcon className="w-8 h-8 text-emerald-400" />
         </div>
         <div>
@@ -286,7 +286,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
         {/* URL copy */}
         <div className="space-y-3">
           <div
-            className="flex items-center gap-2 p-3 rounded-xl border border-[var(--glass-border)] text-left"
+            className="flex items-center gap-2 p-3 rounded-lg border border-[var(--glass-border)] text-left"
             style={{ background: "var(--glass-bg)" }}
           >
             <p
@@ -314,7 +314,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
 
         <button
           onClick={resetForm}
-          className="px-6 py-2.5 rounded-xl text-sm font-bold border border-[var(--glass-border)] hover:border-blue-500/30 transition-colors"
+          className="px-6 py-2.5 rounded-lg text-sm font-bold border border-[var(--glass-border)] hover:border-blue-500/30 transition-colors"
           style={{ color: "var(--text-main)" }}
         >
           Create Another Request
@@ -332,10 +332,10 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
             <button
               key={scenario.id}
               onClick={() => selectScenario(scenario)}
-              className="glass-card rounded-xl p-4 text-left hover:border-blue-500/30 transition-colors group"
+              className="glass-card rounded-lg p-4 text-left hover:border-blue-500/30 transition-colors group"
             >
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0 group-hover:bg-blue-500/20 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0 group-hover:bg-blue-500/20 transition-colors">
                   <ClipboardIcon className="w-5 h-5 text-blue-400" />
                 </div>
                 <div className="min-w-0">
@@ -377,7 +377,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
             {/* Left: Document checklist (2 cols) */}
             <div className="lg:col-span-2 space-y-4">
               {Object.entries(groupedRequirements).map(([category, reqs]) => (
-                <div key={category} className="glass-card rounded-xl p-4">
+                <div key={category} className="glass-card rounded-lg p-4">
                   <h3
                     className="text-[10px] font-bold uppercase tracking-widest mb-3 pb-2 border-b border-[var(--glass-border)]"
                     style={{ color: "var(--text-muted)" }}
@@ -414,7 +414,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
               ))}
 
               {/* Custom items */}
-              <div className="glass-card rounded-xl p-4">
+              <div className="glass-card rounded-lg p-4">
                 <h3
                   className="text-[10px] font-bold uppercase tracking-widest mb-3 pb-2 border-b border-[var(--glass-border)]"
                   style={{ color: "var(--text-muted)" }}
@@ -463,7 +463,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
 
             {/* Right: Client info + submit (1 col) */}
             <div className="space-y-4">
-              <div className="glass-card rounded-xl p-4 space-y-4">
+              <div className="glass-card rounded-lg p-4 space-y-4">
                 <h3
                   className="text-[10px] font-bold uppercase tracking-widest pb-2 border-b border-[var(--glass-border)]"
                   style={{ color: "var(--text-muted)" }}
@@ -480,7 +480,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Client's full name"
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                 </div>
@@ -494,7 +494,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                     value={clientEmail}
                     onChange={(e) => setClientEmail(e.target.value)}
                     placeholder="client@email.com"
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                   <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
@@ -511,7 +511,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
                     placeholder="(555) 123-4567"
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                 </div>
@@ -525,7 +525,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                     onChange={(e) => setMessageText(e.target.value)}
                     placeholder="Hi, please upload the following documents for your tax return..."
                     rows={3}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors resize-none"
+                    className="w-full px-3 py-2.5 rounded-lg border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors resize-none"
                     style={{ color: "var(--text-main)" }}
                   />
                 </div>
@@ -537,7 +537,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                   <select
                     value={expiresInDays}
                     onChange={(e) => setExpiresInDays(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   >
                     <option value={7}>7 days</option>
@@ -550,7 +550,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
               </div>
 
               {/* Summary + Submit */}
-              <div className="glass-card rounded-xl p-4 space-y-4">
+              <div className="glass-card rounded-lg p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
                     Documents selected
@@ -561,7 +561,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || totalChecked === 0}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold text-white transition-all disabled:opacity-40"
                   style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
                 >
                   {submitting ? (
@@ -633,13 +633,13 @@ function FormReferenceTab({ onRequestDocs }: { onRequestDocs: (scenario: Documen
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search forms by number or name..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
             style={{ color: "var(--text-main)" }}
           />
         </div>
 
         {/* Scope toggle */}
-        <div className="flex items-center gap-1 p-1 rounded-xl border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
+        <div className="flex items-center gap-1 p-1 rounded-lg border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
           <button
             onClick={() => { setScope("federal"); setCategory(""); setStateFilter(""); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -665,7 +665,7 @@ function FormReferenceTab({ onRequestDocs }: { onRequestDocs: (scenario: Documen
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none"
+            className="px-3 py-2.5 rounded-lg border border-[var(--glass-border)] bg-transparent text-sm outline-none"
             style={{ color: "var(--text-main)" }}
           >
             <option value="">All Categories</option>
@@ -680,7 +680,7 @@ function FormReferenceTab({ onRequestDocs }: { onRequestDocs: (scenario: Documen
           <select
             value={stateFilter}
             onChange={(e) => setStateFilter(e.target.value)}
-            className="px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none"
+            className="px-3 py-2.5 rounded-lg border border-[var(--glass-border)] bg-transparent text-sm outline-none"
             style={{ color: "var(--text-main)" }}
           >
             <option value="">All States</option>
@@ -706,7 +706,7 @@ function FormReferenceTab({ onRequestDocs }: { onRequestDocs: (scenario: Documen
           return (
             <div
               key={form.id}
-              className="glass-card rounded-xl p-4 hover:border-blue-500/30 transition-colors group"
+              className="glass-card rounded-lg p-4 hover:border-blue-500/30 transition-colors group"
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">

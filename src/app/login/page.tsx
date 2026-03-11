@@ -35,7 +35,7 @@ export default function LoginPage() {
         </div>
 
         {/* Login Card */}
-        <div className="glass-card p-8 md:p-10 rounded-2xl md:rounded-[2rem]">
+        <div className="glass-card p-8 md:p-10">
           <LoginForm />
         </div>
 

@@ -17,22 +17,24 @@
   --animate-pulse-slow: pulse 3s ease-in-out infinite;
 }
 
-/* ── Nexli Theme Variables ── */
+/* ── Theme Variables ── */
 :root {
   --primary-font: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
   --accent: #3b82f6;
 
-  /* Light theme — CLEAN & FLAT like Nextdoor */
+  /* Light theme — FLAT like Nextdoor */
   --bg-main: #f5f5f5;
   --text-main: #1a1a1a;
   --text-muted: #6b7280;
-  --glass-bg: #ffffff;
-  --glass-border: #e5e7eb;
+  --card-bg: #ffffff;
+  --card-border: #e0e0e0;
   --nav-bg: #ffffff;
+  --input-bg: #f5f5f5;
+
+  /* Keep for backward compat */
+  --glass-bg: #ffffff;
+  --glass-border: #e0e0e0;
   --footer-bg: #f5f5f5;
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --card-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --input-bg: #f9fafb;
 
   /* Category accent palette */
   --accent-blue: #2563EB;
@@ -57,15 +59,15 @@
   --bg-main: #0a0a0a;
   --text-main: #fafafa;
   --text-muted: #a1a1aa;
-  --glass-bg: #171717;
-  --glass-border: #262626;
+  --card-bg: #171717;
+  --card-border: #262626;
   --nav-bg: #141414;
-  --footer-bg: #0a0a0a;
-  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --card-hover-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   --input-bg: #1c1c1c;
 
-  /* Category accent palette (dark) */
+  --glass-bg: #171717;
+  --glass-border: #262626;
+  --footer-bg: #0a0a0a;
+
   --accent-blue-bg: rgba(37, 99, 235, 0.12);
   --accent-blue-border: rgba(37, 99, 235, 0.2);
   --accent-cyan-bg: rgba(6, 182, 212, 0.12);
@@ -115,44 +117,31 @@ html {
 }
 
 /* ══════════════════════════════════════════════
-   CARDS — Clean, flat, solid backgrounds
+   CARDS — Flat, no shadow, thin border
    ══════════════════════════════════════════════ */
 .glass-card {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--card-shadow);
-  border-radius: 1rem;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.glass-card:hover {
-  box-shadow: var(--card-hover-shadow);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.5rem;
 }
 
 .glass-card-elevated {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--card-shadow);
-  border-radius: 1rem;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.glass-card-elevated:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--card-hover-shadow);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.5rem;
 }
 
 .glass-nav {
   background: var(--nav-bg);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--card-border);
 }
 
 /* ══════════════════════════════════════════════
-   SIDEBAR
+   SIDEBAR — Clean like Nextdoor
    ══════════════════════════════════════════════ */
 .glass-sidebar {
   background: var(--nav-bg);
-  border-right: 1px solid var(--glass-border);
+  border-right: 1px solid var(--card-border);
 }
 
 @media (min-width: 768px) {
@@ -165,34 +154,6 @@ html {
   }
 }
 
-.sidebar-gradient-border {
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    #2563EB 20%,
-    #06B6D4 50%,
-    #14B8A6 80%,
-    transparent 100%
-  );
-  opacity: 0.3;
-  animation: gradient-shift 6s ease-in-out infinite alternate;
-}
-
-@keyframes gradient-shift {
-  0% {
-    opacity: 0.2;
-    background: linear-gradient(180deg, transparent 0%, #2563EB 20%, #06B6D4 50%, #14B8A6 80%, transparent 100%);
-  }
-  50% {
-    opacity: 0.4;
-    background: linear-gradient(180deg, transparent 0%, #06B6D4 20%, #14B8A6 50%, #8B5CF6 80%, transparent 100%);
-  }
-  100% {
-    opacity: 0.2;
-    background: linear-gradient(180deg, transparent 0%, #14B8A6 20%, #2563EB 50%, #06B6D4 80%, transparent 100%);
-  }
-}
-
 .sidebar-nav-active {
   background: var(--input-bg);
   color: var(--text-main);
@@ -202,39 +163,28 @@ html {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.sidebar-active-bar {
-  background: linear-gradient(180deg, #2563EB, #06B6D4);
-}
-
 .sidebar-active-text {
-  color: #2563EB;
+  color: var(--text-main);
   font-weight: 600;
 }
 
 .dark .sidebar-active-text {
-  background: linear-gradient(135deg, #60a5fa, #22d3ee);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.sidebar-nav-item:hover {
-  transform: translateX(2px);
+  color: #fafafa;
 }
 
 /* ══════════════════════════════════════════════
-   FORM INPUTS — Clean, solid backgrounds
+   FORM INPUTS
    ══════════════════════════════════════════════ */
 .glass-input {
   background: var(--input-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 0.75rem;
+  border: 1px solid var(--card-border);
+  border-radius: 0.5rem;
   padding: 0.75rem 1rem;
   color: var(--text-main);
   font-family: var(--primary-font);
   font-size: 0.875rem;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease;
   width: 100%;
 }
 
@@ -245,7 +195,6 @@ html {
 
 .glass-input:focus {
   border-color: #2563EB;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 /* ── Logo Theme Switching ── */
@@ -266,13 +215,12 @@ html {
 }
 
 /* ══════════════════════════════════════════════
-   BACKGROUND — Very subtle, only in dark mode
+   BACKGROUND — Dark mode only
    ══════════════════════════════════════════════ */
 .dashboard-bg {
   position: relative;
 }
 
-/* No orbs in light mode — keep it clean like Nextdoor */
 .dashboard-bg::before,
 .dashboard-bg::after {
   display: none;
@@ -306,47 +254,11 @@ html {
   z-index: 0;
 }
 
-/* Animated gradient border for featured cards */
-.gradient-border-card {
-  position: relative;
-  overflow: hidden;
-}
-
-.gradient-border-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: conic-gradient(from var(--border-angle, 0deg), #2563EB, #06B6D4, #14B8A6, #8B5CF6, #2563EB);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0.4;
-  animation: border-rotate 4s linear infinite;
-}
-
-@keyframes border-rotate {
-  to { --border-angle: 360deg; }
-}
-
-@property --border-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-/* Logo shimmer on hover */
-.logo-shimmer:hover {
-  filter: drop-shadow(0 0 8px rgba(37, 99, 235, 0.4)) drop-shadow(0 0 16px rgba(6, 182, 212, 0.2));
-  transition: filter 0.3s ease;
-}
-
 /* ══════════════════════════════════════════════
    UTILITY CLASSES
    ══════════════════════════════════════════════ */
 
-/* Section header */
+/* Section header — small uppercase label */
 .section-header {
   font-size: 0.75rem;
   font-weight: 600;
@@ -356,11 +268,11 @@ html {
   margin-bottom: 0.75rem;
 }
 
-/* Stat value — BIG prominent numbers like Nextdoor */
+/* Stat value — prominent number */
 .stat-value {
-  font-size: 2.25rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1;
   color: var(--text-main);
 }
@@ -384,17 +296,16 @@ html {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  padding: 0.875rem 1.25rem;
-  border-bottom: 2px solid var(--glass-border);
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--card-border);
   text-align: left;
-  background: var(--glass-bg);
 }
 
 .data-table tbody td {
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1rem;
   font-size: 0.875rem;
   color: var(--text-main);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--card-border);
   vertical-align: middle;
 }
 
@@ -406,19 +317,15 @@ html {
   background-color: var(--input-bg);
 }
 
-.dark .data-table tbody tr:hover {
-  background-color: rgba(255, 255, 255, 0.03);
-}
-
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-/* Badge / pill styling */
+/* Badge / pill */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.1875rem 0.625rem;
+  padding: 0.125rem 0.5rem;
   font-size: 0.6875rem;
   font-weight: 600;
   border-radius: 9999px;
@@ -483,11 +390,11 @@ html {
 /* Section divider */
 .section-divider {
   height: 1px;
-  background: var(--glass-border);
+  background: var(--card-border);
   margin: 1.5rem 0;
 }
 
-/* Clean empty state */
+/* Empty state */
 .empty-state {
   display: flex;
   flex-direction: column;

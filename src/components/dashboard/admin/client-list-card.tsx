@@ -55,7 +55,7 @@ export function ClientListCard({ client, isSelected, onClick }: ClientListCardPr
     <button
       onClick={onClick}
       className={cn(
-        "w-full text-left p-4 rounded-2xl border transition-all duration-200",
+        "w-full text-left p-4 rounded-lg border transition-all duration-200",
         isSelected
           ? "border-blue-500/30 bg-blue-500/5"
           : "border-[var(--glass-border)] hover:border-blue-500/20 hover:bg-[var(--input-bg)]"

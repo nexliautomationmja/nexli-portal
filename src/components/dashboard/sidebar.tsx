@@ -44,73 +44,19 @@ function ChevronRightIcon({ className }: { className?: string }) {
   );
 }
 
-// Color map matching nexli.net icon box styling
-const colorMap = {
-  blue: {
-    iconDark: "bg-blue-500/10 border-blue-500/20",
-    iconLight: "bg-blue-50 border-blue-200",
-    text: "text-blue-400",
-    glow: "drop-shadow(0 0 8px rgba(37, 99, 235, 0.4))",
-  },
-  cyan: {
-    iconDark: "bg-cyan-500/10 border-cyan-500/20",
-    iconLight: "bg-cyan-50 border-cyan-200",
-    text: "text-cyan-400",
-    glow: "drop-shadow(0 0 8px rgba(6, 182, 212, 0.4))",
-  },
-  violet: {
-    iconDark: "bg-violet-500/10 border-violet-500/20",
-    iconLight: "bg-violet-50 border-violet-200",
-    text: "text-violet-400",
-    glow: "drop-shadow(0 0 8px rgba(139, 92, 246, 0.4))",
-  },
-  emerald: {
-    iconDark: "bg-emerald-500/10 border-emerald-500/20",
-    iconLight: "bg-emerald-50 border-emerald-200",
-    text: "text-emerald-400",
-    glow: "drop-shadow(0 0 8px rgba(16, 185, 129, 0.4))",
-  },
-  teal: {
-    iconDark: "bg-teal-500/10 border-teal-500/20",
-    iconLight: "bg-teal-50 border-teal-200",
-    text: "text-teal-400",
-    glow: "drop-shadow(0 0 8px rgba(20, 184, 166, 0.4))",
-  },
-  amber: {
-    iconDark: "bg-amber-500/10 border-amber-500/20",
-    iconLight: "bg-amber-50 border-amber-200",
-    text: "text-amber-400",
-    glow: "drop-shadow(0 0 8px rgba(245, 158, 11, 0.4))",
-  },
-  rose: {
-    iconDark: "bg-rose-500/10 border-rose-500/20",
-    iconLight: "bg-rose-50 border-rose-200",
-    text: "text-rose-400",
-    glow: "drop-shadow(0 0 8px rgba(244, 63, 94, 0.4))",
-  },
-  indigo: {
-    iconDark: "bg-indigo-500/10 border-indigo-500/20",
-    iconLight: "bg-indigo-50 border-indigo-200",
-    text: "text-indigo-400",
-    glow: "drop-shadow(0 0 8px rgba(99, 102, 241, 0.4))",
-  },
-} as const;
-
-type AccentColor = keyof typeof colorMap;
-
-const clientNav: { href: string; label: string; icon: typeof LayoutIcon; color: AccentColor }[] = [
-  { href: "/dashboard", label: "Overview", icon: LayoutIcon, color: "blue" },
-  { href: "/dashboard/contacts", label: "Contacts", icon: UsersIcon, color: "violet" },
-  { href: "/dashboard/pipeline", label: "Pipeline", icon: KanbanIcon, color: "cyan" },
-  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon, color: "amber" },
-  { href: "/dashboard/messages", label: "Messages", icon: MessageIcon, color: "emerald" },
-  { href: "/dashboard/documents", label: "Documents", icon: FileIcon, color: "teal" },
-  { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon, color: "indigo" },
-  { href: "/dashboard/settings", label: "Settings", icon: GearIcon, color: "rose" },
+const clientNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
+  { href: "/dashboard", label: "Overview", icon: LayoutIcon },
+  { href: "/dashboard/contacts", label: "Contacts", icon: UsersIcon },
+  { href: "/dashboard/pipeline", label: "Pipeline", icon: KanbanIcon },
+  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon },
+  { href: "/dashboard/messages", label: "Messages", icon: MessageIcon },
+  { href: "/dashboard/documents", label: "Documents", icon: FileIcon },
+  { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon },
+  { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
 ];
 
-const adminNav: { href: string; label: string; icon: typeof ShieldIcon; color: AccentColor }[] = [
-  { href: "/dashboard/admin", label: "All Clients", icon: ShieldIcon, color: "amber" },
+const adminNav: { href: string; label: string; icon: typeof ShieldIcon }[] = [
+  { href: "/dashboard/admin", label: "All Clients", icon: ShieldIcon },
 ];
 
 export function Sidebar({ isAdmin, userName }: SidebarProps) {
@@ -130,12 +76,10 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
         .slice(0, 2)
     : "?";
 
-  // Close mobile drawer on route change
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
-  // Prevent body scroll when mobile drawer is open
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = "hidden";
@@ -147,7 +91,6 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
     };
   }, [mobileOpen]);
 
-  // Set data attribute for layout margin adjustment
   useEffect(() => {
     document.documentElement.setAttribute(
       "data-sidebar",
@@ -193,8 +136,8 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
       <div className="hidden md:flex px-3 mb-2">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center h-8 rounded-lg border border-[var(--glass-border)] hover:border-blue-500/30 transition-all duration-200"
-          style={{ color: "var(--text-muted)", background: "var(--glass-bg)" }}
+          className="w-full flex items-center justify-center h-8 rounded-lg border border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
+          style={{ color: "var(--text-muted)" }}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
@@ -205,56 +148,33 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 space-y-1.5 no-scrollbar">
+      {/* Navigation — clean like Nextdoor */}
+      <nav className="flex-1 overflow-y-auto px-3 space-y-0.5 no-scrollbar">
         {navItems.map((item) => {
           const isActive =
             item.href === "/dashboard"
               ? pathname === "/dashboard"
               : pathname.startsWith(item.href);
-          const colors = colorMap[item.color];
 
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 no-underline",
+                "group flex items-center gap-3 rounded-lg text-sm font-medium transition-colors no-underline",
                 collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5",
                 isActive
-                  ? "sidebar-nav-active"
-                  : "hover:bg-[var(--input-bg)] sidebar-nav-item"
+                  ? "sidebar-nav-active sidebar-active-text"
+                  : "hover:bg-[var(--input-bg)]"
               )}
               style={{
                 color: isActive ? undefined : "var(--text-muted)",
               }}
               title={collapsed ? item.label : undefined}
             >
-              {/* Active indicator bar */}
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full sidebar-active-bar" />
-              )}
-              {/* Icon box — colored rounded square like nexli.net */}
-              <div
-                className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 transition-all duration-200",
-                  theme === "dark" ? colors.iconDark : colors.iconLight,
-                  isActive && "group-hover:scale-110",
-                  !isActive && "group-hover:scale-105"
-                )}
-                style={{
-                  filter: isActive ? colors.glow : undefined,
-                }}
-              >
-                <item.icon className={cn("w-4 h-4", colors.text)} />
-              </div>
+              <item.icon className={cn("w-5 h-5 shrink-0", isActive ? "text-[var(--text-main)]" : "")} />
               {!collapsed && (
-                <span className={cn(
-                  "transition-colors duration-200",
-                  isActive ? "sidebar-active-text" : "group-hover:text-[var(--text-main)]"
-                )}>
-                  {item.label}
-                </span>
+                <span>{item.label}</span>
               )}
             </Link>
           );
@@ -262,29 +182,22 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
       </nav>
 
       {/* Bottom section */}
-      <div className="px-3 pb-4 space-y-1.5 border-t border-[var(--glass-border)] pt-3 mt-2">
+      <div className="px-3 pb-4 space-y-0.5 border-t border-[var(--card-border)] pt-3 mt-2">
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
           className={cn(
-            "group w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-[var(--input-bg)]",
+            "w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-colors hover:bg-[var(--input-bg)]",
             collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
           )}
           style={{ color: "var(--text-muted)" }}
           title={theme === "dark" ? "Light mode" : "Dark mode"}
         >
-          <div className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 transition-all duration-200 group-hover:scale-105",
-            theme === "dark"
-              ? "bg-amber-500/10 border-amber-500/20"
-              : "bg-indigo-50 border-indigo-200"
-          )}>
-            {theme === "dark" ? (
-              <SunIcon className="w-4 h-4 text-amber-400" />
-            ) : (
-              <MoonIcon className="w-4 h-4 text-indigo-400" />
-            )}
-          </div>
+          {theme === "dark" ? (
+            <SunIcon className="w-5 h-5 shrink-0" />
+          ) : (
+            <MoonIcon className="w-5 h-5 shrink-0" />
+          )}
           {!collapsed && (
             <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
           )}
@@ -293,12 +206,12 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
         {/* User section */}
         <div
           className={cn(
-            "flex items-center gap-3 rounded-xl",
+            "flex items-center gap-3 rounded-lg",
             collapsed ? "justify-center px-2 py-2" : "px-3 py-2"
           )}
         >
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
             style={{
               background: "linear-gradient(135deg, #2563EB, #06B6D4)",
               color: "white",
@@ -329,19 +242,12 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
           className={cn(
-            "group w-full flex items-center gap-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors",
+            "w-full flex items-center gap-3 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors",
             collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
           )}
           title={collapsed ? "Sign Out" : undefined}
         >
-          <div className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 transition-all duration-200 group-hover:scale-105",
-            theme === "dark"
-              ? "bg-red-500/10 border-red-500/20"
-              : "bg-red-50 border-red-200"
-          )}>
-            <LogOutIcon className="w-4 h-4" />
-          </div>
+          <LogOutIcon className="w-5 h-5 shrink-0" />
           {!collapsed && <span>Sign Out</span>}
         </button>
       </div>
@@ -353,7 +259,7 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
       {/* Mobile hamburger button */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-xl flex items-center justify-center glass-card border border-[var(--glass-border)]"
+        className="md:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-lg flex items-center justify-center bg-[var(--card-bg)] border border-[var(--card-border)]"
         style={{ color: "var(--text-muted)" }}
       >
         <HamburgerIcon className="w-5 h-5" />
@@ -362,7 +268,7 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
       {/* Mobile backdrop */}
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
+          className="md:hidden fixed inset-0 z-[60] bg-black/50"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -374,7 +280,6 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Close button */}
         <button
           onClick={() => setMobileOpen(false)}
           className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--input-bg)] transition-colors"
@@ -392,8 +297,6 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
           collapsed ? "w-[64px]" : "w-[240px]"
         )}
       >
-        {/* Gradient accent line on right edge */}
-        <div className="absolute right-0 top-0 h-full w-[1px] sidebar-gradient-border" />
         {sidebarContent}
       </aside>
     </>

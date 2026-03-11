@@ -94,26 +94,22 @@ export default function AdminPage() {
         <StatCard
           label="Total Clients"
           value={loading ? "..." : String(data?.totalClients ?? 0)}
-          accent="blue"
         />
         <StatCard
           label="Active Subs"
           value={loading ? "..." : String(data?.activeSubscriptions ?? 0)}
-          accent="emerald"
         />
         <StatCard
           label="Total Leads"
           value={loading ? "..." : compactNumber(data?.totalLeads ?? 0)}
           delta="all businesses"
           deltaType="neutral"
-          accent="cyan"
         />
         <StatCard
           label="Avg Leads / Biz"
           value={loading ? "..." : String(data?.avgLeadsPerBusiness ?? 0)}
           delta="30 days"
           deltaType="neutral"
-          accent="teal"
         />
       </div>
 
@@ -122,7 +118,7 @@ export default function AdminPage() {
         <select
           value={selectedClientId || ""}
           onChange={(e) => e.target.value && selectClient(e.target.value)}
-          className="w-full px-4 py-3 rounded-xl text-sm font-medium border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50"
+          className="w-full px-4 py-3 rounded-lg text-sm font-medium border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50"
           style={{
             background: "var(--glass-bg)",
             color: "var(--text-main)",
@@ -150,7 +146,7 @@ export default function AdminPage() {
                 placeholder="Search clients..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl text-xs border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50 transition-colors"
+                className="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50 transition-colors"
                 style={{
                   background: "var(--glass-bg)",
                   color: "var(--text-main)",
@@ -164,7 +160,7 @@ export default function AdminPage() {
                 [1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className="h-20 rounded-2xl animate-pulse"
+                    className="h-20 rounded-lg animate-pulse"
                     style={{ background: "var(--glass-border)" }}
                   />
                 ))
@@ -194,7 +190,7 @@ export default function AdminPage() {
             <GlassCard>
               <div className="py-24 text-center">
                 <div
-                  className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                  className="w-16 h-16 rounded-lg mx-auto mb-4 flex items-center justify-center"
                   style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.1), rgba(6,182,212,0.1))" }}
                 >
                   <SearchIcon className="w-6 h-6" style={{ color: "var(--text-muted)" }} />
