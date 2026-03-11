@@ -26,23 +26,20 @@ export function StatCard({ label, value, delta, deltaType = "neutral", icon, acc
 
   return (
     <div
-      className="glass-card p-5 md:p-6 rounded-xl md:rounded-2xl overflow-hidden"
+      className="glass-card-elevated p-5 md:p-6 rounded-xl md:rounded-2xl overflow-hidden"
       style={
         a
-          ? { borderLeft: `3px solid ${a.color}`, background: `linear-gradient(135deg, ${a.bg}, transparent 60%), var(--glass-bg)` }
+          ? { borderLeft: `3px solid ${a.color}` }
           : undefined
       }
     >
-      <div className="flex items-start justify-between mb-3">
-        <span
-          className="text-[10px] font-black uppercase tracking-[0.2em]"
-          style={{ color: "var(--text-muted)", opacity: 0.5 }}
-        >
+      <div className="flex items-start justify-between mb-1">
+        <span className="stat-label">
           {label}
         </span>
         {icon && (
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center border"
+            className="w-9 h-9 rounded-xl flex items-center justify-center border"
             style={
               a
                 ? { background: a.bg, borderColor: a.border, color: a.color }
@@ -54,24 +51,21 @@ export function StatCard({ label, value, delta, deltaType = "neutral", icon, acc
         )}
       </div>
 
-      <p
-        className="text-2xl md:text-3xl font-bold tracking-tight"
-        style={{ color: "var(--text-main)" }}
-      >
+      <p className="stat-value">
         {value}
       </p>
 
       {delta && (
         <p
           className={cn(
-            "text-xs font-semibold mt-1",
-            deltaType === "positive" && "text-green-400",
-            deltaType === "negative" && "text-red-400",
+            "text-xs font-semibold mt-2",
+            deltaType === "positive" && "text-emerald-500",
+            deltaType === "negative" && "text-rose-500",
             deltaType === "neutral" && "text-[var(--text-muted)]"
           )}
         >
           {deltaType === "positive" && "+"}{delta}
-          <span className="font-normal ml-1" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
+          <span className="font-normal ml-1 text-[var(--text-muted)] opacity-60">
             vs prev. period
           </span>
         </p>

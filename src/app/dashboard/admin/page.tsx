@@ -81,7 +81,7 @@ export default function AdminPage() {
     <div className="max-w-[1600px] mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text-main)" }}>
+        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
           Client Overview
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -90,7 +90,7 @@ export default function AdminPage() {
       </div>
 
       {/* Aggregate stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="Total Clients"
           value={loading ? "..." : String(data?.totalClients ?? 0)}
@@ -144,7 +144,7 @@ export default function AdminPage() {
           <GlassCard>
             {/* Search input */}
             <div className="relative mb-4">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
+              <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
               <input
                 type="text"
                 placeholder="Search clients..."
@@ -159,7 +159,7 @@ export default function AdminPage() {
             </div>
 
             {/* Client cards */}
-            <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto pr-1" style={{ scrollbarWidth: "thin" }}>
+            <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto pr-1 no-scrollbar">
               {loading ? (
                 [1, 2, 3].map((i) => (
                   <div
@@ -194,7 +194,7 @@ export default function AdminPage() {
             <GlassCard>
               <div className="py-24 text-center">
                 <div
-                  className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"
+                  className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
                   style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.1), rgba(6,182,212,0.1))" }}
                 >
                   <SearchIcon className="w-6 h-6" style={{ color: "var(--text-muted)" }} />

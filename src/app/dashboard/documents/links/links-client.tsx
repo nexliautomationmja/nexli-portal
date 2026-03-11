@@ -152,7 +152,7 @@ export function LinksClient() {
               Documents
             </Link>
             <span style={{ color: "var(--text-muted)" }}>/</span>
-            <h1 className="text-2xl font-black tracking-tight" style={{ color: "var(--text-main)" }}>
+            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
               Secure Links
             </h1>
           </div>
@@ -162,7 +162,7 @@ export function LinksClient() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
           style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
         >
           <PlusIcon className="w-4 h-4" />
@@ -173,14 +173,14 @@ export function LinksClient() {
       {/* Links List */}
       <div className="glass-card rounded-2xl overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center" style={{ color: "var(--text-muted)" }}>
+          <div className="p-16 text-center" style={{ color: "var(--text-muted)" }}>
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            Loading links...
+            <p className="text-sm">Loading links...</p>
           </div>
         ) : links.length === 0 ? (
-          <div className="p-12 text-center" style={{ color: "var(--text-muted)" }}>
-            <LinkIcon className="w-8 h-8 mx-auto mb-3 opacity-40" />
-            <p className="text-sm font-medium">No secure links yet</p>
+          <div className="empty-state py-16">
+            <LinkIcon className="empty-state-icon" />
+            <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>No secure links yet</p>
             <p className="text-xs mt-1">
               Create a link to collect documents from a client securely.
             </p>
@@ -196,32 +196,24 @@ export function LinksClient() {
               return (
                 <div
                   key={link.id}
-                  className={`p-4 flex items-center justify-between gap-4 ${inactive ? "opacity-60" : ""}`}
+                  className={`p-5 flex items-center justify-between gap-4 ${inactive ? "opacity-60" : ""}`}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-bold truncate" style={{ color: "var(--text-main)" }}>
+                      <p className="text-sm font-semibold truncate" style={{ color: "var(--text-main)" }}>
                         {link.clientName || "Unnamed Client"}
                       </p>
                       {revoked && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
-                          Revoked
-                        </span>
+                        <span className="badge badge-rose uppercase">Revoked</span>
                       )}
                       {expired && !revoked && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                          Expired
-                        </span>
+                        <span className="badge badge-amber uppercase">Expired</span>
                       )}
                       {!inactive && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-green-500/20 text-green-400 border border-green-500/30">
-                          Active
-                        </span>
+                        <span className="badge badge-emerald uppercase">Active</span>
                       )}
                       {wasEmailed && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                          Emailed
-                        </span>
+                        <span className="badge badge-blue uppercase">Emailed</span>
                       )}
                     </div>
                     <div className="flex items-center gap-4 text-xs" style={{ color: "var(--text-muted)" }}>
@@ -234,8 +226,7 @@ export function LinksClient() {
                         {(link.requiredDocuments as string[]).map((doc) => (
                           <span
                             key={doc}
-                            className="px-2 py-0.5 rounded-full text-[10px] font-medium border border-[var(--glass-border)]"
-                            style={{ color: "var(--text-muted)" }}
+                            className="badge badge-gray"
                           >
                             {doc}
                           </span>
@@ -266,7 +257,7 @@ export function LinksClient() {
                         title="Copy link"
                       >
                         {copiedId === link.id ? (
-                          <CheckIcon className="w-4 h-4 text-green-400" />
+                          <CheckIcon className="w-4 h-4 text-emerald-400" />
                         ) : (
                           <CopyIcon className="w-4 h-4 text-blue-400" />
                         )}
@@ -275,18 +266,18 @@ export function LinksClient() {
                     {!inactive && (
                       <button
                         onClick={() => handleRevoke(link.id)}
-                        className="p-2 rounded-lg hover:bg-yellow-500/10 transition-colors"
+                        className="p-2 rounded-lg hover:bg-amber-500/10 transition-colors"
                         title="Revoke link"
                       >
-                        <XIcon className="w-4 h-4 text-yellow-400" />
+                        <XIcon className="w-4 h-4 text-amber-400" />
                       </button>
                     )}
                     <button
                       onClick={() => handleDelete(link.id)}
-                      className="p-2 rounded-lg hover:bg-red-500/10 transition-colors"
+                      className="p-2 rounded-lg hover:bg-rose-500/10 transition-colors"
                       title="Delete"
                     >
-                      <TrashIcon className="w-4 h-4 text-red-400" />
+                      <TrashIcon className="w-4 h-4 text-rose-400" />
                     </button>
                   </div>
                 </div>
@@ -299,13 +290,13 @@ export function LinksClient() {
       {/* Create Link Modal */}
       {showCreate && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowCreate(false)} />
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={() => setShowCreate(false)} />
           <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto z-50 glass-card rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-black" style={{ color: "var(--text-main)" }}>
+              <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                 Create Secure Upload Link
               </h2>
-              <button onClick={() => setShowCreate(false)}>
+              <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)]">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -313,7 +304,7 @@ export function LinksClient() {
             <form onSubmit={handleCreate} className="space-y-4">
               {/* Client Info */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                <label className="block section-header mb-1.5">
                   Client Name
                 </label>
                 <input
@@ -321,14 +312,14 @@ export function LinksClient() {
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   placeholder="e.g., Sarah Mitchell"
-                  className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                   style={{ color: "var(--text-main)" }}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                  <label className="block section-header mb-1.5">
                     Email
                   </label>
                   <input
@@ -336,12 +327,12 @@ export function LinksClient() {
                     value={clientEmail}
                     onChange={(e) => setClientEmail(e.target.value)}
                     placeholder="client@email.com"
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                  <label className="block section-header mb-1.5">
                     Phone
                   </label>
                   <input
@@ -349,7 +340,7 @@ export function LinksClient() {
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
                     placeholder="(555) 123-4567"
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                 </div>
@@ -357,7 +348,7 @@ export function LinksClient() {
 
               {/* Send via email toggle */}
               {clientEmail && (
-                <label className="flex items-center gap-3 p-3 rounded-xl border border-[var(--glass-border)] cursor-pointer hover:border-blue-500/30 transition-colors">
+                <label className="flex items-center gap-3 p-4 rounded-xl border border-[var(--glass-border)] cursor-pointer hover:border-blue-500/30 transition-colors">
                   <input
                     type="checkbox"
                     checked={sendViaEmail}
@@ -380,21 +371,21 @@ export function LinksClient() {
 
               {/* Message */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                <label className="block section-header mb-1.5">
                   Message (optional)
                 </label>
                 <textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Instructions or notes for the client..."
-                  className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 resize-none h-16 transition-colors"
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 resize-none h-16 transition-colors"
                   style={{ color: "var(--text-main)" }}
                 />
               </div>
 
               {/* Required Documents */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-muted)" }}>
+                <label className="block section-header mb-2">
                   Required Documents
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -403,7 +394,7 @@ export function LinksClient() {
                       key={docType}
                       type="button"
                       onClick={() => toggleDocType(docType)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                         requiredDocs.includes(docType)
                           ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
                           : "border-[var(--glass-border)] hover:border-blue-500/30"
@@ -420,13 +411,13 @@ export function LinksClient() {
 
               {/* Expiration */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                <label className="block section-header mb-1.5">
                   Expires In
                 </label>
                 <select
                   value={expiresInDays}
                   onChange={(e) => setExpiresInDays(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none"
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none"
                   style={{ color: "var(--text-main)" }}
                 >
                   <option value={7}>7 days</option>
@@ -441,7 +432,7 @@ export function LinksClient() {
               <button
                 type="submit"
                 disabled={creating}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:opacity-90"
                 style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
               >
                 {creating ? (

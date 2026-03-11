@@ -93,7 +93,7 @@ export function TaxFormsClient() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1
-            className="text-2xl font-black tracking-tight"
+            className="text-2xl font-bold tracking-tight"
             style={{ color: "var(--text-main)" }}
           >
             Tax Center
@@ -273,7 +273,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
           <CheckIcon className="w-8 h-8 text-emerald-400" />
         </div>
         <div>
-          <h2 className="text-xl font-black" style={{ color: "var(--text-main)" }}>
+          <h2 className="text-xl font-bold" style={{ color: "var(--text-main)" }}>
             Request Created
           </h2>
           <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>
@@ -364,7 +364,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
               <XIcon className="w-4 h-4" />
             </button>
             <div>
-              <h2 className="text-lg font-black" style={{ color: "var(--text-main)" }}>
+              <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                 {selectedScenario.name}
               </h2>
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -447,7 +447,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                     onChange={(e) => setCustomInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && addCustomItem()}
                     placeholder="Add custom document request..."
-                    className="flex-1 px-3 py-2 rounded-lg border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="flex-1 px-3 py-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                   <button
@@ -480,7 +480,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Client's full name"
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                 </div>
@@ -494,7 +494,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                     value={clientEmail}
                     onChange={(e) => setClientEmail(e.target.value)}
                     placeholder="client@email.com"
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                   <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
@@ -511,7 +511,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
                     placeholder="(555) 123-4567"
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   />
                 </div>
@@ -537,7 +537,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                   <select
                     value={expiresInDays}
                     onChange={(e) => setExpiresInDays(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
                     style={{ color: "var(--text-main)" }}
                   >
                     <option value={7}>7 days</option>
@@ -555,7 +555,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                   <p className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
                     Documents selected
                   </p>
-                  <p className="text-sm font-black text-blue-400">{totalChecked}</p>
+                  <p className="text-sm font-bold text-blue-400">{totalChecked}</p>
                 </div>
 
                 <button
