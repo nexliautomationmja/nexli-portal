@@ -16,6 +16,7 @@ import {
   TrashIcon,
   XIcon,
   CheckIcon,
+  SendIcon,
 } from "@/components/ui/icons";
 
 const DOCUMENT_TYPES = [
@@ -29,6 +30,15 @@ const DOCUMENT_TYPES = [
   "ID / License",
   "Other",
 ];
+
+function MailIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>
+  );
+}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -46,6 +56,7 @@ export function LinksClient() {
   const { links, loading, refetch } = useDocumentLinks();
   const [showCreate, setShowCreate] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   // Form state
   const [clientName, setClientName] = useState("");
@@ -54,6 +65,7 @@ export function LinksClient() {
   const [message, setMessage] = useState("");
   const [requiredDocs, setRequiredDocs] = useState<string[]>([]);
   const [expiresInDays, setExpiresInDays] = useState(14);
+  const [sendViaEmail, setSendViaEmail] = useState(false);
   const [creating, setCreating] = useState(false);
 
   async function handleCreate(e: React.FormEvent) {
@@ -67,6 +79,7 @@ export function LinksClient() {
         message: message || undefined,
         requiredDocuments: requiredDocs.length > 0 ? requiredDocs : undefined,
         expiresInDays,
+        deliveryMethod: sendViaEmail && clientEmail ? "email" : "manual",
       });
       setShowCreate(false);
       setClientName("");
@@ -75,6 +88,7 @@ export function LinksClient() {
       setMessage("");
       setRequiredDocs([]);
       setExpiresInDays(14);
+      setSendViaEmail(false);
       refetch();
     } finally {
       setCreating(false);
@@ -93,8 +107,25 @@ export function LinksClient() {
     refetch();
   }
 
+  async function handleResendEmail(linkId: string) {
+    setResendingId(linkId);
+    try {
+      const res = await fetch(`/api/dashboard/links/${linkId}/resend`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to resend email");
+      }
+    } catch {
+      alert("Failed to resend email");
+    } finally {
+      setResendingId(null);
+    }
+  }
+
   function copyLink(link: DocumentLink) {
-    const portalUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || (typeof window !== "undefined" ? window.location.origin : "");
     const url = `${portalUrl}/upload/${link.token}`;
     navigator.clipboard.writeText(url);
     setCopiedId(link.id);
@@ -160,6 +191,7 @@ export function LinksClient() {
               const expired = isExpired(link.expiresAt);
               const revoked = link.status === "revoked";
               const inactive = expired || revoked;
+              const wasEmailed = link.deliveryMethod === "email";
 
               return (
                 <div
@@ -186,6 +218,11 @@ export function LinksClient() {
                           Active
                         </span>
                       )}
+                      {wasEmailed && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                          Emailed
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-xs" style={{ color: "var(--text-muted)" }}>
                       {link.clientEmail && <span>{link.clientEmail}</span>}
@@ -208,6 +245,20 @@ export function LinksClient() {
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
+                    {!inactive && link.clientEmail && (
+                      <button
+                        onClick={() => handleResendEmail(link.id)}
+                        disabled={resendingId === link.id}
+                        className="p-2 rounded-lg hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                        title="Resend email"
+                      >
+                        {resendingId === link.id ? (
+                          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <MailIcon className="w-4 h-4 text-blue-400" />
+                        )}
+                      </button>
+                    )}
                     {!inactive && (
                       <button
                         onClick={() => copyLink(link)}
@@ -304,6 +355,29 @@ export function LinksClient() {
                 </div>
               </div>
 
+              {/* Send via email toggle */}
+              {clientEmail && (
+                <label className="flex items-center gap-3 p-3 rounded-xl border border-[var(--glass-border)] cursor-pointer hover:border-blue-500/30 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={sendViaEmail}
+                    onChange={(e) => setSendViaEmail(e.target.checked)}
+                    className="w-4 h-4 rounded accent-blue-500"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <MailIcon className="w-4 h-4 text-blue-400" />
+                    <div>
+                      <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                        Send link via email
+                      </p>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                        Automatically email the upload link to {clientEmail}
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              )}
+
               {/* Message */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
@@ -367,10 +441,19 @@ export function LinksClient() {
               <button
                 type="submit"
                 disabled={creating}
-                className="w-full py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all"
                 style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
               >
-                {creating ? "Creating..." : "Generate Secure Link"}
+                {creating ? (
+                  "Creating..."
+                ) : sendViaEmail && clientEmail ? (
+                  <>
+                    <SendIcon className="w-4 h-4" />
+                    Create & Send Link
+                  </>
+                ) : (
+                  "Generate Secure Link"
+                )}
               </button>
             </form>
           </div>

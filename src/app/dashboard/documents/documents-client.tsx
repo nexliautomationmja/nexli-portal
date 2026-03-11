@@ -10,6 +10,12 @@ import {
   type Document,
 } from "@/lib/hooks/use-documents";
 import {
+  useESignatures,
+  createEsignRequest,
+  voidEsignRequest,
+  type ESignature,
+} from "@/lib/hooks/use-esignatures";
+import {
   FileIcon,
   SearchIcon,
   EyeIcon,
@@ -19,6 +25,7 @@ import {
   LinkIcon,
   PlusIcon,
   XIcon,
+  SendIcon,
 } from "@/components/ui/icons";
 
 const STATUS_COLORS = {
@@ -70,6 +77,14 @@ export function DocumentsClient() {
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
 
+  // E-sign state
+  const [showEsignModal, setShowEsignModal] = useState(false);
+  const [esignDocId, setEsignDocId] = useState<string | null>(null);
+  const [esignName, setEsignName] = useState("");
+  const [esignEmail, setEsignEmail] = useState("");
+  const [esignSending, setEsignSending] = useState(false);
+  const { esignatures, refetch: refetchEsign } = useESignatures();
+
   const { documents, total, loading, refetch } = useDocuments({
     status: statusFilter !== "all" ? statusFilter : undefined,
     category: categoryFilter || undefined,
@@ -91,6 +106,46 @@ export function DocumentsClient() {
     refetch();
     if (selectedDoc?.id === docId) setSelectedDoc(null);
   }
+
+  function openEsignModal(doc: Document) {
+    setEsignDocId(doc.id);
+    setEsignName(doc.clientName || "");
+    setEsignEmail(doc.clientEmail || "");
+    setShowEsignModal(true);
+  }
+
+  async function handleSendEsign(e: React.FormEvent) {
+    e.preventDefault();
+    if (!esignDocId || !esignName || !esignEmail) return;
+    setEsignSending(true);
+    try {
+      await createEsignRequest({
+        documentId: esignDocId,
+        signerName: esignName,
+        signerEmail: esignEmail,
+      });
+      setShowEsignModal(false);
+      setEsignDocId(null);
+      setEsignName("");
+      setEsignEmail("");
+      refetchEsign();
+    } finally {
+      setEsignSending(false);
+    }
+  }
+
+  function getEsignsForDoc(docId: string): ESignature[] {
+    return esignatures.filter((e) => e.documentId === docId);
+  }
+
+  const ESIGN_STATUS_COLORS: Record<string, string> = {
+    pending: "text-gray-400",
+    sent: "text-blue-400",
+    viewed: "text-cyan-400",
+    signed: "text-emerald-400",
+    declined: "text-red-400",
+    expired: "text-yellow-400",
+  };
 
   return (
     <div className="space-y-6">
@@ -315,6 +370,65 @@ export function DocumentsClient() {
         )}
       </div>
 
+      {/* E-Sign Modal */}
+      {showEsignModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowEsignModal(false)} />
+          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 glass-card rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-black" style={{ color: "var(--text-main)" }}>
+                Request E-Signature
+              </h2>
+              <button onClick={() => setShowEsignModal(false)}>
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSendEsign} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                  Signer Name
+                </label>
+                <input
+                  type="text"
+                  value={esignName}
+                  onChange={(e) => setEsignName(e.target.value)}
+                  placeholder="Full name of the signer"
+                  required
+                  className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                  style={{ color: "var(--text-main)" }}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                  Signer Email
+                </label>
+                <input
+                  type="email"
+                  value={esignEmail}
+                  onChange={(e) => setEsignEmail(e.target.value)}
+                  placeholder="signer@email.com"
+                  required
+                  className="w-full px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+                  style={{ color: "var(--text-main)" }}
+                />
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                The signer will receive an email with a secure link to review and sign the document.
+              </p>
+              <button
+                type="submit"
+                disabled={esignSending || !esignName || !esignEmail}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all"
+                style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+              >
+                <SendIcon className="w-4 h-4" />
+                {esignSending ? "Sending..." : "Send Signature Request"}
+              </button>
+            </form>
+          </div>
+        </>
+      )}
+
       {/* Detail Panel (slide-over) */}
       {selectedDoc && (
         <>
@@ -441,12 +555,73 @@ export function DocumentsClient() {
                   Download
                 </button>
                 <button
+                  onClick={() => openEsignModal(selectedDoc)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                >
+                  <SendIcon className="w-4 h-4" />
+                  E-Sign
+                </button>
+                <button
                   onClick={() => handleDelete(selectedDoc.id)}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-all"
                 >
                   <TrashIcon className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* E-Signature Status */}
+              {getEsignsForDoc(selectedDoc.id).length > 0 && (
+                <div>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-widest mb-2"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    E-Signatures
+                  </p>
+                  <div className="space-y-2">
+                    {getEsignsForDoc(selectedDoc.id).map((es) => (
+                      <div
+                        key={es.id}
+                        className="p-3 rounded-xl border border-[var(--glass-border)]"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                            {es.signerName}
+                          </p>
+                          <span
+                            className={`text-[10px] font-bold uppercase ${ESIGN_STATUS_COLORS[es.status] || "text-gray-400"}`}
+                          >
+                            {es.status}
+                          </span>
+                        </div>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {es.signerEmail}
+                        </p>
+                        {es.signedAt && (
+                          <p className="text-[10px] text-emerald-400 mt-1">
+                            Signed {formatDate(es.signedAt)}
+                          </p>
+                        )}
+                        {es.status === "signed" && es.signatureData && (
+                          <div className="mt-2 p-2 bg-white rounded-lg">
+                            <img
+                              src={es.signatureData}
+                              alt="Signature"
+                              className="h-12 mx-auto"
+                            />
+                          </div>
+                        )}
+                        {es.declineReason && (
+                          <p className="text-[10px] text-red-400 mt-1 italic">
+                            &quot;{es.declineReason}&quot;
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Notes */}
               <div>

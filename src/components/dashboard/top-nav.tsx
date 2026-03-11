@@ -35,7 +35,7 @@ const clientNav = [
   { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon },
   { href: "/dashboard/messages", label: "Messages", icon: MessageIcon },
   { href: "/dashboard/documents", label: "Documents", icon: FileIcon },
-  { href: "/dashboard/tax-forms", label: "Tax Forms", icon: FormIcon },
+  { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon },
   { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
 ];
 
