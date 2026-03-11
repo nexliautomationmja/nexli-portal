@@ -131,7 +131,7 @@ export function MessagesClient() {
                   <button
                     key={convo.id}
                     onClick={() => setSelectedConvo(convo.id)}
-                    className={`w-full text-left px-4 py-3.5 border-b border-[var(--glass-border)] hover:bg-[var(--glass-bg)] transition-colors ${
+                    className={`w-full text-left px-4 py-3.5 border-b border-[var(--glass-border)] hover:bg-[var(--input-bg)] transition-colors ${
                       selectedConvo === convo.id ? "bg-blue-500/10 border-l-2 border-l-blue-500" : ""
                     }`}
                   >

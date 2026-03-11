@@ -137,7 +137,7 @@ export function CalendarClient() {
                   <div
                     key={i}
                     className={`min-h-[80px] md:min-h-[100px] p-2 border-b border-r border-[var(--glass-border)] transition-colors ${
-                      day ? "hover:bg-[var(--glass-bg)]" : "opacity-30"
+                      day ? "hover:bg-[var(--input-bg)]" : "opacity-30"
                     }`}
                   >
                     {day && (
@@ -199,7 +199,7 @@ export function CalendarClient() {
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
               .slice(0, 5)
               .map((evt) => (
-                <div key={evt.id} className="flex items-center gap-4 py-3 px-3 rounded-xl hover:bg-[var(--glass-bg)] transition-colors">
+                <div key={evt.id} className="flex items-center gap-4 py-3 px-3 rounded-xl hover:bg-[var(--input-bg)] transition-colors">
                   <div className="w-12 text-center shrink-0">
                     <p className="text-lg font-black leading-none" style={{ color: "var(--text-main)" }}>
                       {new Date(evt.startTime).getDate()}

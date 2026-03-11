@@ -219,7 +219,7 @@ export function DocumentsClient() {
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
                 statusFilter === s
                   ? "bg-blue-500/20 text-blue-400"
-                  : "hover:bg-[var(--glass-bg)]"
+                  : "hover:bg-[var(--input-bg)]"
               }`}
               style={{ color: statusFilter === s ? undefined : "var(--text-muted)" }}
             >
@@ -368,7 +368,7 @@ export function DocumentsClient() {
               <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                 Request E-Signature
               </h2>
-              <button onClick={() => setShowEsignModal(false)} className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)]">
+              <button onClick={() => setShowEsignModal(false)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)]">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -439,7 +439,7 @@ export function DocumentsClient() {
                 </div>
                 <button
                   onClick={() => setSelectedDoc(null)}
-                  className="p-2 rounded-xl hover:bg-[var(--glass-bg)] transition-colors"
+                  className="p-2 rounded-xl hover:bg-[var(--input-bg)] transition-colors"
                 >
                   <XIcon className="w-5 h-5" />
                 </button>

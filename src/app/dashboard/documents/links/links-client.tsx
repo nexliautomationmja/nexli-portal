@@ -296,7 +296,7 @@ export function LinksClient() {
               <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                 Create Secure Upload Link
               </h2>
-              <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)]">
+              <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)]">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>

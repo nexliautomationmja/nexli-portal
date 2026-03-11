@@ -156,7 +156,7 @@ export function ContactsClient() {
                     Added {new Date(selectedContact.dateAdded).toLocaleDateString()}
                   </p>
                 </div>
-                <button onClick={() => setSelectedContact(null)} className="p-2 rounded-xl hover:bg-[var(--glass-bg)] transition-colors">
+                <button onClick={() => setSelectedContact(null)} className="p-2 rounded-xl hover:bg-[var(--input-bg)] transition-colors">
                   <XIcon className="w-5 h-5" />
                 </button>
               </div>

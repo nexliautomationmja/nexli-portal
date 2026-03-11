@@ -33,7 +33,7 @@ export function RecentLeads() {
       {data.recentLeads.map((lead) => (
         <div
           key={lead.id}
-          className="flex items-center justify-between p-3 rounded-xl border border-[var(--glass-border)] hover:bg-[var(--glass-bg)] transition-colors"
+          className="flex items-center justify-between p-3 rounded-xl border border-[var(--glass-border)] hover:bg-[var(--input-bg)] transition-colors"
         >
           <div>
             <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>

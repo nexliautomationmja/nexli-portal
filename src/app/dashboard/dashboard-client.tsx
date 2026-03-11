@@ -237,7 +237,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="flex items-center justify-between py-2.5 px-3 rounded-xl" style={{ background: "var(--glass-bg)" }}>
+                <div className="flex items-center justify-between py-2.5 px-3 rounded-xl" style={{ background: "var(--input-bg)" }}>
                   <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
                     {docStats.new} pending review
                   </span>
@@ -277,7 +277,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
                 {ghlData.recentLeads.slice(0, 5).map((lead) => (
                   <div
                     key={lead.id}
-                    className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-[var(--glass-bg)] transition-colors"
+                    className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-[var(--input-bg)] transition-colors"
                   >
                     <div>
                       <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>

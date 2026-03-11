@@ -223,7 +223,7 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
                 collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5",
                 isActive
                   ? "sidebar-nav-active"
-                  : "hover:bg-[var(--glass-bg)] sidebar-nav-item"
+                  : "hover:bg-[var(--input-bg)] sidebar-nav-item"
               )}
               style={{
                 color: isActive ? undefined : "var(--text-muted)",
@@ -267,7 +267,7 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
         <button
           onClick={toggleTheme}
           className={cn(
-            "group w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-[var(--glass-bg)]",
+            "group w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-[var(--input-bg)]",
             collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
           )}
           style={{ color: "var(--text-muted)" }}
@@ -377,7 +377,7 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
         {/* Close button */}
         <button
           onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--glass-bg)] transition-colors"
+          className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--input-bg)] transition-colors"
           style={{ color: "var(--text-muted)" }}
         >
           <XIcon className="w-4 h-4" />
