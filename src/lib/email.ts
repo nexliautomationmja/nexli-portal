@@ -9,7 +9,7 @@ function getResend() {
 }
 
 const FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL || "Nexli Portal <documents@nexli.net>";
+  process.env.RESEND_FROM_EMAIL || "Nexli Portal <portal@documents.nexli.net>";
 
 interface SendEmailParams {
   to: string;
