@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { TopNav } from "@/components/dashboard/top-nav";
+import { Sidebar } from "@/components/dashboard/sidebar";
 
 export default async function DashboardLayout({
   children,
@@ -17,11 +17,13 @@ export default async function DashboardLayout({
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen dashboard-bg"
       style={{ backgroundColor: "var(--bg-main)" }}
     >
-      <TopNav isAdmin={isAdmin} userName={session.user.name} />
-      <main className="pt-20 px-4 md:px-6 pb-8">{children}</main>
+      <Sidebar isAdmin={isAdmin} userName={session.user.name} />
+      <main className="sidebar-content px-4 md:px-6 lg:px-8 py-6 pt-16 md:pt-6 relative z-10">
+        {children}
+      </main>
     </div>
   );
 }
