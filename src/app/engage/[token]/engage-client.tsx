@@ -211,10 +211,25 @@ export function EngageClient({ token }: { token: string }) {
   if (signed) {
     return (
       <div className="min-h-screen bg-gray-100 flex flex-col">
+        <style>{`
+          @keyframes check-bounce {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.25); opacity: 1; }
+            70% { transform: scale(0.9); }
+            85% { transform: scale(1.08); }
+            100% { transform: scale(1); opacity: 1; }
+          }
+        `}</style>
         <Header />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-10 text-center space-y-5">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto" style={{ background: "linear-gradient(135deg, #10B981, #06B6D4)" }}>
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
+              style={{
+                background: "linear-gradient(135deg, #10B981, #06B6D4)",
+                animation: "check-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+              }}
+            >
               <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 6 9 17l-5-5" />
               </svg>
