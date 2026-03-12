@@ -9,9 +9,11 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/upload/") ||
     pathname.startsWith("/esign/") ||
     pathname.startsWith("/engage/") ||
+    pathname.startsWith("/invoice/") ||
     pathname.startsWith("/api/upload/") ||
     pathname.startsWith("/api/esign/") ||
     pathname.startsWith("/api/engage/") ||
+    pathname.startsWith("/api/invoice/") ||
     pathname.startsWith("/api/preview/")
   ) {
     return NextResponse.next();
@@ -46,9 +48,11 @@ export const config = {
     "/upload/:path*",
     "/esign/:path*",
     "/engage/:path*",
+    "/invoice/:path*",
     "/api/upload/:path*",
     "/api/esign/:path*",
     "/api/engage/:path*",
+    "/api/invoice/:path*",
     "/api/preview/:path*",
   ],
 };

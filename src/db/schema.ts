@@ -535,3 +535,112 @@ export const engagementSigners = pgTable(
     index("engagement_signers_engagement_idx").on(table.engagementId),
   ]
 );
+
+// ══════════════════════════════════════════════════════════
+// ══  INVOICING  ══════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "paid",
+  "overdue",
+  "canceled",
+  "void",
+]);
+
+export const invoiceCurrencyEnum = pgEnum("invoice_currency", [
+  "usd",
+  "cad",
+  "gbp",
+  "eur",
+  "aud",
+]);
+
+// ── Invoices ─────────────────────────────────────────────
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // Client info
+    clientName: text("client_name").notNull(),
+    clientEmail: text("client_email").notNull(),
+    clientPhone: text("client_phone"),
+    clientCompany: text("client_company"),
+
+    // Invoice metadata
+    invoiceNumber: text("invoice_number").notNull().unique(),
+    status: invoiceStatusEnum("status").default("draft").notNull(),
+    currency: invoiceCurrencyEnum("currency").default("usd").notNull(),
+    token: text("token").notNull().unique(),
+
+    // Financials (integer cents)
+    subtotal: integer("subtotal").notNull().default(0),
+    taxRate: integer("tax_rate").default(0), // basis points: 825 = 8.25%
+    taxAmount: integer("tax_amount").default(0),
+    total: integer("total").notNull().default(0),
+
+    // Dates
+    issueDate: timestamp("issue_date").defaultNow().notNull(),
+    dueDate: timestamp("due_date").notNull(),
+
+    // Content
+    notes: text("notes"),
+    terms: text("terms"),
+
+    // Stripe references
+    stripeInvoiceId: text("stripe_invoice_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    stripePaymentUrl: text("stripe_payment_url"),
+
+    // Accounting sync references
+    qbInvoiceId: text("qb_invoice_id"),
+    xeroInvoiceId: text("xero_invoice_id"),
+
+    // Reminder config (JSONB)
+    // { schedule: [{ dayOffset: -7 }, { dayOffset: 0 }, { dayOffset: 3 }] }
+    reminderConfig: jsonb("reminder_config"),
+
+    // Lifecycle timestamps
+    sentAt: timestamp("sent_at"),
+    viewedAt: timestamp("viewed_at"),
+    paidAt: timestamp("paid_at"),
+    canceledAt: timestamp("canceled_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("invoices_token_idx").on(table.token),
+    uniqueIndex("invoices_number_idx").on(table.invoiceNumber),
+    index("invoices_owner_idx").on(table.ownerId),
+    index("invoices_owner_status_idx").on(table.ownerId, table.status),
+    index("invoices_client_email_idx").on(table.clientEmail),
+    index("invoices_due_date_idx").on(table.dueDate),
+  ]
+);
+
+// ── Invoice Line Items ───────────────────────────────────
+export const invoiceLineItems = pgTable(
+  "invoice_line_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    quantity: integer("quantity").notNull().default(100), // stored * 100 (1.5 → 150)
+    unitPrice: integer("unit_price").notNull(), // cents
+    amount: integer("amount").notNull(), // cents
+    order: integer("order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("invoice_line_items_invoice_idx").on(table.invoiceId),
+  ]
+);

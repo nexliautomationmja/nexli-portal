@@ -14,6 +14,7 @@ import {
   MessageIcon,
   FileIcon,
   PenLineIcon,
+  InvoiceIcon,
   FormIcon,
   GearIcon,
   ShieldIcon,
@@ -53,6 +54,7 @@ const clientNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
   { href: "/dashboard/messages", label: "Messages", icon: MessageIcon },
   { href: "/dashboard/documents", label: "Documents", icon: FileIcon },
   { href: "/dashboard/engagements", label: "Engagements", icon: PenLineIcon },
+  { href: "/dashboard/invoices", label: "Invoices", icon: InvoiceIcon },
   { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon },
   { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
 ];

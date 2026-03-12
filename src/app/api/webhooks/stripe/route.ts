@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { db } from "@/db";
-import { users, subscriptions } from "@/db/schema";
+import { users, subscriptions, invoices } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import type Stripe from "stripe";
+import { sendEmail, buildInvoicePaidEmail } from "@/lib/email";
+import { formatCurrency } from "@/lib/invoice-utils";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -27,7 +29,11 @@ export async function POST(req: NextRequest) {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      await handleCheckoutCompleted(session);
+      if (session.metadata?.nexli_invoice_id) {
+        await handleInvoicePayment(session);
+      } else {
+        await handleCheckoutCompleted(session);
+      }
       break;
     }
     case "customer.subscription.updated": {
@@ -147,4 +153,42 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       updatedAt: new Date(),
     })
     .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
+}
+
+async function handleInvoicePayment(session: Stripe.Checkout.Session) {
+  const invoiceId = session.metadata!.nexli_invoice_id;
+
+  const [invoice] = await db
+    .update(invoices)
+    .set({
+      status: "paid",
+      paidAt: new Date(),
+      stripePaymentIntentId: session.payment_intent as string,
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, invoiceId))
+    .returning();
+
+  if (!invoice) return;
+
+  try {
+    const [owner] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, invoice.ownerId))
+      .limit(1);
+
+    if (owner?.email) {
+      const { subject, html } = buildInvoicePaidEmail({
+        cpaName: owner.name || owner.email,
+        clientName: invoice.clientName,
+        invoiceNumber: invoice.invoiceNumber,
+        total: formatCurrency(invoice.total, invoice.currency),
+        paidAt: new Date(),
+      });
+      await sendEmail({ to: owner.email, subject, html });
+    }
+  } catch (err) {
+    console.error("Failed to send invoice paid email:", err);
+  }
 }

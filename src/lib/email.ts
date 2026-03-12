@@ -314,3 +314,187 @@ export function buildEngagementSignedEmail(params: {
     html,
   };
 }
+
+// ══════════════════════════════════════════════════════════
+// ══  INVOICE EMAILS  ═════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+// ── Invoice Email (to Client) ────────────────────────────
+
+export function buildInvoiceEmail(params: {
+  clientName: string;
+  cpaName: string;
+  invoiceNumber: string;
+  total: string;
+  dueDate: Date;
+  invoiceUrl: string;
+}): { subject: string; html: string } {
+  const { clientName, cpaName, invoiceNumber, total, dueDate, invoiceUrl } =
+    params;
+  const dueDateStr = dueDate.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Invoice from ${cpaName}</h1>
+    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+      Hi ${clientName}, you have a new invoice ready for payment.
+    </p>
+    <div style="margin:20px 0;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Invoice</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${invoiceNumber}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Amount Due</td>
+          <td style="color:#fff;font-size:18px;font-weight:800;text-align:right;padding:4px 0;">${total}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Due Date</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${dueDateStr}</td>
+        </tr>
+      </table>
+    </div>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${invoiceUrl}" style="${buttonStyle}">View &amp; Pay Invoice</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+        No account required &bull; Secure payment via Stripe
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: `Invoice ${invoiceNumber} from ${cpaName} — ${total} due ${dueDateStr}`,
+    html,
+  };
+}
+
+// ── Invoice Paid Email (to CPA) ──────────────────────────
+
+export function buildInvoicePaidEmail(params: {
+  cpaName: string;
+  clientName: string;
+  invoiceNumber: string;
+  total: string;
+  paidAt: Date;
+}): { subject: string; html: string } {
+  const { cpaName, clientName, invoiceNumber, total, paidAt } = params;
+  const paidDate = paidAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Invoice Paid</h1>
+    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+      Hi ${cpaName}, <strong style="color:#10B981;">${clientName}</strong> has paid invoice ${invoiceNumber}.
+    </p>
+    <div style="margin:20px 0;padding:16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:12px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Invoice</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${invoiceNumber}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Amount</td>
+          <td style="color:#10B981;font-size:18px;font-weight:800;text-align:right;padding:4px 0;">${total}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Paid by</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${clientName}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Date</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${paidDate}</td>
+        </tr>
+      </table>
+    </div>
+    <p style="margin:24px 0 0;color:rgba(255,255,255,0.4);font-size:12px;text-align:center;">
+      View invoice details in your Nexli Portal dashboard.
+    </p>
+  `);
+
+  return {
+    subject: `${clientName} paid invoice ${invoiceNumber} — ${total}`,
+    html,
+  };
+}
+
+// ── Invoice Reminder Email (to Client) ───────────────────
+
+export function buildInvoiceReminderEmail(params: {
+  clientName: string;
+  cpaName: string;
+  invoiceNumber: string;
+  total: string;
+  dueDate: Date;
+  isOverdue: boolean;
+  invoiceUrl: string;
+}): { subject: string; html: string } {
+  const {
+    clientName,
+    cpaName,
+    invoiceNumber,
+    total,
+    dueDate,
+    isOverdue,
+    invoiceUrl,
+  } = params;
+  const dueDateStr = dueDate.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const heading = isOverdue ? "Invoice Overdue" : "Invoice Reminder";
+  const message = isOverdue
+    ? `Your invoice ${invoiceNumber} from ${cpaName} was due on ${dueDateStr} and is now overdue.`
+    : `This is a reminder that invoice ${invoiceNumber} from ${cpaName} is due on ${dueDateStr}.`;
+  const urgencyColor = isOverdue ? "#EF4444" : "#F59E0B";
+  const urgencyRgb = isOverdue ? "239,68,68" : "245,158,11";
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">${heading}</h1>
+    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+      Hi ${clientName}, ${message}
+    </p>
+    <div style="margin:20px 0;padding:16px;background:rgba(${urgencyRgb},0.08);border:1px solid rgba(${urgencyRgb},0.2);border-radius:12px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Invoice</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${invoiceNumber}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Amount Due</td>
+          <td style="color:${urgencyColor};font-size:18px;font-weight:800;text-align:right;padding:4px 0;">${total}</td>
+        </tr>
+        <tr>
+          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">${isOverdue ? "Was Due" : "Due Date"}</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${dueDateStr}</td>
+        </tr>
+      </table>
+    </div>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${invoiceUrl}" style="${buttonStyle}">View &amp; Pay Invoice</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+        No account required &bull; Secure payment via Stripe
+      </p>
+    </div>
+  `);
+
+  const subjectLine = isOverdue
+    ? `Overdue: Invoice ${invoiceNumber} — ${total} was due ${dueDateStr}`
+    : `Reminder: Invoice ${invoiceNumber} — ${total} due ${dueDateStr}`;
+
+  return { subject: subjectLine, html };
+}

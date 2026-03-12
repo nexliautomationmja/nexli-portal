@@ -1,0 +1,824 @@
+"use client";
+
+import { useState, useEffect } from "react";
+
+interface LineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  order: number;
+}
+
+interface InvoiceData {
+  invoiceNumber: string;
+  status: string;
+  currency: string;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  issueDate: string;
+  dueDate: string;
+  notes: string | null;
+  terms: string | null;
+  clientName: string;
+  clientEmail: string;
+  clientCompany: string | null;
+  stripePaymentUrl: string | null;
+  paidAt: string | null;
+}
+
+function formatCurrency(cents: number, currency: string = "usd"): string {
+  const dollars = cents / 100;
+  const symbols: Record<string, string> = {
+    usd: "$",
+    cad: "CA$",
+    gbp: "\u00a3",
+    eur: "\u20ac",
+    aud: "A$",
+  };
+  const symbol = symbols[currency] || "$";
+  return `${symbol}${dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export function InvoiceClient({ token }: { token: string }) {
+  const [invoice, setInvoice] = useState<InvoiceData | null>(null);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [from, setFrom] = useState<{ name: string; company: string }>({
+    name: "",
+    company: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/invoice/${token}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) {
+          setError(data.error);
+        } else {
+          setInvoice(data.invoice);
+          setLineItems(data.lineItems || []);
+          setFrom(data.from || { name: "", company: "" });
+        }
+      })
+      .catch(() => setError("Failed to load invoice"))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f8f9fa",
+        }}
+      >
+        <div style={{ textAlign: "center", color: "#666" }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              border: "3px solid #e5e7eb",
+              borderTop: "3px solid #2563EB",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+              margin: "0 auto 16px",
+            }}
+          />
+          <p>Loading invoice...</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f8f9fa",
+        }}
+      >
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 16,
+            padding: 48,
+            textAlign: "center",
+            maxWidth: 400,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          }}
+        >
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              background: "#FEF2F2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 16px",
+              fontSize: 28,
+            }}
+          >
+            !
+          </div>
+          <h2 style={{ margin: "0 0 8px", color: "#111", fontSize: 20, fontWeight: 700 }}>
+            Invoice Unavailable
+          </h2>
+          <p style={{ margin: 0, color: "#666", fontSize: 14 }}>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!invoice) return null;
+
+  const isPaid = invoice.status === "paid";
+  const isOverdue =
+    invoice.status === "overdue" ||
+    (!isPaid && new Date(invoice.dueDate) < new Date());
+
+  // Paid success state
+  if (isPaid) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
+        {/* Header */}
+        <header
+          style={{
+            background: "#0a0a0f",
+            padding: "16px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <img
+            src="/logos/nexli-logo-white-wordmark@2x.png"
+            alt="Nexli"
+            style={{ height: 28 }}
+          />
+        </header>
+
+        <div
+          style={{
+            maxWidth: 480,
+            margin: "80px auto",
+            padding: "0 20px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 20,
+              padding: 48,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+            }}
+          >
+            <div
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #10B981, #06B6D4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 24px",
+                animation:
+                  "check-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+              }}
+            >
+              <svg
+                width="36"
+                height="36"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </div>
+            <h1
+              style={{
+                margin: "0 0 8px",
+                color: "#000000",
+                fontSize: 24,
+                fontWeight: 800,
+              }}
+            >
+              Payment Received
+            </h1>
+            <p style={{ margin: "0 0 24px", color: "#666", fontSize: 14 }}>
+              Invoice {invoice.invoiceNumber} has been paid in full.
+            </p>
+            <div
+              style={{
+                padding: 16,
+                background: "#F0FDF4",
+                borderRadius: 12,
+                border: "1px solid #BBF7D0",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  color: "#166534",
+                  fontSize: 24,
+                  fontWeight: 800,
+                }}
+              >
+                {formatCurrency(invoice.total, invoice.currency)}
+              </p>
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  color: "#166534",
+                  fontSize: 12,
+                  opacity: 0.7,
+                }}
+              >
+                Paid{" "}
+                {invoice.paidAt
+                  ? formatDate(invoice.paidAt)
+                  : ""}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <footer
+          style={{
+            background: "#0a0a0f",
+            padding: "20px 24px",
+            textAlign: "center",
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+          }}
+        >
+          <img
+            src="/logos/nexli-logo-white-wordmark@2x.png"
+            alt="Nexli"
+            style={{ height: 16, opacity: 0.4 }}
+          />
+          <p
+            style={{
+              margin: "8px 0 0",
+              color: "rgba(255,255,255,0.3)",
+              fontSize: 11,
+            }}
+          >
+            Powered by Nexli Portal
+          </p>
+        </footer>
+
+        <style>{`
+          @keyframes check-bounce {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.25); opacity: 1; }
+            70% { transform: scale(0.9); }
+            85% { transform: scale(1.08); }
+            100% { transform: scale(1); opacity: 1; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // Normal invoice view
+  return (
+    <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
+      {/* Header */}
+      <header
+        style={{
+          background: "#0a0a0f",
+          padding: "16px 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <img
+          src="/logos/nexli-logo-white-wordmark@2x.png"
+          alt="Nexli"
+          style={{ height: 28 }}
+        />
+      </header>
+
+      <div
+        style={{
+          maxWidth: 700,
+          margin: "32px auto",
+          padding: "0 20px 120px",
+        }}
+      >
+        {/* Invoice card */}
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 16,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Invoice header */}
+          <div
+            style={{
+              padding: "32px 32px 24px",
+              borderBottom: "1px solid #e5e7eb",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                flexWrap: "wrap",
+                gap: 16,
+              }}
+            >
+              <div>
+                <h1
+                  style={{
+                    margin: "0 0 4px",
+                    color: "#111",
+                    fontSize: 24,
+                    fontWeight: 800,
+                  }}
+                >
+                  Invoice
+                </h1>
+                <p style={{ margin: 0, color: "#666", fontSize: 14 }}>
+                  {invoice.invoiceNumber}
+                </p>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                {isOverdue ? (
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "4px 12px",
+                      borderRadius: 20,
+                      background: "#FEF2F2",
+                      color: "#DC2626",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    OVERDUE
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "4px 12px",
+                      borderRadius: 20,
+                      background: "#EFF6FF",
+                      color: "#2563EB",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {invoice.status.toUpperCase()}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* From / To */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 24,
+                marginTop: 24,
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    margin: "0 0 4px",
+                    color: "#999",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                  }}
+                >
+                  From
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#111",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {from.company || from.name}
+                </p>
+                {from.company && from.name && (
+                  <p style={{ margin: "2px 0 0", color: "#666", fontSize: 13 }}>
+                    {from.name}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p
+                  style={{
+                    margin: "0 0 4px",
+                    color: "#999",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                  }}
+                >
+                  Bill To
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#111",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {invoice.clientName}
+                </p>
+                {invoice.clientCompany && (
+                  <p style={{ margin: "2px 0 0", color: "#666", fontSize: 13 }}>
+                    {invoice.clientCompany}
+                  </p>
+                )}
+                <p style={{ margin: "2px 0 0", color: "#666", fontSize: 13 }}>
+                  {invoice.clientEmail}
+                </p>
+              </div>
+            </div>
+
+            {/* Dates */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 24,
+                marginTop: 16,
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    margin: "0 0 2px",
+                    color: "#999",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                  }}
+                >
+                  Issue Date
+                </p>
+                <p style={{ margin: 0, color: "#111", fontSize: 14 }}>
+                  {formatDate(invoice.issueDate)}
+                </p>
+              </div>
+              <div>
+                <p
+                  style={{
+                    margin: "0 0 2px",
+                    color: "#999",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                  }}
+                >
+                  Due Date
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    color: isOverdue ? "#DC2626" : "#111",
+                    fontSize: 14,
+                    fontWeight: isOverdue ? 700 : 400,
+                  }}
+                >
+                  {formatDate(invoice.dueDate)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Line items */}
+          <div style={{ padding: "24px 32px" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 14,
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: "2px solid #e5e7eb",
+                  }}
+                >
+                  <th
+                    style={{
+                      textAlign: "left",
+                      padding: "8px 0",
+                      color: "#999",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    Description
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "8px 0",
+                      color: "#999",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                      width: 60,
+                    }}
+                  >
+                    Qty
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "8px 0",
+                      color: "#999",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                      width: 100,
+                    }}
+                  >
+                    Rate
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "8px 0",
+                      color: "#999",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                      width: 100,
+                    }}
+                  >
+                    Amount
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineItems.map((item) => (
+                  <tr
+                    key={item.id}
+                    style={{ borderBottom: "1px solid #f3f4f6" }}
+                  >
+                    <td style={{ padding: "12px 0", color: "#111" }}>
+                      {item.description}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 0",
+                        color: "#666",
+                        textAlign: "right",
+                      }}
+                    >
+                      {(item.quantity / 100).toFixed(item.quantity % 100 === 0 ? 0 : 2)}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 0",
+                        color: "#666",
+                        textAlign: "right",
+                      }}
+                    >
+                      {formatCurrency(item.unitPrice, invoice.currency)}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 0",
+                        color: "#111",
+                        textAlign: "right",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {formatCurrency(item.amount, invoice.currency)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Totals */}
+            <div style={{ marginTop: 16, borderTop: "2px solid #e5e7eb" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "12px 0 4px",
+                }}
+              >
+                <span style={{ color: "#666", fontSize: 14 }}>Subtotal</span>
+                <span style={{ color: "#111", fontSize: 14 }}>
+                  {formatCurrency(invoice.subtotal, invoice.currency)}
+                </span>
+              </div>
+              {(invoice.taxRate ?? 0) > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    padding: "4px 0",
+                  }}
+                >
+                  <span style={{ color: "#666", fontSize: 14 }}>
+                    Tax ({((invoice.taxRate ?? 0) / 100).toFixed(2)}%)
+                  </span>
+                  <span style={{ color: "#111", fontSize: 14 }}>
+                    {formatCurrency(invoice.taxAmount ?? 0, invoice.currency)}
+                  </span>
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "12px 0 0",
+                  borderTop: "1px solid #e5e7eb",
+                  marginTop: 8,
+                }}
+              >
+                <span
+                  style={{ color: "#111", fontSize: 18, fontWeight: 800 }}
+                >
+                  Total
+                </span>
+                <span
+                  style={{ color: "#111", fontSize: 18, fontWeight: 800 }}
+                >
+                  {formatCurrency(invoice.total, invoice.currency)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes / Terms */}
+          {(invoice.notes || invoice.terms) && (
+            <div
+              style={{
+                padding: "0 32px 24px",
+                borderTop: "1px solid #f3f4f6",
+                marginTop: 8,
+              }}
+            >
+              {invoice.notes && (
+                <div style={{ marginTop: 16 }}>
+                  <p
+                    style={{
+                      margin: "0 0 4px",
+                      color: "#999",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    Notes
+                  </p>
+                  <p style={{ margin: 0, color: "#666", fontSize: 13 }}>
+                    {invoice.notes}
+                  </p>
+                </div>
+              )}
+              {invoice.terms && (
+                <div style={{ marginTop: 16 }}>
+                  <p
+                    style={{
+                      margin: "0 0 4px",
+                      color: "#999",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    Terms
+                  </p>
+                  <p style={{ margin: 0, color: "#666", fontSize: 13 }}>
+                    {invoice.terms}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pay button */}
+          {invoice.stripePaymentUrl && (
+            <div
+              style={{
+                padding: "24px 32px",
+                borderTop: "1px solid #e5e7eb",
+                textAlign: "center",
+              }}
+            >
+              <a
+                href={invoice.stripePaymentUrl}
+                style={{
+                  display: "inline-block",
+                  background: "linear-gradient(135deg, #2563EB, #06B6D4)",
+                  color: "#fff",
+                  textDecoration: "none",
+                  padding: "14px 48px",
+                  borderRadius: 12,
+                  fontSize: 16,
+                  fontWeight: 700,
+                }}
+              >
+                Pay {formatCurrency(invoice.total, invoice.currency)}
+              </a>
+              <p
+                style={{
+                  margin: "12px 0 0",
+                  color: "#999",
+                  fontSize: 12,
+                }}
+              >
+                Secure payment via Stripe
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer
+        style={{
+          background: "#0a0a0f",
+          padding: "20px 24px",
+          textAlign: "center",
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+        }}
+      >
+        <img
+          src="/logos/nexli-logo-white-wordmark@2x.png"
+          alt="Nexli"
+          style={{ height: 16, opacity: 0.4 }}
+        />
+        <p
+          style={{
+            margin: "8px 0 0",
+            color: "rgba(255,255,255,0.3)",
+            fontSize: 11,
+          }}
+        >
+          Powered by Nexli Portal
+        </p>
+      </footer>
+    </div>
+  );
+}
