@@ -36,55 +36,32 @@ export async function sendEmail({ to, subject, html }: SendEmailParams) {
 // ── Shared email styles ──────────────────────────────────
 
 const PORTAL_URL = process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-const LOGO_WHITE = `${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png`;
-const LOGO_DARK = `${PORTAL_URL}/logos/nexli-logo-dark-wordmark@2x.png`;
+const LOGO_URL = `${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png`;
 
 const emailWrapper = (content: string) => `
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
-  <style>
-    :root { color-scheme: light dark; }
-    .logo-dark { display: none !important; }
-    .logo-light { display: inline-block !important; }
-    @media (prefers-color-scheme: light) {
-      .email-body { background: #f5f5f5 !important; }
-      .email-card { background: #ffffff !important; border-color: #e0e0e0 !important; }
-      .email-text { color: #1a1a1a !important; }
-      .email-text-muted { color: #6b7280 !important; }
-      .email-footer-text { color: rgba(0,0,0,0.3) !important; }
-      .email-divider { border-color: rgba(0,0,0,0.08) !important; }
-      .logo-dark { display: inline-block !important; }
-      .logo-light { display: none !important; }
-    }
-  </style>
-</head>
-<body class="email-body" style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" class="email-body" style="background:#0a0a0f;padding:40px 20px;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 20px;">
     <tr><td align="center">
-      <table width="100%" class="email-card" style="max-width:560px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:16px;overflow:hidden;">
+      <table width="100%" style="max-width:560px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:16px;overflow:hidden;">
         <!-- Logo Header -->
         <tr><td style="padding:32px 32px 0;text-align:center;">
-          <img src="${LOGO_WHITE}" alt="Nexli" width="130" class="logo-light" style="display:inline-block;" />
-          <img src="${LOGO_DARK}" alt="Nexli" width="130" class="logo-dark" style="display:none;" />
+          <img src="${LOGO_URL}" alt="Nexli" width="130" style="display:inline-block;" />
         </td></tr>
         <!-- Content -->
         <tr><td style="padding:32px;">
           ${content}
         </td></tr>
         <!-- Footer -->
-        <tr><td class="email-divider" style="padding:0 32px 32px;border-top:1px solid rgba(255,255,255,0.06);padding-top:24px;">
+        <tr><td style="padding:0 32px 32px;border-top:1px solid rgba(255,255,255,0.06);padding-top:24px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr><td align="center" style="padding-bottom:12px;">
-              <img src="${LOGO_WHITE}" alt="Nexli" width="60" class="logo-light" style="display:inline-block;opacity:0.4;" />
-              <img src="${LOGO_DARK}" alt="Nexli" width="60" class="logo-dark" style="display:none;opacity:0.4;" />
+              <img src="${LOGO_URL}" alt="Nexli" width="60" style="opacity:0.4;" />
             </td></tr>
             <tr><td align="center">
-              <p class="email-footer-text" style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+              <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
                 Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
               </p>
             </td></tr>
