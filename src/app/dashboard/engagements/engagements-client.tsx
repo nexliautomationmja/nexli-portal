@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
+import { ClientPicker } from "@/components/dashboard/client-picker";
 
 interface Signer {
   id: string;
@@ -403,16 +404,22 @@ export function EngagementsClient() {
                   <label className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                     Recipients *
                   </label>
-                  {recipients.length < 5 && (
-                    <button
-                      onClick={addRecipient}
-                      className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-400 transition-colors"
-                    >
-                      <PlusIcon className="w-3 h-3" />
-                      Add Recipient
-                    </button>
-                  )}
                 </div>
+                <ClientPicker
+                  onSelect={(c) => {
+                    const emptyIdx = recipients.findIndex((r) => !r.name && !r.email);
+                    if (emptyIdx >= 0) {
+                      setRecipients((prev) =>
+                        prev.map((r, i) =>
+                          i === emptyIdx ? { ...r, name: c.name, email: c.email } : r
+                        )
+                      );
+                    } else if (recipients.length < 5) {
+                      setRecipients((prev) => [...prev, { name: c.name, email: c.email }]);
+                    }
+                  }}
+                  placeholder="Search existing clients..."
+                />
                 <div className="space-y-2">
                   {recipients.map((r, i) => (
                     <div key={i} className="flex items-center gap-2">
@@ -444,9 +451,18 @@ export function EngagementsClient() {
                   ))}
                 </div>
                 {recipients.length < 5 && (
-                  <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
-                    Up to 5 recipients can sign the same engagement letter.
-                  </p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                      Up to 5 recipients can sign the same engagement letter.
+                    </p>
+                    <button
+                      onClick={addRecipient}
+                      className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-400 transition-colors"
+                    >
+                      <PlusIcon className="w-3 h-3" />
+                      Add Recipient
+                    </button>
+                  </div>
                 )}
               </div>
 

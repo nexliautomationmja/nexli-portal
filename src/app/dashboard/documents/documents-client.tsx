@@ -27,6 +27,7 @@ import {
   XIcon,
   SendIcon,
 } from "@/components/ui/icons";
+import { ClientPicker } from "@/components/dashboard/client-picker";
 
 const STATUS_COLORS = {
   new: "badge-blue",
@@ -373,6 +374,13 @@ export function DocumentsClient() {
               </button>
             </div>
             <form onSubmit={handleSendEsign} className="space-y-4">
+              <ClientPicker
+                onSelect={(c) => {
+                  setEsignName(c.name);
+                  setEsignEmail(c.email);
+                }}
+                placeholder="Search existing clients..."
+              />
               <div>
                 <label className="block section-header mb-1.5">
                   Signer Name

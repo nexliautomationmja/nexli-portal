@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ClientPicker } from "@/components/dashboard/client-picker";
 import {
   InvoiceIcon,
   PlusIcon,
@@ -563,7 +564,16 @@ export function InvoicesClient() {
                 >
                   Client Information *
                 </label>
-                <div className="grid grid-cols-2 gap-2 mt-1.5">
+                <ClientPicker
+                  onSelect={(c) => {
+                    setClientName(c.name);
+                    setClientEmail(c.email);
+                    if (c.phone) setClientPhone(c.phone);
+                    if (c.company) setClientCompany(c.company);
+                  }}
+                  placeholder="Search existing clients..."
+                />
+                <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
                     value={clientName}
