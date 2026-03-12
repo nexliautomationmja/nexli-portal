@@ -14,7 +14,7 @@ export function NexliLogo({ size = "md" }: NexliLogoProps) {
     <span className="inline-flex items-center">
       {/* Dark mode */}
       <img
-        src="/logos/nexli-logo-allwhite@2x.png"
+        src="/logos/nexli-logo-white-wordmark@2x.png"
         alt="Nexli"
         className={`${h} w-auto logo-icon-dark`}
       />
