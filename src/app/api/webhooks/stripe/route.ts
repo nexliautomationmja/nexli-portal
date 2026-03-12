@@ -8,6 +8,7 @@ import crypto from "crypto";
 import type Stripe from "stripe";
 import { sendEmail, buildInvoicePaidEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/invoice-utils";
+import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -191,4 +192,9 @@ async function handleInvoicePayment(session: Stripe.Checkout.Session) {
   } catch (err) {
     console.error("Failed to send invoice paid email:", err);
   }
+
+  // Sync payment to accounting software (non-blocking)
+  syncPaymentToAccounting(invoiceId).catch((err) =>
+    console.error("Accounting payment sync failed:", err)
+  );
 }

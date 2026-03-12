@@ -644,3 +644,72 @@ export const invoiceLineItems = pgTable(
     index("invoice_line_items_invoice_idx").on(table.invoiceId),
   ]
 );
+
+// ══════════════════════════════════════════════════════════
+// ══  ACCOUNTING INTEGRATIONS  ════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const accountingProviderEnum = pgEnum("accounting_provider", [
+  "quickbooks",
+  "xero",
+]);
+
+export const accountingConnections = pgTable(
+  "accounting_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: accountingProviderEnum("provider").notNull(),
+
+    // OAuth tokens
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at").notNull(),
+
+    // Provider-specific IDs
+    realmId: text("realm_id"), // QuickBooks company ID
+    tenantId: text("tenant_id"), // Xero organization ID
+
+    companyName: text("company_name"),
+    connectedAt: timestamp("connected_at").defaultNow().notNull(),
+    lastSyncAt: timestamp("last_sync_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("accounting_connections_user_provider_idx").on(
+      table.userId,
+      table.provider
+    ),
+    index("accounting_connections_user_idx").on(table.userId),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
+// ══  INVOICE REMINDERS  ══════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const invoiceReminders = pgTable(
+  "invoice_reminders",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    dayOffset: integer("day_offset").notNull(), // e.g. -7 = 7 days before due
+    scheduledFor: timestamp("scheduled_for").notNull(),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("invoice_reminders_invoice_idx").on(table.invoiceId),
+    index("invoice_reminders_scheduled_idx").on(table.scheduledFor),
+    uniqueIndex("invoice_reminders_invoice_offset_idx").on(
+      table.invoiceId,
+      table.dayOffset
+    ),
+  ]
+);

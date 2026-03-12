@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { invoices, invoiceLineItems, users } from "@/db/schema";
+import { invoices, invoiceLineItems, invoiceReminders, users } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { createInvoicePaymentLink } from "@/lib/stripe";
 import { sendEmail, buildInvoiceEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/invoice-utils";
+import { syncInvoiceToAccounting } from "@/lib/accounting-sync";
 
 export async function POST(
   _req: NextRequest,
@@ -91,6 +92,38 @@ export async function POST(
     await sendEmail({ to: invoice.clientEmail, subject, html });
   } catch (err) {
     console.error("Failed to send invoice email:", err);
+  }
+
+  // Sync to accounting software (non-blocking)
+  syncInvoiceToAccounting(invoiceId).catch((err) =>
+    console.error("Accounting sync failed:", err)
+  );
+
+  // Materialize reminders from reminderConfig
+  if (invoice.reminderConfig) {
+    try {
+      const config = invoice.reminderConfig as {
+        schedule?: { dayOffset: number }[];
+      };
+      if (config.schedule?.length) {
+        const dueDate = invoice.dueDate;
+        const reminderRows = config.schedule.map((r) => {
+          const scheduledFor = new Date(dueDate);
+          scheduledFor.setDate(scheduledFor.getDate() + r.dayOffset);
+          return {
+            invoiceId,
+            dayOffset: r.dayOffset,
+            scheduledFor,
+          };
+        });
+        await db
+          .insert(invoiceReminders)
+          .values(reminderRows)
+          .onConflictDoNothing();
+      }
+    } catch (err) {
+      console.error("Failed to create invoice reminders:", err);
+    }
   }
 
   return NextResponse.json({ invoice: updated });
