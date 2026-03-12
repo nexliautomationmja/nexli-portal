@@ -40,12 +40,28 @@ const LOGO_URL = `${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png`;
 
 const emailWrapper = (content: string) => `
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 20px;">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark only">
+  <meta name="supported-color-schemes" content="dark only">
+  <style>
+    :root { color-scheme: dark only; supported-color-schemes: dark only; }
+    body, .body-bg { background-color: #0a0a0f !important; }
+    .card-bg { background-color: #111118 !important; }
+    [data-ogsc] body, [data-ogsc] .body-bg { background-color: #0a0a0f !important; }
+    [data-ogsc] .card-bg { background-color: #111118 !important; }
+    @media (prefers-color-scheme: light) {
+      body, .body-bg { background-color: #0a0a0f !important; }
+      .card-bg { background-color: #111118 !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="background-color:#0a0a0f;padding:40px 20px;">
     <tr><td align="center">
-      <table width="100%" style="max-width:560px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:16px;overflow:hidden;">
+      <table width="100%" class="card-bg" style="max-width:560px;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
         <!-- Logo Header -->
         <tr><td style="padding:32px 32px 0;text-align:center;">
           <img src="${LOGO_URL}" alt="Nexli" width="130" style="display:inline-block;" />
@@ -55,13 +71,13 @@ const emailWrapper = (content: string) => `
           ${content}
         </td></tr>
         <!-- Footer -->
-        <tr><td style="padding:0 32px 32px;border-top:1px solid rgba(255,255,255,0.06);padding-top:24px;">
+        <tr><td style="padding:0 32px 32px;border-top:1px solid #1a1a24;padding-top:24px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr><td align="center" style="padding-bottom:12px;">
               <img src="${LOGO_URL}" alt="Nexli" width="60" style="opacity:0.4;" />
             </td></tr>
             <tr><td align="center">
-              <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+              <p style="margin:0;color:#4a4a5a;font-size:11px;">
                 Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
               </p>
             </td></tr>
@@ -96,21 +112,21 @@ export function buildUploadRequestEmail(params: {
   const docList =
     requiredDocs.length > 0
       ? `
-    <div style="margin:20px 0;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
-      <p style="margin:0 0 12px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Documents Needed</p>
-      ${requiredDocs.map((d) => `<p style="margin:4px 0;color:rgba(255,255,255,0.8);font-size:13px;">&#x2022; ${d}</p>`).join("")}
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+      <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Documents Needed</p>
+      ${requiredDocs.map((d) => `<p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; ${d}</p>`).join("")}
     </div>`
       : "";
 
   const messageBlock = message
-    ? `<div style="margin:20px 0;padding:16px;background:rgba(37,99,235,0.08);border-left:3px solid #2563EB;border-radius:0 8px 8px 0;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:13px;font-style:italic;">"${message}"</p>
+    ? `<div style="margin:20px 0;padding:16px;background-color:#0f1528;border-left:3px solid #2563EB;border-radius:0 8px 8px 0;">
+      <p style="margin:0;color:#b3b3c0;font-size:13px;font-style:italic;">"${message}"</p>
     </div>`
     : "";
 
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Document Request</h1>
-    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName || "there"}, <strong style="color:#fff;">${cpaName}</strong> has requested documents from you.
     </p>
     ${messageBlock}
@@ -119,10 +135,10 @@ export function buildUploadRequestEmail(params: {
       <a href="${uploadUrl}" style="${buttonStyle}">Upload Documents</a>
     </div>
     <div style="text-align:center;">
-      <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
         This link expires ${expDate} &bull; No account required
       </p>
-      <p style="margin:8px 0 0;color:rgba(255,255,255,0.2);font-size:10px;word-break:break-all;">
+      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
         ${uploadUrl}
       </p>
     </div>
@@ -152,18 +168,18 @@ export function buildEsignRequestEmail(params: {
 
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Signature Requested</h1>
-    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${signerName}, <strong style="color:#fff;">${cpaName}</strong> has requested your signature on a document.
     </p>
-    <div style="margin:20px 0;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
-      <p style="margin:0;color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Document</p>
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+      <p style="margin:0;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Document</p>
       <p style="margin:8px 0 0;color:#fff;font-size:15px;font-weight:600;">${documentName}</p>
     </div>
     <div style="text-align:center;margin:28px 0;">
       <a href="${signUrl}" style="${buttonStyle}">Review & Sign</a>
     </div>
     <div style="text-align:center;">
-      <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
         This link expires ${expDate} &bull; No account required
       </p>
     </div>
@@ -195,26 +211,26 @@ export function buildEsignCompletedEmail(params: {
 
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Document Signed</h1>
-    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${cpaName}, <strong style="color:#10B981;">${signerName}</strong> has signed your document.
     </p>
-    <div style="margin:20px 0;padding:16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:12px;">
+    <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Document</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Document</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${documentName}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Signed by</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Signed by</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${signerName}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Date</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Date</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${signDate}</td>
         </tr>
       </table>
     </div>
-    <p style="margin:24px 0 0;color:rgba(255,255,255,0.4);font-size:12px;text-align:center;">
+    <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View the signed document in your Nexli Portal dashboard.
     </p>
   `);
@@ -243,18 +259,18 @@ export function buildEngagementRequestEmail(params: {
 
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Engagement Letter</h1>
-    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, <strong style="color:#fff;">${cpaName}</strong> has sent you an engagement letter for review and signature.
     </p>
-    <div style="margin:20px 0;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
-      <p style="margin:0;color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Subject</p>
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+      <p style="margin:0;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Subject</p>
       <p style="margin:8px 0 0;color:#fff;font-size:15px;font-weight:600;">${subject}</p>
     </div>
     <div style="text-align:center;margin:28px 0;">
       <a href="${engageUrl}" style="${buttonStyle}">Review & Sign</a>
     </div>
     <div style="text-align:center;">
-      <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
         This link expires ${expDate} &bull; No account required
       </p>
     </div>
@@ -285,26 +301,26 @@ export function buildEngagementSignedEmail(params: {
 
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Engagement Letter Signed</h1>
-    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${cpaName}, <strong style="color:#10B981;">${clientName}</strong> has signed your engagement letter.
     </p>
-    <div style="margin:20px 0;padding:16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:12px;">
+    <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Subject</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Subject</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${subject}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Signed by</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Signed by</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${clientName}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Date</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Date</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${signDate}</td>
         </tr>
       </table>
     </div>
-    <p style="margin:24px 0 0;color:rgba(255,255,255,0.4);font-size:12px;text-align:center;">
+    <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View the signed engagement in your Nexli Portal dashboard.
     </p>
   `);
@@ -339,21 +355,21 @@ export function buildInvoiceEmail(params: {
 
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Invoice from ${cpaName}</h1>
-    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, you have a new invoice ready for payment.
     </p>
-    <div style="margin:20px 0;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Invoice</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${invoiceNumber}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Amount Due</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Amount Due</td>
           <td style="color:#fff;font-size:18px;font-weight:800;text-align:right;padding:4px 0;">${total}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Due Date</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Due Date</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${dueDateStr}</td>
         </tr>
       </table>
@@ -362,7 +378,7 @@ export function buildInvoiceEmail(params: {
       <a href="${invoiceUrl}" style="${buttonStyle}">View &amp; Pay Invoice</a>
     </div>
     <div style="text-align:center;">
-      <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
         No account required &bull; Secure payment via Stripe
       </p>
     </div>
@@ -394,30 +410,30 @@ export function buildInvoicePaidEmail(params: {
 
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Invoice Paid</h1>
-    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${cpaName}, <strong style="color:#10B981;">${clientName}</strong> has paid invoice ${invoiceNumber}.
     </p>
-    <div style="margin:20px 0;padding:16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:12px;">
+    <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Invoice</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${invoiceNumber}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Amount</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Amount</td>
           <td style="color:#10B981;font-size:18px;font-weight:800;text-align:right;padding:4px 0;">${total}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Paid by</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Paid by</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${clientName}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Date</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Date</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${paidDate}</td>
         </tr>
       </table>
     </div>
-    <p style="margin:24px 0 0;color:rgba(255,255,255,0.4);font-size:12px;text-align:center;">
+    <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View invoice details in your Nexli Portal dashboard.
     </p>
   `);
@@ -459,25 +475,26 @@ export function buildInvoiceReminderEmail(params: {
     ? `Your invoice ${invoiceNumber} from ${cpaName} was due on ${dueDateStr} and is now overdue.`
     : `This is a reminder that invoice ${invoiceNumber} from ${cpaName} is due on ${dueDateStr}.`;
   const urgencyColor = isOverdue ? "#EF4444" : "#F59E0B";
-  const urgencyRgb = isOverdue ? "239,68,68" : "245,158,11";
+  const urgencyBg = isOverdue ? "#1f0f0f" : "#1f1a0d";
+  const urgencyBorder = isOverdue ? "#3d1616" : "#3d3010";
 
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">${heading}</h1>
-    <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:14px;">
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, ${message}
     </p>
-    <div style="margin:20px 0;padding:16px;background:rgba(${urgencyRgb},0.08);border:1px solid rgba(${urgencyRgb},0.2);border-radius:12px;">
+    <div style="margin:20px 0;padding:16px;background-color:${urgencyBg};border:1px solid ${urgencyBorder};border-radius:12px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Invoice</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${invoiceNumber}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">Amount Due</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Amount Due</td>
           <td style="color:${urgencyColor};font-size:18px;font-weight:800;text-align:right;padding:4px 0;">${total}</td>
         </tr>
         <tr>
-          <td style="color:rgba(255,255,255,0.5);font-size:11px;padding:4px 0;">${isOverdue ? "Was Due" : "Due Date"}</td>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">${isOverdue ? "Was Due" : "Due Date"}</td>
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${dueDateStr}</td>
         </tr>
       </table>
@@ -486,7 +503,7 @@ export function buildInvoiceReminderEmail(params: {
       <a href="${invoiceUrl}" style="${buttonStyle}">View &amp; Pay Invoice</a>
     </div>
     <div style="text-align:center;">
-      <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
         No account required &bull; Secure payment via Stripe
       </p>
     </div>
