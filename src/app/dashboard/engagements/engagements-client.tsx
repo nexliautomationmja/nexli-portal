@@ -3,19 +3,26 @@
 import { useState, useEffect } from "react";
 import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 
-interface Engagement {
+interface Signer {
   id: string;
-  clientName: string;
-  clientEmail: string;
-  subject: string;
-  content: string;
+  name: string;
+  email: string;
   status: "draft" | "sent" | "viewed" | "signed" | "declined" | "expired";
   sentAt: string | null;
   viewedAt: string | null;
   signedAt: string | null;
   declinedAt: string | null;
+}
+
+interface Engagement {
+  id: string;
+  subject: string;
+  content: string;
+  status: "draft" | "sent" | "viewed" | "signed" | "declined" | "expired";
+  sentAt: string | null;
   expiresAt: string;
   createdAt: string;
+  signers: Signer[];
 }
 
 interface Template {
@@ -41,8 +48,7 @@ export function EngagementsClient() {
   const [showDetail, setShowDetail] = useState<Engagement | null>(null);
 
   // Compose form
-  const [clientName, setClientName] = useState("");
-  const [clientEmail, setClientEmail] = useState("");
+  const [recipients, setRecipients] = useState([{ name: "", email: "" }]);
   const [subject, setSubject] = useState("");
   const [content, setContent] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -75,16 +81,33 @@ export function EngagementsClient() {
     }
   }
 
+  function addRecipient() {
+    if (recipients.length >= 5) return;
+    setRecipients((prev) => [...prev, { name: "", email: "" }]);
+  }
+
+  function removeRecipient(index: number) {
+    if (recipients.length <= 1) return;
+    setRecipients((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateRecipient(index: number, field: "name" | "email", value: string) {
+    setRecipients((prev) =>
+      prev.map((r, i) => (i === index ? { ...r, [field]: value } : r))
+    );
+  }
+
+  const allRecipientsValid = recipients.every((r) => r.name.trim() && r.email.trim());
+
   async function handleSend() {
-    if (!clientName || !clientEmail || !subject || !content) return;
+    if (!allRecipientsValid || !subject || !content) return;
     setSending(true);
     try {
       const res = await fetch("/api/dashboard/engagements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientName,
-          clientEmail,
+          recipients: recipients.map((r) => ({ name: r.name.trim(), email: r.email.trim() })),
           subject,
           content,
           templateId: selectedTemplate || undefined,
@@ -95,15 +118,18 @@ export function EngagementsClient() {
       });
       const data = await res.json();
       if (data.engagement) {
-        setEngagements((prev) => [data.engagement, ...prev]);
+        // Re-fetch to get full engagement with signers
+        const refreshRes = await fetch("/api/dashboard/engagements");
+        const refreshData = await refreshRes.json();
+        setEngagements(refreshData.engagements || []);
+
         if (saveAsTemplate && templateName) {
-          // Refresh templates
           const tmplRes = await fetch("/api/dashboard/engagements/templates");
           const tmplData = await tmplRes.json();
           setTemplates(tmplData.templates || []);
         }
-        if (data.emailError) {
-          alert(`Engagement created but email failed: ${data.emailError}`);
+        if (data.emailErrors) {
+          alert(`Engagement created but some emails failed:\n${data.emailErrors.join("\n")}`);
         }
       }
       resetForm();
@@ -120,7 +146,15 @@ export function EngagementsClient() {
       body: JSON.stringify({ action: "void" }),
     });
     setEngagements((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, status: "expired" as const } : e))
+      prev.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              status: "expired" as const,
+              signers: e.signers.map((s) => ({ ...s, status: "expired" as const })),
+            }
+          : e
+      )
     );
     setShowDetail(null);
   }
@@ -132,8 +166,7 @@ export function EngagementsClient() {
   }
 
   function resetForm() {
-    setClientName("");
-    setClientEmail("");
+    setRecipients([{ name: "", email: "" }]);
     setSubject("");
     setContent("");
     setSelectedTemplate("");
@@ -151,11 +184,40 @@ export function EngagementsClient() {
     });
   }
 
+  function getSignerSummary(signers: Signer[]): string {
+    if (signers.length === 0) return "—";
+    if (signers.length === 1) return signers[0].name;
+    return `${signers[0].name} +${signers.length - 1} more`;
+  }
+
+  function getSignerEmails(signers: Signer[]): string {
+    if (signers.length === 0) return "";
+    if (signers.length === 1) return signers[0].email;
+    return `${signers.length} recipients`;
+  }
+
+  function getOverallStatus(eng: Engagement): string {
+    const signers = eng.signers;
+    if (signers.length === 0) return eng.status;
+    if (signers.every((s) => s.status === "signed")) return "signed";
+    if (signers.some((s) => s.status === "declined")) return "declined";
+    if (signers.some((s) => s.status === "viewed")) return "viewed";
+    return eng.status;
+  }
+
+  function getSignedCount(signers: Signer[]): string {
+    const signed = signers.filter((s) => s.status === "signed").length;
+    return `${signed}/${signers.length} signed`;
+  }
+
   const stats = {
     total: engagements.length,
-    pending: engagements.filter((e) => e.status === "sent" || e.status === "viewed").length,
-    signed: engagements.filter((e) => e.status === "signed").length,
-    declined: engagements.filter((e) => e.status === "declined").length,
+    pending: engagements.filter((e) => {
+      const s = getOverallStatus(e);
+      return s === "sent" || s === "viewed";
+    }).length,
+    signed: engagements.filter((e) => getOverallStatus(e) === "signed").length,
+    declined: engagements.filter((e) => getOverallStatus(e) === "declined").length,
   };
 
   return (
@@ -229,7 +291,7 @@ export function EngagementsClient() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--card-border)]">
-                  {["Client", "Subject", "Status", "Sent", "Actions"].map((h) => (
+                  {["Recipients", "Subject", "Status", "Sent", "Actions"].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest"
@@ -242,7 +304,8 @@ export function EngagementsClient() {
               </thead>
               <tbody>
                 {engagements.map((eng) => {
-                  const sc = statusConfig[eng.status] || statusConfig.draft;
+                  const overallStatus = getOverallStatus(eng);
+                  const sc = statusConfig[overallStatus] || statusConfig.draft;
                   return (
                     <tr
                       key={eng.id}
@@ -251,10 +314,10 @@ export function EngagementsClient() {
                     >
                       <td className="px-4 py-3">
                         <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                          {eng.clientName}
+                          {getSignerSummary(eng.signers)}
                         </p>
                         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          {eng.clientEmail}
+                          {getSignerEmails(eng.signers)}
                         </p>
                       </td>
                       <td className="px-4 py-3">
@@ -266,6 +329,11 @@ export function EngagementsClient() {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${sc.color} ${sc.bg}`}>
                           {sc.label}
                         </span>
+                        {eng.signers.length > 1 && (
+                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                            {getSignedCount(eng.signers)}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
                         {formatDate(eng.sentAt)}
@@ -279,7 +347,7 @@ export function EngagementsClient() {
                           >
                             <EyeIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                           </button>
-                          {(eng.status === "sent" || eng.status === "viewed") && (
+                          {(overallStatus === "sent" || overallStatus === "viewed") && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleVoid(eng.id); }}
                               className="p-1.5 rounded hover:bg-red-500/10 transition-colors"
@@ -329,34 +397,57 @@ export function EngagementsClient() {
 
             {/* Modal body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Client info row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
-                    Client Name *
+              {/* Recipients */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                    Recipients *
                   </label>
-                  <input
-                    type="text"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    placeholder="John Smith"
-                    className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                    style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                  />
+                  {recipients.length < 5 && (
+                    <button
+                      onClick={addRecipient}
+                      className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-400 transition-colors"
+                    >
+                      <PlusIcon className="w-3 h-3" />
+                      Add Recipient
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
-                    Client Email *
-                  </label>
-                  <input
-                    type="email"
-                    value={clientEmail}
-                    onChange={(e) => setClientEmail(e.target.value)}
-                    placeholder="john@example.com"
-                    className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                    style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                  />
+                <div className="space-y-2">
+                  {recipients.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={r.name}
+                        onChange={(e) => updateRecipient(i, "name", e.target.value)}
+                        placeholder="Name"
+                        className="flex-1 px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
+                        style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
+                      />
+                      <input
+                        type="email"
+                        value={r.email}
+                        onChange={(e) => updateRecipient(i, "email", e.target.value)}
+                        placeholder="Email"
+                        className="flex-1 px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
+                        style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
+                      />
+                      {recipients.length > 1 && (
+                        <button
+                          onClick={() => removeRecipient(i)}
+                          className="p-2 rounded hover:bg-red-500/10 transition-colors shrink-0"
+                        >
+                          <XIcon className="w-3.5 h-3.5 text-red-400" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
+                {recipients.length < 5 && (
+                  <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                    Up to 5 recipients can sign the same engagement letter.
+                  </p>
+                )}
               </div>
 
               {/* Subject */}
@@ -467,12 +558,12 @@ export function EngagementsClient() {
               </button>
               <button
                 onClick={handleSend}
-                disabled={!clientName || !clientEmail || !subject || !content || sending}
+                disabled={!allRecipientsValid || !subject || !content || sending}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-all hover:opacity-90"
                 style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
               >
                 <SendIcon className="w-3.5 h-3.5" />
-                {sending ? "Sending..." : "Send Engagement Letter"}
+                {sending ? "Sending..." : `Send to ${recipients.length} Recipient${recipients.length > 1 ? "s" : ""}`}
               </button>
             </div>
           </div>
@@ -494,7 +585,7 @@ export function EngagementsClient() {
                   {showDetail.subject}
                 </h2>
                 <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {showDetail.clientName} &bull; {showDetail.clientEmail}
+                  {showDetail.signers.length} recipient{showDetail.signers.length !== 1 ? "s" : ""}
                 </p>
               </div>
               <button
@@ -507,29 +598,47 @@ export function EngagementsClient() {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Status */}
-              <div className="flex items-center gap-4">
-                {(() => {
-                  const sc = statusConfig[showDetail.status] || statusConfig.draft;
-                  return (
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold ${sc.color} ${sc.bg}`}>
-                      {sc.label}
-                    </span>
-                  );
-                })()}
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  Sent {formatDate(showDetail.sentAt)}
-                </span>
-                {showDetail.viewedAt && (
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Viewed {formatDate(showDetail.viewedAt)}
-                  </span>
-                )}
-                {showDetail.signedAt && (
-                  <span className="text-xs text-emerald-500">
-                    Signed {formatDate(showDetail.signedAt)}
-                  </span>
-                )}
+              {/* Signers status */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-muted)" }}>
+                  Signers
+                </p>
+                <div className="space-y-2">
+                  {showDetail.signers.map((signer) => {
+                    const sc = statusConfig[signer.status] || statusConfig.draft;
+                    return (
+                      <div
+                        key={signer.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                        style={{ borderColor: "var(--card-border)", background: "var(--input-bg)" }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                            {signer.name}
+                          </p>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {signer.email}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${sc.color} ${sc.bg}`}>
+                            {sc.label}
+                          </span>
+                          {signer.signedAt && (
+                            <p className="text-[10px] mt-0.5 text-emerald-500">
+                              {formatDate(signer.signedAt)}
+                            </p>
+                          )}
+                          {signer.viewedAt && !signer.signedAt && (
+                            <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                              Viewed {formatDate(signer.viewedAt)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Letter content */}
@@ -553,16 +662,26 @@ export function EngagementsClient() {
                 <div className="space-y-1.5">
                   <TimelineItem label="Created" date={showDetail.createdAt} />
                   {showDetail.sentAt && <TimelineItem label="Sent" date={showDetail.sentAt} />}
-                  {showDetail.viewedAt && <TimelineItem label="Viewed by client" date={showDetail.viewedAt} />}
-                  {showDetail.signedAt && <TimelineItem label="Signed by client" date={showDetail.signedAt} color="text-emerald-500" />}
-                  {showDetail.declinedAt && <TimelineItem label="Declined by client" date={showDetail.declinedAt} color="text-red-500" />}
+                  {showDetail.signers.map((signer) => (
+                    <div key={signer.id}>
+                      {signer.viewedAt && (
+                        <TimelineItem label={`Viewed by ${signer.name}`} date={signer.viewedAt} />
+                      )}
+                      {signer.signedAt && (
+                        <TimelineItem label={`Signed by ${signer.name}`} date={signer.signedAt} color="text-emerald-500" />
+                      )}
+                      {signer.declinedAt && (
+                        <TimelineItem label={`Declined by ${signer.name}`} date={signer.declinedAt} color="text-red-500" />
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
             {/* Footer actions */}
             <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-end gap-3">
-              {(showDetail.status === "sent" || showDetail.status === "viewed") && (
+              {(getOverallStatus(showDetail) === "sent" || getOverallStatus(showDetail) === "viewed") && (
                 <button
                   onClick={() => handleVoid(showDetail.id)}
                   className="px-4 py-2 rounded-lg text-sm font-medium border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { engagements, engagementTemplates } from "@/db/schema";
+import {
+  engagements,
+  engagementSigners,
+  engagementTemplates,
+} from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { sendEmail, buildEngagementRequestEmail } from "@/lib/email";
@@ -18,7 +22,43 @@ export async function GET() {
     .where(eq(engagements.ownerId, session.user.id))
     .orderBy(desc(engagements.createdAt));
 
-  return NextResponse.json({ engagements: rows });
+  // Fetch signers for all engagements
+  const engagementIds = rows.map((r) => r.id);
+  const allSigners =
+    engagementIds.length > 0
+      ? await db
+          .select()
+          .from(engagementSigners)
+          .where(
+            eq(
+              engagementSigners.engagementId,
+              engagementIds.length === 1 ? engagementIds[0] : engagementIds[0]
+            )
+          )
+      : [];
+
+  // If more than one engagement, fetch all signers at once
+  let signersByEngagement: Record<string, (typeof allSigners)[number][]> = {};
+  if (engagementIds.length > 0) {
+    const signers = await db.select().from(engagementSigners);
+    const ownerEngagementIds = new Set(engagementIds);
+    for (const s of signers) {
+      if (!ownerEngagementIds.has(s.engagementId)) continue;
+      if (!signersByEngagement[s.engagementId]) {
+        signersByEngagement[s.engagementId] = [];
+      }
+      signersByEngagement[s.engagementId].push(s);
+    }
+  }
+
+  const enriched = rows.map((eng) => ({
+    ...eng,
+    signers: (signersByEngagement[eng.id] || []).sort(
+      (a, b) => a.order - b.order
+    ),
+  }));
+
+  return NextResponse.json({ engagements: enriched });
 }
 
 export async function POST(req: NextRequest) {
@@ -29,8 +69,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
-    clientName,
-    clientEmail,
+    recipients,
     subject,
     content,
     templateId,
@@ -39,9 +78,30 @@ export async function POST(req: NextRequest) {
     templateName,
   } = body;
 
-  if (!clientName || !clientEmail || !subject || !content) {
+  if (
+    !recipients ||
+    !Array.isArray(recipients) ||
+    recipients.length === 0 ||
+    recipients.length > 5
+  ) {
     return NextResponse.json(
-      { error: "clientName, clientEmail, subject, and content are required" },
+      { error: "1 to 5 recipients are required" },
+      { status: 400 }
+    );
+  }
+
+  for (const r of recipients) {
+    if (!r.name || !r.email) {
+      return NextResponse.json(
+        { error: "Each recipient must have a name and email" },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (!subject || !content) {
+    return NextResponse.json(
+      { error: "subject and content are required" },
       { status: 400 }
     );
   }
@@ -55,7 +115,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const token = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
@@ -64,9 +123,6 @@ export async function POST(req: NextRequest) {
     .values({
       ownerId: session.user.id,
       templateId: templateId || null,
-      token,
-      clientName,
-      clientEmail,
       subject,
       content,
       status: "sent",
@@ -75,29 +131,53 @@ export async function POST(req: NextRequest) {
     })
     .returning();
 
-  // Send email
+  // Create signers and send emails
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-  const engageUrl = `${portalUrl}/engage/${token}`;
   const cpaName = session.user.name || session.user.email || "Your CPA";
+  const emailErrors: string[] = [];
+  const signers: { name: string; email: string; engageUrl: string }[] = [];
 
-  let emailError: string | null = null;
-  try {
-    const { subject: emailSubject, html } = buildEngagementRequestEmail({
-      clientName,
-      cpaName,
-      subject,
-      engageUrl,
-      expiresAt,
+  for (let i = 0; i < recipients.length; i++) {
+    const { name, email } = recipients[i];
+    const token = crypto.randomBytes(32).toString("base64url");
+    const engageUrl = `${portalUrl}/engage/${token}`;
+
+    await db.insert(engagementSigners).values({
+      engagementId: engagement.id,
+      name,
+      email,
+      token,
+      order: i + 1,
+      status: "sent",
+      sentAt: new Date(),
     });
-    await sendEmail({ to: clientEmail, subject: emailSubject, html });
-  } catch (err) {
-    console.error("Failed to send engagement email:", err);
-    emailError = err instanceof Error ? err.message : String(err);
+
+    signers.push({ name, email, engageUrl });
+
+    try {
+      const { subject: emailSubject, html } = buildEngagementRequestEmail({
+        clientName: name,
+        cpaName,
+        subject,
+        engageUrl,
+        expiresAt,
+      });
+      await sendEmail({ to: email, subject: emailSubject, html });
+    } catch (err) {
+      console.error(`Failed to send engagement email to ${email}:`, err);
+      emailErrors.push(
+        `${email}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
   return NextResponse.json(
-    { engagement, engageUrl, emailError },
+    {
+      engagement,
+      signers,
+      emailErrors: emailErrors.length > 0 ? emailErrors : null,
+    },
     { status: 201 }
   );
 }

@@ -1,20 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { engagements, users } from "@/db/schema";
+import { engagements, engagementSigners, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { sendEmail, buildEngagementSignedEmail } from "@/lib/email";
 
-// GET — validate token, return engagement info, mark as viewed
+// GET — validate token, return engagement info, mark signer as viewed
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
 
+  const [signer] = await db
+    .select()
+    .from(engagementSigners)
+    .where(eq(engagementSigners.token, token))
+    .limit(1);
+
+  if (!signer) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const [engagement] = await db
     .select()
     .from(engagements)
-    .where(eq(engagements.token, token))
+    .where(eq(engagements.id, signer.engagementId))
     .limit(1);
 
   if (!engagement) {
@@ -22,47 +32,66 @@ export async function GET(
   }
 
   if (new Date(engagement.expiresAt) < new Date()) {
-    return NextResponse.json({ error: "This link has expired" }, { status: 410 });
+    return NextResponse.json(
+      { error: "This link has expired" },
+      { status: 410 }
+    );
   }
 
-  if (engagement.status === "signed") {
+  if (signer.status === "signed") {
     return NextResponse.json({ error: "Already signed" }, { status: 410 });
   }
-  if (engagement.status === "declined") {
-    return NextResponse.json({ error: "This engagement was declined" }, { status: 410 });
+  if (signer.status === "declined") {
+    return NextResponse.json(
+      { error: "This engagement was declined" },
+      { status: 410 }
+    );
   }
-  if (engagement.status === "expired") {
-    return NextResponse.json({ error: "This engagement has been voided" }, { status: 410 });
+  if (signer.status === "expired" || engagement.status === "expired") {
+    return NextResponse.json(
+      { error: "This engagement has been voided" },
+      { status: 410 }
+    );
   }
 
-  // Mark as viewed if first time
-  if (!engagement.viewedAt) {
+  // Mark signer as viewed if first time
+  if (!signer.viewedAt) {
     await db
-      .update(engagements)
-      .set({ status: "viewed", viewedAt: new Date(), updatedAt: new Date() })
-      .where(eq(engagements.id, engagement.id));
+      .update(engagementSigners)
+      .set({ status: "viewed", viewedAt: new Date() })
+      .where(eq(engagementSigners.id, signer.id));
   }
 
   return NextResponse.json({
-    clientName: engagement.clientName,
+    clientName: signer.name,
     subject: engagement.subject,
     content: engagement.content,
     expiresAt: engagement.expiresAt,
-    status: engagement.viewedAt ? engagement.status : "viewed",
+    status: signer.viewedAt ? signer.status : "viewed",
   });
 }
 
-// POST — submit signature
+// POST — submit signature for this signer
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
 
+  const [signer] = await db
+    .select()
+    .from(engagementSigners)
+    .where(eq(engagementSigners.token, token))
+    .limit(1);
+
+  if (!signer) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const [engagement] = await db
     .select()
     .from(engagements)
-    .where(eq(engagements.token, token))
+    .where(eq(engagements.id, signer.engagementId))
     .limit(1);
 
   if (!engagement) {
@@ -72,7 +101,7 @@ export async function POST(
   if (new Date(engagement.expiresAt) < new Date()) {
     return NextResponse.json({ error: "Expired" }, { status: 410 });
   }
-  if (engagement.status === "signed") {
+  if (signer.status === "signed") {
     return NextResponse.json({ error: "Already signed" }, { status: 410 });
   }
 
@@ -92,17 +121,34 @@ export async function POST(
     "unknown";
   const ua = req.headers.get("user-agent") || "unknown";
 
+  // Update this signer
   await db
-    .update(engagements)
+    .update(engagementSigners)
     .set({
       status: "signed",
       signedAt: new Date(),
       signatureData,
       signatureIp: ip,
       signatureUserAgent: ua,
-      updatedAt: new Date(),
     })
-    .where(eq(engagements.id, engagement.id));
+    .where(eq(engagementSigners.id, signer.id));
+
+  // Check if all signers have signed → update engagement status
+  const allSigners = await db
+    .select()
+    .from(engagementSigners)
+    .where(eq(engagementSigners.engagementId, engagement.id));
+
+  const allSigned = allSigners.every(
+    (s) => s.id === signer.id || s.status === "signed"
+  );
+
+  if (allSigned) {
+    await db
+      .update(engagements)
+      .set({ status: "signed", updatedAt: new Date() })
+      .where(eq(engagements.id, engagement.id));
+  }
 
   // Notify CPA via email
   try {
@@ -115,7 +161,7 @@ export async function POST(
     if (owner?.email) {
       const { subject, html } = buildEngagementSignedEmail({
         cpaName: owner.name || owner.email,
-        clientName: engagement.clientName,
+        clientName: signer.name,
         subject: engagement.subject,
         signedAt: new Date(),
       });
@@ -125,27 +171,31 @@ export async function POST(
     console.error("Failed to send engagement signed email:", err);
   }
 
-  return NextResponse.json({ ok: true, signedAt: new Date().toISOString() });
+  return NextResponse.json({
+    ok: true,
+    signedAt: new Date().toISOString(),
+    allSigned,
+  });
 }
 
-// PATCH — decline
+// PATCH — decline for this signer
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
 
-  const [engagement] = await db
+  const [signer] = await db
     .select()
-    .from(engagements)
-    .where(eq(engagements.token, token))
+    .from(engagementSigners)
+    .where(eq(engagementSigners.token, token))
     .limit(1);
 
-  if (!engagement) {
+  if (!signer) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (engagement.status === "signed") {
+  if (signer.status === "signed") {
     return NextResponse.json({ error: "Already signed" }, { status: 410 });
   }
 
@@ -153,14 +203,19 @@ export async function PATCH(
   const { reason } = body;
 
   await db
-    .update(engagements)
+    .update(engagementSigners)
     .set({
       status: "declined",
       declinedAt: new Date(),
       declineReason: reason || null,
-      updatedAt: new Date(),
     })
-    .where(eq(engagements.id, engagement.id));
+    .where(eq(engagementSigners.id, signer.id));
+
+  // Update engagement status to declined
+  await db
+    .update(engagements)
+    .set({ status: "declined", updatedAt: new Date() })
+    .where(eq(engagements.id, signer.engagementId));
 
   return NextResponse.json({ ok: true });
 }

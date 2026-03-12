@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { engagements } from "@/db/schema";
+import { engagements, engagementSigners } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export async function GET(
@@ -30,7 +30,13 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json(engagement);
+  const signers = await db
+    .select()
+    .from(engagementSigners)
+    .where(eq(engagementSigners.engagementId, engagementId))
+    .orderBy(engagementSigners.order);
+
+  return NextResponse.json({ ...engagement, signers });
 }
 
 export async function PATCH(
@@ -66,6 +72,12 @@ export async function PATCH(
       .set({ status: "expired", updatedAt: new Date() })
       .where(eq(engagements.id, engagementId));
 
+    // Also void all signers
+    await db
+      .update(engagementSigners)
+      .set({ status: "expired" })
+      .where(eq(engagementSigners.engagementId, engagementId));
+
     return NextResponse.json({ ok: true });
   }
 
@@ -98,6 +110,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Signers cascade-deleted via FK
   await db.delete(engagements).where(eq(engagements.id, engagementId));
 
   return NextResponse.json({ ok: true });

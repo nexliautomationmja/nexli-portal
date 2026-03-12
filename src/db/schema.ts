@@ -493,12 +493,33 @@ export const engagements = pgTable(
     templateId: uuid("template_id").references(() => engagementTemplates.id, {
       onDelete: "set null",
     }),
-    token: text("token").notNull().unique(),
-    clientName: text("client_name").notNull(),
-    clientEmail: text("client_email").notNull(),
     subject: text("subject").notNull(),
     content: text("content").notNull(),
     status: engagementStatusEnum("status").default("draft").notNull(),
+    sentAt: timestamp("sent_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("engagements_owner_idx").on(table.ownerId),
+    index("engagements_status_idx").on(table.status),
+  ]
+);
+
+// ── Engagement Signers ──────────────────────────────────────
+export const engagementSigners = pgTable(
+  "engagement_signers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    token: text("token").notNull().unique(),
+    order: integer("order").notNull().default(1),
+    status: engagementStatusEnum("status").default("sent").notNull(),
     sentAt: timestamp("sent_at"),
     viewedAt: timestamp("viewed_at"),
     signedAt: timestamp("signed_at"),
@@ -507,13 +528,10 @@ export const engagements = pgTable(
     signatureData: text("signature_data"),
     signatureIp: text("signature_ip"),
     signatureUserAgent: text("signature_user_agent"),
-    expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("engagements_token_idx").on(table.token),
-    index("engagements_owner_idx").on(table.ownerId),
-    index("engagements_status_idx").on(table.status),
+    uniqueIndex("engagement_signers_token_idx").on(table.token),
+    index("engagement_signers_engagement_idx").on(table.engagementId),
   ]
 );
