@@ -35,6 +35,9 @@ export async function sendEmail({ to, subject, html }: SendEmailParams) {
 
 // ── Shared email styles ──────────────────────────────────
 
+const PORTAL_URL = process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+const LOGO_URL = `${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png`;
+
 const emailWrapper = (content: string) => `
 <!DOCTYPE html>
 <html>
@@ -45,9 +48,7 @@ const emailWrapper = (content: string) => `
       <table width="100%" style="max-width:560px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:16px;overflow:hidden;">
         <!-- Logo Header -->
         <tr><td style="padding:32px 32px 0;text-align:center;">
-          <div style="display:inline-block;background:linear-gradient(135deg,#2563EB,#06B6D4);padding:8px 20px;border-radius:12px;">
-            <span style="color:#fff;font-size:18px;font-weight:800;letter-spacing:1px;">NEXLI</span>
-          </div>
+          <img src="${LOGO_URL}" alt="Nexli" width="130" style="display:inline-block;" />
         </td></tr>
         <!-- Content -->
         <tr><td style="padding:32px;">
@@ -55,9 +56,16 @@ const emailWrapper = (content: string) => `
         </td></tr>
         <!-- Footer -->
         <tr><td style="padding:0 32px 32px;border-top:1px solid rgba(255,255,255,0.06);padding-top:24px;">
-          <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;text-align:center;">
-            Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
-          </p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td align="center" style="padding-bottom:12px;">
+              <img src="${LOGO_URL}" alt="Nexli" width="60" style="opacity:0.4;" />
+            </td></tr>
+            <tr><td align="center">
+              <p style="margin:0;color:rgba(255,255,255,0.3);font-size:11px;">
+                Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
+              </p>
+            </td></tr>
+          </table>
         </td></tr>
       </table>
     </td></tr>

@@ -8,8 +8,11 @@ export function middleware(req: NextRequest) {
   if (
     pathname.startsWith("/upload/") ||
     pathname.startsWith("/esign/") ||
+    pathname.startsWith("/engage/") ||
     pathname.startsWith("/api/upload/") ||
-    pathname.startsWith("/api/esign/")
+    pathname.startsWith("/api/esign/") ||
+    pathname.startsWith("/api/engage/") ||
+    pathname.startsWith("/api/preview/")
   ) {
     return NextResponse.next();
   }
@@ -42,7 +45,10 @@ export const config = {
     "/login",
     "/upload/:path*",
     "/esign/:path*",
+    "/engage/:path*",
     "/api/upload/:path*",
     "/api/esign/:path*",
+    "/api/engage/:path*",
+    "/api/preview/:path*",
   ],
 };

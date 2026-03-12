@@ -107,29 +107,19 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={cn("flex items-center h-16 px-4", collapsed ? "justify-center" : "gap-3")}>
-        <Link href="/dashboard" className="flex items-center gap-2 no-underline shrink-0">
-          {theme === "dark" ? (
-            <svg className="w-8 h-8 shrink-0" viewBox="0 0 48 48" fill="none">
-              <defs>
-                <linearGradient id="logo-grad-sidebar" x1="0%" y1="100%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#2563EB" />
-                  <stop offset="100%" stopColor="#06B6D4" />
-                </linearGradient>
-              </defs>
-              <path d="M4 36L20 24L4 12L4 20L12 24L4 28L4 36Z" fill="#2563EB" />
-              <path d="M12 36L28 24L12 12L12 18L18 24L12 30L12 36Z" fill="url(#logo-grad-sidebar)" />
-              <path d="M20 36L44 24L20 12L20 18L32 24L20 30L20 36Z" fill="#06B6D4" />
-            </svg>
+        <Link href="/dashboard" className="flex items-center no-underline shrink-0">
+          {collapsed ? (
+            <img
+              src={theme === "dark" ? "/logos/nexli-logo-allwhite@2x.png" : "/logos/nexli-logo-gradient-wordmark@2x.png"}
+              alt="Nexli"
+              className="h-6 w-auto shrink-0"
+            />
           ) : (
-            <img src="/logos/icon-light.svg" alt="Nexli" className="w-8 h-8 shrink-0" />
-          )}
-          {!collapsed && (
-            <span
-              className="text-xl font-black tracking-tighter text-[var(--text-main)]"
-              style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
-            >
-              NEXLI
-            </span>
+            <img
+              src={theme === "dark" ? "/logos/nexli-logo-allwhite@2x.png" : "/logos/nexli-logo-gradient-wordmark@2x.png"}
+              alt="Nexli"
+              className="h-7 w-auto shrink-0"
+            />
           )}
         </Link>
       </div>

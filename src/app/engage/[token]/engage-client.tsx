@@ -15,6 +15,9 @@ export function EngageClient({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Step flow: 1=Review, 2=Sign, 3=Complete
+  const [step, setStep] = useState(1);
+
   // Signing state
   const [agreed, setAgreed] = useState(false);
   const [typedName, setTypedName] = useState("");
@@ -26,6 +29,7 @@ export function EngageClient({ token }: { token: string }) {
 
   // Canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const signSectionRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
 
@@ -78,7 +82,6 @@ export function EngageClient({ token }: { token: string }) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
     const { x, y } = getCanvasCoords(e);
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -93,7 +96,6 @@ export function EngageClient({ token }: { token: string }) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
     const { x, y } = getCanvasCoords(e);
     ctx.lineTo(x, y);
     ctx.strokeStyle = "#1e293b";
@@ -116,29 +118,33 @@ export function EngageClient({ token }: { token: string }) {
     setHasDrawn(false);
   }
 
+  function handleStart() {
+    setStep(2);
+    setTimeout(() => {
+      signSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  }
+
   async function handleSign() {
     if (!data || !agreed || !hasDrawn || !typedName.trim()) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     setSigning(true);
     try {
       const signatureData = canvas.toDataURL("image/png");
-
       const res = await fetch(`/api/engage/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signatureData, typedName: typedName.trim() }),
       });
-
       if (!res.ok) {
         const body = await res.json();
         setError(body.error || "Signing failed");
         return;
       }
-
       setSigned(true);
+      setStep(3);
     } catch {
       setError("Signing failed. Please try again.");
     } finally {
@@ -162,252 +168,309 @@ export function EngageClient({ token }: { token: string }) {
 
   const canSign = agreed && hasDrawn && typedName.trim().length > 0;
 
-  // Loading state
+  const today = new Date().toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  // ─── Loading ─────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  // Error state
+  // ─── Error ───────────────────────────────────────
   if (error) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6">
-        <div className="max-w-md w-full text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto">
-            <svg className="w-8 h-8 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="15" y1="9" x2="9" y2="15" />
-              <line x1="9" y1="9" x2="15" y2="15" />
-            </svg>
+      <div className="min-h-screen bg-gray-100 flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mx-auto">
+              <svg className="w-8 h-8 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">{error}</h1>
+            <p className="text-sm text-gray-500">
+              This engagement letter link may have expired or already been used.
+            </p>
           </div>
-          <h1 className="text-xl font-black text-white">{error}</h1>
-          <p className="text-sm text-white/50">
-            This engagement letter link may have expired or already been used.
-          </p>
         </div>
       </div>
     );
   }
 
-  // Signed success state
+  // ─── Signed Success ──────────────────────────────
   if (signed) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6">
-        <div className="max-w-md w-full text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
-            <svg className="w-8 h-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-black text-white">Engagement Letter Signed</h1>
-          <p className="text-sm text-white/50">
-            Thank you, {data?.clientName}. Your signature has been recorded securely.
-          </p>
-          <div className="flex items-center justify-center gap-4 pt-4 text-[10px] text-white/30 uppercase tracking-widest font-bold">
-            <span>ESIGN Act Compliant</span>
-            <span>IP Recorded</span>
-            <span>Timestamped</span>
+      <div className="min-h-screen bg-gray-100 flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto">
+              <svg className="w-8 h-8 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">Engagement Letter Signed</h1>
+            <p className="text-sm text-gray-500">
+              Thank you, {data?.clientName}. Your signature has been recorded securely.
+            </p>
+            <div className="flex items-center justify-center gap-4 pt-4 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+              <span>ESIGN Act Compliant</span>
+              <span>&bull;</span>
+              <span>IP Recorded</span>
+              <span>&bull;</span>
+              <span>Timestamped</span>
+            </div>
           </div>
         </div>
+        <Footer />
       </div>
     );
   }
 
-  // Declined state
+  // ─── Declined ────────────────────────────────────
   if (declined) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6">
-        <div className="max-w-md w-full text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center mx-auto">
-            <svg className="w-8 h-8 text-yellow-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
+      <div className="min-h-screen bg-gray-100 flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto">
+              <svg className="w-8 h-8 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">Engagement Declined</h1>
+            <p className="text-sm text-gray-500">
+              You have declined this engagement letter. The sender has been notified.
+            </p>
           </div>
-          <h1 className="text-xl font-black text-white">Engagement Declined</h1>
-          <p className="text-sm text-white/50">
-            You have declined this engagement letter. The sender has been notified.
-          </p>
         </div>
+        <Footer />
       </div>
     );
   }
 
-  // Main signing UI
+  // ─── Main DocuSign-Style UI ──────────────────────
   return (
-    <div className="min-h-screen bg-[#0a0a0f]">
-      {/* Top bar */}
-      <header className="border-b border-white/10 px-6 py-4">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      <Header />
+
+      {/* Yellow action banner */}
+      <div className="bg-[#FFF4CC] border-b border-[#F5E6A3]">
+        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className="px-3 py-1.5 rounded-lg"
-              style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+            <svg className="w-5 h-5 text-[#B8860B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 20h9" />
+              <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+            </svg>
+            <span className="text-sm font-semibold text-[#7A5C00]">
+              Please review this document and sign below
+            </span>
+          </div>
+          {step === 1 && (
+            <button
+              onClick={handleStart}
+              className="px-5 py-2 rounded-md text-sm font-bold text-white bg-[#D4A017] hover:bg-[#C4920F] transition-colors shadow-sm"
             >
-              <span className="text-white text-sm font-extrabold tracking-wider">
-                NEXLI
-              </span>
-            </div>
-            <span className="text-sm text-white/40">Engagement Letter</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
-              Secure
-            </span>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto p-6 space-y-6">
-        {/* Engagement letter info */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-          <h1 className="text-xl font-black text-white mb-2">
-            {data?.subject}
-          </h1>
-          <p className="text-sm text-white/60 mb-6">
-            Hi {data?.clientName}, please review the engagement letter below and sign to confirm your agreement.
-          </p>
-
-          {/* Letter content */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6">
-            <pre className="whitespace-pre-wrap text-sm text-white/80 leading-relaxed font-sans">
-              {data?.content}
-            </pre>
-          </div>
-        </div>
-
-        {/* Legal disclosure */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
-          <h2 className="text-sm font-bold text-white">
-            Electronic Signature Disclosure
-          </h2>
-          <p className="text-xs text-white/50 leading-relaxed">
-            By signing this engagement letter electronically, you agree that your electronic signature
-            is the legal equivalent of your handwritten signature. This transaction is governed
-            by the Electronic Signatures in Global and National Commerce Act (ESIGN Act, 15
-            U.S.C. &sect; 7001 et seq.) and the Uniform Electronic Transactions Act (UETA).
-            Your signature, IP address, and timestamp will be recorded as part of the signing
-            record.
-          </p>
-
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              className="mt-0.5 w-5 h-5 rounded accent-blue-500"
-            />
-            <span className="text-sm text-white/80 group-hover:text-white transition-colors">
-              I have read the engagement letter above and agree to use electronic signatures.
-            </span>
-          </label>
-        </div>
-
-        {/* Signature pad */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white">Draw Your Signature</h2>
-            {hasDrawn && (
-              <button
-                onClick={clearSignature}
-                className="text-xs text-red-400 hover:text-red-300 font-bold transition-colors"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          <div className="rounded-xl border-2 border-dashed border-white/20 bg-white overflow-hidden">
-            <canvas
-              ref={canvasRef}
-              width={600}
-              height={200}
-              className="w-full cursor-crosshair touch-none"
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-              onTouchStart={startDrawing}
-              onTouchMove={draw}
-              onTouchEnd={stopDrawing}
-            />
-          </div>
-          {!hasDrawn && (
-            <p className="text-[10px] text-white/30 text-center">
-              Use your mouse or finger to draw your signature above
-            </p>
+              Start
+            </button>
           )}
+        </div>
+      </div>
 
-          {/* Typed name verification */}
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5 text-white/40">
-              Type your full name to confirm
-            </label>
-            <input
-              type="text"
-              value={typedName}
-              onChange={(e) => setTypedName(e.target.value)}
-              placeholder={data?.clientName || "Full name"}
-              className="w-full px-4 py-3 rounded-xl border border-white/10 bg-transparent text-white text-sm outline-none focus:border-blue-500 transition-colors"
-            />
+      {/* Step Progress */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-3">
+          <div className="flex items-center gap-2 text-xs">
+            <StepBadge num={1} label="Review" active={step >= 1} current={step === 1} />
+            <div className="w-8 h-px bg-gray-300" />
+            <StepBadge num={2} label="Sign" active={step >= 2} current={step === 2} />
+            <div className="w-8 h-px bg-gray-300" />
+            <StepBadge num={3} label="Complete" active={step >= 3} current={step === 3} />
           </div>
         </div>
+      </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSign}
-            disabled={!canSign || signing}
-            className="flex-1 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all"
-            style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-          >
-            {signing ? "Signing..." : "Sign Engagement Letter"}
-          </button>
-          <button
-            onClick={() => setShowDeclineModal(true)}
-            className="px-6 py-3.5 rounded-xl text-sm font-bold text-white/50 border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all"
-          >
-            Decline
-          </button>
-        </div>
+      {/* Main Content */}
+      <main className="flex-1 py-8">
+        <div className="max-w-4xl mx-auto px-6 space-y-6">
 
-        {/* Security badges */}
-        <div className="flex items-center justify-center gap-6 py-4">
-          {["ESIGN Act Compliant", "IP Recorded", "Timestamp Verified"].map(
-            (badge) => (
-              <div key={badge} className="flex items-center gap-1.5">
-                <svg className="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
-                <span className="text-[9px] text-white/30 font-bold uppercase tracking-widest">
-                  {badge}
-                </span>
+          {/* ═══ THE DOCUMENT ═══ */}
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+
+            {/* Document Letterhead */}
+            <div className="px-10 pt-8 pb-6 bg-[#0a0a0f] rounded-t-lg">
+              <div className="flex items-start justify-between">
+                <img
+                  src="/logos/nexli-logo-white-wordmark@2x.png"
+                  alt="Nexli"
+                  className="h-8"
+                />
+                <div className="text-right text-xs text-gray-400">
+                  <p>{today}</p>
+                  <p className="mt-1">Engagement Letter</p>
+                </div>
               </div>
-            )
+            </div>
+
+            {/* Recipient Info */}
+            <div className="px-10 py-5 bg-gray-50 border-b border-gray-100">
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <p className="text-gray-400 uppercase tracking-widest font-bold text-[10px] mb-1">Prepared For</p>
+                  <p className="text-gray-900 font-semibold">{data?.clientName}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 uppercase tracking-widest font-bold text-[10px] mb-1">Subject</p>
+                  <p className="text-gray-900 font-semibold">{data?.subject}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Letter Body */}
+            <div className="px-10 py-8">
+              <pre className="whitespace-pre-wrap text-sm text-gray-700 leading-7 font-sans">
+                {data?.content}
+              </pre>
+            </div>
+
+            {/* Signature Block (in document) */}
+            <div className="px-10 pb-10" ref={signSectionRef}>
+              {step >= 2 ? (
+                <div className="border-2 border-[#D4A017] rounded-lg overflow-hidden">
+                  {/* Yellow Sign Here tab */}
+                  <div className="bg-[#D4A017] px-4 py-2 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 20h9" />
+                      <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                    </svg>
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">Sign Here</span>
+                    {hasDrawn && (
+                      <button
+                        onClick={clearSignature}
+                        className="ml-auto text-xs text-white/80 hover:text-white font-semibold transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {/* Canvas */}
+                  <div className="bg-white">
+                    <canvas
+                      ref={canvasRef}
+                      width={600}
+                      height={180}
+                      className="w-full cursor-crosshair touch-none"
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                    />
+                  </div>
+                  {!hasDrawn && (
+                    <div className="bg-[#FFFDF0] px-4 py-2 flex items-center gap-2 border-t border-[#F5E6A3]">
+                      <svg className="w-3.5 h-3.5 text-[#B8860B] animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="m5 12 7 7 7-7" />
+                      </svg>
+                      <span className="text-xs text-[#7A5C00]">Draw your signature above using your mouse or finger</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Preview signature placeholder before step 2 */
+                <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
+                  <div className="flex items-center justify-center gap-2 text-gray-400">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 20h9" />
+                      <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                    </svg>
+                    <span className="text-sm font-medium">Signature Required</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Click &ldquo;Start&rdquo; above to begin signing</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ═══ SIGN ACTIONS (below document) ═══ */}
+          {step >= 2 && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-5">
+              {/* Typed name */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
+                  Type your full name to confirm
+                </label>
+                <input
+                  type="text"
+                  value={typedName}
+                  onChange={(e) => setTypedName(e.target.value)}
+                  placeholder={data?.clientName || "Full name"}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                />
+              </div>
+
+              {/* Agreement */}
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  className="mt-0.5 w-5 h-5 rounded border-gray-300 accent-blue-600"
+                />
+                <span className="text-xs text-gray-600 leading-relaxed group-hover:text-gray-900 transition-colors">
+                  I have read the engagement letter above and agree to sign electronically.
+                  By signing, I acknowledge that my electronic signature is the legal equivalent
+                  of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
+                  My signature, IP address, and timestamp will be recorded.
+                </span>
+              </label>
+
+              {/* Buttons */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleSign}
+                  disabled={!canSign || signing}
+                  className="flex-1 py-3.5 rounded-lg text-sm font-bold text-white disabled:opacity-40 transition-all shadow-sm"
+                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                >
+                  {signing ? "Signing..." : "Finish"}
+                </button>
+                <button
+                  onClick={() => setShowDeclineModal(true)}
+                  className="px-5 py-3.5 rounded-lg text-sm font-medium text-gray-500 border border-gray-300 hover:border-red-300 hover:text-red-500 transition-all"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
           )}
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-[10px] text-white/20">
-          Powered by Nexli Portal &bull; Digital Rainmaker System
-        </p>
       </main>
 
-      {/* Decline modal */}
+      <Footer />
+
+      {/* ═══ Decline Modal ═══ */}
       {showDeclineModal && (
         <>
-          <div
-            className="fixed inset-0 bg-black/60 z-40"
-            onClick={() => setShowDeclineModal(false)}
-          />
-          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 rounded-2xl border border-white/10 bg-[#0a0a0f] p-6 space-y-4">
-            <h2 className="text-lg font-bold text-white">Decline Engagement</h2>
-            <p className="text-sm text-white/50">
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowDeclineModal(false)} />
+          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 bg-white rounded-lg shadow-xl border border-gray-200 p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Decline Engagement</h2>
+            <p className="text-sm text-gray-500">
               Are you sure? The sender will be notified that you declined.
             </p>
             <textarea
@@ -415,18 +478,18 @@ export function EngageClient({ token }: { token: string }) {
               onChange={(e) => setDeclineReason(e.target.value)}
               placeholder="Reason (optional)"
               rows={3}
-              className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-transparent text-white text-sm outline-none focus:border-red-500 resize-none transition-colors"
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-gray-900 text-sm outline-none focus:border-red-500 resize-none transition-colors"
             />
             <div className="flex gap-3">
               <button
                 onClick={handleDecline}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500/20 border border-red-500/30 hover:bg-red-500/30 transition-colors"
+                className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-colors"
               >
                 Confirm Decline
               </button>
               <button
                 onClick={() => setShowDeclineModal(false)}
-                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white/50 border border-white/10 hover:border-white/20 transition-colors"
+                className="px-6 py-2.5 rounded-lg text-sm font-medium text-gray-500 border border-gray-300 hover:border-gray-400 transition-colors"
               >
                 Cancel
               </button>
@@ -434,6 +497,81 @@ export function EngageClient({ token }: { token: string }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Shared Components ─────────────────────────────
+
+function Header() {
+  return (
+    <header className="bg-[#0a0a0f] px-6 py-4">
+      <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <img
+          src="/logos/nexli-logo-white-wordmark@2x.png"
+          alt="Nexli"
+          className="h-7"
+        />
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span className="text-xs text-emerald-400 font-semibold">Secure</span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="bg-[#0a0a0f] px-6 py-4 mt-auto">
+      <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <img
+            src="/logos/nexli-logo-white-wordmark@2x.png"
+            alt="Nexli"
+            className="h-4 opacity-40"
+          />
+          <span className="text-[10px] text-gray-500">&bull; Digital Rainmaker System</span>
+        </div>
+        <div className="flex items-center gap-4">
+          {["ESIGN Act Compliant", "IP Recorded", "Timestamp Verified"].map((badge) => (
+            <div key={badge} className="flex items-center gap-1">
+              <svg className="w-3 h-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider">{badge}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function StepBadge({ num, label, active, current }: { num: number; label: string; active: boolean; current: boolean }) {
+  return (
+    <div className={`flex items-center gap-1.5 ${current ? "text-blue-600" : active ? "text-emerald-600" : "text-gray-400"}`}>
+      <div
+        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+          current
+            ? "bg-blue-600 text-white"
+            : active
+            ? "bg-emerald-100 text-emerald-600 border border-emerald-300"
+            : "bg-gray-100 text-gray-400 border border-gray-300"
+        }`}
+      >
+        {active && !current ? (
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        ) : (
+          num
+        )}
+      </div>
+      <span className="font-semibold">{label}</span>
     </div>
   );
 }

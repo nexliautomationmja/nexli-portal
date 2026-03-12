@@ -25,7 +25,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <NexliLogo iconSize="w-10 h-10" textSize="text-2xl" />
+          <NexliLogo size="lg" />
           <p
             className="mt-3 text-sm"
             style={{ color: "var(--text-muted)" }}

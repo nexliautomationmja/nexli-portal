@@ -246,18 +246,18 @@ export function EsignClient({ token }: { token: string }) {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className="px-3 py-1.5 rounded-lg"
-              style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-            >
-              <span className="text-white text-sm font-extrabold tracking-wider">
-                NEXLI
-              </span>
-            </div>
+            <img
+              src="/logos/nexli-logo-allwhite@2x.png"
+              alt="Nexli"
+              className="h-6"
+            />
             <span className="text-sm text-white/40">Secure Document Signing</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
             <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
               Secure
             </span>
@@ -420,9 +420,10 @@ export function EsignClient({ token }: { token: string }) {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-[10px] text-white/20">
-          Powered by Nexli Portal &bull; Digital Rainmaker System
-        </p>
+        <div className="flex items-center justify-center gap-2 py-2">
+          <img src="/logos/nexli-logo-allwhite@2x.png" alt="Nexli" className="h-3 opacity-30" />
+          <span className="text-[10px] text-white/20">&bull; Digital Rainmaker System</span>
+        </div>
       </main>
 
       {/* Decline modal */}
