@@ -20,7 +20,7 @@ export function NexliLogo({ size = "md" }: NexliLogoProps) {
       />
       {/* Light mode */}
       <img
-        src="/logos/nexli-logo-gradient-wordmark@2x.png"
+        src="/logos/nexli-logo-dark-wordmark@2x.png"
         alt="Nexli"
         className={`${h} w-auto logo-icon-light`}
       />

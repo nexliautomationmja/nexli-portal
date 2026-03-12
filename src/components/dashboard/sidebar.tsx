@@ -110,13 +110,13 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
         <Link href="/dashboard" className="flex items-center no-underline shrink-0">
           {collapsed ? (
             <img
-              src={theme === "dark" ? "/logos/nexli-logo-white-wordmark@2x.png" : "/logos/nexli-logo-gradient-wordmark@2x.png"}
+              src={theme === "dark" ? "/logos/nexli-logo-white-wordmark@2x.png" : "/logos/nexli-logo-dark-wordmark@2x.png"}
               alt="Nexli"
               className="h-6 w-auto shrink-0"
             />
           ) : (
             <img
-              src={theme === "dark" ? "/logos/nexli-logo-white-wordmark@2x.png" : "/logos/nexli-logo-gradient-wordmark@2x.png"}
+              src={theme === "dark" ? "/logos/nexli-logo-white-wordmark@2x.png" : "/logos/nexli-logo-dark-wordmark@2x.png"}
               alt="Nexli"
               className="h-7 w-auto shrink-0"
             />
