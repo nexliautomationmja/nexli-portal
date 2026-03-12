@@ -54,6 +54,8 @@ export async function GET(
       taxRate: invoice.taxRate,
       taxAmount: invoice.taxAmount,
       total: invoice.total,
+      amountPaid: invoice.amountPaid,
+      balanceDue: invoice.balanceDue,
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
       notes: invoice.notes,

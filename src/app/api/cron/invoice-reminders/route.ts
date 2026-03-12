@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { invoices, invoiceReminders, users } from "@/db/schema";
-import { eq, and, lte, isNull, inArray } from "drizzle-orm";
+import { invoices, invoiceReminders, invoiceLineItems, users } from "@/db/schema";
+import { eq, and, lte, isNull, inArray, not } from "drizzle-orm";
 import {
   sendEmail,
   buildInvoiceReminderEmail,
 } from "@/lib/email";
-import { formatCurrency } from "@/lib/invoice-utils";
+import {
+  formatCurrency,
+  generateInvoiceNumber,
+  generateInvoiceToken,
+} from "@/lib/invoice-utils";
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -17,6 +21,7 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   let overdueCount = 0;
   let reminderCount = 0;
+  let recurredCount = 0;
 
   // 1. Mark overdue invoices
   try {
@@ -106,9 +111,140 @@ export async function GET(req: NextRequest) {
     console.error("Failed to process invoice reminders:", err);
   }
 
+  // 3. Generate invoices from recurring templates
+  try {
+    const recurringTemplates = await db
+      .select()
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.isRecurring, true),
+          lte(invoices.nextRecurrenceDate, now),
+          not(inArray(invoices.status, ["canceled", "void"]))
+        )
+      );
+
+    for (const template of recurringTemplates) {
+      try {
+        const newInvoiceNumber = await generateInvoiceNumber();
+        const newToken = generateInvoiceToken();
+
+        // Calculate due date based on recurring interval
+        const dueDate = new Date(now);
+        switch (template.recurringInterval) {
+          case "weekly":
+            dueDate.setDate(dueDate.getDate() + 7);
+            break;
+          case "biweekly":
+            dueDate.setDate(dueDate.getDate() + 14);
+            break;
+          case "monthly":
+            dueDate.setMonth(dueDate.getMonth() + 1);
+            break;
+          case "quarterly":
+            dueDate.setMonth(dueDate.getMonth() + 3);
+            break;
+          case "yearly":
+            dueDate.setFullYear(dueDate.getFullYear() + 1);
+            break;
+        }
+
+        // Create the new invoice
+        const [newInvoice] = await db
+          .insert(invoices)
+          .values({
+            ownerId: template.ownerId,
+            clientName: template.clientName,
+            clientEmail: template.clientEmail,
+            clientPhone: template.clientPhone,
+            clientCompany: template.clientCompany,
+            invoiceNumber: newInvoiceNumber,
+            token: newToken,
+            status: "draft",
+            currency: template.currency,
+            subtotal: template.subtotal,
+            taxRate: template.taxRate,
+            taxAmount: template.taxAmount,
+            total: template.total,
+            issueDate: now,
+            dueDate,
+            notes: template.notes,
+            terms: template.terms,
+            reminderConfig: template.reminderConfig,
+            amountPaid: 0,
+            balanceDue: template.total,
+            recurringParentId: template.id,
+          })
+          .returning({ id: invoices.id });
+
+        // Copy line items from the parent invoice
+        const parentLineItems = await db
+          .select()
+          .from(invoiceLineItems)
+          .where(eq(invoiceLineItems.invoiceId, template.id));
+
+        if (parentLineItems.length > 0) {
+          await db.insert(invoiceLineItems).values(
+            parentLineItems.map((item) => ({
+              invoiceId: newInvoice.id,
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              amount: item.amount,
+              order: item.order,
+            }))
+          );
+        }
+
+        // Calculate the next recurrence date for the parent template
+        const nextDate = new Date(template.nextRecurrenceDate!);
+        switch (template.recurringInterval) {
+          case "weekly":
+            nextDate.setDate(nextDate.getDate() + 7);
+            break;
+          case "biweekly":
+            nextDate.setDate(nextDate.getDate() + 14);
+            break;
+          case "monthly":
+            nextDate.setMonth(nextDate.getMonth() + 1);
+            break;
+          case "quarterly":
+            nextDate.setMonth(nextDate.getMonth() + 3);
+            break;
+          case "yearly":
+            nextDate.setFullYear(nextDate.getFullYear() + 1);
+            break;
+        }
+
+        // If next recurrence exceeds end date, stop recurring
+        const shouldStopRecurring =
+          template.recurringEndDate && nextDate > template.recurringEndDate;
+
+        await db
+          .update(invoices)
+          .set({
+            nextRecurrenceDate: shouldStopRecurring ? null : nextDate,
+            isRecurring: !shouldStopRecurring,
+            updatedAt: now,
+          })
+          .where(eq(invoices.id, template.id));
+
+        recurredCount++;
+      } catch (err) {
+        console.error(
+          `Failed to generate recurring invoice from template ${template.id}:`,
+          err
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Failed to process recurring invoices:", err);
+  }
+
   return NextResponse.json({
     ok: true,
     overdueMarked: overdueCount,
     remindersSent: reminderCount,
+    recurringGenerated: recurredCount,
   });
 }

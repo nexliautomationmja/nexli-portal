@@ -10,6 +10,9 @@ import {
   TrashIcon,
   SendIcon,
   CopyIcon,
+  DownloadIcon,
+  ClockIcon,
+  UsersIcon,
 } from "@/components/ui/icons";
 
 interface LineItem {
@@ -33,6 +36,10 @@ interface Invoice {
   taxRate: number | null;
   taxAmount: number | null;
   total: number;
+  amountPaid: number;
+  balanceDue: number;
+  isRecurring: boolean;
+  recurringInterval: string | null;
   issueDate: string;
   dueDate: string;
   notes: string | null;
@@ -46,6 +53,19 @@ interface Invoice {
   reminderConfig: { schedule: { dayOffset: number }[] } | null;
   createdAt: string;
   lineItems: LineItem[];
+}
+
+interface ClientHistory {
+  clientEmail: string;
+  clientName: string;
+  clientCompany: string;
+  invoices: Invoice[];
+  summary: {
+    totalInvoices: number;
+    totalInvoiced: number;
+    totalPaid: number;
+    totalOutstanding: number;
+  };
 }
 
 const statusConfig: Record<
@@ -63,6 +83,11 @@ const statusConfig: Record<
     label: "Paid",
     color: "text-emerald-500",
     bg: "bg-emerald-500/10",
+  },
+  partial: {
+    label: "Partial",
+    color: "text-orange-500",
+    bg: "bg-orange-500/10",
   },
   overdue: { label: "Overdue", color: "text-red-500", bg: "bg-red-500/10" },
   canceled: {
@@ -111,11 +136,23 @@ const REMINDER_OPTIONS = [
   { dayOffset: 7, label: "7 days after due" },
 ];
 
+const RECURRING_OPTIONS = [
+  { value: "", label: "One-time (no recurrence)" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Every 2 Weeks" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "yearly", label: "Yearly" },
+];
+
 export function InvoicesClient() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCompose, setShowCompose] = useState(false);
   const [showDetail, setShowDetail] = useState<Invoice | null>(null);
+  const [showBatch, setShowBatch] = useState(false);
+  const [showHistory, setShowHistory] = useState<ClientHistory | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Compose form
   const [clientName, setClientName] = useState("");
@@ -131,7 +168,23 @@ export function InvoicesClient() {
   const [terms, setTerms] = useState("");
   const [currency, setCurrency] = useState("usd");
   const [selectedReminders, setSelectedReminders] = useState<number[]>([]);
+  const [recurringInterval, setRecurringInterval] = useState("");
+  const [recurringEndDate, setRecurringEndDate] = useState("");
   const [sending, setSending] = useState(false);
+
+  // Batch form
+  const [batchClients, setBatchClients] = useState([
+    { clientName: "", clientEmail: "", clientPhone: "", clientCompany: "" },
+  ]);
+  const [batchLineItems, setBatchLineItems] = useState([
+    { description: "", quantity: 1, unitPrice: 0 },
+  ]);
+  const [batchTaxRate, setBatchTaxRate] = useState(0);
+  const [batchDueDate, setBatchDueDate] = useState("");
+  const [batchNotes, setBatchNotes] = useState("");
+  const [batchTerms, setBatchTerms] = useState("");
+  const [batchCurrency, setBatchCurrency] = useState("usd");
+  const [batchSending, setBatchSending] = useState(false);
 
   useEffect(() => {
     fetch("/api/dashboard/invoices")
@@ -191,7 +244,6 @@ export function InvoicesClient() {
     if (!formValid) return;
     setSending(true);
     try {
-      // Create the invoice
       const res = await fetch("/api/dashboard/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -205,11 +257,14 @@ export function InvoicesClient() {
             quantity: li.quantity,
             unitPrice: li.unitPrice,
           })),
-          taxRate: Math.round(taxRate * 100), // convert percentage to basis points
+          taxRate: Math.round(taxRate * 100),
           dueDate,
           notes: notes.trim() || undefined,
           terms: terms.trim() || undefined,
           currency,
+          isRecurring: !!recurringInterval,
+          recurringInterval: recurringInterval || undefined,
+          recurringEndDate: recurringEndDate || undefined,
           reminderConfig:
             selectedReminders.length > 0
               ? {
@@ -223,13 +278,11 @@ export function InvoicesClient() {
       const data = await res.json();
 
       if (data.invoice && sendImmediately) {
-        // Send the invoice immediately
         await fetch(`/api/dashboard/invoices/${data.invoice.id}/send`, {
           method: "POST",
         });
       }
 
-      // Refresh list
       const refreshRes = await fetch("/api/dashboard/invoices");
       const refreshData = await refreshRes.json();
       setInvoices(refreshData.invoices || []);
@@ -268,6 +321,123 @@ export function InvoicesClient() {
     setShowDetail(null);
   }
 
+  async function handleDownloadPDF(inv: Invoice) {
+    const { generateInvoicePDF } = await import("@/lib/invoice-pdf");
+    generateInvoicePDF({
+      invoiceNumber: inv.invoiceNumber,
+      status: inv.status,
+      currency: inv.currency,
+      issueDate: inv.issueDate,
+      dueDate: inv.dueDate,
+      clientName: inv.clientName,
+      clientEmail: inv.clientEmail,
+      clientCompany: inv.clientCompany,
+      fromName: "",
+      fromCompany: "",
+      lineItems: inv.lineItems,
+      subtotal: inv.subtotal,
+      taxRate: inv.taxRate ?? 0,
+      taxAmount: inv.taxAmount ?? 0,
+      total: inv.total,
+      amountPaid: inv.amountPaid ?? 0,
+      balanceDue: inv.balanceDue ?? inv.total,
+      notes: inv.notes,
+      terms: inv.terms,
+    });
+  }
+
+  async function handleViewClientHistory(email: string) {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(
+        `/api/dashboard/invoices/client-history?email=${encodeURIComponent(email)}`
+      );
+      const data = await res.json();
+      setShowHistory(data);
+    } catch {
+      // Silently fail
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  // ── Batch invoicing ──
+  function addBatchClient() {
+    setBatchClients((prev) => [
+      ...prev,
+      { clientName: "", clientEmail: "", clientPhone: "", clientCompany: "" },
+    ]);
+  }
+
+  function removeBatchClient(index: number) {
+    if (batchClients.length <= 1) return;
+    setBatchClients((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateBatchClient(
+    index: number,
+    field: string,
+    value: string
+  ) {
+    setBatchClients((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
+    );
+  }
+
+  function getBatchSubtotal() {
+    return batchLineItems.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0
+    );
+  }
+
+  function getBatchTotal() {
+    return getBatchSubtotal() + (getBatchSubtotal() * batchTaxRate) / 100;
+  }
+
+  const batchFormValid =
+    batchClients.every((c) => c.clientName.trim() && c.clientEmail.trim()) &&
+    batchDueDate &&
+    batchLineItems.every((li) => li.description.trim() && li.unitPrice > 0);
+
+  async function handleBatchCreate(sendImmediately: boolean) {
+    if (!batchFormValid) return;
+    setBatchSending(true);
+    try {
+      await fetch("/api/dashboard/invoices/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clients: batchClients.map((c) => ({
+            clientName: c.clientName.trim(),
+            clientEmail: c.clientEmail.trim(),
+            clientPhone: c.clientPhone.trim() || undefined,
+            clientCompany: c.clientCompany.trim() || undefined,
+          })),
+          lineItems: batchLineItems.map((li) => ({
+            description: li.description.trim(),
+            quantity: li.quantity,
+            unitPrice: li.unitPrice,
+          })),
+          taxRate: Math.round(batchTaxRate * 100),
+          dueDate: batchDueDate,
+          notes: batchNotes.trim() || undefined,
+          terms: batchTerms.trim() || undefined,
+          currency: batchCurrency,
+          sendImmediately,
+        }),
+      });
+
+      const refreshRes = await fetch("/api/dashboard/invoices");
+      const refreshData = await refreshRes.json();
+      setInvoices(refreshData.invoices || []);
+      resetBatchForm();
+      setShowBatch(false);
+    } finally {
+      setBatchSending(false);
+    }
+  }
+
   function resetForm() {
     setClientName("");
     setClientEmail("");
@@ -280,6 +450,20 @@ export function InvoicesClient() {
     setTerms("");
     setCurrency("usd");
     setSelectedReminders([]);
+    setRecurringInterval("");
+    setRecurringEndDate("");
+  }
+
+  function resetBatchForm() {
+    setBatchClients([
+      { clientName: "", clientEmail: "", clientPhone: "", clientCompany: "" },
+    ]);
+    setBatchLineItems([{ description: "", quantity: 1, unitPrice: 0 }]);
+    setBatchTaxRate(0);
+    setBatchDueDate("");
+    setBatchNotes("");
+    setBatchTerms("");
+    setBatchCurrency("usd");
   }
 
   function toggleReminder(dayOffset: number) {
@@ -301,7 +485,7 @@ export function InvoicesClient() {
   const stats = {
     total: invoices.length,
     outstanding: invoices.filter((i) =>
-      ["sent", "viewed", "overdue"].includes(i.status)
+      ["sent", "viewed", "overdue", "partial"].includes(i.status)
     ).length,
     paid: invoices.filter((i) => i.status === "paid").length,
     overdue: invoices.filter((i) => i.status === "overdue").length,
@@ -325,16 +509,29 @@ export function InvoicesClient() {
             Create and manage client invoices with online payments.
           </p>
         </div>
-        <button
-          onClick={() => setShowCompose(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
-          style={{
-            background: "linear-gradient(135deg, #2563EB, #06B6D4)",
-          }}
-        >
-          <PlusIcon className="w-4 h-4" />
-          New Invoice
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowBatch(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--input-bg)]"
+            style={{
+              borderColor: "var(--card-border)",
+              color: "var(--text-main)",
+            }}
+          >
+            <UsersIcon className="w-4 h-4" />
+            Batch Invoice
+          </button>
+          <button
+            onClick={() => setShowCompose(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
+            style={{
+              background: "linear-gradient(135deg, #2563EB, #06B6D4)",
+            }}
+          >
+            <PlusIcon className="w-4 h-4" />
+            New Invoice
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -399,6 +596,7 @@ export function InvoicesClient() {
                     "Client",
                     "Invoice #",
                     "Amount",
+                    "Paid",
                     "Status",
                     "Due Date",
                     "Actions",
@@ -424,18 +622,27 @@ export function InvoicesClient() {
                       onClick={() => setShowDetail(inv)}
                     >
                       <td className="px-4 py-3">
-                        <p
-                          className="text-sm font-medium"
-                          style={{ color: "var(--text-main)" }}
-                        >
-                          {inv.clientName}
-                        </p>
-                        <p
-                          className="text-xs"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {inv.clientEmail}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p
+                              className="text-sm font-medium"
+                              style={{ color: "var(--text-main)" }}
+                            >
+                              {inv.clientName}
+                            </p>
+                            <p
+                              className="text-xs"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              {inv.clientEmail}
+                            </p>
+                          </div>
+                          {inv.isRecurring && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-purple-500" title="Recurring">
+                              REC
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td
                         className="px-4 py-3 text-sm"
@@ -448,6 +655,14 @@ export function InvoicesClient() {
                         style={{ color: "var(--text-main)" }}
                       >
                         {formatCurrency(inv.total, inv.currency)}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-sm"
+                        style={{ color: inv.amountPaid > 0 ? "#10B981" : "var(--text-muted)" }}
+                      >
+                        {inv.amountPaid > 0
+                          ? formatCurrency(inv.amountPaid, inv.currency)
+                          : "\u2014"}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -474,6 +689,26 @@ export function InvoicesClient() {
                           >
                             <EyeIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                           </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadPDF(inv);
+                            }}
+                            className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+                            title="Download PDF"
+                          >
+                            <DownloadIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewClientHistory(inv.clientEmail);
+                            }}
+                            className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+                            title="Client History"
+                          >
+                            <ClockIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                          </button>
                           {inv.status === "draft" && (
                             <button
                               onClick={(e) => {
@@ -486,7 +721,7 @@ export function InvoicesClient() {
                               <SendIcon className="w-3.5 h-3.5 text-blue-400" />
                             </button>
                           )}
-                          {["sent", "viewed", "overdue"].includes(
+                          {["sent", "viewed", "overdue", "partial"].includes(
                             inv.status
                           ) && (
                             <button
@@ -627,7 +862,6 @@ export function InvoicesClient() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {/* Header row */}
                   <div className="grid grid-cols-12 gap-2 px-1">
                     <span
                       className="col-span-5 text-[10px] font-bold uppercase tracking-widest"
@@ -826,6 +1060,54 @@ export function InvoicesClient() {
                 </div>
               </div>
 
+              {/* Recurring Schedule */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    className="text-xs font-medium block mb-1.5"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Recurring Schedule
+                  </label>
+                  <select
+                    value={recurringInterval}
+                    onChange={(e) => setRecurringInterval(e.target.value)}
+                    className={inputClass}
+                    style={inputStyle}
+                  >
+                    {RECURRING_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {recurringInterval && (
+                  <div>
+                    <label
+                      className="text-xs font-medium block mb-1.5"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      End Recurrence (optional)
+                    </label>
+                    <input
+                      type="date"
+                      value={recurringEndDate}
+                      onChange={(e) => setRecurringEndDate(e.target.value)}
+                      min={dueDate || new Date().toISOString().split("T")[0]}
+                      className={inputClass}
+                      style={inputStyle}
+                    />
+                    <p
+                      className="text-[10px] mt-1"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Leave empty for indefinite recurrence.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Notes + Terms */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -961,6 +1243,11 @@ export function InvoicesClient() {
                   {(statusConfig[showDetail.status] || statusConfig.draft)
                     .label}
                 </span>
+                {showDetail.isRecurring && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-purple-500">
+                    RECURRING {showDetail.recurringInterval?.toUpperCase()}
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => setShowDetail(null)}
@@ -1001,6 +1288,14 @@ export function InvoicesClient() {
                       {showDetail.clientCompany}
                     </p>
                   )}
+                  <button
+                    onClick={() =>
+                      handleViewClientHistory(showDetail.clientEmail)
+                    }
+                    className="mt-1 text-[10px] font-medium text-blue-500 hover:text-blue-400 transition-colors"
+                  >
+                    View all invoices for this client
+                  </button>
                 </div>
                 <div>
                   <p
@@ -1141,6 +1436,22 @@ export function InvoicesClient() {
                       )}
                     </span>
                   </div>
+                  {showDetail.amountPaid > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span style={{ color: "#10B981" }}>Amount Paid</span>
+                        <span style={{ color: "#10B981" }}>
+                          -{formatCurrency(showDetail.amountPaid, showDetail.currency)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between font-bold">
+                        <span style={{ color: "#2563EB" }}>Balance Due</span>
+                        <span style={{ color: "#2563EB" }}>
+                          {formatCurrency(showDetail.balanceDue, showDetail.currency)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1258,7 +1569,7 @@ export function InvoicesClient() {
                 >
                   Delete
                 </button>
-                {["sent", "viewed", "overdue"].includes(
+                {["sent", "viewed", "overdue", "partial"].includes(
                   showDetail.status
                 ) && (
                   <button
@@ -1270,6 +1581,17 @@ export function InvoicesClient() {
                 )}
               </div>
               <div className="flex gap-2">
+                <button
+                  onClick={() => handleDownloadPDF(showDetail)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors hover:bg-[var(--input-bg)]"
+                  style={{
+                    borderColor: "var(--card-border)",
+                    color: "var(--text-main)",
+                  }}
+                >
+                  <DownloadIcon className="w-3 h-3" />
+                  PDF
+                </button>
                 {showDetail.status !== "draft" && (
                   <button
                     onClick={() => copyPaymentLink(showDetail)}
@@ -1297,6 +1619,541 @@ export function InvoicesClient() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ═══ Client History Modal ═══ */}
+      {(showHistory || historyLoading) && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-40"
+            onClick={() => {
+              setShowHistory(null);
+              setHistoryLoading(false);
+            }}
+          />
+          <div
+            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            style={{
+              background: "var(--card-bg)",
+              borderColor: "var(--card-border)",
+            }}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[var(--card-border)]">
+              <h2
+                className="text-lg font-bold"
+                style={{ color: "var(--text-main)" }}
+              >
+                Client Payment History
+              </h2>
+              <button
+                onClick={() => {
+                  setShowHistory(null);
+                  setHistoryLoading(false);
+                }}
+                className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+              >
+                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {historyLoading ? (
+                <div className="p-12 text-center">
+                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                </div>
+              ) : showHistory ? (
+                <div className="space-y-4">
+                  {/* Client info */}
+                  <div>
+                    <p
+                      className="text-sm font-bold"
+                      style={{ color: "var(--text-main)" }}
+                    >
+                      {showHistory.clientName}
+                    </p>
+                    <p
+                      className="text-xs"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {showHistory.clientEmail}
+                      {showHistory.clientCompany
+                        ? ` \u00b7 ${showHistory.clientCompany}`
+                        : ""}
+                    </p>
+                  </div>
+
+                  {/* Summary stats */}
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      {
+                        label: "Invoices",
+                        value: showHistory.summary.totalInvoices,
+                        fmt: false,
+                      },
+                      {
+                        label: "Total Invoiced",
+                        value: showHistory.summary.totalInvoiced,
+                        fmt: true,
+                      },
+                      {
+                        label: "Total Paid",
+                        value: showHistory.summary.totalPaid,
+                        fmt: true,
+                      },
+                      {
+                        label: "Outstanding",
+                        value: showHistory.summary.totalOutstanding,
+                        fmt: true,
+                      },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        className="rounded-lg border p-3"
+                        style={{ borderColor: "var(--card-border)" }}
+                      >
+                        <p
+                          className="text-[10px] font-bold uppercase tracking-widest"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          {s.label}
+                        </p>
+                        <p
+                          className="text-base font-bold mt-1"
+                          style={{ color: "var(--text-main)" }}
+                        >
+                          {s.fmt
+                            ? formatCurrency(s.value as number, "usd")
+                            : s.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Invoice list */}
+                  <div className="rounded-lg border border-[var(--card-border)] overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[var(--card-border)]">
+                          {["Invoice #", "Amount", "Paid", "Status", "Date"].map(
+                            (h) => (
+                              <th
+                                key={h}
+                                className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest"
+                                style={{ color: "var(--text-muted)" }}
+                              >
+                                {h}
+                              </th>
+                            )
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {showHistory.invoices.map((inv) => {
+                          const sc =
+                            statusConfig[inv.status] || statusConfig.draft;
+                          return (
+                            <tr
+                              key={inv.id}
+                              className="border-b border-[var(--card-border)] last:border-0"
+                            >
+                              <td
+                                className="px-3 py-2"
+                                style={{ color: "var(--text-main)" }}
+                              >
+                                {inv.invoiceNumber}
+                              </td>
+                              <td
+                                className="px-3 py-2 font-semibold"
+                                style={{ color: "var(--text-main)" }}
+                              >
+                                {formatCurrency(inv.total, inv.currency)}
+                              </td>
+                              <td
+                                className="px-3 py-2"
+                                style={{
+                                  color:
+                                    inv.amountPaid > 0
+                                      ? "#10B981"
+                                      : "var(--text-muted)",
+                                }}
+                              >
+                                {inv.amountPaid > 0
+                                  ? formatCurrency(
+                                      inv.amountPaid,
+                                      inv.currency
+                                    )
+                                  : "\u2014"}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${sc.color} ${sc.bg}`}
+                                >
+                                  {sc.label}
+                                </span>
+                              </td>
+                              <td
+                                className="px-3 py-2 text-xs"
+                                style={{ color: "var(--text-muted)" }}
+                              >
+                                {formatDate(inv.createdAt)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ═══ Batch Invoice Modal ═══ */}
+      {showBatch && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-40"
+            onClick={() => setShowBatch(false)}
+          />
+          <div
+            className="fixed inset-x-4 top-[3%] bottom-[3%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            style={{
+              background: "var(--card-bg)",
+              borderColor: "var(--card-border)",
+            }}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[var(--card-border)]">
+              <h2
+                className="text-lg font-bold"
+                style={{ color: "var(--text-main)" }}
+              >
+                Batch Invoice
+              </h2>
+              <button
+                onClick={() => {
+                  setShowBatch(false);
+                  resetBatchForm();
+                }}
+                className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+              >
+                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Clients */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label
+                    className="text-xs font-medium"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Clients * ({batchClients.length})
+                  </label>
+                  <button
+                    onClick={addBatchClient}
+                    className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-400 transition-colors"
+                  >
+                    <PlusIcon className="w-3 h-3" />
+                    Add Client
+                  </button>
+                </div>
+                <ClientPicker
+                  onSelect={(c) => {
+                    const emptyIdx = batchClients.findIndex(
+                      (bc) => !bc.clientName && !bc.clientEmail
+                    );
+                    if (emptyIdx >= 0) {
+                      setBatchClients((prev) =>
+                        prev.map((bc, i) =>
+                          i === emptyIdx
+                            ? {
+                                clientName: c.name,
+                                clientEmail: c.email,
+                                clientPhone: c.phone || "",
+                                clientCompany: c.company || "",
+                              }
+                            : bc
+                        )
+                      );
+                    } else {
+                      setBatchClients((prev) => [
+                        ...prev,
+                        {
+                          clientName: c.name,
+                          clientEmail: c.email,
+                          clientPhone: c.phone || "",
+                          clientCompany: c.company || "",
+                        },
+                      ]);
+                    }
+                  }}
+                  placeholder="Search CRM to add clients..."
+                />
+                <div className="space-y-2">
+                  {batchClients.map((client, i) => (
+                    <div
+                      key={i}
+                      className="grid grid-cols-12 gap-2 items-center"
+                    >
+                      <input
+                        type="text"
+                        value={client.clientName}
+                        onChange={(e) =>
+                          updateBatchClient(i, "clientName", e.target.value)
+                        }
+                        placeholder="Client Name *"
+                        className={`col-span-5 ${inputClass}`}
+                        style={inputStyle}
+                      />
+                      <input
+                        type="email"
+                        value={client.clientEmail}
+                        onChange={(e) =>
+                          updateBatchClient(i, "clientEmail", e.target.value)
+                        }
+                        placeholder="Email *"
+                        className={`col-span-6 ${inputClass}`}
+                        style={inputStyle}
+                      />
+                      <div className="col-span-1 flex justify-center">
+                        {batchClients.length > 1 && (
+                          <button
+                            onClick={() => removeBatchClient(i)}
+                            className="p-1 rounded hover:bg-red-500/10 transition-colors"
+                          >
+                            <XIcon className="w-3 h-3 text-red-400" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Line items (shared) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label
+                    className="text-xs font-medium"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Line Items (same for all clients) *
+                  </label>
+                  <button
+                    onClick={() =>
+                      setBatchLineItems((prev) => [
+                        ...prev,
+                        { description: "", quantity: 1, unitPrice: 0 },
+                      ])
+                    }
+                    className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-400 transition-colors"
+                  >
+                    <PlusIcon className="w-3 h-3" />
+                    Add Item
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {batchLineItems.map((item, i) => (
+                    <div
+                      key={i}
+                      className="grid grid-cols-12 gap-2 items-center"
+                    >
+                      <input
+                        type="text"
+                        value={item.description}
+                        onChange={(e) =>
+                          setBatchLineItems((prev) =>
+                            prev.map((li, idx) =>
+                              idx === i
+                                ? { ...li, description: e.target.value }
+                                : li
+                            )
+                          )
+                        }
+                        placeholder="Description"
+                        className={`col-span-5 ${inputClass}`}
+                        style={inputStyle}
+                      />
+                      <input
+                        type="number"
+                        value={item.quantity || ""}
+                        onChange={(e) =>
+                          setBatchLineItems((prev) =>
+                            prev.map((li, idx) =>
+                              idx === i
+                                ? {
+                                    ...li,
+                                    quantity:
+                                      parseFloat(e.target.value) || 0,
+                                  }
+                                : li
+                            )
+                          )
+                        }
+                        placeholder="1"
+                        min="0.01"
+                        step="0.01"
+                        className={`col-span-2 ${inputClass}`}
+                        style={inputStyle}
+                      />
+                      <input
+                        type="number"
+                        value={item.unitPrice || ""}
+                        onChange={(e) =>
+                          setBatchLineItems((prev) =>
+                            prev.map((li, idx) =>
+                              idx === i
+                                ? {
+                                    ...li,
+                                    unitPrice:
+                                      parseFloat(e.target.value) || 0,
+                                  }
+                                : li
+                            )
+                          )
+                        }
+                        placeholder="0.00"
+                        min="0"
+                        step="0.01"
+                        className={`col-span-2 ${inputClass}`}
+                        style={inputStyle}
+                      />
+                      <p
+                        className="col-span-2 text-sm text-right font-medium"
+                        style={{ color: "var(--text-main)" }}
+                      >
+                        {formatCurrency(
+                          Math.round(item.quantity * item.unitPrice * 100),
+                          batchCurrency
+                        )}
+                      </p>
+                      <div className="col-span-1 flex justify-center">
+                        {batchLineItems.length > 1 && (
+                          <button
+                            onClick={() =>
+                              setBatchLineItems((prev) =>
+                                prev.filter((_, idx) => idx !== i)
+                              )
+                            }
+                            className="p-1 rounded hover:bg-red-500/10 transition-colors"
+                          >
+                            <XIcon className="w-3 h-3 text-red-400" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Batch totals */}
+                <div className="mt-3 pt-3 border-t border-[var(--card-border)] space-y-1">
+                  <div className="flex justify-between text-base font-bold">
+                    <span style={{ color: "var(--text-main)" }}>
+                      Per Client Total
+                    </span>
+                    <span style={{ color: "var(--text-main)" }}>
+                      {formatCurrency(
+                        Math.round(getBatchTotal() * 100),
+                        batchCurrency
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: "var(--text-muted)" }}>
+                      Total ({batchClients.length} clients)
+                    </span>
+                    <span
+                      className="font-semibold"
+                      style={{ color: "#2563EB" }}
+                    >
+                      {formatCurrency(
+                        Math.round(
+                          getBatchTotal() * 100 * batchClients.length
+                        ),
+                        batchCurrency
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Due Date + Currency */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    className="text-xs font-medium block mb-1.5"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Due Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={batchDueDate}
+                    onChange={(e) => setBatchDueDate(e.target.value)}
+                    min={new Date().toISOString().split("T")[0]}
+                    max={
+                      new Date(Date.now() + 365 * 86400000)
+                        .toISOString()
+                        .split("T")[0]
+                    }
+                    className={inputClass}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label
+                    className="text-xs font-medium block mb-1.5"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Currency
+                  </label>
+                  <select
+                    value={batchCurrency}
+                    onChange={(e) => setBatchCurrency(e.target.value)}
+                    className={inputClass}
+                    style={inputStyle}
+                  >
+                    <option value="usd">USD ($)</option>
+                    <option value="cad">CAD (CA$)</option>
+                    <option value="gbp">GBP (&pound;)</option>
+                    <option value="eur">EUR (&euro;)</option>
+                    <option value="aud">AUD (A$)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Batch footer */}
+            <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-end gap-3">
+              <button
+                onClick={() => handleBatchCreate(false)}
+                disabled={!batchFormValid || batchSending}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-40"
+                style={{
+                  borderColor: "var(--card-border)",
+                  color: "var(--text-main)",
+                }}
+              >
+                {batchSending ? "Creating..." : "Save All as Drafts"}
+              </button>
+              <button
+                onClick={() => handleBatchCreate(true)}
+                disabled={!batchFormValid || batchSending}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-40"
+                style={{
+                  background: "linear-gradient(135deg, #2563EB, #06B6D4)",
+                }}
+              >
+                {batchSending
+                  ? "Sending..."
+                  : `Send ${batchClients.length} Invoice${batchClients.length > 1 ? "s" : ""}`}
+              </button>
             </div>
           </div>
         </>

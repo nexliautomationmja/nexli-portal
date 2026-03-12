@@ -19,6 +19,8 @@ interface InvoiceData {
   taxRate: number;
   taxAmount: number;
   total: number;
+  amountPaid: number;
+  balanceDue: number;
   issueDate: string;
   dueDate: string;
   notes: string | null;
@@ -155,9 +157,11 @@ export function InvoiceClient({ token }: { token: string }) {
   if (!invoice) return null;
 
   const isPaid = invoice.status === "paid";
+  const isPartial = invoice.status === "partial";
   const isOverdue =
     invoice.status === "overdue" ||
-    (!isPaid && new Date(invoice.dueDate) < new Date());
+    (!isPaid && !isPartial && new Date(invoice.dueDate) < new Date());
+  const hasPartialPayment = (invoice.amountPaid ?? 0) > 0;
 
   // Paid success state
   if (isPaid) {
@@ -393,6 +397,20 @@ export function InvoiceClient({ token }: { token: string }) {
                     }}
                   >
                     OVERDUE
+                  </span>
+                ) : isPartial ? (
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "4px 12px",
+                      borderRadius: 20,
+                      background: "#FFF7ED",
+                      color: "#EA580C",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    PARTIALLY PAID
                   </span>
                 ) : (
                   <span
@@ -701,6 +719,40 @@ export function InvoiceClient({ token }: { token: string }) {
                   {formatCurrency(invoice.total, invoice.currency)}
                 </span>
               </div>
+              {hasPartialPayment && (
+                <>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      padding: "8px 0 4px",
+                    }}
+                  >
+                    <span style={{ color: "#10B981", fontSize: 14, fontWeight: 600 }}>
+                      Amount Paid
+                    </span>
+                    <span style={{ color: "#10B981", fontSize: 14, fontWeight: 600 }}>
+                      -{formatCurrency(invoice.amountPaid, invoice.currency)}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      padding: "8px 0 0",
+                      borderTop: "2px solid #111",
+                      marginTop: 4,
+                    }}
+                  >
+                    <span style={{ color: "#111", fontSize: 18, fontWeight: 800 }}>
+                      Balance Due
+                    </span>
+                    <span style={{ color: "#DC2626", fontSize: 18, fontWeight: 800 }}>
+                      {formatCurrency(invoice.balanceDue, invoice.currency)}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -755,7 +807,7 @@ export function InvoiceClient({ token }: { token: string }) {
           )}
 
           {/* Pay button */}
-          {invoice.stripePaymentUrl && (
+          {invoice.stripePaymentUrl && (invoice.balanceDue ?? invoice.total) > 0 && (
             <div
               style={{
                 padding: "24px 32px",
@@ -763,21 +815,46 @@ export function InvoiceClient({ token }: { token: string }) {
                 textAlign: "center",
               }}
             >
-              <a
-                href={invoice.stripePaymentUrl}
-                style={{
-                  display: "inline-block",
-                  background: "linear-gradient(135deg, #2563EB, #06B6D4)",
-                  color: "#fff",
-                  textDecoration: "none",
-                  padding: "14px 48px",
-                  borderRadius: 12,
-                  fontSize: 16,
-                  fontWeight: 700,
-                }}
-              >
-                Pay {formatCurrency(invoice.total, invoice.currency)}
-              </a>
+              {hasPartialPayment && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 16px",
+                    background: "#FFF7ED",
+                    border: "1px solid #FED7AA",
+                    borderRadius: 10,
+                    marginBottom: 16,
+                    fontSize: 13,
+                    color: "#9A3412",
+                    fontWeight: 600,
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 8v4M12 16h.01" />
+                  </svg>
+                  Partial payment received — {formatCurrency(invoice.amountPaid, invoice.currency)} of {formatCurrency(invoice.total, invoice.currency)} paid
+                </div>
+              )}
+              <div>
+                <a
+                  href={invoice.stripePaymentUrl}
+                  style={{
+                    display: "inline-block",
+                    background: "linear-gradient(135deg, #2563EB, #06B6D4)",
+                    color: "#fff",
+                    textDecoration: "none",
+                    padding: "14px 48px",
+                    borderRadius: 12,
+                    fontSize: 16,
+                    fontWeight: 700,
+                  }}
+                >
+                  Pay {formatCurrency(hasPartialPayment ? invoice.balanceDue : invoice.total, invoice.currency)}
+                </a>
+              </div>
               <p
                 style={{
                   margin: "12px 0 0",

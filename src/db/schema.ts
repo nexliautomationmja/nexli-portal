@@ -545,9 +545,18 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "sent",
   "viewed",
   "paid",
+  "partial",
   "overdue",
   "canceled",
   "void",
+]);
+
+export const recurringIntervalEnum = pgEnum("recurring_interval", [
+  "weekly",
+  "biweekly",
+  "monthly",
+  "quarterly",
+  "yearly",
 ]);
 
 export const invoiceCurrencyEnum = pgEnum("invoice_currency", [
@@ -598,9 +607,21 @@ export const invoices = pgTable(
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     stripePaymentUrl: text("stripe_payment_url"),
 
+    // Partial payment tracking (integer cents)
+    amountPaid: integer("amount_paid").default(0).notNull(),
+    balanceDue: integer("balance_due").default(0).notNull(),
+
+    // Recurring invoice fields
+    isRecurring: boolean("is_recurring").default(false).notNull(),
+    recurringInterval: recurringIntervalEnum("recurring_interval"),
+    recurringEndDate: timestamp("recurring_end_date"),
+    nextRecurrenceDate: timestamp("next_recurrence_date"),
+    recurringParentId: uuid("recurring_parent_id"),
+
     // Accounting sync references
     qbInvoiceId: text("qb_invoice_id"),
     xeroInvoiceId: text("xero_invoice_id"),
+    customBooksInvoiceId: text("custom_books_invoice_id"),
 
     // Reminder config (JSONB)
     // { schedule: [{ dayOffset: -7 }, { dayOffset: 0 }, { dayOffset: 3 }] }
@@ -652,6 +673,7 @@ export const invoiceLineItems = pgTable(
 export const accountingProviderEnum = pgEnum("accounting_provider", [
   "quickbooks",
   "xero",
+  "custombooks",
 ]);
 
 export const accountingConnections = pgTable(

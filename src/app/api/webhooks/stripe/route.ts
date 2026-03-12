@@ -158,12 +158,42 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 
 async function handleInvoicePayment(session: Stripe.Checkout.Session) {
   const invoiceId = session.metadata!.nexli_invoice_id;
+  const isPartial = session.metadata?.is_partial_payment === "true";
+
+  // Fetch the current invoice first
+  const [currentInvoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId))
+    .limit(1);
+
+  if (!currentInvoice) return;
+
+  let paymentAmount: number;
+  let newAmountPaid: number;
+  let newBalanceDue: number;
+  let newStatus: "paid" | "partial";
+
+  if (isPartial) {
+    paymentAmount = parseInt(session.metadata!.payment_amount_cents, 10);
+    newAmountPaid = currentInvoice.amountPaid + paymentAmount;
+    newBalanceDue = currentInvoice.total - newAmountPaid;
+    newStatus = newBalanceDue <= 0 ? "paid" : "partial";
+  } else {
+    // Full payment
+    paymentAmount = currentInvoice.total;
+    newAmountPaid = currentInvoice.total;
+    newBalanceDue = 0;
+    newStatus = "paid";
+  }
 
   const [invoice] = await db
     .update(invoices)
     .set({
-      status: "paid",
-      paidAt: new Date(),
+      status: newStatus,
+      amountPaid: newAmountPaid,
+      balanceDue: Math.max(0, newBalanceDue),
+      paidAt: newStatus === "paid" ? new Date() : null,
       stripePaymentIntentId: session.payment_intent as string,
       updatedAt: new Date(),
     })
@@ -180,11 +210,14 @@ async function handleInvoicePayment(session: Stripe.Checkout.Session) {
       .limit(1);
 
     if (owner?.email) {
+      const paidLabel = newStatus === "paid"
+        ? formatCurrency(invoice.total, invoice.currency)
+        : `${formatCurrency(paymentAmount, invoice.currency)} (partial — ${formatCurrency(newBalanceDue, invoice.currency)} remaining)`;
       const { subject, html } = buildInvoicePaidEmail({
         cpaName: owner.name || owner.email,
         clientName: invoice.clientName,
         invoiceNumber: invoice.invoiceNumber,
-        total: formatCurrency(invoice.total, invoice.currency),
+        total: paidLabel,
         paidAt: new Date(),
       });
       await sendEmail({ to: owner.email, subject, html });

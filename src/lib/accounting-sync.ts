@@ -7,6 +7,7 @@ import {
 import { eq, and } from "drizzle-orm";
 import { createQuickBooksInvoice, recordQuickBooksPayment } from "./quickbooks";
 import { createXeroInvoice, recordXeroPayment } from "./xero";
+import { createCustomBooksInvoice, recordCustomBooksPayment } from "./custombooks";
 
 /**
  * Sync an invoice to connected accounting software.
@@ -79,6 +80,21 @@ export async function syncInvoiceToAccounting(invoiceId: string) {
               .set({ xeroInvoiceId: xeroId, updatedAt: new Date() })
               .where(eq(invoices.id, invoiceId));
           }
+        } else if (conn.provider === "custombooks") {
+          const cbId = await createCustomBooksInvoice(invoice.ownerId, {
+            clientName: invoice.clientName,
+            clientEmail: invoice.clientEmail,
+            invoiceNumber: invoice.invoiceNumber,
+            lineItems: lineItemsFormatted,
+            dueDate: dueDateStr,
+            taxRate,
+          });
+          if (cbId) {
+            await db
+              .update(invoices)
+              .set({ customBooksInvoiceId: cbId, updatedAt: new Date() })
+              .where(eq(invoices.id, invoiceId));
+          }
         }
 
         // Update last sync timestamp
@@ -138,6 +154,12 @@ export async function syncPaymentToAccounting(invoiceId: string) {
             invoice.xeroInvoiceId,
             amountDollars,
             paidDateStr
+          );
+        } else if (conn.provider === "custombooks" && invoice.customBooksInvoiceId) {
+          await recordCustomBooksPayment(
+            invoice.ownerId,
+            invoice.customBooksInvoiceId,
+            amountDollars
           );
         }
 
