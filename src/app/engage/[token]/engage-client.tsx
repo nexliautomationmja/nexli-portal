@@ -213,17 +213,17 @@ export function EngageClient({ token }: { token: string }) {
       <div className="min-h-screen bg-gray-100 flex flex-col">
         <Header />
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto">
-              <svg className="w-8 h-8 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-10 text-center space-y-5">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto" style={{ background: "linear-gradient(135deg, #10B981, #06B6D4)" }}>
+              <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 6 9 17l-5-5" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-gray-900">Engagement Letter Signed</h1>
-            <p className="text-sm text-gray-500">
+            <h1 style={{ color: "#000000", fontSize: "22px", fontWeight: 800, margin: 0 }}>Engagement Letter Signed</h1>
+            <p style={{ color: "#6b7280", fontSize: "14px", margin: 0 }}>
               Thank you, {data?.clientName}. Your signature has been recorded securely.
             </p>
-            <div className="flex items-center justify-center gap-4 pt-4 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+            <div className="flex items-center justify-center gap-4 pt-4 text-[10px] uppercase tracking-widest font-bold" style={{ color: "#9ca3af" }}>
               <span>ESIGN Act Compliant</span>
               <span>&bull;</span>
               <span>IP Recorded</span>
