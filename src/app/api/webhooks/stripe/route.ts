@@ -10,7 +10,7 @@ import { sendEmail, buildInvoicePaidEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_PORTAL!;
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
