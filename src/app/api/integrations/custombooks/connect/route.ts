@@ -1,15 +1,24 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import crypto from "crypto";
 import { getCustomBooksAuthUrl } from "@/lib/custombooks";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const loginUrl = new URL("/login", req.nextUrl.origin);
+    loginUrl.searchParams.set("callbackUrl", "/dashboard/settings");
+    return NextResponse.redirect(loginUrl);
   }
 
-  // State encodes userId for callback verification
+  if (!process.env.CB_CLIENT_ID || !process.env.CB_CLIENT_SECRET) {
+    const settingsUrl = new URL("/dashboard/settings", req.nextUrl.origin);
+    settingsUrl.searchParams.set("error", "custombooks_not_configured");
+    return NextResponse.redirect(settingsUrl);
+  }
+
   const state = Buffer.from(
     JSON.stringify({
       userId: session.user.id,

@@ -12,8 +12,10 @@ interface Connection {
 
 export function AccountingConnections({
   connections,
+  error,
 }: {
   connections: Connection[];
+  error?: string;
 }) {
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
@@ -41,8 +43,31 @@ export function AccountingConnections({
     }
   }
 
+  const errorMessages: Record<string, string> = {
+    xero_not_configured: "Xero integration is not configured yet. Contact support to set up your Xero connection.",
+    custombooks_not_configured: "CustomBooks integration is not configured yet. Contact support to set up your CustomBooks connection.",
+    quickbooks_not_configured: "QuickBooks integration is not configured yet. Contact support to set up your QuickBooks connection.",
+  };
+
   return (
     <div className="space-y-4">
+      {error && errorMessages[error] && (
+        <div
+          className="flex items-center gap-2 px-4 py-3 rounded-lg text-sm"
+          style={{
+            background: "rgba(239,68,68,0.1)",
+            border: "1px solid rgba(239,68,68,0.2)",
+            color: "#ef4444",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          {errorMessages[error]}
+        </div>
+      )}
       <p className="text-sm" style={{ color: "var(--text-muted)" }}>
         Connect your accounting software to automatically sync invoices and
         payments.

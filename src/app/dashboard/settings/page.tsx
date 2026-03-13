@@ -9,7 +9,12 @@ import { GHLConnection } from "@/components/dashboard/settings/ghl-connection";
 import { TrackingSnippet } from "@/components/dashboard/settings/tracking-snippet";
 import { AccountingConnections } from "@/components/dashboard/settings/accounting-connections";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error: connectError } = await searchParams;
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -101,6 +106,7 @@ export default async function SettingsPage() {
             connectedAt: c.connectedAt.toISOString(),
             lastSyncAt: c.lastSyncAt?.toISOString() || null,
           }))}
+          error={connectError}
         />
       </GlassCard>
 
