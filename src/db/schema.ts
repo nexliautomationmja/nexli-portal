@@ -720,6 +720,54 @@ export const accountingConnections = pgTable(
 );
 
 // ══════════════════════════════════════════════════════════
+// ══  TAX RETURNS  ════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const taxReturnStatusEnum = pgEnum("tax_return_status", [
+  "not_started",
+  "documents_received",
+  "in_progress",
+  "filed",
+  "accepted",
+]);
+
+export const taxReturnTypeEnum = pgEnum("tax_return_type", [
+  "1040",
+  "1120",
+  "1120S",
+  "1065",
+  "990",
+  "other",
+]);
+
+export const taxReturns = pgTable(
+  "tax_returns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientName: text("client_name").notNull(),
+    clientEmail: text("client_email").notNull(),
+    clientCompany: text("client_company"),
+    taxYear: text("tax_year").notNull(),
+    returnType: taxReturnTypeEnum("return_type").default("1040").notNull(),
+    status: taxReturnStatusEnum("status").default("not_started").notNull(),
+    dueDate: timestamp("due_date"),
+    filedDate: timestamp("filed_date"),
+    acceptedDate: timestamp("accepted_date"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("tax_returns_owner_idx").on(table.ownerId),
+    index("tax_returns_owner_status_idx").on(table.ownerId, table.status),
+    index("tax_returns_owner_year_idx").on(table.ownerId, table.taxYear),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
 // ══  INVOICE REMINDERS  ══════════════════════════════════
 // ══════════════════════════════════════════════════════════
 
