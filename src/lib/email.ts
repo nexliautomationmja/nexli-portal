@@ -81,6 +81,11 @@ const emailWrapper = (content: string) => `
                 Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
               </p>
             </td></tr>
+            <tr><td align="center" style="padding-top:12px;">
+              <a href="${PORTAL_URL}/portal" style="color:#2563EB;font-size:11px;text-decoration:none;opacity:0.6;">
+                Sign in to your Client Portal
+              </a>
+            </td></tr>
           </table>
         </td></tr>
       </table>

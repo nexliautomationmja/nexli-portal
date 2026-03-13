@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 import { NexliLogo } from "@/components/ui/nexli-logo";
 
@@ -39,9 +40,21 @@ export default function LoginPage() {
           <LoginForm />
         </div>
 
+        {/* Client Portal Link */}
+        <p className="text-center mt-6 text-sm" style={{ color: "var(--text-muted)" }}>
+          Are you a client?{" "}
+          <Link
+            href="/portal"
+            className="font-medium no-underline hover:underline"
+            style={{ color: "var(--accent-blue)" }}
+          >
+            Sign in to your portal
+          </Link>
+        </p>
+
         {/* Footer */}
         <p
-          className="text-center mt-6 text-xs"
+          className="text-center mt-4 text-xs"
           style={{ color: "var(--text-muted)", opacity: 0.5 }}
         >
           Protected by Nexli Automation

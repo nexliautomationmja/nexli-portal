@@ -551,25 +551,30 @@ function Header() {
 function Footer() {
   return (
     <footer className="bg-[#0a0a0f] px-6 py-4 mt-auto">
-      <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <img
-            src="/logos/nexli-logo-white-wordmark@2x.png"
-            alt="Nexli"
-            className="h-4 opacity-40"
-          />
-          <span className="text-[10px] text-gray-500">&bull; Digital Rainmaker System</span>
+      <div className="max-w-4xl mx-auto flex flex-col items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
+          <div className="flex items-center gap-2">
+            <img
+              src="/logos/nexli-logo-white-wordmark@2x.png"
+              alt="Nexli"
+              className="h-4 opacity-40"
+            />
+            <span className="text-[10px] text-gray-500">&bull; Digital Rainmaker System</span>
+          </div>
+          <div className="flex items-center gap-4">
+            {["ESIGN Act Compliant", "IP Recorded", "Timestamp Verified"].map((badge) => (
+              <div key={badge} className="flex items-center gap-1">
+                <svg className="w-3 h-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider">{badge}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          {["ESIGN Act Compliant", "IP Recorded", "Timestamp Verified"].map((badge) => (
-            <div key={badge} className="flex items-center gap-1">
-              <svg className="w-3 h-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
-              <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider">{badge}</span>
-            </div>
-          ))}
-        </div>
+        <a href="/portal" className="text-[10px] text-blue-500/50 hover:text-blue-400 no-underline">
+          Sign in to Client Portal
+        </a>
       </div>
     </footer>
   );

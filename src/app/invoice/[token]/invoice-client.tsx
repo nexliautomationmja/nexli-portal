@@ -302,6 +302,18 @@ export function InvoiceClient({ token }: { token: string }) {
           >
             Powered by Nexli Portal
           </p>
+          <a
+            href="/portal"
+            style={{
+              display: "inline-block",
+              marginTop: 8,
+              color: "rgba(37, 99, 235, 0.6)",
+              fontSize: 11,
+              textDecoration: "none",
+            }}
+          >
+            Sign in to Client Portal
+          </a>
         </footer>
 
         <style>{`

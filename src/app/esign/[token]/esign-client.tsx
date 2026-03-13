@@ -420,9 +420,14 @@ export function EsignClient({ token }: { token: string }) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-center gap-2 py-2">
-          <img src="/logos/nexli-logo-allwhite@2x.png" alt="Nexli" className="h-3 opacity-30" />
-          <span className="text-[10px] text-white/20">&bull; Digital Rainmaker System</span>
+        <div className="flex flex-col items-center gap-2 py-2">
+          <div className="flex items-center gap-2">
+            <img src="/logos/nexli-logo-allwhite@2x.png" alt="Nexli" className="h-3 opacity-30" />
+            <span className="text-[10px] text-white/20">&bull; Digital Rainmaker System</span>
+          </div>
+          <a href="/portal" className="text-[10px] text-blue-500/50 hover:text-blue-400 no-underline">
+            Sign in to Client Portal
+          </a>
         </div>
       </main>
 
