@@ -149,9 +149,44 @@ export async function POST(req: NextRequest) {
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
   const cpaName = session.user.name || session.user.email || "Your CPA";
+  const cpaEmail = session.user.email || "";
   const emailErrors: string[] = [];
   const signers: { name: string; email: string; engageUrl: string }[] = [];
 
+  // Add the CPA (sender) as the first signer (order 0)
+  const cpaToken = crypto.randomBytes(32).toString("base64url");
+  const cpaEngageUrl = `${portalUrl}/engage/${cpaToken}`;
+
+  await db.insert(engagementSigners).values({
+    engagementId: engagement.id,
+    name: cpaName,
+    email: cpaEmail,
+    token: cpaToken,
+    order: 0,
+    status: "sent",
+    sentAt: new Date(),
+  });
+
+  signers.push({ name: cpaName, email: cpaEmail, engageUrl: cpaEngageUrl });
+
+  // Send signing email to the CPA
+  try {
+    const { subject: cpaSubject, html: cpaHtml } = buildEngagementRequestEmail({
+      clientName: cpaName,
+      cpaName: "Nexli",
+      subject,
+      engageUrl: cpaEngageUrl,
+      expiresAt,
+    });
+    await sendEmail({ to: cpaEmail, subject: cpaSubject, html: cpaHtml });
+  } catch (err) {
+    console.error(`Failed to send engagement email to CPA ${cpaEmail}:`, err);
+    emailErrors.push(
+      `${cpaEmail}: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  // Add client recipients as signers (order 1+)
   for (let i = 0; i < recipients.length; i++) {
     const { name, email } = recipients[i];
     const token = crypto.randomBytes(32).toString("base64url");

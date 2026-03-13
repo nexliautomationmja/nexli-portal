@@ -44,10 +44,41 @@ export function DocumentPreview({
           "'Georgia', 'Times New Roman', 'Garamond', serif",
       }}
     >
-      {/* Letterhead */}
+      {/* Dark branded header with Nexli logo */}
       <div
         style={{
-          padding: "40px 48px 24px",
+          background: "#0a0a0f",
+          padding: "20px 48px",
+          borderRadius: "4px 4px 0 0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logos/nexli-logo-white-wordmark@2x.png"
+          alt="Nexli"
+          style={{ height: 28 }}
+        />
+        <span
+          style={{
+            fontSize: 11,
+            color: "rgba(255,255,255,0.4)",
+            fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          Engagement Letter
+        </span>
+      </div>
+
+      {/* Firm info + date */}
+      <div
+        style={{
+          padding: "28px 48px 20px",
           borderBottom: "2px solid #111827",
         }}
       >
@@ -104,33 +135,17 @@ export function DocumentPreview({
               </h1>
             )}
           </div>
-          <div style={{ textAlign: "right" }}>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 12,
-                color: "#9ca3af",
-                fontFamily:
-                  "'Inter', 'Helvetica Neue', Arial, sans-serif",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              Engagement Letter
-            </p>
-            <p
-              style={{
-                margin: "4px 0 0",
-                fontSize: 13,
-                color: "#6b7280",
-                fontFamily:
-                  "'Inter', 'Helvetica Neue', Arial, sans-serif",
-              }}
-            >
-              {displayDate}
-            </p>
-          </div>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              color: "#6b7280",
+              fontFamily:
+                "'Inter', 'Helvetica Neue', Arial, sans-serif",
+            }}
+          >
+            {displayDate}
+          </p>
         </div>
       </div>
 
