@@ -161,7 +161,7 @@ export function InvoicesClient() {
   const [clientPhone, setClientPhone] = useState("");
   const [clientCompany, setClientCompany] = useState("");
   const [lineItems, setLineItems] = useState([
-    { description: "", quantity: 1, unitPrice: 0 },
+    { description: "", quantity: 1, unitPrice: 0, billingType: "one_time" as string },
   ]);
   const [taxRate, setTaxRate] = useState(0);
   const [dueDate, setDueDate] = useState("");
@@ -183,7 +183,7 @@ export function InvoicesClient() {
     { clientName: "", clientEmail: "", clientPhone: "", clientCompany: "" },
   ]);
   const [batchLineItems, setBatchLineItems] = useState([
-    { description: "", quantity: 1, unitPrice: 0 },
+    { description: "", quantity: 1, unitPrice: 0, billingType: "one_time" as string },
   ]);
   const [batchTaxRate, setBatchTaxRate] = useState(0);
   const [batchDueDate, setBatchDueDate] = useState("");
@@ -206,7 +206,7 @@ export function InvoicesClient() {
   function addLineItem() {
     setLineItems((prev) => [
       ...prev,
-      { description: "", quantity: 1, unitPrice: 0 },
+      { description: "", quantity: 1, unitPrice: 0, billingType: "one_time" },
     ]);
   }
 
@@ -217,7 +217,7 @@ export function InvoicesClient() {
 
   function updateLineItem(
     index: number,
-    field: "description" | "quantity" | "unitPrice",
+    field: "description" | "quantity" | "unitPrice" | "billingType",
     value: string | number
   ) {
     setLineItems((prev) =>
@@ -265,15 +265,15 @@ export function InvoicesClient() {
             description: li.description.trim(),
             quantity: li.quantity,
             unitPrice: li.unitPrice,
+            billingType: li.billingType,
           })),
           taxRate: Math.round(taxRate * 100),
           dueDate,
           notes: notes.trim() || undefined,
           terms: terms.trim() || undefined,
           currency,
-          isRecurring: !!recurringInterval,
-          recurringInterval: recurringInterval || undefined,
-          recurringEndDate: recurringEndDate || undefined,
+          isRecurring: lineItems.some((li) => li.billingType !== "one_time"),
+          recurringInterval: lineItems.find((li) => li.billingType !== "one_time")?.billingType === "one_time" ? undefined : lineItems.find((li) => li.billingType !== "one_time")?.billingType || undefined,
           reminderConfig:
             selectedReminders.length > 0
               ? {
@@ -428,6 +428,7 @@ export function InvoicesClient() {
             description: li.description.trim(),
             quantity: li.quantity,
             unitPrice: li.unitPrice,
+            billingType: li.billingType,
           })),
           taxRate: Math.round(batchTaxRate * 100),
           dueDate: batchDueDate,
@@ -453,7 +454,7 @@ export function InvoicesClient() {
     setClientEmail("");
     setClientPhone("");
     setClientCompany("");
-    setLineItems([{ description: "", quantity: 1, unitPrice: 0 }]);
+    setLineItems([{ description: "", quantity: 1, unitPrice: 0, billingType: "one_time" }]);
     setTaxRate(0);
     setDueDate("");
     setNotes("");
@@ -468,7 +469,7 @@ export function InvoicesClient() {
     setBatchClients([
       { clientName: "", clientEmail: "", clientPhone: "", clientCompany: "" },
     ]);
-    setBatchLineItems([{ description: "", quantity: 1, unitPrice: 0 }]);
+    setBatchLineItems([{ description: "", quantity: 1, unitPrice: 0, billingType: "one_time" }]);
     setBatchTaxRate(0);
     setBatchDueDate("");
     setBatchNotes("");
@@ -913,38 +914,30 @@ export function InvoicesClient() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  <div className="grid grid-cols-12 gap-2 px-1">
-                    <span
-                      className="col-span-5 text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color: "var(--text-muted)" }}
-                    >
+                  <div className="grid gap-2 px-1" style={{ gridTemplateColumns: "1fr 60px 80px 80px 70px 24px" }}>
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
                       Description
                     </span>
-                    <span
-                      className="col-span-2 text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color: "var(--text-muted)" }}
-                    >
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
                       Qty
                     </span>
-                    <span
-                      className="col-span-2 text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color: "var(--text-muted)" }}
-                    >
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
                       Rate ($)
                     </span>
-                    <span
-                      className="col-span-2 text-[10px] font-bold uppercase tracking-widest text-right"
-                      style={{ color: "var(--text-muted)" }}
-                    >
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                      Terms
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-right" style={{ color: "var(--text-muted)" }}>
                       Amount
                     </span>
-                    <span className="col-span-1" />
+                    <span />
                   </div>
 
                   {lineItems.map((item, i) => (
                     <div
                       key={i}
-                      className="grid grid-cols-12 gap-2 items-center"
+                      className="grid gap-2 items-center"
+                      style={{ gridTemplateColumns: "1fr 60px 80px 80px 70px 24px" }}
                     >
                       <input
                         type="text"
@@ -953,7 +946,7 @@ export function InvoicesClient() {
                           updateLineItem(i, "description", e.target.value)
                         }
                         placeholder="Description"
-                        className={`col-span-5 ${inputClass}`}
+                        className={inputClass}
                         style={inputStyle}
                       />
                       <input
@@ -969,7 +962,7 @@ export function InvoicesClient() {
                         placeholder="1"
                         min="0.01"
                         step="0.01"
-                        className={`col-span-2 ${inputClass}`}
+                        className={inputClass}
                         style={inputStyle}
                       />
                       <input
@@ -985,11 +978,24 @@ export function InvoicesClient() {
                         placeholder="0.00"
                         min="0"
                         step="0.01"
-                        className={`col-span-2 ${inputClass}`}
+                        className={inputClass}
                         style={inputStyle}
                       />
+                      <select
+                        value={item.billingType}
+                        onChange={(e) =>
+                          updateLineItem(i, "billingType", e.target.value)
+                        }
+                        className={inputClass}
+                        style={{ ...inputStyle, fontSize: 11, padding: "6px 4px" }}
+                      >
+                        <option value="one_time">One-time</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
                       <p
-                        className="col-span-2 text-sm text-right font-medium"
+                        className="text-sm text-right font-medium"
                         style={{ color: "var(--text-main)" }}
                       >
                         {formatCurrency(
@@ -997,7 +1003,7 @@ export function InvoicesClient() {
                           currency
                         )}
                       </p>
-                      <div className="col-span-1 flex justify-center">
+                      <div className="flex justify-center">
                         {lineItems.length > 1 && (
                           <button
                             onClick={() => removeLineItem(i)}
@@ -1111,53 +1117,6 @@ export function InvoicesClient() {
                 </div>
               </div>
 
-              {/* Recurring Schedule */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className="text-xs font-medium block mb-1.5"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Recurring Schedule
-                  </label>
-                  <select
-                    value={recurringInterval}
-                    onChange={(e) => setRecurringInterval(e.target.value)}
-                    className={inputClass}
-                    style={inputStyle}
-                  >
-                    {RECURRING_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {recurringInterval && (
-                  <div>
-                    <label
-                      className="text-xs font-medium block mb-1.5"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      End Recurrence (optional)
-                    </label>
-                    <input
-                      type="date"
-                      value={recurringEndDate}
-                      onChange={(e) => setRecurringEndDate(e.target.value)}
-                      min={dueDate || new Date().toISOString().split("T")[0]}
-                      className={inputClass}
-                      style={inputStyle}
-                    />
-                    <p
-                      className="text-[10px] mt-1"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Leave empty for indefinite recurrence.
-                    </p>
-                  </div>
-                )}
-              </div>
 
               {/* Notes + Terms */}
               <div className="grid grid-cols-2 gap-4">
@@ -1794,7 +1753,7 @@ export function InvoicesClient() {
                     onClick={() =>
                       setBatchLineItems((prev) => [
                         ...prev,
-                        { description: "", quantity: 1, unitPrice: 0 },
+                        { description: "", quantity: 1, unitPrice: 0, billingType: "one_time" },
                       ])
                     }
                     className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-400 transition-colors"
@@ -1807,7 +1766,8 @@ export function InvoicesClient() {
                   {batchLineItems.map((item, i) => (
                     <div
                       key={i}
-                      className="grid grid-cols-12 gap-2 items-center"
+                      className="grid gap-2 items-center"
+                      style={{ gridTemplateColumns: "1fr 60px 80px 80px 70px 24px" }}
                     >
                       <input
                         type="text"
@@ -1822,7 +1782,7 @@ export function InvoicesClient() {
                           )
                         }
                         placeholder="Description"
-                        className={`col-span-5 ${inputClass}`}
+                        className={inputClass}
                         style={inputStyle}
                       />
                       <input
@@ -1844,7 +1804,7 @@ export function InvoicesClient() {
                         placeholder="1"
                         min="0.01"
                         step="0.01"
-                        className={`col-span-2 ${inputClass}`}
+                        className={inputClass}
                         style={inputStyle}
                       />
                       <input
@@ -1866,11 +1826,30 @@ export function InvoicesClient() {
                         placeholder="0.00"
                         min="0"
                         step="0.01"
-                        className={`col-span-2 ${inputClass}`}
+                        className={inputClass}
                         style={inputStyle}
                       />
+                      <select
+                        value={item.billingType}
+                        onChange={(e) =>
+                          setBatchLineItems((prev) =>
+                            prev.map((li, idx) =>
+                              idx === i
+                                ? { ...li, billingType: e.target.value }
+                                : li
+                            )
+                          )
+                        }
+                        className={inputClass}
+                        style={{ ...inputStyle, fontSize: 11, padding: "6px 4px" }}
+                      >
+                        <option value="one_time">One-time</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
                       <p
-                        className="col-span-2 text-sm text-right font-medium"
+                        className="text-sm text-right font-medium"
                         style={{ color: "var(--text-main)" }}
                       >
                         {formatCurrency(
@@ -1878,7 +1857,7 @@ export function InvoicesClient() {
                           batchCurrency
                         )}
                       </p>
-                      <div className="col-span-1 flex justify-center">
+                      <div className="flex justify-center">
                         {batchLineItems.length > 1 && (
                           <button
                             onClick={() =>

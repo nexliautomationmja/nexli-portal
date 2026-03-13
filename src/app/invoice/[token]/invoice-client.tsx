@@ -9,6 +9,7 @@ interface LineItem {
   unitPrice: number;
   amount: number;
   order: number;
+  billingType?: string;
 }
 
 interface InvoiceData {
@@ -635,6 +636,22 @@ export function InvoiceClient({ token }: { token: string }) {
                   >
                     <td style={{ padding: "12px 0", color: "#111" }}>
                       {item.description}
+                      {item.billingType && item.billingType !== "one_time" && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: "#7c3aed",
+                            background: "rgba(124, 58, 237, 0.08)",
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            verticalAlign: "middle",
+                          }}
+                        >
+                          {item.billingType === "monthly" ? "Monthly" : item.billingType === "quarterly" ? "Quarterly" : item.billingType === "yearly" ? "Yearly" : ""}
+                        </span>
+                      )}
                     </td>
                     <td
                       style={{

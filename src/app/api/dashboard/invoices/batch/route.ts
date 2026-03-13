@@ -65,18 +65,33 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  type BillingType = "one_time" | "monthly" | "quarterly" | "yearly";
+  const validBillingTypes: BillingType[] = ["one_time", "monthly", "quarterly", "yearly"];
+
   // Process line items once
   const processedItems = lineItems.map(
     (
-      item: { description: string; quantity: number; unitPrice: number },
+      item: { description: string; quantity: number; unitPrice: number; billingType?: string },
       i: number
     ) => {
       const qty = Math.round(item.quantity * 100);
       const price = dollarsToCents(item.unitPrice);
       const amount = calculateLineAmount(qty, price);
-      return { description: item.description, quantity: qty, unitPrice: price, amount, order: i };
+      const bt = validBillingTypes.includes(item.billingType as BillingType)
+        ? (item.billingType as BillingType)
+        : ("one_time" as const);
+      return {
+        description: item.description,
+        quantity: qty,
+        unitPrice: price,
+        amount,
+        billingType: bt,
+        order: i,
+      };
     }
   );
+
+  const hasRecurring = processedItems.some((p) => p.billingType !== "one_time");
 
   const { subtotal, taxAmount, total } = calculateInvoiceTotals(
     processedItems,
@@ -113,6 +128,7 @@ export async function POST(req: NextRequest) {
           total,
           amountPaid: 0,
           balanceDue: total,
+          isRecurring: hasRecurring,
           dueDate: dueDateObj,
           notes: notes || null,
           terms: terms || null,

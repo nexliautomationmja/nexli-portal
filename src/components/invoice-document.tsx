@@ -11,6 +11,7 @@ interface InvoiceDocumentPreviewProps {
     quantity: number;
     unitPrice: number;
     amount?: number;
+    billingType?: string;
   }>;
   currency?: string;
   taxRate: number;
@@ -93,13 +94,21 @@ export function InvoiceDocumentPreview({
         year: "numeric",
       });
 
+  const billingLabels: Record<string, string> = {
+    monthly: "Monthly",
+    quarterly: "Quarterly",
+    yearly: "Yearly",
+  };
+
   const computed = lineItems.map((item) => {
+    const billingType = item.billingType || "one_time";
     if (valuesInCents) {
       return {
         description: item.description,
         qty: item.quantity / 100,
         unitPriceCents: item.unitPrice,
         amountCents: item.amount ?? 0,
+        billingType,
       };
     }
     const amountDollars = item.quantity * item.unitPrice;
@@ -108,6 +117,7 @@ export function InvoiceDocumentPreview({
       qty: item.quantity,
       unitPriceCents: Math.round(item.unitPrice * 100),
       amountCents: Math.round(amountDollars * 100),
+      billingType,
     };
   });
 
@@ -276,6 +286,22 @@ export function InvoiceDocumentPreview({
                   >
                     {item.description || (
                       <em style={{ color: "#9ca3af" }}>No description</em>
+                    )}
+                    {billingLabels[item.billingType] && (
+                      <span
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: "#7c3aed",
+                          background: "rgba(124, 58, 237, 0.08)",
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        {billingLabels[item.billingType]}
+                      </span>
                     )}
                   </td>
                   <td

@@ -560,6 +560,13 @@ export const recurringIntervalEnum = pgEnum("recurring_interval", [
   "yearly",
 ]);
 
+export const billingTypeEnum = pgEnum("billing_type", [
+  "one_time",
+  "monthly",
+  "quarterly",
+  "yearly",
+]);
+
 export const invoiceCurrencyEnum = pgEnum("invoice_currency", [
   "usd",
   "cad",
@@ -659,6 +666,7 @@ export const invoiceLineItems = pgTable(
     quantity: integer("quantity").notNull().default(100), // stored * 100 (1.5 → 150)
     unitPrice: integer("unit_price").notNull(), // cents
     amount: integer("amount").notNull(), // cents
+    billingType: billingTypeEnum("billing_type").default("one_time").notNull(),
     order: integer("order").notNull().default(0),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
