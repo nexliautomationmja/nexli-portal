@@ -75,6 +75,7 @@ export async function GET(
     content: engagement.content,
     expiresAt: engagement.expiresAt,
     status: signer.viewedAt ? signer.status : "viewed",
+    role: signer.role || null,
     from: {
       name: owner?.name || "",
       company: owner?.companyName || "",

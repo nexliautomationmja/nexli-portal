@@ -153,6 +153,14 @@ export async function POST(req: NextRequest) {
   const emailErrors: string[] = [];
   const signers: { name: string; email: string; engageUrl: string }[] = [];
 
+  // Fetch company name for CPA representative role
+  const [ownerInfo] = await db
+    .select({ companyName: users.companyName })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+  const companyName = ownerInfo?.companyName || "";
+
   // Add the CPA (sender) as the first signer (order 0)
   const cpaToken = crypto.randomBytes(32).toString("base64url");
   const cpaEngageUrl = `${portalUrl}/engage/${cpaToken}`;
@@ -165,6 +173,9 @@ export async function POST(req: NextRequest) {
     order: 0,
     status: "sent",
     sentAt: new Date(),
+    role: companyName
+      ? `Authorized Representative, ${companyName}`
+      : "Authorized Representative",
   });
 
   signers.push({ name: cpaName, email: cpaEmail, engageUrl: cpaEngageUrl });

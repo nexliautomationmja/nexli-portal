@@ -525,6 +525,7 @@ export const engagementSigners = pgTable(
     signedAt: timestamp("signed_at"),
     declinedAt: timestamp("declined_at"),
     declineReason: text("decline_reason"),
+    role: text("role"),
     signatureData: text("signature_data"),
     signatureIp: text("signature_ip"),
     signatureUserAgent: text("signature_user_agent"),

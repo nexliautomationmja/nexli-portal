@@ -9,6 +9,7 @@ interface EngageData {
   content: string;
   expiresAt: string;
   status: string;
+  role?: string | null;
   from?: {
     name: string;
     company: string;
@@ -406,6 +407,21 @@ export function EngageClient({ token }: { token: string }) {
           {/* ═══ SIGN ACTIONS (below document) ═══ */}
           {step >= 2 && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-5">
+              {/* Representative role banner */}
+              {data?.role && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <svg className="w-4 h-4 text-blue-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                  <span className="text-xs font-semibold text-blue-800">
+                    Signing as: {data.role}
+                  </span>
+                </div>
+              )}
+
               {/* Typed name */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
@@ -429,10 +445,22 @@ export function EngageClient({ token }: { token: string }) {
                   className="mt-0.5 w-5 h-5 rounded border-gray-300 accent-blue-600"
                 />
                 <span className="text-xs text-gray-600 leading-relaxed group-hover:text-gray-900 transition-colors">
-                  I have read the engagement letter above and agree to sign electronically.
-                  By signing, I acknowledge that my electronic signature is the legal equivalent
-                  of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
-                  My signature, IP address, and timestamp will be recorded.
+                  {data?.role ? (
+                    <>
+                      I have read the engagement letter above and, as {data.role}, agree to sign electronically
+                      on behalf of the organization.
+                      By signing, I acknowledge that my electronic signature is the legal equivalent
+                      of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
+                      My signature, role, IP address, and timestamp will be recorded.
+                    </>
+                  ) : (
+                    <>
+                      I have read the engagement letter above and agree to sign electronically.
+                      By signing, I acknowledge that my electronic signature is the legal equivalent
+                      of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
+                      My signature, IP address, and timestamp will be recorded.
+                    </>
+                  )}
                 </span>
               </label>
 

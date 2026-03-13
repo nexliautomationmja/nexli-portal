@@ -75,82 +75,18 @@ export function DocumentPreview({
         </span>
       </div>
 
-      {/* Firm info + date */}
-      <div
-        style={{
-          padding: "28px 48px 20px",
-          borderBottom: "2px solid #111827",
-        }}
-      >
-        <div
+      {/* Date + Recipient + Subject */}
+      <div style={{ padding: "28px 48px 0" }}>
+        <p
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
+            margin: "0 0 20px",
+            fontSize: 13,
+            color: "#6b7280",
+            fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
           }}
         >
-          <div>
-            {fromCompany ? (
-              <>
-                <h1
-                  style={{
-                    margin: 0,
-                    fontSize: 22,
-                    fontWeight: 700,
-                    color: "#111827",
-                    letterSpacing: "-0.01em",
-                    fontFamily:
-                      "'Inter', 'Helvetica Neue', Arial, sans-serif",
-                  }}
-                >
-                  {fromCompany}
-                </h1>
-                {fromName && (
-                  <p
-                    style={{
-                      margin: "4px 0 0",
-                      fontSize: 13,
-                      color: "#6b7280",
-                      fontFamily:
-                        "'Inter', 'Helvetica Neue', Arial, sans-serif",
-                    }}
-                  >
-                    {fromName}
-                  </p>
-                )}
-              </>
-            ) : (
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: 22,
-                  fontWeight: 700,
-                  color: "#111827",
-                  letterSpacing: "-0.01em",
-                  fontFamily:
-                    "'Inter', 'Helvetica Neue', Arial, sans-serif",
-                }}
-              >
-                {fromName || "—"}
-              </h1>
-            )}
-          </div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 13,
-              color: "#6b7280",
-              fontFamily:
-                "'Inter', 'Helvetica Neue', Arial, sans-serif",
-            }}
-          >
-            {displayDate}
-          </p>
-        </div>
-      </div>
-
-      {/* Recipient + Subject */}
-      <div style={{ padding: "28px 48px 0" }}>
+          {displayDate}
+        </p>
         <div
           style={{
             display: "grid",
