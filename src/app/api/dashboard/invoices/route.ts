@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { invoices, invoiceLineItems } from "@/db/schema";
+import { invoices, invoiceLineItems, users } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import {
   generateInvoiceNumber,
@@ -46,7 +46,20 @@ export async function GET() {
     ),
   }));
 
-  return NextResponse.json({ invoices: enriched });
+  // Fetch owner info for document preview
+  const [owner] = await db
+    .select({ name: users.name, companyName: users.companyName })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
+  return NextResponse.json({
+    invoices: enriched,
+    from: {
+      name: owner?.name || "",
+      company: owner?.companyName || "",
+    },
+  });
 }
 
 export async function POST(req: NextRequest) {

@@ -14,6 +14,7 @@ import {
   ClockIcon,
   UsersIcon,
 } from "@/components/ui/icons";
+import { InvoiceDocumentPreview } from "@/components/invoice-document";
 
 interface LineItem {
   id: string;
@@ -171,6 +172,11 @@ export function InvoicesClient() {
   const [recurringInterval, setRecurringInterval] = useState("");
   const [recurringEndDate, setRecurringEndDate] = useState("");
   const [sending, setSending] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({
+    name: "",
+    company: "",
+  });
 
   // Batch form
   const [batchClients, setBatchClients] = useState([
@@ -189,7 +195,10 @@ export function InvoicesClient() {
   useEffect(() => {
     fetch("/api/dashboard/invoices")
       .then((r) => r.json())
-      .then((data) => setInvoices(data.invoices || []))
+      .then((data) => {
+        setInvoices(data.invoices || []);
+        if (data.from) setFirmInfo(data.from);
+      })
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
   }, []);
@@ -288,6 +297,7 @@ export function InvoicesClient() {
       setInvoices(refreshData.invoices || []);
       resetForm();
       setShowCompose(false);
+      setShowPreview(false);
     } finally {
       setSending(false);
     }
@@ -332,8 +342,8 @@ export function InvoicesClient() {
       clientName: inv.clientName,
       clientEmail: inv.clientEmail,
       clientCompany: inv.clientCompany,
-      fromName: "",
-      fromCompany: "",
+      fromName: firmInfo.name,
+      fromCompany: firmInfo.company,
       lineItems: inv.lineItems,
       subtotal: inv.subtotal,
       taxRate: inv.taxRate ?? 0,
@@ -761,7 +771,7 @@ export function InvoicesClient() {
         <>
           <div
             className="fixed inset-0 bg-black/40 z-40"
-            onClick={() => setShowCompose(false)}
+            onClick={() => { setShowCompose(false); setShowPreview(false); }}
           />
           <div
             className="fixed inset-x-4 top-[3%] bottom-[3%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
@@ -778,19 +788,60 @@ export function InvoicesClient() {
               >
                 New Invoice
               </h2>
-              <button
-                onClick={() => {
-                  setShowCompose(false);
-                  resetForm();
-                }}
-                className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
-              >
-                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowPreview(!showPreview)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  style={{
+                    background: showPreview
+                      ? "linear-gradient(135deg, #2563EB, #06B6D4)"
+                      : "var(--input-bg)",
+                    color: showPreview ? "#fff" : "var(--text-muted)",
+                    border: showPreview
+                      ? "none"
+                      : "1px solid var(--card-border)",
+                  }}
+                >
+                  <EyeIcon className="w-3.5 h-3.5" />
+                  {showPreview ? "Edit" : "Preview"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCompose(false);
+                    resetForm();
+                    setShowPreview(false);
+                  }}
+                  className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+                >
+                  <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                </button>
+              </div>
             </div>
 
             {/* Modal body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Document Preview Mode */}
+              {showPreview && (
+                <div style={{ padding: "8px 0" }}>
+                  <InvoiceDocumentPreview
+                    clientName={clientName || "Client Name"}
+                    clientEmail={clientEmail}
+                    clientCompany={clientCompany || undefined}
+                    fromName={firmInfo.name}
+                    fromCompany={firmInfo.company}
+                    lineItems={lineItems}
+                    currency={currency}
+                    taxRate={taxRate}
+                    dueDate={dueDate || undefined}
+                    notes={notes || undefined}
+                    terms={terms || undefined}
+                    valuesInCents={false}
+                  />
+                </div>
+              )}
+
+              {/* Form Mode */}
+              {!showPreview && <>
               {/* Client info */}
               <div>
                 <label
@@ -1183,6 +1234,7 @@ export function InvoicesClient() {
                   Select when to send payment reminder emails to the client.
                 </p>
               </div>
+              </>}
             </div>
 
             {/* Modal footer */}
@@ -1259,239 +1311,32 @@ export function InvoicesClient() {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Client info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-widest mb-1"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Client
-                  </p>
-                  <p
-                    className="text-sm font-medium"
-                    style={{ color: "var(--text-main)" }}
-                  >
-                    {showDetail.clientName}
-                  </p>
-                  <p
-                    className="text-xs"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {showDetail.clientEmail}
-                  </p>
-                  {showDetail.clientCompany && (
-                    <p
-                      className="text-xs"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {showDetail.clientCompany}
-                    </p>
-                  )}
-                  <button
-                    onClick={() =>
-                      handleViewClientHistory(showDetail.clientEmail)
-                    }
-                    className="mt-1 text-[10px] font-medium text-blue-500 hover:text-blue-400 transition-colors"
-                  >
-                    View all invoices for this client
-                  </button>
-                </div>
-                <div>
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-widest mb-1"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Dates
-                  </p>
-                  <p
-                    className="text-xs"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Issued: {formatDate(showDetail.issueDate)}
-                  </p>
-                  <p
-                    className="text-xs"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Due: {formatDate(showDetail.dueDate)}
-                  </p>
-                </div>
-              </div>
+              {/* Invoice document preview */}
+              <InvoiceDocumentPreview
+                clientName={showDetail.clientName}
+                clientEmail={showDetail.clientEmail}
+                clientCompany={showDetail.clientCompany || undefined}
+                fromName={firmInfo.name}
+                fromCompany={firmInfo.company}
+                lineItems={showDetail.lineItems}
+                currency={showDetail.currency}
+                taxRate={(showDetail.taxRate ?? 0) / 100}
+                dueDate={showDetail.dueDate}
+                issueDate={showDetail.issueDate}
+                notes={showDetail.notes || undefined}
+                terms={showDetail.terms || undefined}
+                valuesInCents={true}
+                invoiceNumber={showDetail.invoiceNumber}
+              />
 
-              {/* Line items */}
-              <div>
-                <p
-                  className="text-[10px] font-bold uppercase tracking-widest mb-2"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Line Items
-                </p>
-                <div className="rounded-lg border border-[var(--card-border)] overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--card-border)]">
-                        <th
-                          className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Description
-                        </th>
-                        <th
-                          className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Qty
-                        </th>
-                        <th
-                          className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Rate
-                        </th>
-                        <th
-                          className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Amount
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {showDetail.lineItems.map((li) => (
-                        <tr
-                          key={li.id}
-                          className="border-b border-[var(--card-border)] last:border-0"
-                        >
-                          <td
-                            className="px-3 py-2"
-                            style={{ color: "var(--text-main)" }}
-                          >
-                            {li.description}
-                          </td>
-                          <td
-                            className="px-3 py-2 text-right"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {(li.quantity / 100).toFixed(
-                              li.quantity % 100 === 0 ? 0 : 2
-                            )}
-                          </td>
-                          <td
-                            className="px-3 py-2 text-right"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {formatCurrency(
-                              li.unitPrice,
-                              showDetail.currency
-                            )}
-                          </td>
-                          <td
-                            className="px-3 py-2 text-right font-medium"
-                            style={{ color: "var(--text-main)" }}
-                          >
-                            {formatCurrency(
-                              li.amount,
-                              showDetail.currency
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Totals */}
-                <div className="mt-2 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span style={{ color: "var(--text-muted)" }}>
-                      Subtotal
-                    </span>
-                    <span style={{ color: "var(--text-main)" }}>
-                      {formatCurrency(
-                        showDetail.subtotal,
-                        showDetail.currency
-                      )}
-                    </span>
-                  </div>
-                  {(showDetail.taxRate ?? 0) > 0 && (
-                    <div className="flex justify-between">
-                      <span style={{ color: "var(--text-muted)" }}>
-                        Tax ({((showDetail.taxRate ?? 0) / 100).toFixed(2)}%)
-                      </span>
-                      <span style={{ color: "var(--text-main)" }}>
-                        {formatCurrency(
-                          showDetail.taxAmount ?? 0,
-                          showDetail.currency
-                        )}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-base pt-1 border-t border-[var(--card-border)]">
-                    <span style={{ color: "var(--text-main)" }}>Total</span>
-                    <span style={{ color: "var(--text-main)" }}>
-                      {formatCurrency(
-                        showDetail.total,
-                        showDetail.currency
-                      )}
-                    </span>
-                  </div>
-                  {showDetail.amountPaid > 0 && (
-                    <>
-                      <div className="flex justify-between">
-                        <span style={{ color: "#10B981" }}>Amount Paid</span>
-                        <span style={{ color: "#10B981" }}>
-                          -{formatCurrency(showDetail.amountPaid, showDetail.currency)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between font-bold">
-                        <span style={{ color: "#2563EB" }}>Balance Due</span>
-                        <span style={{ color: "#2563EB" }}>
-                          {formatCurrency(showDetail.balanceDue, showDetail.currency)}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Notes & Terms */}
-              {(showDetail.notes || showDetail.terms) && (
-                <div className="grid grid-cols-2 gap-4">
-                  {showDetail.notes && (
-                    <div>
-                      <p
-                        className="text-[10px] font-bold uppercase tracking-widest mb-1"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        Notes
-                      </p>
-                      <p
-                        className="text-xs"
-                        style={{ color: "var(--text-main)" }}
-                      >
-                        {showDetail.notes}
-                      </p>
-                    </div>
-                  )}
-                  {showDetail.terms && (
-                    <div>
-                      <p
-                        className="text-[10px] font-bold uppercase tracking-widest mb-1"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        Terms
-                      </p>
-                      <p
-                        className="text-xs"
-                        style={{ color: "var(--text-main)" }}
-                      >
-                        {showDetail.terms}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+              <button
+                onClick={() =>
+                  handleViewClientHistory(showDetail.clientEmail)
+                }
+                className="text-[10px] font-medium text-blue-500 hover:text-blue-400 transition-colors"
+              >
+                View all invoices for this client
+              </button>
 
               {/* Timeline */}
               <div>
