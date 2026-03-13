@@ -62,12 +62,23 @@ export async function GET(
       .where(eq(engagementSigners.id, signer.id));
   }
 
+  // Fetch owner info for letterhead
+  const [owner] = await db
+    .select({ name: users.name, companyName: users.companyName })
+    .from(users)
+    .where(eq(users.id, engagement.ownerId))
+    .limit(1);
+
   return NextResponse.json({
     clientName: signer.name,
     subject: engagement.subject,
     content: engagement.content,
     expiresAt: engagement.expiresAt,
     status: signer.viewedAt ? signer.status : "viewed",
+    from: {
+      name: owner?.name || "",
+      company: owner?.companyName || "",
+    },
   });
 }
 

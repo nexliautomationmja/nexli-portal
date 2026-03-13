@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 import { ClientPicker } from "@/components/dashboard/client-picker";
+import { DocumentPreview } from "@/components/engagement-document";
 
 interface Signer {
   id: string;
@@ -57,6 +58,8 @@ export function EngagementsClient() {
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [sending, setSending] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
   useEffect(() => {
     Promise.all([
@@ -66,6 +69,9 @@ export function EngagementsClient() {
       .then(([engData, tmplData]) => {
         setEngagements(engData.engagements || []);
         setTemplates(tmplData.templates || []);
+        if (engData.from) {
+          setFirmInfo(engData.from);
+        }
       })
       .catch(() => {
         setEngagements([]);
@@ -388,16 +394,45 @@ export function EngagementsClient() {
               <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                 New Engagement Letter
               </h2>
-              <button
-                onClick={() => { setShowCompose(false); resetForm(); }}
-                className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
-              >
-                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowPreview(!showPreview)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  style={{
+                    background: showPreview ? "linear-gradient(135deg, #2563EB, #06B6D4)" : "var(--input-bg)",
+                    color: showPreview ? "#fff" : "var(--text-muted)",
+                    border: showPreview ? "none" : "1px solid var(--card-border)",
+                  }}
+                >
+                  <EyeIcon className="w-3.5 h-3.5" />
+                  {showPreview ? "Edit" : "Preview"}
+                </button>
+                <button
+                  onClick={() => { setShowCompose(false); resetForm(); setShowPreview(false); }}
+                  className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+                >
+                  <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                </button>
+              </div>
             </div>
 
             {/* Modal body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Document Preview Mode */}
+              {showPreview && (
+                <div style={{ padding: "8px 0" }}>
+                  <DocumentPreview
+                    content={content}
+                    subject={subject}
+                    clientName={recipients[0]?.name || "Client Name"}
+                    fromName={firmInfo.name}
+                    fromCompany={firmInfo.company}
+                  />
+                </div>
+              )}
+
+              {/* Form Mode */}
+              {!showPreview && <>
               {/* Recipients */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -561,12 +596,13 @@ export function EngagementsClient() {
                   />
                 )}
               </div>
+              </>}
             </div>
 
             {/* Modal footer */}
             <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-end gap-3">
               <button
-                onClick={() => { setShowCompose(false); resetForm(); }}
+                onClick={() => { setShowCompose(false); resetForm(); setShowPreview(false); }}
                 className="px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)]"
                 style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
               >
@@ -657,18 +693,15 @@ export function EngagementsClient() {
                 </div>
               </div>
 
-              {/* Letter content */}
-              <div
-                className="rounded-lg border p-4"
-                style={{ borderColor: "var(--card-border)", background: "var(--input-bg)" }}
-              >
-                <pre
-                  className="whitespace-pre-wrap text-sm leading-relaxed font-sans"
-                  style={{ color: "var(--text-main)" }}
-                >
-                  {showDetail.content}
-                </pre>
-              </div>
+              {/* Letter content — document view */}
+              <DocumentPreview
+                content={showDetail.content}
+                subject={showDetail.subject}
+                clientName={showDetail.signers[0]?.name || ""}
+                fromName={firmInfo.name}
+                fromCompany={firmInfo.company}
+                date={showDetail.sentAt ? new Date(showDetail.sentAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : undefined}
+              />
 
               {/* Timeline */}
               <div className="space-y-2">

@@ -5,6 +5,7 @@ import {
   engagements,
   engagementSigners,
   engagementTemplates,
+  users,
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
@@ -58,7 +59,20 @@ export async function GET() {
     ),
   }));
 
-  return NextResponse.json({ engagements: enriched });
+  // Fetch owner info for document preview
+  const [owner] = await db
+    .select({ name: users.name, companyName: users.companyName })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
+  return NextResponse.json({
+    engagements: enriched,
+    from: {
+      name: owner?.name || "",
+      company: owner?.companyName || "",
+    },
+  });
 }
 
 export async function POST(req: NextRequest) {

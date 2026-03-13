@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { DocumentPreview } from "@/components/engagement-document";
 
 interface EngageData {
   clientName: string;
@@ -8,6 +9,10 @@ interface EngageData {
   content: string;
   expiresAt: string;
   status: string;
+  from?: {
+    name: string;
+    company: string;
+  };
 }
 
 export function EngageClient({ token }: { token: string }) {
@@ -323,46 +328,22 @@ export function EngageClient({ token }: { token: string }) {
         <div className="max-w-4xl mx-auto px-6 space-y-6">
 
           {/* ═══ THE DOCUMENT ═══ */}
-          <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+          <div className="rounded-lg shadow-lg overflow-hidden">
+            {/* Document Preview */}
+            <DocumentPreview
+              content={data?.content || ""}
+              subject={data?.subject || ""}
+              clientName={data?.clientName || ""}
+              fromName={data?.from?.name || ""}
+              fromCompany={data?.from?.company || ""}
+              date={today}
+            />
 
-            {/* Document Letterhead */}
-            <div className="px-10 pt-8 pb-6 bg-[#0a0a0f] rounded-t-lg">
-              <div className="flex items-start justify-between">
-                <img
-                  src="/logos/nexli-logo-white-wordmark@2x.png"
-                  alt="Nexli"
-                  className="h-8"
-                />
-                <div className="text-right text-xs text-gray-400">
-                  <p>{today}</p>
-                  <p className="mt-1">Engagement Letter</p>
-                </div>
-              </div>
-            </div>
+          </div>
 
-            {/* Recipient Info */}
-            <div className="px-10 py-5 bg-gray-50 border-b border-gray-100">
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <p className="text-gray-400 uppercase tracking-widest font-bold text-[10px] mb-1">Prepared For</p>
-                  <p className="text-gray-900 font-semibold">{data?.clientName}</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 uppercase tracking-widest font-bold text-[10px] mb-1">Subject</p>
-                  <p className="text-gray-900 font-semibold">{data?.subject}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Letter Body */}
+          {/* ═══ SIGNATURE BLOCK ═══ */}
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden" ref={signSectionRef}>
             <div className="px-10 py-8">
-              <pre className="whitespace-pre-wrap text-sm text-gray-700 leading-7 font-sans">
-                {data?.content}
-              </pre>
-            </div>
-
-            {/* Signature Block (in document) */}
-            <div className="px-10 pb-10" ref={signSectionRef}>
               {step >= 2 ? (
                 <div className="border-2 border-[#D4A017] rounded-lg overflow-hidden">
                   {/* Yellow Sign Here tab */}
