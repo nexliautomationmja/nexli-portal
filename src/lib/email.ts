@@ -515,3 +515,34 @@ export function buildInvoiceReminderEmail(params: {
 
   return { subject: subjectLine, html };
 }
+
+// ── Portal Magic Link Email ─────────────────────────────
+
+export function buildMagicLinkEmail(params: {
+  clientName: string;
+  magicLinkUrl: string;
+  expiresInMinutes: number;
+}): { subject: string; html: string } {
+  const { clientName, magicLinkUrl, expiresInMinutes } = params;
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Sign in to Nexli Portal</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
+      Hi ${clientName}, click the button below to access your client portal.
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${magicLinkUrl}" style="${buttonStyle}">Sign In to Portal</a>
+    </div>
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;text-align:center;">
+      <p style="margin:0;color:#808090;font-size:12px;">
+        This link expires in ${expiresInMinutes} minutes.<br/>
+        If you didn&rsquo;t request this, you can safely ignore this email.
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: "Sign in to your Nexli Portal",
+    html,
+  };
+}

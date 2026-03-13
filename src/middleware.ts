@@ -19,7 +19,33 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for session token (NextAuth JWT cookie)
+  // ── Portal auth routes (public — no session needed) ──
+  if (pathname.startsWith("/api/portal/auth/")) {
+    return NextResponse.next();
+  }
+
+  // Portal login page
+  if (pathname === "/portal") {
+    const portalToken = req.cookies.get("nexli-portal-session");
+    if (portalToken) {
+      return NextResponse.redirect(new URL("/portal/dashboard", req.url));
+    }
+    return NextResponse.next();
+  }
+
+  // Protected portal routes
+  if (
+    pathname.startsWith("/portal/dashboard") ||
+    pathname.startsWith("/api/portal/")
+  ) {
+    const portalToken = req.cookies.get("nexli-portal-session");
+    if (!portalToken) {
+      return NextResponse.redirect(new URL("/portal", req.url));
+    }
+    return NextResponse.next();
+  }
+
+  // ── Dashboard auth (existing) ──
   const token =
     req.cookies.get("__Secure-authjs.session-token") ||
     req.cookies.get("authjs.session-token");
@@ -45,6 +71,9 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/login",
+    "/portal",
+    "/portal/:path*",
+    "/api/portal/:path*",
     "/upload/:path*",
     "/esign/:path*",
     "/engage/:path*",

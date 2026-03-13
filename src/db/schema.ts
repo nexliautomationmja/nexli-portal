@@ -768,6 +768,43 @@ export const taxReturns = pgTable(
 );
 
 // ══════════════════════════════════════════════════════════
+// ══  CLIENT PORTAL  ═══════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const portalMagicLinks = pgTable(
+  "portal_magic_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    token: text("token").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("portal_magic_links_token_idx").on(table.token),
+    index("portal_magic_links_email_idx").on(table.email),
+  ]
+);
+
+export const portalSessions = pgTable(
+  "portal_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    sessionToken: text("session_token").notNull().unique(),
+    clientName: text("client_name"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("portal_sessions_token_idx").on(table.sessionToken),
+    index("portal_sessions_email_idx").on(table.email),
+    index("portal_sessions_expires_idx").on(table.expiresAt),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
 // ══  INVOICE REMINDERS  ══════════════════════════════════
 // ══════════════════════════════════════════════════════════
 
