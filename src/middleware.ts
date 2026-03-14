@@ -85,11 +85,18 @@ export function middleware(req: NextRequest) {
     req.cookies.get("authjs.session-token");
 
   const isLoggedIn = !!token;
-  const isOnDashboard = pathname.startsWith("/dashboard");
+  const isOnDashboard =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/api/dashboard/");
   const isOnLogin = pathname === "/login";
 
-  // Redirect unauthenticated users to login
+  // Redirect unauthenticated users to login (API routes get 401 instead of redirect)
   if (isOnDashboard && !isLoggedIn) {
+    if (pathname.startsWith("/api/")) {
+      return addSecurityHeaders(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      );
+    }
     return addSecurityHeaders(
       NextResponse.redirect(new URL("/login", req.url))
     );
@@ -108,6 +115,9 @@ export function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/api/dashboard/:path*",
+    "/api/cron/:path*",
+    "/api/webhooks/:path*",
     "/login",
     "/portal",
     "/portal/:path*",

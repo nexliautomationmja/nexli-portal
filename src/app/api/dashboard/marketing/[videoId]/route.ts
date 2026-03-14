@@ -106,6 +106,24 @@ export async function GET(
       });
     }
 
+    // Validate URL before fetching (SSRF protection)
+    try {
+      const parsedUrl = new URL(outputVideoUrl);
+      if (!["https:", "http:"].includes(parsedUrl.protocol)) {
+        throw new Error("Invalid protocol");
+      }
+      const blockedHosts = ["localhost", "127.0.0.1", "0.0.0.0", "[::1]"];
+      if (blockedHosts.includes(parsedUrl.hostname) || parsedUrl.hostname.endsWith(".internal")) {
+        throw new Error("Internal URL blocked");
+      }
+    } catch {
+      await db
+        .update(marketingVideos)
+        .set({ status: "failed", errorMessage: "Invalid video URL from provider", updatedAt: new Date() })
+        .where(eq(marketingVideos.id, video.id));
+      return NextResponse.json({ status: "failed", errorMessage: "Invalid video URL" });
+    }
+
     // Download video from fal.ai and upload to Supabase
     const videoResponse = await fetch(outputVideoUrl);
     const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
