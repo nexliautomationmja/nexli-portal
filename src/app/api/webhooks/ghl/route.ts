@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, leadNotifications } from "@/db/schema";
-import { eq, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
+  // C3: Verify shared secret if configured
+  const webhookSecret = process.env.GHL_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const authHeader = req.headers.get("authorization");
+    const querySecret = req.nextUrl.searchParams.get("secret");
+    const providedSecret = authHeader?.replace("Bearer ", "") || querySecret;
+
+    if (providedSecret !== webhookSecret) {
+      console.error("[GHL Webhook] Invalid or missing webhook secret");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -23,28 +36,20 @@ export async function POST(req: NextRequest) {
     ((body.contact as Record<string, unknown>)?.locationId as string) ||
     null;
 
-  // Find user by locationId, or fall back to any user with GHL connected
-  let user: { id: string } | undefined;
-
-  if (locationId) {
-    [user] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.ghlLocationId, locationId))
-      .limit(1);
+  // C4: Only match users by locationId — no insecure fallback
+  if (!locationId) {
+    console.error("[GHL Webhook] No locationId found in payload");
+    return NextResponse.json({ error: "Missing locationId" }, { status: 400 });
   }
 
-  if (!user) {
-    // Fallback: find any user with a GHL location configured
-    [user] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(isNotNull(users.ghlLocationId))
-      .limit(1);
-  }
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.ghlLocationId, locationId))
+    .limit(1);
 
   if (!user) {
-    console.error("[GHL Webhook] No user found with GHL location connected");
+    console.error("[GHL Webhook] No user found for locationId:", locationId);
     return NextResponse.json({ ok: true, skipped: true });
   }
 

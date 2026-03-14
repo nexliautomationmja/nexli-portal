@@ -9,7 +9,7 @@ import {
   engagements,
   taxReturns,
 } from "@/db/schema";
-import { eq, and, desc, or, inArray } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { getPortalSessionFromRequest } from "@/lib/portal-auth";
 
 export async function GET(req: NextRequest) {
@@ -19,16 +19,16 @@ export async function GET(req: NextRequest) {
   }
 
   const email = session.email;
+  const ownerId = session.ownerId;
 
   // Invoices
   const clientInvoices = await db
     .select()
     .from(invoices)
     .where(
-      and(
-        eq(invoices.clientEmail, email),
-        // Exclude drafts — client shouldn't see unsent invoices
-      )
+      ownerId
+        ? and(eq(invoices.clientEmail, email), eq(invoices.ownerId, ownerId))
+        : eq(invoices.clientEmail, email)
     )
     .orderBy(desc(invoices.createdAt));
 
@@ -42,33 +42,59 @@ export async function GET(req: NextRequest) {
   const clientDocs = await db
     .select()
     .from(documents)
-    .where(eq(documents.clientEmail, email));
+    .where(
+      ownerId
+        ? and(eq(documents.clientEmail, email), eq(documents.ownerId, ownerId))
+        : eq(documents.clientEmail, email)
+    );
 
   // Active upload links
   const activeLinks = await db
     .select()
     .from(documentLinks)
     .where(
-      and(eq(documentLinks.clientEmail, email), eq(documentLinks.status, "active"))
+      ownerId
+        ? and(eq(documentLinks.clientEmail, email), eq(documentLinks.ownerId, ownerId), eq(documentLinks.status, "active"))
+        : and(eq(documentLinks.clientEmail, email), eq(documentLinks.status, "active"))
     );
 
   // E-signature requests
   const esignRequests = await db
     .select()
     .from(eSignatures)
-    .where(eq(eSignatures.signerEmail, email));
+    .where(
+      ownerId
+        ? and(eq(eSignatures.signerEmail, email), eq(eSignatures.ownerId, ownerId))
+        : eq(eSignatures.signerEmail, email)
+    );
 
   const pendingEsigns = esignRequests.filter((e) =>
     ["pending", "sent", "viewed"].includes(e.status)
   );
 
-  // Engagement letters
+  // Engagement letters — engagementSigners has no ownerId, scope via engagements table
   const signerRows = await db
     .select()
     .from(engagementSigners)
     .where(eq(engagementSigners.email, email));
 
-  const pendingEngagements = signerRows.filter((s) =>
+  // Filter signers by ownerId through engagements table
+  let filteredSigners = signerRows;
+  if (ownerId && signerRows.length > 0) {
+    const engagementIds = [...new Set(signerRows.map((s) => s.engagementId))];
+    const ownedEngagementIds = new Set<string>();
+    for (const eid of engagementIds) {
+      const [eng] = await db
+        .select({ id: engagements.id })
+        .from(engagements)
+        .where(and(eq(engagements.id, eid), eq(engagements.ownerId, ownerId)))
+        .limit(1);
+      if (eng) ownedEngagementIds.add(eid);
+    }
+    filteredSigners = signerRows.filter((s) => ownedEngagementIds.has(s.engagementId));
+  }
+
+  const pendingEngagements = filteredSigners.filter((s) =>
     ["sent", "viewed"].includes(s.status)
   );
 
@@ -76,7 +102,11 @@ export async function GET(req: NextRequest) {
   const clientReturns = await db
     .select()
     .from(taxReturns)
-    .where(eq(taxReturns.clientEmail, email));
+    .where(
+      ownerId
+        ? and(eq(taxReturns.clientEmail, email), eq(taxReturns.ownerId, ownerId))
+        : eq(taxReturns.clientEmail, email)
+    );
 
   const inProgressReturns = clientReturns.filter((r) =>
     ["not_started", "documents_received", "in_progress"].includes(r.status)

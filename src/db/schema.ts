@@ -794,6 +794,9 @@ export const portalSessions = pgTable(
     email: text("email").notNull(),
     sessionToken: text("session_token").notNull().unique(),
     clientName: text("client_name"),
+    ownerId: uuid("owner_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

@@ -56,18 +56,25 @@ export async function verifyMagicLink(
   return { email: link.email };
 }
 
+export type PortalSession = {
+  email: string;
+  clientName: string | null;
+  ownerId: string | null;
+};
+
 /**
  * Create a portal session for the given email. Returns the session token string.
- * Looks up clientName from invoices for display.
+ * Looks up clientName and ownerId from invoices for display and tenant scoping.
  */
 export async function createPortalSession(email: string): Promise<string> {
   const sessionToken = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-  // Try to find a client name from existing invoice data
+  // Try to find a client name and ownerId from existing invoice data
   let clientName: string | null = null;
+  let ownerId: string | null = null;
   const [invoice] = await db
-    .select({ clientName: invoices.clientName })
+    .select({ clientName: invoices.clientName, ownerId: invoices.ownerId })
     .from(invoices)
     .where(eq(invoices.clientEmail, email.toLowerCase().trim()))
     .orderBy(desc(invoices.createdAt))
@@ -75,35 +82,30 @@ export async function createPortalSession(email: string): Promise<string> {
 
   if (invoice) {
     clientName = invoice.clientName;
+    ownerId = invoice.ownerId;
   }
 
   await db.insert(portalSessions).values({
     email: email.toLowerCase().trim(),
     sessionToken,
     clientName,
+    ownerId,
     expiresAt,
   });
 
   // Notify CPA of portal login
-  try {
-    const [ownerInvoice] = await db
-      .select({ ownerId: invoices.ownerId })
-      .from(invoices)
-      .where(eq(invoices.clientEmail, email.toLowerCase().trim()))
-      .orderBy(desc(invoices.createdAt))
-      .limit(1);
-
-    if (ownerInvoice) {
+  if (ownerId) {
+    try {
       await createNotification({
-        userId: ownerInvoice.ownerId,
+        userId: ownerId,
         type: "portal_login",
         title: "Client Portal Login",
         message: `${clientName || email} signed in to the client portal`,
         metadata: { clientEmail: email, clientName },
       });
+    } catch {
+      // Non-critical — don't block session creation
     }
-  } catch {
-    // Non-critical — don't block session creation
   }
 
   return sessionToken;
@@ -114,7 +116,7 @@ export async function createPortalSession(email: string): Promise<string> {
  */
 export async function getPortalSession(
   sessionToken: string
-): Promise<{ email: string; clientName: string | null } | null> {
+): Promise<PortalSession | null> {
   const [session] = await db
     .select()
     .from(portalSessions)
@@ -127,7 +129,11 @@ export async function getPortalSession(
     .limit(1);
 
   if (!session) return null;
-  return { email: session.email, clientName: session.clientName };
+  return {
+    email: session.email,
+    clientName: session.clientName,
+    ownerId: session.ownerId,
+  };
 }
 
 /**
@@ -147,7 +153,7 @@ export async function deletePortalSession(
  */
 export async function getPortalSessionFromRequest(
   req: NextRequest
-): Promise<{ email: string; clientName: string | null } | null> {
+): Promise<PortalSession | null> {
   const token = req.cookies.get(PORTAL_SESSION_COOKIE)?.value;
   if (!token) return null;
   return getPortalSession(token);
