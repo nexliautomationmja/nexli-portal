@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { taxReturns } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { getPortalSessionFromRequest } from "@/lib/portal-auth";
 
 export async function GET(req: NextRequest) {
@@ -10,10 +10,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const ownerId = session.ownerId;
+
   const rows = await db
     .select()
     .from(taxReturns)
-    .where(eq(taxReturns.clientEmail, session.email))
+    .where(
+      ownerId
+        ? and(eq(taxReturns.clientEmail, session.email), eq(taxReturns.ownerId, ownerId))
+        : eq(taxReturns.clientEmail, session.email)
+    )
     .orderBy(desc(taxReturns.taxYear));
 
   return NextResponse.json({
@@ -27,7 +33,6 @@ export async function GET(req: NextRequest) {
       dueDate: r.dueDate,
       filedDate: r.filedDate,
       acceptedDate: r.acceptedDate,
-      notes: r.notes,
       createdAt: r.createdAt,
     })),
   });

@@ -11,26 +11,39 @@ export async function GET(req: NextRequest) {
   }
 
   const email = session.email;
+  const ownerId = session.ownerId;
 
   // Documents uploaded by/for the client
   const clientDocs = await db
     .select()
     .from(documents)
-    .where(eq(documents.clientEmail, email))
+    .where(
+      ownerId
+        ? and(eq(documents.clientEmail, email), eq(documents.ownerId, ownerId))
+        : eq(documents.clientEmail, email)
+    )
     .orderBy(desc(documents.createdAt));
 
   // Active upload links
   const uploadLinks = await db
     .select()
     .from(documentLinks)
-    .where(eq(documentLinks.clientEmail, email))
+    .where(
+      ownerId
+        ? and(eq(documentLinks.clientEmail, email), eq(documentLinks.ownerId, ownerId))
+        : eq(documentLinks.clientEmail, email)
+    )
     .orderBy(desc(documentLinks.createdAt));
 
   // E-signature requests
   const esignRequests = await db
     .select()
     .from(eSignatures)
-    .where(eq(eSignatures.signerEmail, email))
+    .where(
+      ownerId
+        ? and(eq(eSignatures.signerEmail, email), eq(eSignatures.ownerId, ownerId))
+        : eq(eSignatures.signerEmail, email)
+    )
     .orderBy(desc(eSignatures.createdAt));
 
   return NextResponse.json({

@@ -7,20 +7,58 @@ import {
   taxReturns,
   eSignatures,
   documentLinks,
+  portalMagicLinks,
 } from "@/db/schema";
-import { eq, or } from "drizzle-orm";
+import { eq, and, gt, count } from "drizzle-orm";
 import { generateMagicLink } from "@/lib/portal-auth";
 import { sendEmailWithLog, buildMagicLinkEmail } from "@/lib/email";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const email = (body.email || "").toLowerCase().trim();
+  // Rate limit by IP (10 requests per 15 min)
+  const ip = getClientIp(req);
+  const ipLimit = checkRateLimit(`send-link:ip:${ip}`, 10, 15 * 60 * 1000);
+  if (!ipLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429 }
+    );
+  }
 
-  if (!email || !email.includes("@")) {
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
+    );
+  }
+
+  const email = ((body.email as string) || "").toLowerCase().trim();
+
+  if (!email || !email.includes("@") || email.length > 254) {
     return NextResponse.json(
       { error: "Valid email is required" },
       { status: 400 }
     );
+  }
+
+  // Rate limit by email (3 magic links per 15 min via DB check)
+  const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
+  const [recentCount] = await db
+    .select({ count: count() })
+    .from(portalMagicLinks)
+    .where(
+      and(
+        eq(portalMagicLinks.email, email),
+        gt(portalMagicLinks.createdAt, fifteenMinAgo)
+      )
+    );
+
+  if (recentCount && recentCount.count >= 3) {
+    // Still return success to prevent email enumeration
+    return NextResponse.json({ success: true });
   }
 
   // Check if any data exists for this email (across all client-facing tables)
