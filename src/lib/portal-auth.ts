@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { db } from "@/db";
 import { portalMagicLinks, portalSessions, invoices } from "@/db/schema";
 import { eq, and, gt, isNull, desc } from "drizzle-orm";
+import { createNotification } from "@/lib/notifications";
 import type { NextRequest } from "next/server";
 
 export const PORTAL_SESSION_COOKIE = "nexli-portal-session";
@@ -82,6 +83,28 @@ export async function createPortalSession(email: string): Promise<string> {
     clientName,
     expiresAt,
   });
+
+  // Notify CPA of portal login
+  try {
+    const [ownerInvoice] = await db
+      .select({ ownerId: invoices.ownerId })
+      .from(invoices)
+      .where(eq(invoices.clientEmail, email.toLowerCase().trim()))
+      .orderBy(desc(invoices.createdAt))
+      .limit(1);
+
+    if (ownerInvoice) {
+      createNotification({
+        userId: ownerInvoice.ownerId,
+        type: "portal_login",
+        title: "Client Portal Login",
+        message: `${clientName || email} signed in to the client portal`,
+        metadata: { clientEmail: email, clientName },
+      }).catch(() => {});
+    }
+  } catch {
+    // Non-critical — don't block session creation
+  }
 
   return sessionToken;
 }

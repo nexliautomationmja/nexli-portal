@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { documentLinks, documents, documentAuditLog } from "@/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
+import { createNotification } from "@/lib/notifications";
 
 function getSupabase() {
   return createClient(
@@ -181,6 +182,15 @@ export async function POST(
     .update(documentLinks)
     .set({ uploadCount: (link.uploadCount || 0) + files.length })
     .where(eq(documentLinks.id, link.id));
+
+  // Notify CPA
+  createNotification({
+    userId: link.ownerId,
+    type: "document_uploaded",
+    title: "Document Uploaded",
+    message: `${clientName || "A client"} uploaded ${uploadedDocs.length} document${uploadedDocs.length > 1 ? "s" : ""}`,
+    metadata: { linkId: link.id, clientName, count: uploadedDocs.length },
+  }).catch((err) => console.error("Upload notification failed:", err));
 
   return NextResponse.json({
     ok: true,
