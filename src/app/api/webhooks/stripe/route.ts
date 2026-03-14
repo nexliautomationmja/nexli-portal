@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import type Stripe from "stripe";
-import { sendEmail, buildInvoicePaidEmail } from "@/lib/email";
+import { sendEmailWithLog, buildInvoicePaidEmail, buildPaymentReceiptEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 
@@ -214,16 +214,46 @@ async function handleInvoicePayment(session: Stripe.Checkout.Session) {
         ? formatCurrency(invoice.total, invoice.currency)
         : `${formatCurrency(paymentAmount, invoice.currency)} (partial — ${formatCurrency(newBalanceDue, invoice.currency)} remaining)`;
       const { subject, html } = buildInvoicePaidEmail({
-        cpaName: owner.name || owner.email,
+        senderName: owner.name || owner.email,
         clientName: invoice.clientName,
         invoiceNumber: invoice.invoiceNumber,
         total: paidLabel,
         paidAt: new Date(),
       });
-      await sendEmail({ to: owner.email, subject, html });
+      await sendEmailWithLog({ to: owner.email, subject, html, recipientName: owner.name || undefined, emailType: "invoice_paid", relatedId: invoice.id });
     }
   } catch (err) {
     console.error("Failed to send invoice paid email:", err);
+  }
+
+  // Send payment receipt to the client
+  try {
+    const portalUrl =
+      process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+
+    const [owner] = await db
+      .select({ name: users.name, email: users.email, companyName: users.companyName })
+      .from(users)
+      .where(eq(users.id, invoice.ownerId))
+      .limit(1);
+
+    const senderLabel = owner?.companyName || owner?.name || owner?.email || "Your Service Provider";
+
+    const { subject: receiptSubject, html: receiptHtml } = buildPaymentReceiptEmail({
+      clientName: invoice.clientName,
+      senderName: senderLabel,
+      invoiceNumber: invoice.invoiceNumber,
+      amountPaid: formatCurrency(paymentAmount, invoice.currency),
+      totalInvoice: formatCurrency(invoice.total, invoice.currency),
+      remainingBalance: newBalanceDue > 0
+        ? formatCurrency(newBalanceDue, invoice.currency)
+        : null,
+      paidAt: new Date(),
+      portalUrl,
+    });
+    await sendEmailWithLog({ to: invoice.clientEmail, subject: receiptSubject, html: receiptHtml, recipientName: invoice.clientName, emailType: "payment_receipt", relatedId: invoice.id });
+  } catch (err) {
+    console.error("Failed to send payment receipt to client:", err);
   }
 
   // Sync payment to accounting software (non-blocking)

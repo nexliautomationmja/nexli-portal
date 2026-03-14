@@ -9,7 +9,7 @@ import {
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
-import { sendEmail, buildEngagementRequestEmail } from "@/lib/email";
+import { sendEmailWithLog, buildEngagementRequestEmail } from "@/lib/email";
 
 export async function GET() {
   const session = await auth();
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
   // Create signers and send emails
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-  const cpaName = session.user.name || session.user.email || "Your CPA";
+  const senderName = session.user.name || session.user.email || "Your Service Provider";
   const cpaEmail = session.user.email || "";
   const emailErrors: string[] = [];
   const signers: { name: string; email: string; engageUrl: string }[] = [];
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
 
   await db.insert(engagementSigners).values({
     engagementId: engagement.id,
-    name: cpaName,
+    name: senderName,
     email: cpaEmail,
     token: cpaToken,
     order: 0,
@@ -178,18 +178,18 @@ export async function POST(req: NextRequest) {
       : "Authorized Representative",
   });
 
-  signers.push({ name: cpaName, email: cpaEmail, engageUrl: cpaEngageUrl });
+  signers.push({ name: senderName, email: cpaEmail, engageUrl: cpaEngageUrl });
 
   // Send signing email to the CPA
   try {
     const { subject: cpaSubject, html: cpaHtml } = buildEngagementRequestEmail({
-      clientName: cpaName,
-      cpaName: "Nexli",
+      clientName: senderName,
+      senderName: "Nexli",
       subject,
       engageUrl: cpaEngageUrl,
       expiresAt,
     });
-    await sendEmail({ to: cpaEmail, subject: cpaSubject, html: cpaHtml });
+    await sendEmailWithLog({ to: cpaEmail, subject: cpaSubject, html: cpaHtml, recipientName: senderName, emailType: "engagement_request", relatedId: engagement.id, sentBy: session.user.id });
   } catch (err) {
     console.error(`Failed to send engagement email to CPA ${cpaEmail}:`, err);
     emailErrors.push(
@@ -218,12 +218,12 @@ export async function POST(req: NextRequest) {
     try {
       const { subject: emailSubject, html } = buildEngagementRequestEmail({
         clientName: name,
-        cpaName,
+        senderName,
         subject,
         engageUrl,
         expiresAt,
       });
-      await sendEmail({ to: email, subject: emailSubject, html });
+      await sendEmailWithLog({ to: email, subject: emailSubject, html, recipientName: name, emailType: "engagement_request", relatedId: engagement.id, sentBy: session.user.id });
     } catch (err) {
       console.error(`Failed to send engagement email to ${email}:`, err);
       emailErrors.push(

@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { invoices, invoiceReminders, invoiceLineItems, users } from "@/db/schema";
 import { eq, and, lte, isNull, inArray, not } from "drizzle-orm";
 import {
-  sendEmail,
+  sendEmailWithLog,
   buildInvoiceReminderEmail,
 } from "@/lib/email";
 import {
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
           .where(eq(users.id, invoice.ownerId))
           .limit(1);
 
-        const cpaName = owner?.name || owner?.email || "Your Service Provider";
+        const senderName = owner?.name || owner?.email || "Your Service Provider";
         const portalUrl =
           process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
         const invoiceUrl = `${portalUrl}/invoice/${invoice.token}`;
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
 
         const { subject, html } = buildInvoiceReminderEmail({
           clientName: invoice.clientName,
-          cpaName,
+          senderName,
           invoiceNumber: invoice.invoiceNumber,
           total: formatCurrency(invoice.total, invoice.currency),
           dueDate: invoice.dueDate,
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
           invoiceUrl,
         });
 
-        await sendEmail({ to: invoice.clientEmail, subject, html });
+        await sendEmailWithLog({ to: invoice.clientEmail, subject, html, recipientName: invoice.clientName, emailType: "invoice_reminder", relatedId: invoice.id });
 
         await db
           .update(invoiceReminders)

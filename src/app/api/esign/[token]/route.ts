@@ -7,7 +7,7 @@ import {
   users,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { sendEmail, buildEsignCompletedEmail } from "@/lib/email";
+import { sendEmailWithLog, buildEsignCompletedEmail } from "@/lib/email";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let _supabase: SupabaseClient | null = null;
@@ -168,13 +168,13 @@ export async function POST(
 
     if (owner?.email) {
       const { subject, html } = buildEsignCompletedEmail({
-        cpaName: owner.name || owner.email,
+        senderName: owner.name || owner.email,
         cpaEmail: owner.email,
         signerName: esign.signerName,
         documentName: result.documentName,
         signedAt: new Date(),
       });
-      await sendEmail({ to: owner.email, subject, html });
+      await sendEmailWithLog({ to: owner.email, subject, html, recipientName: owner.name || undefined, emailType: "esign_completed", relatedId: esign.id });
     }
   } catch (err) {
     console.error("Failed to send esign completed email:", err);

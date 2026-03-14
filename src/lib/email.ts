@@ -1,4 +1,6 @@
 import { Resend } from "resend";
+import { db } from "@/db";
+import { emailLog } from "@/db/schema";
 
 let _resend: Resend | null = null;
 function getResend() {
@@ -31,6 +33,53 @@ export async function sendEmail({ to, subject, html }: SendEmailParams) {
   }
 
   return { id: data?.id };
+}
+
+interface SendEmailWithLogParams extends SendEmailParams {
+  recipientName?: string;
+  emailType: string;
+  relatedId?: string;
+  sentBy?: string;
+}
+
+export async function sendEmailWithLog({
+  to,
+  subject,
+  html,
+  recipientName,
+  emailType,
+  relatedId,
+  sentBy,
+}: SendEmailWithLogParams) {
+  try {
+    const result = await sendEmail({ to, subject, html });
+    await db.insert(emailLog).values({
+      recipientEmail: to,
+      recipientName,
+      subject,
+      emailType,
+      relatedId,
+      status: "sent",
+      resendMessageId: result.id,
+      sentBy,
+    });
+    return result;
+  } catch (err) {
+    await db
+      .insert(emailLog)
+      .values({
+        recipientEmail: to,
+        recipientName,
+        subject,
+        emailType,
+        relatedId,
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+        sentBy,
+      })
+      .catch(() => {}); // Don't let log failure mask the real error
+    throw err;
+  }
 }
 
 // ── Shared email styles ──────────────────────────────────
@@ -100,13 +149,13 @@ const buttonStyle = `display:inline-block;background:linear-gradient(135deg,#256
 
 export function buildUploadRequestEmail(params: {
   clientName: string;
-  cpaName: string;
+  senderName: string;
   uploadUrl: string;
   requiredDocs: string[];
   message?: string;
   expiresAt: Date;
 }): { subject: string; html: string } {
-  const { clientName, cpaName, uploadUrl, requiredDocs, message, expiresAt } =
+  const { clientName, senderName, uploadUrl, requiredDocs, message, expiresAt } =
     params;
   const expDate = expiresAt.toLocaleDateString("en-US", {
     month: "long",
@@ -132,7 +181,7 @@ export function buildUploadRequestEmail(params: {
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Document Request</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
-      Hi ${clientName || "there"}, <strong style="color:#fff;">${cpaName}</strong> has requested documents from you.
+      Hi ${clientName || "there"}, <strong style="color:#fff;">${senderName}</strong> has requested documents from you.
     </p>
     ${messageBlock}
     ${docList}
@@ -150,7 +199,7 @@ export function buildUploadRequestEmail(params: {
   `);
 
   return {
-    subject: `${cpaName} requested documents from you`,
+    subject: `${senderName} requested documents from you`,
     html,
   };
 }
@@ -159,12 +208,12 @@ export function buildUploadRequestEmail(params: {
 
 export function buildEsignRequestEmail(params: {
   signerName: string;
-  cpaName: string;
+  senderName: string;
   documentName: string;
   signUrl: string;
   expiresAt: Date;
 }): { subject: string; html: string } {
-  const { signerName, cpaName, documentName, signUrl, expiresAt } = params;
+  const { signerName, senderName, documentName, signUrl, expiresAt } = params;
   const expDate = expiresAt.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -174,7 +223,7 @@ export function buildEsignRequestEmail(params: {
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Signature Requested</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
-      Hi ${signerName}, <strong style="color:#fff;">${cpaName}</strong> has requested your signature on a document.
+      Hi ${signerName}, <strong style="color:#fff;">${senderName}</strong> has requested your signature on a document.
     </p>
     <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
       <p style="margin:0;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Document</p>
@@ -191,7 +240,7 @@ export function buildEsignRequestEmail(params: {
   `);
 
   return {
-    subject: `${cpaName} needs your signature — ${documentName}`,
+    subject: `${senderName} needs your signature — ${documentName}`,
     html,
   };
 }
@@ -199,13 +248,13 @@ export function buildEsignRequestEmail(params: {
 // ── E-Sign Completed Email (to CPA) ─────────────────────
 
 export function buildEsignCompletedEmail(params: {
-  cpaName: string;
+  senderName: string;
   cpaEmail: string;
   signerName: string;
   documentName: string;
   signedAt: Date;
 }): { subject: string; html: string } {
-  const { cpaName, signerName, documentName, signedAt } = params;
+  const { senderName, signerName, documentName, signedAt } = params;
   const signDate = signedAt.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -217,7 +266,7 @@ export function buildEsignCompletedEmail(params: {
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Document Signed</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
-      Hi ${cpaName}, <strong style="color:#10B981;">${signerName}</strong> has signed your document.
+      Hi ${senderName}, <strong style="color:#10B981;">${signerName}</strong> has signed your document.
     </p>
     <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
       <table width="100%" cellpadding="0" cellspacing="0">
@@ -250,12 +299,12 @@ export function buildEsignCompletedEmail(params: {
 
 export function buildEngagementRequestEmail(params: {
   clientName: string;
-  cpaName: string;
+  senderName: string;
   subject: string;
   engageUrl: string;
   expiresAt: Date;
 }): { subject: string; html: string } {
-  const { clientName, cpaName, subject, engageUrl, expiresAt } = params;
+  const { clientName, senderName, subject, engageUrl, expiresAt } = params;
   const expDate = expiresAt.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -265,7 +314,7 @@ export function buildEngagementRequestEmail(params: {
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Engagement Letter</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
-      Hi ${clientName}, <strong style="color:#fff;">${cpaName}</strong> has sent you an engagement letter for review and signature.
+      Hi ${clientName}, <strong style="color:#fff;">${senderName}</strong> has sent you an engagement letter for review and signature.
     </p>
     <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
       <p style="margin:0;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Subject</p>
@@ -282,7 +331,7 @@ export function buildEngagementRequestEmail(params: {
   `);
 
   return {
-    subject: `${cpaName} sent you an engagement letter — ${subject}`,
+    subject: `${senderName} sent you an engagement letter — ${subject}`,
     html,
   };
 }
@@ -290,12 +339,12 @@ export function buildEngagementRequestEmail(params: {
 // ── Engagement Signed Email (to CPA) ─────────────────────
 
 export function buildEngagementSignedEmail(params: {
-  cpaName: string;
+  senderName: string;
   clientName: string;
   subject: string;
   signedAt: Date;
 }): { subject: string; html: string } {
-  const { cpaName, clientName, subject, signedAt } = params;
+  const { senderName, clientName, subject, signedAt } = params;
   const signDate = signedAt.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -307,7 +356,7 @@ export function buildEngagementSignedEmail(params: {
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Engagement Letter Signed</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
-      Hi ${cpaName}, <strong style="color:#10B981;">${clientName}</strong> has signed your engagement letter.
+      Hi ${senderName}, <strong style="color:#10B981;">${clientName}</strong> has signed your engagement letter.
     </p>
     <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
       <table width="100%" cellpadding="0" cellspacing="0">
@@ -344,13 +393,13 @@ export function buildEngagementSignedEmail(params: {
 
 export function buildInvoiceEmail(params: {
   clientName: string;
-  cpaName: string;
+  senderName: string;
   invoiceNumber: string;
   total: string;
   dueDate: Date;
   invoiceUrl: string;
 }): { subject: string; html: string } {
-  const { clientName, cpaName, invoiceNumber, total, dueDate, invoiceUrl } =
+  const { clientName, senderName, invoiceNumber, total, dueDate, invoiceUrl } =
     params;
   const dueDateStr = dueDate.toLocaleDateString("en-US", {
     month: "long",
@@ -359,7 +408,7 @@ export function buildInvoiceEmail(params: {
   });
 
   const html = emailWrapper(`
-    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Invoice from ${cpaName}</h1>
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Invoice from ${senderName}</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, you have a new invoice ready for payment.
     </p>
@@ -390,7 +439,7 @@ export function buildInvoiceEmail(params: {
   `);
 
   return {
-    subject: `Invoice ${invoiceNumber} from ${cpaName} — ${total} due ${dueDateStr}`,
+    subject: `Invoice ${invoiceNumber} from ${senderName} — ${total} due ${dueDateStr}`,
     html,
   };
 }
@@ -398,13 +447,13 @@ export function buildInvoiceEmail(params: {
 // ── Invoice Paid Email (to CPA) ──────────────────────────
 
 export function buildInvoicePaidEmail(params: {
-  cpaName: string;
+  senderName: string;
   clientName: string;
   invoiceNumber: string;
   total: string;
   paidAt: Date;
 }): { subject: string; html: string } {
-  const { cpaName, clientName, invoiceNumber, total, paidAt } = params;
+  const { senderName, clientName, invoiceNumber, total, paidAt } = params;
   const paidDate = paidAt.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -416,7 +465,7 @@ export function buildInvoicePaidEmail(params: {
   const html = emailWrapper(`
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Invoice Paid</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
-      Hi ${cpaName}, <strong style="color:#10B981;">${clientName}</strong> has paid invoice ${invoiceNumber}.
+      Hi ${senderName}, <strong style="color:#10B981;">${clientName}</strong> has paid invoice ${invoiceNumber}.
     </p>
     <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
       <table width="100%" cellpadding="0" cellspacing="0">
@@ -453,7 +502,7 @@ export function buildInvoicePaidEmail(params: {
 
 export function buildInvoiceReminderEmail(params: {
   clientName: string;
-  cpaName: string;
+  senderName: string;
   invoiceNumber: string;
   total: string;
   dueDate: Date;
@@ -462,7 +511,7 @@ export function buildInvoiceReminderEmail(params: {
 }): { subject: string; html: string } {
   const {
     clientName,
-    cpaName,
+    senderName,
     invoiceNumber,
     total,
     dueDate,
@@ -477,8 +526,8 @@ export function buildInvoiceReminderEmail(params: {
 
   const heading = isOverdue ? "Invoice Overdue" : "Invoice Reminder";
   const message = isOverdue
-    ? `Your invoice ${invoiceNumber} from ${cpaName} was due on ${dueDateStr} and is now overdue.`
-    : `This is a reminder that invoice ${invoiceNumber} from ${cpaName} is due on ${dueDateStr}.`;
+    ? `Your invoice ${invoiceNumber} from ${senderName} was due on ${dueDateStr} and is now overdue.`
+    : `This is a reminder that invoice ${invoiceNumber} from ${senderName} is due on ${dueDateStr}.`;
   const urgencyColor = isOverdue ? "#EF4444" : "#F59E0B";
   const urgencyBg = isOverdue ? "#1f0f0f" : "#1f1a0d";
   const urgencyBorder = isOverdue ? "#3d1616" : "#3d3010";
@@ -550,4 +599,82 @@ export function buildMagicLinkEmail(params: {
     subject: "Sign in to your Nexli Portal",
     html,
   };
+}
+
+// ── Payment Receipt Email (to Client) ────────────────────
+
+export function buildPaymentReceiptEmail(params: {
+  clientName: string;
+  senderName: string;
+  invoiceNumber: string;
+  amountPaid: string;
+  totalInvoice: string;
+  remainingBalance: string | null;
+  paidAt: Date;
+  portalUrl: string;
+}): { subject: string; html: string } {
+  const {
+    clientName,
+    senderName,
+    invoiceNumber,
+    amountPaid,
+    totalInvoice,
+    remainingBalance,
+    paidAt,
+    portalUrl,
+  } = params;
+  const paidDate = paidAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const isPartial = remainingBalance !== null;
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Payment Receipt</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
+      Hi ${clientName}, your payment to <strong style="color:#fff;">${senderName}</strong> has been received. Thank you!
+    </p>
+    <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${invoiceNumber}</td>
+        </tr>
+        <tr>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Amount Paid</td>
+          <td style="color:#10B981;font-size:18px;font-weight:800;text-align:right;padding:4px 0;">${amountPaid}</td>
+        </tr>
+        ${isPartial ? `
+        <tr>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice Total</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${totalInvoice}</td>
+        </tr>
+        <tr>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Remaining Balance</td>
+          <td style="color:#F59E0B;font-size:13px;font-weight:700;text-align:right;padding:4px 0;">${remainingBalance}</td>
+        </tr>
+        ` : ""}
+        <tr>
+          <td style="color:#808090;font-size:11px;padding:4px 0;">Date</td>
+          <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${paidDate}</td>
+        </tr>
+      </table>
+    </div>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${portalUrl}/portal" style="${buttonStyle}">View in Client Portal</a>
+    </div>
+    <p style="margin:0;color:#666675;font-size:12px;text-align:center;">
+      Keep this email as your payment confirmation.
+    </p>
+  `);
+
+  const subject = isPartial
+    ? `Payment received — ${amountPaid} toward invoice ${invoiceNumber}`
+    : `Payment receipt — Invoice ${invoiceNumber} paid in full`;
+
+  return { subject, html };
 }

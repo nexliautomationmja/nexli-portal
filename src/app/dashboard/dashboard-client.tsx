@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useGHL } from "@/lib/hooks/use-ghl";
 import { useGHLMetrics } from "@/lib/hooks/use-ghl-metrics";
+import { useInvoiceAnalytics } from "@/lib/hooks/use-invoice-analytics";
+import { usePortalActivity } from "@/lib/hooks/use-portal-activity";
+import { RevenueChart } from "@/components/dashboard/charts/revenue-chart";
 import {
   FileIcon,
   UsersIcon,
@@ -20,13 +23,41 @@ interface OverviewProps {
   isAdmin: boolean;
 }
 
+function formatCentsToDollars(cents: number) {
+  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+const activityTypeConfig = {
+  payment: { color: "bg-emerald-500", label: "Payment" },
+  document: { color: "bg-blue-500", label: "Document" },
+  engagement: { color: "bg-violet-500", label: "Engagement" },
+  login: { color: "bg-gray-400", label: "Login" },
+} as const;
+
 export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
   const { data: ghlData, loading: ghlLoading } = useGHL();
   const { data: ghlMetrics, loading: metricsLoading } = useGHLMetrics("7d");
+  const { data: analytics, loading: analyticsLoading } = useInvoiceAnalytics();
+  const { data: portalActivity, loading: activityLoading } = usePortalActivity();
 
   return (
     <div className="space-y-6">
-      {/* Stat cards — flat, no decoration */}
+      {/* Core stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Link href="/dashboard/documents" className="glass-card p-4 no-underline hover:bg-[var(--input-bg)] transition-colors">
           <div className="flex items-center justify-between mb-2">
@@ -66,6 +97,49 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
           </p>
           <p className="stat-label mt-1">Conversion Rate</p>
         </Link>
+      </div>
+
+      {/* Revenue Section */}
+      <div>
+        <p className="section-header">Revenue</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div className="glass-card p-4">
+            <p className="stat-label">Collected</p>
+            <p className="stat-value text-emerald-500">
+              {analyticsLoading ? "—" : formatCentsToDollars(analytics?.stats.totalCollected ?? 0)}
+            </p>
+          </div>
+          <div className="glass-card p-4">
+            <p className="stat-label">Outstanding</p>
+            <p className="stat-value">
+              {analyticsLoading ? "—" : formatCentsToDollars(analytics?.stats.totalOutstanding ?? 0)}
+            </p>
+          </div>
+          <div className="glass-card p-4">
+            <p className="stat-label">Overdue</p>
+            <p className="stat-value text-rose-500">
+              {analyticsLoading ? "—" : analytics?.stats.overdueCount ?? 0}
+            </p>
+          </div>
+          <div className="glass-card p-4">
+            <p className="stat-label">Avg Days to Pay</p>
+            <p className="stat-value">
+              {analyticsLoading ? "—" : `${analytics?.stats.avgDaysToPay ?? 0}d`}
+            </p>
+          </div>
+        </div>
+        <div className="glass-card p-5">
+          <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-main)" }}>
+            Monthly Revenue
+          </h3>
+          {analyticsLoading ? (
+            <div className="h-[240px] flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <RevenueChart data={analytics?.chartData ?? []} />
+          )}
+        </div>
       </div>
 
       {/* Activity row */}
@@ -150,43 +224,43 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
       <div>
         <p className="section-header">Quick Access</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* Recent Documents */}
+          {/* Portal Activity */}
           <div className="glass-card p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>
-                Recent Documents
+                Portal Activity
               </h3>
-              <Link href="/dashboard/documents" className="text-xs font-semibold text-blue-500 hover:underline">
-                View All
-              </Link>
             </div>
-            {docStats.total === 0 ? (
-              <div className="empty-state">
-                <FileIcon className="empty-state-icon" />
-                <p className="text-sm mb-3">No documents yet. Create a secure link to get started.</p>
-                <Link
-                  href="/dashboard/documents/links"
-                  className="inline-block px-4 py-2 rounded-lg text-xs font-semibold text-blue-500 border border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
-                >
-                  Create Secure Link
-                </Link>
+            {activityLoading ? (
+              <div className="py-8 flex justify-center">
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : portalActivity.length > 0 ? (
+              <div className="space-y-0.5">
+                {portalActivity.slice(0, 8).map((item, i) => {
+                  const config = activityTypeConfig[item.type];
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-[var(--input-bg)] transition-colors"
+                    >
+                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${config.color}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm" style={{ color: "var(--text-main)" }}>
+                          <span className="font-medium">{item.actorName || "Someone"}</span>{" "}
+                          {item.description}
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                          {timeAgo(item.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ background: "var(--input-bg)" }}>
-                  <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                    {docStats.new} pending review
-                  </span>
-                  <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                    {docStats.reviewed} reviewed
-                  </span>
-                </div>
-                <Link
-                  href="/dashboard/documents"
-                  className="block w-full text-center py-2 rounded-lg text-sm font-semibold text-blue-500 hover:bg-[var(--input-bg)] transition-colors"
-                >
-                  Open Document Manager
-                </Link>
+              <div className="empty-state">
+                <p className="text-sm">No recent activity. Activity will show up as clients interact with your portal.</p>
               </div>
             )}
           </div>

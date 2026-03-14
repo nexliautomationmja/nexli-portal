@@ -836,64 +836,12 @@ export function InvoiceClient({ token }: { token: string }) {
           )}
 
           {/* Pay button */}
-          {invoice.stripePaymentUrl && (invoice.balanceDue ?? invoice.total) > 0 && (
-            <div
-              style={{
-                padding: "24px 32px",
-                borderTop: "1px solid #e5e7eb",
-                textAlign: "center",
-              }}
-            >
-              {hasPartialPayment && (
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "8px 16px",
-                    background: "#FFF7ED",
-                    border: "1px solid #FED7AA",
-                    borderRadius: 10,
-                    marginBottom: 16,
-                    fontSize: 13,
-                    color: "#9A3412",
-                    fontWeight: 600,
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 8v4M12 16h.01" />
-                  </svg>
-                  Partial payment received — {formatCurrency(invoice.amountPaid, invoice.currency)} of {formatCurrency(invoice.total, invoice.currency)} paid
-                </div>
-              )}
-              <div>
-                <a
-                  href={invoice.stripePaymentUrl}
-                  style={{
-                    display: "inline-block",
-                    background: "linear-gradient(135deg, #2563EB, #06B6D4)",
-                    color: "#fff",
-                    textDecoration: "none",
-                    padding: "14px 48px",
-                    borderRadius: 12,
-                    fontSize: 16,
-                    fontWeight: 700,
-                  }}
-                >
-                  Pay {formatCurrency(hasPartialPayment ? invoice.balanceDue : invoice.total, invoice.currency)}
-                </a>
-              </div>
-              <p
-                style={{
-                  margin: "12px 0 0",
-                  color: "#999",
-                  fontSize: 12,
-                }}
-              >
-                Secure payment via Stripe
-              </p>
-            </div>
+          {(invoice.balanceDue ?? invoice.total) > 0 && !["paid", "canceled", "void"].includes(invoice.status) && (
+            <PayButton
+              token={token}
+              invoice={invoice}
+              hasPartialPayment={hasPartialPayment}
+            />
           )}
         </div>
       </div>
@@ -925,6 +873,110 @@ export function InvoiceClient({ token }: { token: string }) {
           Powered by Nexli Portal
         </p>
       </footer>
+    </div>
+  );
+}
+
+function PayButton({
+  token,
+  invoice,
+  hasPartialPayment,
+}: {
+  token: string;
+  invoice: InvoiceData;
+  hasPartialPayment: boolean;
+}) {
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState("");
+
+  async function handlePay() {
+    setPaying(true);
+    setPayError("");
+    try {
+      const res = await fetch(`/api/invoice/${token}/checkout`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.checkoutUrl) {
+        setPayError(data.error || "Failed to create payment session.");
+        return;
+      }
+      window.location.href = data.checkoutUrl;
+    } catch {
+      setPayError("Something went wrong. Please try again.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        padding: "24px 32px",
+        borderTop: "1px solid #e5e7eb",
+        textAlign: "center",
+      }}
+    >
+      {hasPartialPayment && (
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 16px",
+            background: "#FFF7ED",
+            border: "1px solid #FED7AA",
+            borderRadius: 10,
+            marginBottom: 16,
+            fontSize: 13,
+            color: "#9A3412",
+            fontWeight: 600,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+          Partial payment received — {formatCurrency(invoice.amountPaid, invoice.currency)} of {formatCurrency(invoice.total, invoice.currency)} paid
+        </div>
+      )}
+      <div>
+        <button
+          onClick={handlePay}
+          disabled={paying}
+          style={{
+            display: "inline-block",
+            background: paying
+              ? "#94a3b8"
+              : "linear-gradient(135deg, #2563EB, #06B6D4)",
+            color: "#fff",
+            border: "none",
+            cursor: paying ? "not-allowed" : "pointer",
+            padding: "14px 48px",
+            borderRadius: 12,
+            fontSize: 16,
+            fontWeight: 700,
+          }}
+        >
+          {paying
+            ? "Redirecting to payment..."
+            : `Pay ${formatCurrency(hasPartialPayment ? invoice.balanceDue : invoice.total, invoice.currency)}`}
+        </button>
+      </div>
+      {payError && (
+        <p style={{ margin: "8px 0 0", color: "#DC2626", fontSize: 13 }}>
+          {payError}
+        </p>
+      )}
+      <p
+        style={{
+          margin: "12px 0 0",
+          color: "#999",
+          fontSize: 12,
+        }}
+      >
+        Secure payment via Stripe
+      </p>
     </div>
   );
 }

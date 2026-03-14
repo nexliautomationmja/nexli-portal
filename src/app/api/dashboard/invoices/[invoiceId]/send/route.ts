@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { invoices, invoiceLineItems, invoiceReminders, users } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { createInvoicePaymentLink } from "@/lib/stripe";
-import { sendEmail, buildInvoiceEmail } from "@/lib/email";
+import { sendEmailWithLog, buildInvoiceEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncInvoiceToAccounting } from "@/lib/accounting-sync";
 
@@ -77,19 +77,19 @@ export async function POST(
     .returning();
 
   // Send email to client
-  const cpaName = session.user.name || session.user.email || "Your Service Provider";
+  const senderName = session.user.name || session.user.email || "Your Service Provider";
   const invoiceUrl = `${portalUrl}/invoice/${invoice.token}`;
 
   try {
     const { subject, html } = buildInvoiceEmail({
       clientName: invoice.clientName,
-      cpaName,
+      senderName,
       invoiceNumber: invoice.invoiceNumber,
       total: formatCurrency(invoice.total, invoice.currency),
       dueDate: invoice.dueDate,
       invoiceUrl,
     });
-    await sendEmail({ to: invoice.clientEmail, subject, html });
+    await sendEmailWithLog({ to: invoice.clientEmail, subject, html, recipientName: invoice.clientName, emailType: "invoice", relatedId: invoice.id, sentBy: session.user.id });
   } catch (err) {
     console.error("Failed to send invoice email:", err);
   }

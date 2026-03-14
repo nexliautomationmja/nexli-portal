@@ -829,3 +829,30 @@ export const invoiceReminders = pgTable(
     ),
   ]
 );
+
+// ══════════════════════════════════════════════════════════
+// ══  EMAIL LOG  ══════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const emailLog = pgTable(
+  "email_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipientEmail: text("recipient_email").notNull(),
+    recipientName: text("recipient_name"),
+    subject: text("subject").notNull(),
+    emailType: text("email_type").notNull(),
+    relatedId: text("related_id"),
+    status: text("status").default("sent").notNull(),
+    resendMessageId: text("resend_message_id"),
+    error: text("error"),
+    sentBy: uuid("sent_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("email_log_recipient_idx").on(table.recipientEmail),
+    index("email_log_type_idx").on(table.emailType),
+    index("email_log_created_idx").on(table.createdAt),
+    index("email_log_sent_by_idx").on(table.sentBy),
+  ]
+);

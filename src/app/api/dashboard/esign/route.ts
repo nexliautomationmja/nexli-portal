@@ -8,7 +8,7 @@ import {
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
-import { sendEmail, buildEsignRequestEmail } from "@/lib/email";
+import { sendEmailWithLog, buildEsignRequestEmail } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -94,17 +94,17 @@ export async function POST(req: NextRequest) {
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
   const signUrl = `${portalUrl}/esign/${token}`;
-  const cpaName = session.user.name || session.user.email || "Your CPA";
+  const senderName = session.user.name || session.user.email || "Your Service Provider";
 
   try {
     const { subject, html } = buildEsignRequestEmail({
       signerName,
-      cpaName,
+      senderName,
       documentName: doc.fileName,
       signUrl,
       expiresAt,
     });
-    await sendEmail({ to: signerEmail, subject, html });
+    await sendEmailWithLog({ to: signerEmail, subject, html, recipientName: signerName, emailType: "esign_request", relatedId: esign.id, sentBy: session.user.id });
   } catch (err) {
     console.error("Failed to send e-sign email:", err);
   }

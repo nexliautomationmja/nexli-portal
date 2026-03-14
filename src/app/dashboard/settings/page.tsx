@@ -8,6 +8,7 @@ import { PasswordForm } from "@/components/dashboard/settings/password-form";
 import { GHLConnection } from "@/components/dashboard/settings/ghl-connection";
 import { TrackingSnippet } from "@/components/dashboard/settings/tracking-snippet";
 import { AccountingConnections } from "@/components/dashboard/settings/accounting-connections";
+import { EmailLog } from "@/components/dashboard/settings/email-log";
 
 export default async function SettingsPage({
   searchParams,
@@ -130,6 +131,17 @@ export default async function SettingsPage({
           Tracking Script
         </h3>
         <TrackingSnippet clientId={session.user.id!} />
+      </GlassCard>
+
+      {/* Email History */}
+      <GlassCard>
+        <h3
+          className="text-sm font-semibold mb-5"
+          style={{ color: "var(--text-main)" }}
+        >
+          Email History
+        </h3>
+        <EmailLog />
       </GlassCard>
     </div>
   );

@@ -40,10 +40,41 @@ function SearchIcon({ className, style }: { className?: string; style?: React.CS
   );
 }
 
+interface PortalSession {
+  id: string;
+  email: string;
+  clientName: string | null;
+  createdAt: string;
+  expiresAt: string;
+  isActive: boolean;
+}
+
+interface PortalSessionsData {
+  stats: { totalActive: number; uniqueClients7d: number };
+  sessions: PortalSession[];
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function AdminPage() {
   const [data, setData] = useState<AdminData | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [portalData, setPortalData] = useState<PortalSessionsData | null>(null);
+  const [portalLoading, setPortalLoading] = useState(true);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -56,6 +87,12 @@ export default function AdminPage() {
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+
+    fetch("/api/dashboard/portal-sessions")
+      .then((r) => r.json())
+      .then(setPortalData)
+      .catch(() => setPortalData(null))
+      .finally(() => setPortalLoading(false));
   }, []);
 
   function selectClient(clientId: string) {
@@ -205,6 +242,87 @@ export default function AdminPage() {
             </GlassCard>
           )}
         </main>
+      </div>
+
+      {/* Portal Sessions */}
+      <div className="mt-8">
+        <p className="section-header">Portal Sessions</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <StatCard
+            label="Active Sessions"
+            value={portalLoading ? "..." : String(portalData?.stats.totalActive ?? 0)}
+          />
+          <StatCard
+            label="Unique Clients"
+            value={portalLoading ? "..." : String(portalData?.stats.uniqueClients7d ?? 0)}
+            delta="7 days"
+            deltaType="neutral"
+          />
+        </div>
+
+        <GlassCard>
+          {portalLoading ? (
+            <div className="py-12 flex justify-center">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : !portalData || portalData.sessions.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                No portal sessions yet. Clients will appear here when they sign in via magic link.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Email</th>
+                    <th>Signed In</th>
+                    <th>Expires</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {portalData.sessions.map((s) => (
+                    <tr key={s.id}>
+                      <td>
+                        <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                          {s.clientName || "—"}
+                        </p>
+                      </td>
+                      <td>
+                        <p className="text-sm" style={{ color: "var(--text-main)" }}>
+                          {s.email}
+                        </p>
+                      </td>
+                      <td>
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {timeAgo(s.createdAt)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {new Date(s.expiresAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${s.isActive ? "badge-emerald" : "badge-gray"}`}>
+                          {s.isActive ? "Active" : "Expired"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </GlassCard>
       </div>
     </div>
   );

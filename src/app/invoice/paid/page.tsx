@@ -83,11 +83,26 @@ export default function InvoicePaidPage() {
             Payment Successful
           </h1>
           <p style={{ margin: "0 0 24px", color: "#666", fontSize: 14 }}>
-            Your payment has been received. You will receive a confirmation
-            email shortly.
+            Your payment has been received. A receipt has been sent to your
+            email.
           </p>
-          <p style={{ margin: 0, color: "#999", fontSize: 12 }}>
-            You can safely close this window.
+          <a
+            href="/portal"
+            style={{
+              display: "inline-block",
+              background: "linear-gradient(135deg, #2563EB, #06B6D4)",
+              color: "#fff",
+              textDecoration: "none",
+              padding: "12px 32px",
+              borderRadius: 12,
+              fontSize: 14,
+              fontWeight: 700,
+            }}
+          >
+            Go to Client Portal
+          </a>
+          <p style={{ margin: "16px 0 0", color: "#999", fontSize: 12 }}>
+            You can also safely close this window.
           </p>
         </div>
       </div>

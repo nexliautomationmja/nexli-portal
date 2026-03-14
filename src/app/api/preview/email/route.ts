@@ -6,7 +6,7 @@ import { buildEngagementRequestEmail } from "@/lib/email";
 export async function GET() {
   const { html } = buildEngagementRequestEmail({
     clientName: "John Smith",
-    cpaName: "Marcel Allen, CPA",
+    senderName: "Marcel Allen",
     subject: "2025 Tax Preparation Engagement Letter",
     engageUrl: "https://portal.nexli.net/engage/demo-token-preview",
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),

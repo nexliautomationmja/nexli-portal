@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { engagements, engagementSigners, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { sendEmail, buildEngagementSignedEmail } from "@/lib/email";
+import { sendEmailWithLog, buildEngagementSignedEmail } from "@/lib/email";
 
 // GET — validate token, return engagement info, mark signer as viewed
 export async function GET(
@@ -172,12 +172,12 @@ export async function POST(
 
     if (owner?.email) {
       const { subject, html } = buildEngagementSignedEmail({
-        cpaName: owner.name || owner.email,
+        senderName: owner.name || owner.email,
         clientName: signer.name,
         subject: engagement.subject,
         signedAt: new Date(),
       });
-      await sendEmail({ to: owner.email, subject, html });
+      await sendEmailWithLog({ to: owner.email, subject, html, recipientName: owner.name || undefined, emailType: "engagement_signed", relatedId: engagement.id });
     }
   } catch (err) {
     console.error("Failed to send engagement signed email:", err);

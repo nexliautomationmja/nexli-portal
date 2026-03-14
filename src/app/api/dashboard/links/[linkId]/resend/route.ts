@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { documentLinks } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { sendEmail, buildUploadRequestEmail } from "@/lib/email";
+import { sendEmailWithLog, buildUploadRequestEmail } from "@/lib/email";
 
 export async function POST(
   _req: NextRequest,
@@ -48,17 +48,17 @@ export async function POST(
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
   const uploadUrl = `${portalUrl}/upload/${link.token}`;
-  const cpaName = session.user.name || session.user.email || "Your CPA";
+  const senderName = session.user.name || session.user.email || "Your Service Provider";
 
   const { subject, html } = buildUploadRequestEmail({
     clientName: link.clientName || "",
-    cpaName,
+    senderName,
     uploadUrl,
     requiredDocs: (link.requiredDocuments as string[]) || [],
     expiresAt: new Date(link.expiresAt),
   });
 
-  await sendEmail({ to: link.clientEmail, subject, html });
+  await sendEmailWithLog({ to: link.clientEmail, subject, html, recipientName: link.clientName || undefined, emailType: "upload_request", relatedId: link.id, sentBy: session.user.id });
 
   return NextResponse.json({ ok: true });
 }

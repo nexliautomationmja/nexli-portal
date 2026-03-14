@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import { eq, or } from "drizzle-orm";
 import { generateMagicLink } from "@/lib/portal-auth";
-import { sendEmail, buildMagicLinkEmail } from "@/lib/email";
+import { sendEmailWithLog, buildMagicLinkEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         magicLinkUrl,
         expiresInMinutes: 15,
       });
-      await sendEmail({ to: email, subject, html });
+      await sendEmailWithLog({ to: email, subject, html, recipientName: clientName || undefined, emailType: "magic_link" });
     } catch (err) {
       console.error("Failed to send magic link:", err);
     }

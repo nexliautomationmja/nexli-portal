@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { documents, documentAuditLog } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { getSupabase } from "@/lib/supabase";
 
 export async function GET(
   _req: NextRequest,
@@ -131,7 +132,10 @@ export async function DELETE(
     metadata: { fileName: doc.fileName },
   });
 
-  // TODO: Delete from Supabase storage as well
+  // Delete from Supabase storage
+  const supabase = getSupabase();
+  await supabase.storage.from("documents").remove([doc.storagePath]);
+
   await db.delete(documents).where(eq(documents.id, docId));
 
   return NextResponse.json({ ok: true });
