@@ -1,6 +1,16 @@
 import crypto from "crypto";
 import { db } from "@/db";
-import { portalMagicLinks, portalSessions, invoices } from "@/db/schema";
+import {
+  portalMagicLinks,
+  portalSessions,
+  invoices,
+  documents,
+  documentLinks,
+  eSignatures,
+  taxReturns,
+  engagements,
+  engagementSigners,
+} from "@/db/schema";
 import { eq, and, gt, lt, isNull, desc, asc } from "drizzle-orm";
 import { createNotification } from "@/lib/notifications";
 import type { NextRequest } from "next/server";
@@ -70,19 +80,84 @@ export async function createPortalSession(email: string): Promise<string> {
   const sessionToken = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-  // Try to find a client name and ownerId from existing invoice data
+  // Look up clientName and ownerId across all client-facing tables
   let clientName: string | null = null;
   let ownerId: string | null = null;
-  const [invoice] = await db
+  const normalEmail = email.toLowerCase().trim();
+
+  // Try invoices first (most common)
+  const [inv] = await db
     .select({ clientName: invoices.clientName, ownerId: invoices.ownerId })
     .from(invoices)
-    .where(eq(invoices.clientEmail, email.toLowerCase().trim()))
+    .where(eq(invoices.clientEmail, normalEmail))
     .orderBy(desc(invoices.createdAt))
     .limit(1);
 
-  if (invoice) {
-    clientName = invoice.clientName;
-    ownerId = invoice.ownerId;
+  if (inv) {
+    clientName = inv.clientName;
+    ownerId = inv.ownerId;
+  }
+
+  // Fall through other tables if no invoice found
+  if (!ownerId) {
+    const [doc] = await db
+      .select({ clientName: documents.clientName, ownerId: documents.ownerId })
+      .from(documents)
+      .where(eq(documents.clientEmail, normalEmail))
+      .orderBy(desc(documents.createdAt))
+      .limit(1);
+    if (doc) { clientName = clientName || doc.clientName; ownerId = doc.ownerId; }
+  }
+
+  if (!ownerId) {
+    const [link] = await db
+      .select({ clientName: documentLinks.clientName, ownerId: documentLinks.ownerId })
+      .from(documentLinks)
+      .where(eq(documentLinks.clientEmail, normalEmail))
+      .orderBy(desc(documentLinks.createdAt))
+      .limit(1);
+    if (link) { clientName = clientName || link.clientName; ownerId = link.ownerId; }
+  }
+
+  if (!ownerId) {
+    const [esign] = await db
+      .select({ signerName: eSignatures.signerName, ownerId: eSignatures.ownerId })
+      .from(eSignatures)
+      .where(eq(eSignatures.signerEmail, normalEmail))
+      .orderBy(desc(eSignatures.createdAt))
+      .limit(1);
+    if (esign) { clientName = clientName || esign.signerName; ownerId = esign.ownerId; }
+  }
+
+  if (!ownerId) {
+    const [tr] = await db
+      .select({ clientName: taxReturns.clientName, ownerId: taxReturns.ownerId })
+      .from(taxReturns)
+      .where(eq(taxReturns.clientEmail, normalEmail))
+      .orderBy(desc(taxReturns.createdAt))
+      .limit(1);
+    if (tr) { clientName = clientName || tr.clientName; ownerId = tr.ownerId; }
+  }
+
+  if (!ownerId) {
+    const [signer] = await db
+      .select({
+        name: engagementSigners.name,
+        engagementId: engagementSigners.engagementId,
+      })
+      .from(engagementSigners)
+      .where(eq(engagementSigners.email, normalEmail))
+      .orderBy(desc(engagementSigners.createdAt))
+      .limit(1);
+    if (signer) {
+      clientName = clientName || signer.name;
+      const [eng] = await db
+        .select({ ownerId: engagements.ownerId })
+        .from(engagements)
+        .where(eq(engagements.id, signer.engagementId))
+        .limit(1);
+      if (eng) ownerId = eng.ownerId;
+    }
   }
 
   const normalizedEmail = email.toLowerCase().trim();
