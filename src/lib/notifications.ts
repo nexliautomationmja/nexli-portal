@@ -9,7 +9,8 @@ export type NotificationType =
   | "esign_completed"
   | "new_lead"
   | "portal_login"
-  | "document_viewed";
+  | "document_viewed"
+  | "portal_message";
 
 interface CreateNotificationParams {
   userId: string;
@@ -34,6 +35,7 @@ const TYPE_CONFIG: Record<
   new_lead: { emoji: "\u{1F514}", color: "#8B5CF6" },
   portal_login: { emoji: "\u{1F511}", color: "#06B6D4" },
   document_viewed: { emoji: "\u{1F441}", color: "#F59E0B" },
+  portal_message: { emoji: "\u{1F4AC}", color: "#2563EB" },
 };
 
 export async function createNotification({

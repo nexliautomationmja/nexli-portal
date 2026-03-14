@@ -11,6 +11,7 @@ import {
   FileIcon,
   PenLineIcon,
   KanbanIcon,
+  MessageIcon,
   SunIcon,
   MoonIcon,
   LogOutIcon,
@@ -43,6 +44,7 @@ const portalNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
   { href: "/portal/dashboard", label: "Overview", icon: LayoutIcon },
   { href: "/portal/dashboard/invoices", label: "Invoices", icon: InvoiceIcon },
   { href: "/portal/dashboard/documents", label: "Documents", icon: FileIcon },
+  { href: "/portal/dashboard/messages", label: "Messages", icon: MessageIcon },
   { href: "/portal/dashboard/engagements", label: "Engagements", icon: PenLineIcon },
   { href: "/portal/dashboard/tax-returns", label: "Tax Returns", icon: KanbanIcon },
 ];

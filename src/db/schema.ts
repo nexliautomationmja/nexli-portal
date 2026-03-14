@@ -348,6 +348,8 @@ export const documents = pgTable(
     category: text("category"), // "W-2", "1099", "Bank Statement", etc.
     taxYear: text("tax_year"),
     notes: text("notes"),
+    sharedWithClient: boolean("shared_with_client").default(false).notNull(),
+    sharedAt: timestamp("shared_at"),
     reviewedAt: timestamp("reviewed_at"),
     reviewedBy: uuid("reviewed_by").references(() => users.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -857,6 +859,34 @@ export const emailLog = pgTable(
     index("email_log_type_idx").on(table.emailType),
     index("email_log_created_idx").on(table.createdAt),
     index("email_log_sent_by_idx").on(table.sentBy),
+  ]
+);
+
+// ── Portal Messages ──────────────────────────────────────
+export const portalMessages = pgTable(
+  "portal_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientEmail: text("client_email").notNull(),
+    senderType: text("sender_type").notNull(), // "cpa" | "client"
+    message: text("message").notNull(),
+    read: boolean("read").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("portal_messages_thread_idx").on(
+      table.ownerId,
+      table.clientEmail,
+      table.createdAt
+    ),
+    index("portal_messages_unread_idx").on(
+      table.ownerId,
+      table.clientEmail,
+      table.read
+    ),
   ]
 );
 

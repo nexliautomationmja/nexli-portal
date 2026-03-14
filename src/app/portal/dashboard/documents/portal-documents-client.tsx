@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FileIcon, PenLineIcon, UploadIcon } from "@/components/ui/icons";
+import { FileIcon, PenLineIcon, UploadIcon, DownloadIcon } from "@/components/ui/icons";
 
 interface Document {
   id: string;
@@ -12,6 +12,15 @@ interface Document {
   taxYear: string | null;
   status: string;
   createdAt: string;
+}
+
+interface SharedDocument {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  category: string | null;
+  sharedAt: string | null;
 }
 
 interface UploadLink {
@@ -38,6 +47,7 @@ interface EsignRequest {
 
 interface DocumentsData {
   documents: Document[];
+  sharedDocuments: SharedDocument[];
   uploadLinks: UploadLink[];
   esignRequests: EsignRequest[];
 }
@@ -69,6 +79,26 @@ const esignStatusBadge: Record<string, string> = {
 export function PortalDocumentsClient() {
   const [data, setData] = useState<DocumentsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  async function handleDownload(doc: SharedDocument) {
+    setDownloading(doc.id);
+    try {
+      const res = await fetch(`/api/portal/documents/${doc.id}/download`);
+      if (!res.ok) throw new Error("Download failed");
+      const { url } = await res.json();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      alert("Failed to download file. Please try again.");
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -116,6 +146,7 @@ export function PortalDocumentsClient() {
 
   const isEmpty =
     data.documents.length === 0 &&
+    (data.sharedDocuments || []).length === 0 &&
     data.uploadLinks.length === 0 &&
     data.esignRequests.length === 0;
 
@@ -198,6 +229,66 @@ export function PortalDocumentsClient() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Documents from CPA */}
+      {(data.sharedDocuments || []).length > 0 && (
+        <div>
+          <h2 className="section-header mb-4">Documents from Your CPA</h2>
+          <div className="glass-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Category</th>
+                    <th>Size</th>
+                    <th>Date Shared</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.sharedDocuments.map((doc) => (
+                    <tr key={doc.id}>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <FileIcon className="w-4 h-4 shrink-0 text-emerald-400" />
+                          <span className="truncate max-w-[200px]" style={{ color: "var(--text-main)" }}>
+                            {doc.fileName}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        {doc.category ? (
+                          <span className="badge badge-gray">{doc.category}</span>
+                        ) : (
+                          <span style={{ color: "var(--text-muted)" }}>—</span>
+                        )}
+                      </td>
+                      <td>{formatFileSize(doc.fileSize)}</td>
+                      <td>{formatDate(doc.sharedAt)}</td>
+                      <td>
+                        <button
+                          onClick={() => handleDownload(doc)}
+                          disabled={downloading === doc.id}
+                          className="flex items-center gap-1.5 text-sm font-medium hover:underline disabled:opacity-50"
+                          style={{ color: "var(--accent-blue)" }}
+                        >
+                          {downloading === doc.id ? (
+                            <div className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <DownloadIcon className="w-3.5 h-3.5" />
+                          )}
+                          Download
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

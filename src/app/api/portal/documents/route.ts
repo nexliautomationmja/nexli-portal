@@ -46,6 +46,24 @@ export async function GET(req: NextRequest) {
     )
     .orderBy(desc(eSignatures.createdAt));
 
+  // Documents shared by CPA to this client
+  const sharedDocs = await db
+    .select()
+    .from(documents)
+    .where(
+      ownerId
+        ? and(
+            eq(documents.clientEmail, email),
+            eq(documents.ownerId, ownerId),
+            eq(documents.sharedWithClient, true)
+          )
+        : and(
+            eq(documents.clientEmail, email),
+            eq(documents.sharedWithClient, true)
+          )
+    )
+    .orderBy(desc(documents.sharedAt));
+
   return NextResponse.json({
     documents: clientDocs.map((d) => ({
       id: d.id,
@@ -76,6 +94,14 @@ export async function GET(req: NextRequest) {
       signedAt: e.signedAt,
       expiresAt: e.expiresAt,
       createdAt: e.createdAt,
+    })),
+    sharedDocuments: sharedDocs.map((d) => ({
+      id: d.id,
+      fileName: d.fileName,
+      fileSize: d.fileSize,
+      mimeType: d.mimeType,
+      category: d.category,
+      sharedAt: d.sharedAt,
     })),
   });
 }
