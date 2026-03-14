@@ -46,7 +46,7 @@ interface Invoice {
   notes: string | null;
   terms: string | null;
   token: string;
-  stripePaymentUrl: string | null;
+  paymentUrl: string | null;
   sentAt: string | null;
   viewedAt: string | null;
   paidAt: string | null;

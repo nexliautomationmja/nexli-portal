@@ -3,7 +3,6 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { invoices } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { createPartialPaymentLink } from "@/lib/stripe";
 
 export async function POST(
   req: NextRequest,
@@ -52,18 +51,13 @@ export async function POST(
     );
   }
 
-  const portalUrl =
-    process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+  if (!invoice.paymentUrl) {
+    return NextResponse.json(
+      { error: "Payment link not yet available" },
+      { status: 400 }
+    );
+  }
 
-  const { paymentUrl } = await createPartialPaymentLink({
-    invoiceId: invoice.id,
-    invoiceNumber: invoice.invoiceNumber,
-    clientEmail: invoice.clientEmail,
-    amountCents,
-    currency: invoice.currency,
-    successUrl: `${portalUrl}/invoice/paid`,
-    cancelUrl: `${portalUrl}/invoice/${invoice.token}`,
-  });
-
-  return NextResponse.json({ paymentUrl });
+  // Helcim hosted page handles partial payments natively
+  return NextResponse.json({ paymentUrl: invoice.paymentUrl });
 }

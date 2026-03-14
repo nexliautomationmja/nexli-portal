@@ -28,7 +28,7 @@ interface Invoice {
   dueDate: string | null;
   paidAt: string | null;
   token: string;
-  stripePaymentUrl: string | null;
+  paymentUrl: string | null;
   notes: string | null;
   terms: string | null;
   createdAt: string;

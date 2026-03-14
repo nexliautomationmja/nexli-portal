@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, subscriptions, dailyStats, leadNotifications } from "@/db/schema";
+import { users, dailyStats, leadNotifications } from "@/db/schema";
 import { eq, sql, and, gte, lt } from "drizzle-orm";
 
 export async function GET() {
@@ -23,17 +23,6 @@ export async function GET() {
     })
     .from(users)
     .where(eq(users.role, "client"));
-
-  // Active subscriptions
-  const activeSubs = await db
-    .select({
-      userId: subscriptions.userId,
-      status: subscriptions.status,
-    })
-    .from(subscriptions)
-    .where(eq(subscriptions.status, "active"));
-
-  const activeSubMap = new Set(activeSubs.map((s) => s.userId));
 
   // Last 30 days page views per client
   const now = new Date();
@@ -85,7 +74,7 @@ export async function GET() {
 
   const result = clients.map((c) => ({
     ...c,
-    active: activeSubMap.has(c.id),
+    active: true,
     pageViews30d: statsMap.get(c.id)?.pageViews || 0,
     uniqueVisitors30d: statsMap.get(c.id)?.uniqueVisitors || 0,
   }));
@@ -93,7 +82,6 @@ export async function GET() {
   return NextResponse.json({
     clients: result,
     totalClients: clients.length,
-    activeSubscriptions: activeSubs.length,
     totalPageViews: totals.totalPageViews,
     totalUniqueVisitors: totals.totalUniqueVisitors,
     totalLeads: leadTotals.totalLeads,

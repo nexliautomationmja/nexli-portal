@@ -12,7 +12,6 @@ import { drizzle } from "drizzle-orm/neon-http";
 import bcrypt from "bcryptjs";
 import {
   users,
-  subscriptions,
   dailyStats,
   pageViews,
 } from "../src/db/schema";
@@ -42,22 +41,7 @@ async function main() {
   console.log(`  ID: ${client.id}`);
   console.log(`  Password: TestClient2025!\n`);
 
-  // 2. Create an active subscription
-  const [sub] = await db
-    .insert(subscriptions)
-    .values({
-      userId: client.id,
-      stripeSubscriptionId: `sub_demo_${Date.now()}`,
-      stripePriceId: "price_demo_monthly",
-      status: "active",
-      currentPeriodStart: new Date(Date.now() - 30 * 86400000),
-      currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
-    })
-    .returning();
-
-  console.log(`✓ Created subscription: ${sub.id} (active)\n`);
-
-  // 3. Seed 30 days of daily stats with realistic data
+  // 2. Seed 30 days of daily stats with realistic data
   const now = new Date();
   const statsRows = [];
   const samplePages = [

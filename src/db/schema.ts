@@ -21,14 +21,6 @@ export const brandFileCategoryEnum = pgEnum("brand_file_category", [
   "design_file",
 ]);
 
-export const subscriptionStatusEnum = pgEnum("subscription_status", [
-  "active",
-  "past_due",
-  "canceled",
-  "trialing",
-  "unpaid",
-]);
-
 // ── Users ──────────────────────────────────────────────
 export const users = pgTable(
   "users",
@@ -41,7 +33,6 @@ export const users = pgTable(
     companyName: text("company_name"),
 
     // External system links
-    stripeCustomerId: text("stripe_customer_id").unique(),
     ghlContactId: text("ghl_contact_id"),
     ghlLocationId: text("ghl_location_id"),
 
@@ -57,7 +48,6 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex("users_email_idx").on(table.email),
-    index("users_stripe_idx").on(table.stripeCustomerId),
   ]
 );
 
@@ -76,29 +66,6 @@ export const sessions = pgTable(
   (table) => [
     uniqueIndex("sessions_token_idx").on(table.sessionToken),
     index("sessions_user_idx").on(table.userId),
-  ]
-);
-
-// ── Subscriptions ──────────────────────────────────────
-export const subscriptions = pgTable(
-  "subscriptions",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    stripeSubscriptionId: text("stripe_subscription_id").notNull().unique(),
-    stripePriceId: text("stripe_price_id").notNull(),
-    status: subscriptionStatusEnum("status").default("active").notNull(),
-    currentPeriodStart: timestamp("current_period_start"),
-    currentPeriodEnd: timestamp("current_period_end"),
-    canceledAt: timestamp("canceled_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    index("subscriptions_user_idx").on(table.userId),
-    uniqueIndex("subscriptions_stripe_idx").on(table.stripeSubscriptionId),
   ]
 );
 
@@ -612,10 +579,12 @@ export const invoices = pgTable(
     notes: text("notes"),
     terms: text("terms"),
 
-    // Stripe references
-    stripeInvoiceId: text("stripe_invoice_id"),
-    stripePaymentIntentId: text("stripe_payment_intent_id"),
-    stripePaymentUrl: text("stripe_payment_url"),
+    // Helcim references
+    helcimInvoiceId: text("helcim_invoice_id"),
+    helcimTransactionId: text("helcim_transaction_id"),
+    paymentUrl: text("payment_url"),
+    paymentMethod: text("payment_method"), // "card" | "ach"
+    achSettlementStatus: text("ach_settlement_status"), // "pending" | "approved" | "declined"
 
     // Partial payment tracking (integer cents)
     amountPaid: integer("amount_paid").default(0).notNull(),

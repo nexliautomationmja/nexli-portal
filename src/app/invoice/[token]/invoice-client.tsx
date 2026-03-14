@@ -29,7 +29,7 @@ interface InvoiceData {
   clientName: string;
   clientEmail: string;
   clientCompany: string | null;
-  stripePaymentUrl: string | null;
+  paymentUrl: string | null;
   paidAt: string | null;
 }
 
@@ -975,7 +975,7 @@ function PayButton({
           fontSize: 12,
         }}
       >
-        Secure payment via Stripe
+        Secure payment via Helcim
       </p>
     </div>
   );
