@@ -87,7 +87,7 @@ export async function sendEmailWithLog({
 const PORTAL_URL = process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
 const LOGO_URL = `${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png`;
 
-const emailWrapper = (content: string) => `
+export const emailWrapper = (content: string) => `
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
