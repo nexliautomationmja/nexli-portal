@@ -29,6 +29,7 @@ const TYPE_ICONS: Record<string, string> = {
   new_lead: "\u{1F514}",
   portal_login: "\u{1F511}",
   document_viewed: "\u{1F441}",
+  portal_message: "\u{1F4AC}",
 };
 
 function formatTimeAgo(dateStr: string): string {
