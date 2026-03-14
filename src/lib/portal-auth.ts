@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { db } from "@/db";
 import { portalMagicLinks, portalSessions, invoices } from "@/db/schema";
-import { eq, and, gt, isNull, desc } from "drizzle-orm";
+import { eq, and, gt, lt, isNull, desc, asc } from "drizzle-orm";
 import { createNotification } from "@/lib/notifications";
 import type { NextRequest } from "next/server";
 
@@ -85,8 +85,34 @@ export async function createPortalSession(email: string): Promise<string> {
     ownerId = invoice.ownerId;
   }
 
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Clean up: remove expired sessions for this email
+  await db
+    .delete(portalSessions)
+    .where(
+      and(
+        eq(portalSessions.email, normalizedEmail),
+        lt(portalSessions.expiresAt, new Date())
+      )
+    );
+
+  // Limit active sessions to 5 per email — delete oldest if over limit
+  const activeSessions = await db
+    .select({ id: portalSessions.id })
+    .from(portalSessions)
+    .where(eq(portalSessions.email, normalizedEmail))
+    .orderBy(asc(portalSessions.createdAt));
+
+  if (activeSessions.length >= 5) {
+    const toDelete = activeSessions.slice(0, activeSessions.length - 4);
+    for (const s of toDelete) {
+      await db.delete(portalSessions).where(eq(portalSessions.id, s.id));
+    }
+  }
+
   await db.insert(portalSessions).values({
-    email: email.toLowerCase().trim(),
+    email: normalizedEmail,
     sessionToken,
     clientName,
     ownerId,
