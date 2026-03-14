@@ -1,0 +1,63 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#020617"/>
+
+  <!-- Gradient Orbs for atmosphere -->
+  <ellipse cx="200" cy="500" rx="300" ry="200" fill="url(#blueGlow)" opacity="0.3"/>
+  <ellipse cx="1000" cy="150" rx="250" ry="180" fill="url(#cyanGlow)" opacity="0.25"/>
+
+  <!-- Subtle grid pattern -->
+  <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+    <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- Logo Icon - centered at x=600 -->
+  <g transform="translate(545, 140)">
+    <svg width="110" height="110" viewBox="0 0 48 48">
+      <path d="M4 36L20 24L4 12L4 20L12 24L4 28L4 36Z" fill="#2563EB"/>
+      <path d="M12 36L28 24L12 12L12 18L18 24L12 30L12 36Z" fill="url(#logoGrad)"/>
+      <path d="M20 36L44 24L20 12L20 18L32 24L20 30L20 36Z" fill="#06B6D4"/>
+    </svg>
+  </g>
+
+  <!-- NEXLI Text - centered -->
+  <text x="600" y="310" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="72" font-weight="900" letter-spacing="-2" fill="white">NEXLI</text>
+
+  <!-- Tagline - centered -->
+  <text x="600" y="370" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="26" font-weight="600" fill="rgba(255,255,255,0.7)">Premium Websites &amp; Automation for CPAs</text>
+
+  <!-- Decorative line - centered -->
+  <rect x="450" y="400" width="300" height="2" rx="1" fill="url(#lineGrad)"/>
+
+  <!-- URL - centered -->
+  <text x="600" y="450" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="20" font-weight="700" letter-spacing="4" fill="#3b82f6">NEXLI.NET</text>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="620" width="1200" height="10" fill="url(#bottomGrad)"/>
+
+  <!-- Definitions -->
+  <defs>
+    <linearGradient id="logoGrad" x1="12" y1="36" x2="28" y2="12">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="lineGrad" x1="450" y1="401" x2="750" y2="401">
+      <stop offset="0%" stop-color="transparent"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </linearGradient>
+    <linearGradient id="bottomGrad" x1="0" y1="625" x2="1200" y2="625">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+    <radialGradient id="blueGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <radialGradient id="cyanGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+  </defs>
+</svg>

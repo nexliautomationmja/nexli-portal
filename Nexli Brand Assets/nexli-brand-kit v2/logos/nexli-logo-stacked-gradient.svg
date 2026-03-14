@@ -1,0 +1,12 @@
+<svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563EB"/><stop offset="100%" stop-color="#06B6D4"/></linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2563EB"/><stop offset="100%" stop-color="#06B6D4"/></linearGradient>
+  </defs>
+  <g transform="translate(36, 8)">
+    <path d="M4 36L20 24L4 12L4 20L12 24L4 28L4 36Z" fill="#2563EB"/>
+    <path d="M12 36L28 24L12 12L12 18L18 24L12 30L12 36Z" fill="url(#g1)"/>
+    <path d="M20 36L44 24L20 12L20 18L32 24L20 30L20 36Z" fill="#06B6D4"/>
+  </g>
+  <text x="60" y="88" font-family="Syne, system-ui, sans-serif" font-size="28" font-weight="800" letter-spacing="-1" text-anchor="middle" fill="url(#g2)">Nexli</text>
+</svg>

@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexli Typography Reference</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-blue: #2563EB;
+            --primary-cyan: #06B6D4;
+            --dark: #0A1628;
+            --neutral-50: #FAFAFA;
+            --neutral-100: #F4F4F5;
+            --neutral-500: #71717A;
+            --neutral-700: #3F3F46;
+            --neutral-900: #18181B;
+            --gradient-primary: linear-gradient(135deg, #2563EB 0%, #06B6D4 100%);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--neutral-50);
+            color: var(--neutral-900);
+            line-height: 1.6;
+            padding: 60px 40px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 80px;
+            padding-bottom: 40px;
+            border-bottom: 1px solid var(--neutral-100);
+        }
+        
+        .header h1 {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 48px;
+            font-weight: 800;
+            letter-spacing: -2px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+        
+        .header p {
+            color: var(--neutral-500);
+            font-size: 18px;
+        }
+        
+        .section {
+            margin-bottom: 80px;
+        }
+        
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        
+        .section-number {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary-blue);
+            background: rgba(37, 99, 235, 0.1);
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+        
+        .section-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        
+        .version-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 12px;
+        }
+        
+        .version-current {
+            background: linear-gradient(135deg, #2563EB 0%, #06B6D4 100%);
+            color: white;
+        }
+        
+        .version-original {
+            background: var(--neutral-100);
+            color: var(--neutral-500);
+        }
+        
+        .font-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--neutral-100);
+        }
+        
+        .font-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--primary-blue);
+            margin-bottom: 8px;
+        }
+        
+        .font-name {
+            font-size: 14px;
+            color: var(--neutral-500);
+            margin-bottom: 24px;
+        }
+        
+        .font-preview {
+            margin-bottom: 32px;
+        }
+        
+        .font-weights {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+        
+        .weight-item {
+            text-align: center;
+        }
+        
+        .weight-sample {
+            font-size: 48px;
+            margin-bottom: 8px;
+            color: var(--dark);
+        }
+        
+        .weight-label {
+            font-size: 12px;
+            color: var(--neutral-500);
+        }
+        
+        .type-scale {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--neutral-100);
+        }
+        
+        .scale-row {
+            display: flex;
+            align-items: baseline;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--neutral-100);
+        }
+        
+        .scale-row:last-child {
+            border-bottom: none;
+        }
+        
+        .scale-label {
+            width: 120px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--neutral-500);
+            flex-shrink: 0;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--neutral-100);
+        }
+        
+        .comparison-table th {
+            background: var(--neutral-100);
+            padding: 16px 24px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--neutral-500);
+        }
+        
+        .comparison-table td {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--neutral-100);
+            vertical-align: top;
+        }
+        
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .usage-note {
+            background: rgba(37, 99, 235, 0.05);
+            border-left: 3px solid var(--primary-blue);
+            padding: 16px 20px;
+            margin-top: 24px;
+            border-radius: 0 8px 8px 0;
+            font-size: 14px;
+            color: var(--neutral-700);
+        }
+        
+        .google-fonts-link {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 12px 24px;
+            background: var(--dark);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        
+        .google-fonts-link:hover {
+            opacity: 0.9;
+        }
+        
+        .code-block {
+            background: var(--dark);
+            color: #E4E4E7;
+            padding: 20px 24px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin-top: 16px;
+        }
+        
+        .code-comment {
+            color: #71717A;
+        }
+        
+        .code-string {
+            color: #06B6D4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>NEXLI TYPOGRAPHY</h1>
+            <p>Complete typography reference including original and current font systems</p>
+        </div>
+
+        <!-- ================================================== -->
+        <!-- SECTION 1: CURRENT TYPOGRAPHY (Most Recent) -->
+        <!-- ================================================== -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-number">01</span>
+                <h2 class="section-title">Current Typography System <span class="version-badge version-current">CURRENT</span></h2>
+            </div>
+            
+            <!-- Display Font - Plus Jakarta Sans -->
+            <div class="font-card">
+                <div class="font-label">Display / Logo Font</div>
+                <div class="font-name">Plus Jakarta Sans — Used for the NEXLI wordmark and headlines</div>
+                
+                <div class="font-preview" style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 64px; font-weight: 800; letter-spacing: -2px; text-transform: uppercase; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                    NEXLI
+                </div>
+                
+                <div class="font-weights">
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 300;">Aa</div>
+                        <div class="weight-label">Light 300</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 400;">Aa</div>
+                        <div class="weight-label">Regular 400</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 500;">Aa</div>
+                        <div class="weight-label">Medium 500</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600;">Aa</div>
+                        <div class="weight-label">SemiBold 600</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700;">Aa</div>
+                        <div class="weight-label">Bold 700</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800;">Aa</div>
+                        <div class="weight-label">ExtraBold 800 ★</div>
+                    </div>
+                </div>
+                
+                <div class="usage-note">
+                    <strong>Logo Usage:</strong> Plus Jakarta Sans, 800 weight, UPPERCASE, tight letter-spacing (-1px to -2px)
+                </div>
+            </div>
+            
+            <!-- Primary Font - Outfit -->
+            <div class="font-card">
+                <div class="font-label">Primary / Body Font</div>
+                <div class="font-name">Outfit — Used for body text, UI elements, and secondary content</div>
+                
+                <div class="font-preview" style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 400; color: var(--neutral-700);">
+                    Smart automation for modern business
+                </div>
+                
+                <div class="font-weights">
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 300;">Aa</div>
+                        <div class="weight-label">Light 300</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 400;">Aa</div>
+                        <div class="weight-label">Regular 400</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 500;">Aa</div>
+                        <div class="weight-label">Medium 500</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 600;">Aa</div>
+                        <div class="weight-label">SemiBold 600</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 700;">Aa</div>
+                        <div class="weight-label">Bold 700</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 800;">Aa</div>
+                        <div class="weight-label">ExtraBold 800</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Current Type Scale -->
+            <div class="type-scale">
+                <div class="font-label" style="margin-bottom: 24px;">Current Type Scale</div>
+                
+                <div class="scale-row">
+                    <span class="scale-label">H1 / 60px</span>
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 48px; font-weight: 700; letter-spacing: -1px;">Headlines That Convert</span>
+                </div>
+                <div class="scale-row">
+                    <span class="scale-label">H2 / 52px</span>
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -1px;">Section Titles</span>
+                </div>
+                <div class="scale-row">
+                    <span class="scale-label">H3 / 36px</span>
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 28px; font-weight: 600;">Feature Headings</span>
+                </div>
+                <div class="scale-row">
+                    <span class="scale-label">Body / 16px</span>
+                    <span style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 400; color: var(--neutral-700);">Body text should be clear, readable, and comfortable for extended reading.</span>
+                </div>
+                <div class="scale-row">
+                    <span class="scale-label">Small / 14px</span>
+                    <span style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 400; color: var(--neutral-500);">Captions, labels, and supporting text.</span>
+                </div>
+            </div>
+            
+            <!-- Google Fonts Import -->
+            <div class="code-block">
+                <span class="code-comment">/* Google Fonts Import - Current Typography */</span><br><br>
+                <span class="code-string">@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');</span>
+            </div>
+            
+            <a href="https://fonts.google.com/specimen/Plus+Jakarta+Sans" target="_blank" class="google-fonts-link" style="margin-right: 12px;">
+                Get Plus Jakarta Sans →
+            </a>
+            <a href="https://fonts.google.com/specimen/Outfit" target="_blank" class="google-fonts-link">
+                Get Outfit →
+            </a>
+        </div>
+
+        <!-- ================================================== -->
+        <!-- SECTION 2: ORIGINAL TYPOGRAPHY (First Version) -->
+        <!-- ================================================== -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-number">02</span>
+                <h2 class="section-title">Original Typography System <span class="version-badge version-original">ORIGINAL</span></h2>
+            </div>
+            
+            <!-- Display Font - Syne -->
+            <div class="font-card">
+                <div class="font-label">Display / Headline Font (Original)</div>
+                <div class="font-name">Syne — Originally used for headlines, logo, and brand statements</div>
+                
+                <div class="font-preview" style="font-family: 'Syne', sans-serif; font-size: 64px; font-weight: 800; letter-spacing: -2px; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                    Nexli Automation
+                </div>
+                
+                <div class="font-weights">
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Syne', sans-serif; font-weight: 400;">Aa</div>
+                        <div class="weight-label">Regular 400</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Syne', sans-serif; font-weight: 500;">Aa</div>
+                        <div class="weight-label">Medium 500</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Syne', sans-serif; font-weight: 600;">Aa</div>
+                        <div class="weight-label">SemiBold 600</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Syne', sans-serif; font-weight: 700;">Aa</div>
+                        <div class="weight-label">Bold 700</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Syne', sans-serif; font-weight: 800;">Aa</div>
+                        <div class="weight-label">ExtraBold 800 ★</div>
+                    </div>
+                </div>
+                
+                <div class="usage-note">
+                    <strong>Original Logo Usage:</strong> Syne, 800 weight, mixed case "Nexli", tight letter-spacing
+                </div>
+            </div>
+            
+            <!-- Primary Font - Outfit (same) -->
+            <div class="font-card">
+                <div class="font-label">Primary / Body Font (Original)</div>
+                <div class="font-name">Outfit — Same as current, used for body text and UI elements</div>
+                
+                <div class="font-preview" style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 400; color: var(--neutral-700);">
+                    Smart automation for modern business
+                </div>
+                
+                <div class="font-weights">
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 300;">Aa</div>
+                        <div class="weight-label">Light 300</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 400;">Aa</div>
+                        <div class="weight-label">Regular 400</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 500;">Aa</div>
+                        <div class="weight-label">Medium 500</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 600;">Aa</div>
+                        <div class="weight-label">SemiBold 600</div>
+                    </div>
+                    <div class="weight-item">
+                        <div class="weight-sample" style="font-family: 'Outfit', sans-serif; font-weight: 700;">Aa</div>
+                        <div class="weight-label">Bold 700</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Original Type Scale -->
+            <div class="type-scale">
+                <div class="font-label" style="margin-bottom: 24px;">Original Type Scale</div>
+                
+                <div class="scale-row">
+                    <span class="scale-label">H1 / 60px</span>
+                    <span style="font-family: 'Syne', sans-serif; font-size: 48px; font-weight: 800; letter-spacing: -1px;">Headlines That Convert</span>
+                </div>
+                <div class="scale-row">
+                    <span class="scale-label">H2 / 52px</span>
+                    <span style="font-family: 'Syne', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -1px;">Section Titles</span>
+                </div>
+                <div class="scale-row">
+                    <span class="scale-label">H3 / 36px</span>
+                    <span style="font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 600;">Feature Headings</span>
+                </div>
+                <div class="scale-row">
+                    <span class="scale-label">Body / 16px</span>
+                    <span style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 400; color: var(--neutral-700);">Body text should be clear, readable, and comfortable for extended reading.</span>
+                </div>
+                <div class="scale-row">
+                    <span class="scale-label">Small / 14px</span>
+                    <span style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 400; color: var(--neutral-500);">Captions, labels, and supporting text.</span>
+                </div>
+            </div>
+            
+            <!-- Google Fonts Import -->
+            <div class="code-block">
+                <span class="code-comment">/* Google Fonts Import - Original Typography */</span><br><br>
+                <span class="code-string">@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@400;500;600;700;800&display=swap');</span>
+            </div>
+            
+            <a href="https://fonts.google.com/specimen/Syne" target="_blank" class="google-fonts-link">
+                Get Syne →
+            </a>
+        </div>
+
+        <!-- ================================================== -->
+        <!-- SECTION 3: COMPARISON TABLE -->
+        <!-- ================================================== -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-number">03</span>
+                <h2 class="section-title">Typography Comparison</h2>
+            </div>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Element</th>
+                        <th>Original (V1)</th>
+                        <th>Current (V2)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Display Font</strong></td>
+                        <td>
+                            <span style="font-family: 'Syne', sans-serif; font-weight: 800;">Syne</span><br>
+                            <span style="font-size: 12px; color: var(--neutral-500);">ExtraBold 800</span>
+                        </td>
+                        <td>
+                            <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800;">Plus Jakarta Sans</span><br>
+                            <span style="font-size: 12px; color: var(--neutral-500);">ExtraBold 800</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Body Font</strong></td>
+                        <td>
+                            <span style="font-family: 'Outfit', sans-serif;">Outfit</span><br>
+                            <span style="font-size: 12px; color: var(--neutral-500);">300-700 weights</span>
+                        </td>
+                        <td>
+                            <span style="font-family: 'Outfit', sans-serif;">Outfit</span><br>
+                            <span style="font-size: 12px; color: var(--neutral-500);">300-800 weights</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Logo Wordmark</strong></td>
+                        <td>
+                            <span style="font-family: 'Syne', sans-serif; font-weight: 800; font-size: 24px;">Nexli</span><br>
+                            <span style="font-size: 12px; color: var(--neutral-500);">Mixed case, tight tracking</span>
+                        </td>
+                        <td>
+                            <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 24px; text-transform: uppercase; letter-spacing: -1px;">NEXLI</span><br>
+                            <span style="font-size: 12px; color: var(--neutral-500);">UPPERCASE, tight tracking</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>H1 Size</strong></td>
+                        <td>60px</td>
+                        <td>60px</td>
+                    </tr>
+                    <tr>
+                        <td><strong>H2 Size</strong></td>
+                        <td>52px</td>
+                        <td>52px</td>
+                    </tr>
+                    <tr>
+                        <td><strong>H3 Size</strong></td>
+                        <td>36px</td>
+                        <td>36px</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Body Size</strong></td>
+                        <td>16px</td>
+                        <td>16px</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Small/Caption</strong></td>
+                        <td>14px</td>
+                        <td>14px</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Letter Spacing (Logo)</strong></td>
+                        <td>-1.5px</td>
+                        <td>-1px to -2px</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ================================================== -->
+        <!-- SECTION 4: IMPLEMENTATION -->
+        <!-- ================================================== -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-number">04</span>
+                <h2 class="section-title">Implementation Code</h2>
+            </div>
+            
+            <div class="font-card">
+                <div class="font-label">HTML Link Tag (Current)</div>
+                <div class="code-block">
+                    &lt;link rel="preconnect" href="https://fonts.googleapis.com"&gt;<br>
+                    &lt;link rel="preconnect" href="https://fonts.gstatic.com" crossorigin&gt;<br>
+                    &lt;link href="<span class="code-string">https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap</span>" rel="stylesheet"&gt;
+                </div>
+            </div>
+            
+            <div class="font-card">
+                <div class="font-label">CSS Variables (Current)</div>
+                <div class="code-block">
+                    :root {<br>
+                    &nbsp;&nbsp;<span class="code-comment">/* Typography */</span><br>
+                    &nbsp;&nbsp;--font-display: <span class="code-string">'Plus Jakarta Sans'</span>, system-ui, sans-serif;<br>
+                    &nbsp;&nbsp;--font-primary: <span class="code-string">'Outfit'</span>, -apple-system, BlinkMacSystemFont, sans-serif;<br><br>
+                    &nbsp;&nbsp;<span class="code-comment">/* Font Weights */</span><br>
+                    &nbsp;&nbsp;--font-light: 300;<br>
+                    &nbsp;&nbsp;--font-regular: 400;<br>
+                    &nbsp;&nbsp;--font-medium: 500;<br>
+                    &nbsp;&nbsp;--font-semibold: 600;<br>
+                    &nbsp;&nbsp;--font-bold: 700;<br>
+                    &nbsp;&nbsp;--font-extrabold: 800;<br><br>
+                    &nbsp;&nbsp;<span class="code-comment">/* Type Scale */</span><br>
+                    &nbsp;&nbsp;--text-h1: 60px;<br>
+                    &nbsp;&nbsp;--text-h2: 52px;<br>
+                    &nbsp;&nbsp;--text-h3: 36px;<br>
+                    &nbsp;&nbsp;--text-body: 16px;<br>
+                    &nbsp;&nbsp;--text-small: 14px;<br>
+                    }
+                </div>
+            </div>
+            
+            <div class="font-card">
+                <div class="font-label">Logo Wordmark CSS (Current)</div>
+                <div class="code-block">
+                    .nexli-logo-text {<br>
+                    &nbsp;&nbsp;font-family: <span class="code-string">'Plus Jakarta Sans'</span>, system-ui, sans-serif;<br>
+                    &nbsp;&nbsp;font-weight: 800;<br>
+                    &nbsp;&nbsp;font-size: 26px;<br>
+                    &nbsp;&nbsp;text-transform: uppercase;<br>
+                    &nbsp;&nbsp;letter-spacing: -1px;<br>
+                    &nbsp;&nbsp;background: linear-gradient(135deg, #2563EB 0%, #06B6D4 100%);<br>
+                    &nbsp;&nbsp;-webkit-background-clip: text;<br>
+                    &nbsp;&nbsp;-webkit-text-fill-color: transparent;<br>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; padding: 60px 0; border-top: 1px solid var(--neutral-100); margin-top: 40px;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px;">
+                <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+                    <defs>
+                        <linearGradient id="footerGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#2563EB"/>
+                            <stop offset="100%" stop-color="#06B6D4"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M4 36L20 24L4 12L4 20L12 24L4 28L4 36Z" fill="#2563EB"/>
+                    <path d="M12 36L28 24L12 12L12 18L18 24L12 30L12 36Z" fill="url(#footerGrad)"/>
+                    <path d="M20 36L44 24L20 12L20 18L32 24L20 30L20 36Z" fill="#06B6D4"/>
+                </svg>
+                <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -1px; text-transform: uppercase; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">NEXLI</span>
+            </div>
+            <p style="color: var(--neutral-500); font-size: 14px;">Typography Reference Guide</p>
+            <p style="color: var(--primary-cyan); font-size: 12px; margin-top: 8px;">© 2026 Nexli. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,64 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { getContacts } from "@/lib/ghl-client";
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ clientId: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { clientId } = await params;
+  const { locationId } = await req.json();
+
+  if (!locationId || typeof locationId !== "string" || !locationId.trim()) {
+    return NextResponse.json(
+      { error: "Location ID is required" },
+      { status: 400 }
+    );
+  }
+
+  const trimmed = locationId.trim();
+
+  // Save the Location ID
+  await db
+    .update(users)
+    .set({ ghlLocationId: trimmed, updatedAt: new Date() })
+    .where(eq(users.id, clientId));
+
+  // Non-blocking test — warn but don't block the save
+  let verified = false;
+  try {
+    await getContacts(trimmed, 1);
+    verified = true;
+  } catch (err) {
+    console.warn("[GHL] Connection test failed for client", clientId, "location", trimmed, err);
+  }
+
+  return NextResponse.json({ ok: true, verified });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ clientId: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { clientId } = await params;
+
+  await db
+    .update(users)
+    .set({ ghlLocationId: null, updatedAt: new Date() })
+    .where(eq(users.id, clientId));
+
+  return NextResponse.json({ ok: true });
+}
