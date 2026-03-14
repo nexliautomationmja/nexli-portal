@@ -182,13 +182,17 @@ export async function POST(
   }
 
   // In-app notification
-  createNotification({
-    userId: result.ownerId,
-    type: "esign_completed",
-    title: "Document Signed",
-    message: `${esign.signerName} signed "${result.documentName}"`,
-    metadata: { esignId: esign.id, documentName: result.documentName, signerName: esign.signerName },
-  }).catch((err) => console.error("E-sign notification failed:", err));
+  try {
+    await createNotification({
+      userId: result.ownerId,
+      type: "esign_completed",
+      title: "Document Signed",
+      message: `${esign.signerName} signed "${result.documentName}"`,
+      metadata: { esignId: esign.id, documentName: result.documentName, signerName: esign.signerName },
+    });
+  } catch (err) {
+    console.error("E-sign notification failed:", err);
+  }
 
   return NextResponse.json({ ok: true, signedAt: new Date().toISOString() });
 }

@@ -48,10 +48,12 @@ export async function createNotification({
     .values({ userId, type, title, message, metadata: metadata || null, read: false })
     .returning();
 
-  // Fire-and-forget email to admin
-  sendNotificationEmail({ type, title, message }).catch((err) =>
-    console.error("Notification email failed:", err)
-  );
+  // Send email to admin — await so Vercel doesn't kill it early
+  try {
+    await sendNotificationEmail({ type, title, message });
+  } catch (err) {
+    console.error("Notification email failed:", err);
+  }
 
   return notif;
 }

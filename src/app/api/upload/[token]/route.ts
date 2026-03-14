@@ -184,13 +184,17 @@ export async function POST(
     .where(eq(documentLinks.id, link.id));
 
   // Notify CPA
-  createNotification({
-    userId: link.ownerId,
-    type: "document_uploaded",
-    title: "Document Uploaded",
-    message: `${clientName || "A client"} uploaded ${uploadedDocs.length} document${uploadedDocs.length > 1 ? "s" : ""}`,
-    metadata: { linkId: link.id, clientName, count: uploadedDocs.length },
-  }).catch((err) => console.error("Upload notification failed:", err));
+  try {
+    await createNotification({
+      userId: link.ownerId,
+      type: "document_uploaded",
+      title: "Document Uploaded",
+      message: `${clientName || "A client"} uploaded ${uploadedDocs.length} document${uploadedDocs.length > 1 ? "s" : ""}`,
+      metadata: { linkId: link.id, clientName, count: uploadedDocs.length },
+    });
+  } catch (err) {
+    console.error("Upload notification failed:", err);
+  }
 
   return NextResponse.json({
     ok: true,
