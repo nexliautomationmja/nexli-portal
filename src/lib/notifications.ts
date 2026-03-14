@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
-import { sendEmailWithLog } from "@/lib/email";
+import { sendEmailWithLog, emailWrapper } from "@/lib/email";
 
 export type NotificationType =
   | "invoice_paid"
@@ -66,46 +66,25 @@ async function sendNotificationEmail(params: {
   const { type, title, message } = params;
   const { emoji, color } = TYPE_CONFIG[type];
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="dark only">
-</head>
-<body style="margin:0;padding:0;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0f;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
-        <tr><td style="padding:32px 32px 0;text-align:center;">
-          <img src="${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png" alt="Nexli" width="100" style="display:inline-block;opacity:0.5;" />
-        </td></tr>
-        <tr><td style="padding:24px 32px;">
-          <div style="text-align:center;margin-bottom:20px;">
-            <span style="font-size:32px;">${emoji}</span>
-          </div>
-          <h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;text-align:center;">
-            ${title}
-          </h1>
-          <p style="margin:0 0 24px;color:#9999a8;font-size:14px;text-align:center;line-height:1.5;">
-            ${message}
-          </p>
-          <div style="text-align:center;">
-            <a href="${PORTAL_URL}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-size:13px;font-weight:700;">
-              Open Dashboard
-            </a>
-          </div>
-        </td></tr>
-        <tr><td style="padding:16px 32px;border-top:1px solid #1a1a24;">
-          <p style="margin:0;color:#4a4a5a;font-size:10px;text-align:center;">
-            Nexli Portal Notification &bull; <span style="color:${color};">${type.replace(/_/g, " ")}</span>
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+  const html = emailWrapper(`
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="font-size:32px;">${emoji}</span>
+    </div>
+    <h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;text-align:center;">
+      ${title}
+    </h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;text-align:center;line-height:1.5;">
+      ${message}
+    </p>
+    <div style="text-align:center;">
+      <a href="${PORTAL_URL}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-size:13px;font-weight:700;">
+        Open Dashboard
+      </a>
+    </div>
+    <p style="margin:20px 0 0;color:#4a4a5a;font-size:10px;text-align:center;">
+      <span style="color:${color};">${type.replace(/_/g, " ")}</span>
+    </p>
+  `);
 
   await sendEmailWithLog({
     to: ADMIN_EMAIL,
