@@ -51,7 +51,7 @@ export function ContactsClient() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-black tracking-tight" style={{ color: "var(--text-main)" }}>
+        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
           Contacts
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
@@ -61,28 +61,28 @@ export function ContactsClient() {
 
       {/* Search */}
       <div className="relative max-w-md">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+        <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search contacts..."
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+          className="w-full pl-11 pr-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
           style={{ color: "var(--text-main)" }}
         />
       </div>
 
       {/* Contact List */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="glass-card overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center" style={{ color: "var(--text-muted)" }}>
+          <div className="p-16 text-center" style={{ color: "var(--text-muted)" }}>
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            Loading contacts from GHL...
+            <p className="text-sm">Loading contacts from GHL...</p>
           </div>
         ) : contacts.length === 0 ? (
-          <div className="p-12 text-center" style={{ color: "var(--text-muted)" }}>
-            <UsersIcon className="w-8 h-8 mx-auto mb-3 opacity-40" />
-            <p className="text-sm font-medium">No contacts found</p>
+          <div className="empty-state py-16">
+            <UsersIcon className="empty-state-icon" />
+            <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>No contacts found</p>
             <p className="text-xs mt-1">
               {search
                 ? "Try a different search term."
@@ -91,47 +91,44 @@ export function ContactsClient() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="data-table">
               <thead>
-                <tr
-                  className="text-[10px] font-bold uppercase tracking-widest border-b border-[var(--glass-border)]"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  <th className="text-left px-4 py-3">Name</th>
-                  <th className="text-left px-4 py-3 hidden md:table-cell">Email</th>
-                  <th className="text-left px-4 py-3 hidden md:table-cell">Phone</th>
-                  <th className="text-left px-4 py-3">Source</th>
-                  <th className="text-left px-4 py-3">Added</th>
+                <tr>
+                  <th>Name</th>
+                  <th className="hidden md:table-cell">Email</th>
+                  <th className="hidden md:table-cell">Phone</th>
+                  <th>Source</th>
+                  <th>Added</th>
                 </tr>
               </thead>
               <tbody>
                 {contacts.map((contact) => (
                   <tr
                     key={contact.id}
-                    className="border-b border-[var(--glass-border)] hover:bg-blue-500/5 transition-colors cursor-pointer"
+                    className="cursor-pointer"
                     onClick={() => setSelectedContact(contact)}
                   >
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                    <td>
+                      <p className="font-medium">
                         {contact.firstName || ""} {contact.lastName || ""}
                       </p>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+                    <td className="hidden md:table-cell">
+                      <span style={{ color: "var(--text-muted)" }}>
                         {contact.email || "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+                    <td className="hidden md:table-cell">
+                      <span style={{ color: "var(--text-muted)" }}>
                         {contact.phone || "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-[var(--glass-border)]" style={{ color: "var(--text-muted)" }}>
+                    <td>
+                      <span className="badge badge-gray">
                         {contact.source || "Direct"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                         {timeAgo(contact.dateAdded)}
                       </span>
@@ -147,39 +144,41 @@ export function ContactsClient() {
       {/* Contact Detail Panel */}
       {selectedContact && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setSelectedContact(null)} />
+          <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setSelectedContact(null)} />
           <div className="fixed right-0 top-0 bottom-0 w-full max-w-sm z-50 glass-card border-l border-[var(--glass-border)] overflow-y-auto">
             <div className="p-6 space-y-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="text-lg font-black" style={{ color: "var(--text-main)" }}>
+                  <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                     {selectedContact.firstName} {selectedContact.lastName}
                   </h2>
                   <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                     Added {new Date(selectedContact.dateAdded).toLocaleDateString()}
                   </p>
                 </div>
-                <button onClick={() => setSelectedContact(null)} className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)]">
+                <button onClick={() => setSelectedContact(null)} className="p-2 rounded-lg hover:bg-[var(--input-bg)] transition-colors">
                   <XIcon className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div className="section-divider" />
+
+              <div className="space-y-5">
                 {selectedContact.email && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Email</p>
-                    <p className="text-sm mt-1" style={{ color: "var(--text-main)" }}>{selectedContact.email}</p>
+                    <p className="section-header">Email</p>
+                    <p className="text-sm" style={{ color: "var(--text-main)" }}>{selectedContact.email}</p>
                   </div>
                 )}
                 {selectedContact.phone && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Phone</p>
-                    <p className="text-sm mt-1" style={{ color: "var(--text-main)" }}>{selectedContact.phone}</p>
+                    <p className="section-header">Phone</p>
+                    <p className="text-sm" style={{ color: "var(--text-main)" }}>{selectedContact.phone}</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Source</p>
-                  <p className="text-sm mt-1" style={{ color: "var(--text-main)" }}>{selectedContact.source || "Direct"}</p>
+                  <p className="section-header">Source</p>
+                  <p className="text-sm" style={{ color: "var(--text-main)" }}>{selectedContact.source || "Direct"}</p>
                 </div>
               </div>
             </div>

@@ -40,10 +40,41 @@ function SearchIcon({ className, style }: { className?: string; style?: React.CS
   );
 }
 
+interface PortalSession {
+  id: string;
+  email: string;
+  clientName: string | null;
+  createdAt: string;
+  expiresAt: string;
+  isActive: boolean;
+}
+
+interface PortalSessionsData {
+  stats: { totalActive: number; uniqueClients7d: number };
+  sessions: PortalSession[];
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function AdminPage() {
   const [data, setData] = useState<AdminData | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [portalData, setPortalData] = useState<PortalSessionsData | null>(null);
+  const [portalLoading, setPortalLoading] = useState(true);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -56,6 +87,12 @@ export default function AdminPage() {
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+
+    fetch("/api/dashboard/portal-sessions")
+      .then((r) => r.json())
+      .then(setPortalData)
+      .catch(() => setPortalData(null))
+      .finally(() => setPortalLoading(false));
   }, []);
 
   function selectClient(clientId: string) {
@@ -81,7 +118,7 @@ export default function AdminPage() {
     <div className="max-w-[1600px] mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text-main)" }}>
+        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
           Client Overview
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -90,30 +127,26 @@ export default function AdminPage() {
       </div>
 
       {/* Aggregate stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="Total Clients"
           value={loading ? "..." : String(data?.totalClients ?? 0)}
-          accent="blue"
         />
         <StatCard
           label="Active Subs"
           value={loading ? "..." : String(data?.activeSubscriptions ?? 0)}
-          accent="emerald"
         />
         <StatCard
           label="Total Leads"
           value={loading ? "..." : compactNumber(data?.totalLeads ?? 0)}
           delta="all businesses"
           deltaType="neutral"
-          accent="cyan"
         />
         <StatCard
           label="Avg Leads / Biz"
           value={loading ? "..." : String(data?.avgLeadsPerBusiness ?? 0)}
           delta="30 days"
           deltaType="neutral"
-          accent="teal"
         />
       </div>
 
@@ -122,7 +155,7 @@ export default function AdminPage() {
         <select
           value={selectedClientId || ""}
           onChange={(e) => e.target.value && selectClient(e.target.value)}
-          className="w-full px-4 py-3 rounded-xl text-sm font-medium border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50"
+          className="w-full px-4 py-3 rounded-lg text-sm font-medium border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50"
           style={{
             background: "var(--glass-bg)",
             color: "var(--text-main)",
@@ -144,13 +177,13 @@ export default function AdminPage() {
           <GlassCard>
             {/* Search input */}
             <div className="relative mb-4">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
+              <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
               <input
                 type="text"
                 placeholder="Search clients..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl text-xs border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50 transition-colors"
+                className="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs border border-[var(--glass-border)] focus:outline-none focus:border-blue-500/50 transition-colors"
                 style={{
                   background: "var(--glass-bg)",
                   color: "var(--text-main)",
@@ -159,12 +192,12 @@ export default function AdminPage() {
             </div>
 
             {/* Client cards */}
-            <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto pr-1" style={{ scrollbarWidth: "thin" }}>
+            <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto pr-1 no-scrollbar">
               {loading ? (
                 [1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className="h-20 rounded-2xl animate-pulse"
+                    className="h-20 rounded-lg animate-pulse"
                     style={{ background: "var(--glass-border)" }}
                   />
                 ))
@@ -194,7 +227,7 @@ export default function AdminPage() {
             <GlassCard>
               <div className="py-24 text-center">
                 <div
-                  className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"
+                  className="w-16 h-16 rounded-lg mx-auto mb-4 flex items-center justify-center"
                   style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.1), rgba(6,182,212,0.1))" }}
                 >
                   <SearchIcon className="w-6 h-6" style={{ color: "var(--text-muted)" }} />
@@ -209,6 +242,87 @@ export default function AdminPage() {
             </GlassCard>
           )}
         </main>
+      </div>
+
+      {/* Portal Sessions */}
+      <div className="mt-8">
+        <p className="section-header">Portal Sessions</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <StatCard
+            label="Active Sessions"
+            value={portalLoading ? "..." : String(portalData?.stats.totalActive ?? 0)}
+          />
+          <StatCard
+            label="Unique Clients"
+            value={portalLoading ? "..." : String(portalData?.stats.uniqueClients7d ?? 0)}
+            delta="7 days"
+            deltaType="neutral"
+          />
+        </div>
+
+        <GlassCard>
+          {portalLoading ? (
+            <div className="py-12 flex justify-center">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : !portalData || portalData.sessions.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                No portal sessions yet. Clients will appear here when they sign in via magic link.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Email</th>
+                    <th>Signed In</th>
+                    <th>Expires</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {portalData.sessions.map((s) => (
+                    <tr key={s.id}>
+                      <td>
+                        <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                          {s.clientName || "—"}
+                        </p>
+                      </td>
+                      <td>
+                        <p className="text-sm" style={{ color: "var(--text-main)" }}>
+                          {s.email}
+                        </p>
+                      </td>
+                      <td>
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {timeAgo(s.createdAt)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {new Date(s.expiresAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${s.isActive ? "badge-emerald" : "badge-gray"}`}>
+                          {s.isActive ? "Active" : "Expired"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </GlassCard>
       </div>
     </div>
   );

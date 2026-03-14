@@ -79,7 +79,7 @@ export function CalendarClient() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-black tracking-tight" style={{ color: "var(--text-main)" }}>
+        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
           Calendar
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
@@ -91,17 +91,17 @@ export function CalendarClient() {
       <div className="flex items-center justify-between">
         <button
           onClick={prevMonth}
-          className="px-3 py-1.5 rounded-lg border border-[var(--glass-border)] text-sm font-bold hover:border-blue-500/30 transition-colors"
+          className="px-4 py-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm font-semibold hover:border-blue-500/30 transition-colors"
           style={{ color: "var(--text-muted)" }}
         >
           Previous
         </button>
-        <h2 className="text-lg font-black" style={{ color: "var(--text-main)" }}>
+        <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
           {monthName}
         </h2>
         <button
           onClick={nextMonth}
-          className="px-3 py-1.5 rounded-lg border border-[var(--glass-border)] text-sm font-bold hover:border-blue-500/30 transition-colors"
+          className="px-4 py-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm font-semibold hover:border-blue-500/30 transition-colors"
           style={{ color: "var(--text-muted)" }}
         >
           Next
@@ -109,11 +109,11 @@ export function CalendarClient() {
       </div>
 
       {/* Calendar Grid */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="glass-card overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center" style={{ color: "var(--text-muted)" }}>
+          <div className="p-16 text-center" style={{ color: "var(--text-muted)" }}>
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            Loading calendar...
+            <p className="text-sm">Loading calendar...</p>
           </div>
         ) : (
           <>
@@ -122,8 +122,7 @@ export function CalendarClient() {
               {DAYS.map((day) => (
                 <div
                   key={day}
-                  className="text-center py-2 text-[10px] font-bold uppercase tracking-widest"
-                  style={{ color: "var(--text-muted)" }}
+                  className="text-center py-3 section-header mb-0"
                 >
                   {day}
                 </div>
@@ -137,14 +136,14 @@ export function CalendarClient() {
                 return (
                   <div
                     key={i}
-                    className={`min-h-[80px] md:min-h-[100px] p-1.5 border-b border-r border-[var(--glass-border)] ${
-                      day ? "hover:bg-blue-500/5" : "opacity-30"
+                    className={`min-h-[80px] md:min-h-[100px] p-2 border-b border-r border-[var(--glass-border)] transition-colors ${
+                      day ? "hover:bg-[var(--input-bg)]" : "opacity-30"
                     }`}
                   >
                     {day && (
                       <>
                         <span
-                          className={`inline-flex w-6 h-6 items-center justify-center rounded-full text-xs font-bold ${
+                          className={`inline-flex w-7 h-7 items-center justify-center rounded-lg text-xs font-bold ${
                             isToday(day)
                               ? "bg-blue-500 text-white"
                               : ""
@@ -157,11 +156,11 @@ export function CalendarClient() {
                           {dayEvents.slice(0, 3).map((evt) => (
                             <div
                               key={evt.id}
-                              className={`text-[10px] px-1.5 py-0.5 rounded truncate ${
+                              className={`text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium ${
                                 evt.status === "cancelled"
-                                  ? "bg-red-500/10 text-red-400 line-through"
+                                  ? "bg-rose-500/10 text-rose-400 line-through"
                                   : evt.status === "confirmed"
-                                  ? "bg-green-500/10 text-green-400"
+                                  ? "bg-emerald-500/10 text-emerald-400"
                                   : "bg-blue-500/10 text-blue-400"
                               }`}
                             >
@@ -190,37 +189,37 @@ export function CalendarClient() {
 
       {/* Upcoming Events list */}
       {events.length > 0 && (
-        <div className="glass-card rounded-2xl p-5">
-          <h3 className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: "var(--text-muted)" }}>
+        <div className="glass-card p-6">
+          <h3 className="section-header mb-4">
             Upcoming Events
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {events
               .filter((e) => new Date(e.startTime) >= new Date() && e.status !== "cancelled")
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
               .slice(0, 5)
               .map((evt) => (
-                <div key={evt.id} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-blue-500/5 transition-colors">
-                  <div className="w-10 text-center shrink-0">
+                <div key={evt.id} className="flex items-center gap-4 py-3 px-3 rounded-lg hover:bg-[var(--input-bg)] transition-colors">
+                  <div className="w-12 text-center shrink-0">
                     <p className="text-lg font-black leading-none" style={{ color: "var(--text-main)" }}>
                       {new Date(evt.startTime).getDate()}
                     </p>
-                    <p className="text-[10px] uppercase" style={{ color: "var(--text-muted)" }}>
+                    <p className="text-[10px] uppercase font-semibold mt-0.5" style={{ color: "var(--text-muted)" }}>
                       {new Date(evt.startTime).toLocaleString("default", { month: "short" })}
                     </p>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: "var(--text-main)" }}>
                       {evt.title || "Appointment"}
                     </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                       {new Date(evt.startTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                       {" — "}
                       {new Date(evt.endTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                     </p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    evt.status === "confirmed" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
+                  <span className={`badge ${
+                    evt.status === "confirmed" ? "badge-emerald" : "badge-blue"
                   }`}>
                     {evt.status}
                   </span>

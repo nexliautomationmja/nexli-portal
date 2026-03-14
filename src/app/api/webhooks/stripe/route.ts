@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { db } from "@/db";
-import { users, subscriptions } from "@/db/schema";
+import { users, subscriptions, invoices } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import type Stripe from "stripe";
+import { sendEmailWithLog, buildInvoicePaidEmail, buildPaymentReceiptEmail } from "@/lib/email";
+import { formatCurrency } from "@/lib/invoice-utils";
+import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_PORTAL!;
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -27,7 +30,11 @@ export async function POST(req: NextRequest) {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      await handleCheckoutCompleted(session);
+      if (session.metadata?.nexli_invoice_id) {
+        await handleInvoicePayment(session);
+      } else {
+        await handleCheckoutCompleted(session);
+      }
       break;
     }
     case "customer.subscription.updated": {
@@ -147,4 +154,110 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       updatedAt: new Date(),
     })
     .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
+}
+
+async function handleInvoicePayment(session: Stripe.Checkout.Session) {
+  const invoiceId = session.metadata!.nexli_invoice_id;
+  const isPartial = session.metadata?.is_partial_payment === "true";
+
+  // Fetch the current invoice first
+  const [currentInvoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId))
+    .limit(1);
+
+  if (!currentInvoice) return;
+
+  let paymentAmount: number;
+  let newAmountPaid: number;
+  let newBalanceDue: number;
+  let newStatus: "paid" | "partial";
+
+  if (isPartial) {
+    paymentAmount = parseInt(session.metadata!.payment_amount_cents, 10);
+    newAmountPaid = currentInvoice.amountPaid + paymentAmount;
+    newBalanceDue = currentInvoice.total - newAmountPaid;
+    newStatus = newBalanceDue <= 0 ? "paid" : "partial";
+  } else {
+    // Full payment
+    paymentAmount = currentInvoice.total;
+    newAmountPaid = currentInvoice.total;
+    newBalanceDue = 0;
+    newStatus = "paid";
+  }
+
+  const [invoice] = await db
+    .update(invoices)
+    .set({
+      status: newStatus,
+      amountPaid: newAmountPaid,
+      balanceDue: Math.max(0, newBalanceDue),
+      paidAt: newStatus === "paid" ? new Date() : null,
+      stripePaymentIntentId: session.payment_intent as string,
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, invoiceId))
+    .returning();
+
+  if (!invoice) return;
+
+  try {
+    const [owner] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, invoice.ownerId))
+      .limit(1);
+
+    if (owner?.email) {
+      const paidLabel = newStatus === "paid"
+        ? formatCurrency(invoice.total, invoice.currency)
+        : `${formatCurrency(paymentAmount, invoice.currency)} (partial — ${formatCurrency(newBalanceDue, invoice.currency)} remaining)`;
+      const { subject, html } = buildInvoicePaidEmail({
+        senderName: owner.name || owner.email,
+        clientName: invoice.clientName,
+        invoiceNumber: invoice.invoiceNumber,
+        total: paidLabel,
+        paidAt: new Date(),
+      });
+      await sendEmailWithLog({ to: owner.email, subject, html, recipientName: owner.name || undefined, emailType: "invoice_paid", relatedId: invoice.id });
+    }
+  } catch (err) {
+    console.error("Failed to send invoice paid email:", err);
+  }
+
+  // Send payment receipt to the client
+  try {
+    const portalUrl =
+      process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+
+    const [owner] = await db
+      .select({ name: users.name, email: users.email, companyName: users.companyName })
+      .from(users)
+      .where(eq(users.id, invoice.ownerId))
+      .limit(1);
+
+    const senderLabel = owner?.companyName || owner?.name || owner?.email || "Your Service Provider";
+
+    const { subject: receiptSubject, html: receiptHtml } = buildPaymentReceiptEmail({
+      clientName: invoice.clientName,
+      senderName: senderLabel,
+      invoiceNumber: invoice.invoiceNumber,
+      amountPaid: formatCurrency(paymentAmount, invoice.currency),
+      totalInvoice: formatCurrency(invoice.total, invoice.currency),
+      remainingBalance: newBalanceDue > 0
+        ? formatCurrency(newBalanceDue, invoice.currency)
+        : null,
+      paidAt: new Date(),
+      portalUrl,
+    });
+    await sendEmailWithLog({ to: invoice.clientEmail, subject: receiptSubject, html: receiptHtml, recipientName: invoice.clientName, emailType: "payment_receipt", relatedId: invoice.id });
+  } catch (err) {
+    console.error("Failed to send payment receipt to client:", err);
+  }
+
+  // Sync payment to accounting software (non-blocking)
+  syncPaymentToAccounting(invoiceId).catch((err) =>
+    console.error("Accounting payment sync failed:", err)
+  );
 }

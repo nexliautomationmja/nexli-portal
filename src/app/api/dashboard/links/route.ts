@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { documentLinks, documentAuditLog } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
+import { sendEmailWithLog, buildUploadRequestEmail } from "@/lib/email";
 
 export async function GET() {
   const session = await auth();
@@ -60,17 +61,43 @@ export async function POST(req: NextRequest) {
     })
     .returning();
 
-  // Log the action
+  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+  const uploadUrl = `${portalUrl}/upload/${token}`;
+
+  // Auto-send email when delivery method is email
+  let emailSent = false;
+  if (deliveryMethod === "email" && clientEmail) {
+    try {
+      const senderName = session.user.name || session.user.email || "Your Service Provider";
+      const { subject, html } = buildUploadRequestEmail({
+        clientName: clientName || "",
+        senderName,
+        uploadUrl,
+        requiredDocs: requiredDocuments || [],
+        message,
+        expiresAt,
+      });
+      await sendEmailWithLog({ to: clientEmail, subject, html, recipientName: clientName, emailType: "upload_request", relatedId: link.id, sentBy: session.user.id });
+      emailSent = true;
+    } catch (err) {
+      console.error("Failed to send upload request email:", err);
+    }
+  }
+
+  // Log the action (includes email status)
   await db.insert(documentAuditLog).values({
     linkId: link.id,
     action: "link_created",
     actorId: session.user.id,
     actorName: session.user.name || session.user.email,
-    metadata: { clientName, clientEmail, expiresAt: expiresAt.toISOString() },
+    metadata: {
+      clientName,
+      clientEmail,
+      expiresAt: expiresAt.toISOString(),
+      deliveryMethod,
+      emailSent,
+    },
   });
 
-  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-  const uploadUrl = `${portalUrl}/upload/${token}`;
-
-  return NextResponse.json({ link, uploadUrl }, { status: 201 });
+  return NextResponse.json({ link, uploadUrl, emailSent }, { status: 201 });
 }

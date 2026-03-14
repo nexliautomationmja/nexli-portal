@@ -10,6 +10,12 @@ import {
   type Document,
 } from "@/lib/hooks/use-documents";
 import {
+  useESignatures,
+  createEsignRequest,
+  voidEsignRequest,
+  type ESignature,
+} from "@/lib/hooks/use-esignatures";
+import {
   FileIcon,
   SearchIcon,
   EyeIcon,
@@ -19,12 +25,14 @@ import {
   LinkIcon,
   PlusIcon,
   XIcon,
+  SendIcon,
 } from "@/components/ui/icons";
+import { ClientPicker } from "@/components/dashboard/client-picker";
 
 const STATUS_COLORS = {
-  new: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  reviewed: "bg-green-500/20 text-green-400 border-green-500/30",
-  archived: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  new: "badge-blue",
+  reviewed: "badge-emerald",
+  archived: "badge-gray",
 };
 
 const CATEGORIES = [
@@ -70,6 +78,14 @@ export function DocumentsClient() {
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
 
+  // E-sign state
+  const [showEsignModal, setShowEsignModal] = useState(false);
+  const [esignDocId, setEsignDocId] = useState<string | null>(null);
+  const [esignName, setEsignName] = useState("");
+  const [esignEmail, setEsignEmail] = useState("");
+  const [esignSending, setEsignSending] = useState(false);
+  const { esignatures, refetch: refetchEsign } = useESignatures();
+
   const { documents, total, loading, refetch } = useDocuments({
     status: statusFilter !== "all" ? statusFilter : undefined,
     category: categoryFilter || undefined,
@@ -92,13 +108,53 @@ export function DocumentsClient() {
     if (selectedDoc?.id === docId) setSelectedDoc(null);
   }
 
+  function openEsignModal(doc: Document) {
+    setEsignDocId(doc.id);
+    setEsignName(doc.clientName || "");
+    setEsignEmail(doc.clientEmail || "");
+    setShowEsignModal(true);
+  }
+
+  async function handleSendEsign(e: React.FormEvent) {
+    e.preventDefault();
+    if (!esignDocId || !esignName || !esignEmail) return;
+    setEsignSending(true);
+    try {
+      await createEsignRequest({
+        documentId: esignDocId,
+        signerName: esignName,
+        signerEmail: esignEmail,
+      });
+      setShowEsignModal(false);
+      setEsignDocId(null);
+      setEsignName("");
+      setEsignEmail("");
+      refetchEsign();
+    } finally {
+      setEsignSending(false);
+    }
+  }
+
+  function getEsignsForDoc(docId: string): ESignature[] {
+    return esignatures.filter((e) => e.documentId === docId);
+  }
+
+  const ESIGN_STATUS_COLORS: Record<string, string> = {
+    pending: "text-gray-400",
+    sent: "text-blue-400",
+    viewed: "text-cyan-400",
+    signed: "text-emerald-400",
+    declined: "text-red-400",
+    expired: "text-yellow-400",
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1
-            className="text-2xl font-black tracking-tight"
+            className="text-2xl font-bold tracking-tight"
             style={{ color: "var(--text-main)" }}
           >
             Documents
@@ -109,7 +165,7 @@ export function DocumentsClient() {
         </div>
         <Link
           href="/dashboard/documents/links"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
           style={{
             background: "linear-gradient(135deg, #2563EB, #06B6D4)",
           }}
@@ -123,19 +179,16 @@ export function DocumentsClient() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Total Uploads", value: stats.total, color: "text-[var(--text-main)]" },
-            { label: "Pending Review", value: stats.new, color: "text-blue-400" },
-            { label: "Reviewed", value: stats.reviewed, color: "text-green-400" },
-            { label: "This Month", value: stats.thisMonth, color: "text-cyan-400" },
+            { label: "Total Uploads", value: stats.total, accent: "#2563EB" },
+            { label: "Pending Review", value: stats.new, accent: "#06B6D4" },
+            { label: "Reviewed", value: stats.reviewed, accent: "#10B981" },
+            { label: "This Month", value: stats.thisMonth, accent: "#8B5CF6" },
           ].map((stat) => (
-            <div key={stat.label} className="glass-card rounded-2xl p-4">
-              <p
-                className="text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: "var(--text-muted)" }}
-              >
+            <div key={stat.label} className="glass-card p-4">
+              <p className="stat-label">
                 {stat.label}
               </p>
-              <p className={`text-2xl font-black mt-1 ${stat.color}`}>
+              <p className="stat-value mt-1">
                 {stat.value}
               </p>
             </div>
@@ -147,27 +200,27 @@ export function DocumentsClient() {
       <div className="flex flex-col md:flex-row gap-3">
         {/* Search */}
         <div className="relative flex-1">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+          <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by filename or client..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 transition-colors"
+            className="w-full pl-11 pr-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
             style={{ color: "var(--text-main)" }}
           />
         </div>
 
         {/* Status filter */}
-        <div className="flex items-center gap-1 p-1 rounded-xl border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
+        <div className="flex items-center gap-1 p-1 rounded-lg border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
           {["all", "new", "reviewed", "archived"].map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
                 statusFilter === s
                   ? "bg-blue-500/20 text-blue-400"
-                  : "hover:bg-[var(--glass-bg)]"
+                  : "hover:bg-[var(--input-bg)]"
               }`}
               style={{ color: statusFilter === s ? undefined : "var(--text-muted)" }}
             >
@@ -180,7 +233,7 @@ export function DocumentsClient() {
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-3 py-2.5 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none"
+          className="px-3 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none"
           style={{ color: "var(--text-main)" }}
         >
           <option value="">All Categories</option>
@@ -191,109 +244,101 @@ export function DocumentsClient() {
       </div>
 
       {/* Document Table */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="glass-card overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center" style={{ color: "var(--text-muted)" }}>
+          <div className="p-16 text-center" style={{ color: "var(--text-muted)" }}>
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            Loading documents...
+            <p className="text-sm">Loading documents...</p>
           </div>
         ) : documents.length === 0 ? (
-          <div className="p-12 text-center" style={{ color: "var(--text-muted)" }}>
-            <FileIcon className="w-8 h-8 mx-auto mb-3 opacity-40" />
-            <p className="text-sm font-medium">No documents found</p>
+          <div className="empty-state py-16">
+            <FileIcon className="empty-state-icon" />
+            <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>No documents found</p>
             <p className="text-xs mt-1">
               Create a secure link to start collecting documents from clients.
             </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="data-table">
               <thead>
-                <tr
-                  className="text-[10px] font-bold uppercase tracking-widest border-b border-[var(--glass-border)]"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  <th className="text-left px-4 py-3">Client</th>
-                  <th className="text-left px-4 py-3">Document</th>
-                  <th className="text-left px-4 py-3 hidden md:table-cell">Category</th>
-                  <th className="text-left px-4 py-3 hidden md:table-cell">Size</th>
-                  <th className="text-left px-4 py-3">Date</th>
-                  <th className="text-left px-4 py-3">Status</th>
-                  <th className="text-right px-4 py-3">Actions</th>
+                <tr>
+                  <th>Client</th>
+                  <th>Document</th>
+                  <th className="hidden md:table-cell">Category</th>
+                  <th className="hidden md:table-cell">Size</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {documents.map((doc) => (
                   <tr
                     key={doc.id}
-                    className="border-b border-[var(--glass-border)] hover:bg-blue-500/5 transition-colors cursor-pointer"
+                    className="cursor-pointer"
                     onClick={() => setSelectedDoc(doc)}
                   >
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                    <td>
+                      <p className="font-medium" style={{ color: "var(--text-main)" }}>
                         {doc.clientName || "Unknown"}
                       </p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                         {doc.clientEmail || ""}
                       </p>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <div className="flex items-center gap-2">
                         <FileIcon className="w-4 h-4 text-blue-400 shrink-0" />
-                        <span
-                          className="text-sm truncate max-w-[200px]"
-                          style={{ color: "var(--text-main)" }}
-                        >
+                        <span className="truncate max-w-[200px]">
                           {doc.fileName}
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    <td className="hidden md:table-cell">
+                      <span style={{ color: "var(--text-muted)" }}>
                         {doc.category || "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                    <td className="hidden md:table-cell">
+                      <span className="font-mono text-xs" style={{ color: "var(--text-muted)" }}>
                         {formatFileSize(doc.fileSize)}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                         {timeAgo(doc.createdAt)}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${STATUS_COLORS[doc.status]}`}
-                      >
+                    <td>
+                      <span className={`badge uppercase ${STATUS_COLORS[doc.status]}`}>
                         {doc.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                         {doc.status === "new" && (
                           <button
                             onClick={() => handleStatusChange(doc.id, "reviewed")}
-                            className="p-1.5 rounded-lg hover:bg-green-500/10 transition-colors"
+                            className="p-2 rounded-lg hover:bg-emerald-500/10 transition-colors"
                             title="Mark as Reviewed"
                           >
-                            <CheckIcon className="w-4 h-4 text-green-400" />
+                            <CheckIcon className="w-4 h-4 text-emerald-400" />
                           </button>
                         )}
                         <button
                           onClick={() => setSelectedDoc(doc)}
-                          className="p-1.5 rounded-lg hover:bg-blue-500/10 transition-colors"
+                          className="p-2 rounded-lg hover:bg-blue-500/10 transition-colors"
                           title="View"
                         >
                           <EyeIcon className="w-4 h-4 text-blue-400" />
                         </button>
                         <button
                           onClick={() => handleDelete(doc.id)}
-                          className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                          className="p-2 rounded-lg hover:bg-rose-500/10 transition-colors"
                           title="Delete"
                         >
-                          <TrashIcon className="w-4 h-4 text-red-400" />
+                          <TrashIcon className="w-4 h-4 text-rose-400" />
                         </button>
                       </div>
                     </td>
@@ -307,7 +352,7 @@ export function DocumentsClient() {
         {/* Pagination info */}
         {total > 0 && (
           <div
-            className="px-4 py-3 text-xs border-t border-[var(--glass-border)]"
+            className="px-5 py-3 text-xs border-t border-[var(--glass-border)]"
             style={{ color: "var(--text-muted)" }}
           >
             Showing {documents.length} of {total} documents
@@ -315,11 +360,77 @@ export function DocumentsClient() {
         )}
       </div>
 
+      {/* E-Sign Modal */}
+      {showEsignModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={() => setShowEsignModal(false)} />
+          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 glass-card p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
+                Request E-Signature
+              </h2>
+              <button onClick={() => setShowEsignModal(false)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)]">
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSendEsign} className="space-y-4">
+              <ClientPicker
+                onSelect={(c) => {
+                  setEsignName(c.name);
+                  setEsignEmail(c.email);
+                }}
+                placeholder="Search existing clients..."
+              />
+              <div>
+                <label className="block section-header mb-1.5">
+                  Signer Name
+                </label>
+                <input
+                  type="text"
+                  value={esignName}
+                  onChange={(e) => setEsignName(e.target.value)}
+                  placeholder="Full name of the signer"
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                  style={{ color: "var(--text-main)" }}
+                />
+              </div>
+              <div>
+                <label className="block section-header mb-1.5">
+                  Signer Email
+                </label>
+                <input
+                  type="email"
+                  value={esignEmail}
+                  onChange={(e) => setEsignEmail(e.target.value)}
+                  placeholder="signer@email.com"
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 transition-colors"
+                  style={{ color: "var(--text-main)" }}
+                />
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                The signer will receive an email with a secure link to review and sign the document.
+              </p>
+              <button
+                type="submit"
+                disabled={esignSending || !esignName || !esignEmail}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold text-white disabled:opacity-50 transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+              >
+                <SendIcon className="w-4 h-4" />
+                {esignSending ? "Sending..." : "Send Signature Request"}
+              </button>
+            </form>
+          </div>
+        </>
+      )}
+
       {/* Detail Panel (slide-over) */}
       {selectedDoc && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 z-40"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
             onClick={() => setSelectedDoc(null)}
           />
           <div className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 glass-card border-l border-[var(--glass-border)] overflow-y-auto">
@@ -327,7 +438,7 @@ export function DocumentsClient() {
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="text-lg font-black" style={{ color: "var(--text-main)" }}>
+                  <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                     {selectedDoc.fileName}
                   </h2>
                   <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
@@ -336,18 +447,17 @@ export function DocumentsClient() {
                 </div>
                 <button
                   onClick={() => setSelectedDoc(null)}
-                  className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] transition-colors"
+                  className="p-2 rounded-lg hover:bg-[var(--input-bg)] transition-colors"
                 >
                   <XIcon className="w-5 h-5" />
                 </button>
               </div>
 
+              <div className="section-divider" />
+
               {/* Status */}
               <div>
-                <p
-                  className="text-[10px] font-bold uppercase tracking-widest mb-2"
-                  style={{ color: "var(--text-muted)" }}
-                >
+                <p className="section-header">
                   Status
                 </p>
                 <div className="flex gap-2">
@@ -355,9 +465,9 @@ export function DocumentsClient() {
                     <button
                       key={s}
                       onClick={() => handleStatusChange(selectedDoc.id, s)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize border transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize border transition-all ${
                         selectedDoc.status === s
-                          ? STATUS_COLORS[s]
+                          ? `${STATUS_COLORS[s]} border-current`
                           : "border-[var(--glass-border)] hover:border-blue-500/30"
                       }`}
                       style={{
@@ -372,14 +482,11 @@ export function DocumentsClient() {
 
               {/* Client Info */}
               <div>
-                <p
-                  className="text-[10px] font-bold uppercase tracking-widest mb-2"
-                  style={{ color: "var(--text-muted)" }}
-                >
+                <p className="section-header">
                   Client
                 </p>
                 <div className="space-y-1">
-                  <p className="text-sm" style={{ color: "var(--text-main)" }}>
+                  <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
                     {selectedDoc.clientName || "Unknown"}
                   </p>
                   {selectedDoc.clientEmail && (
@@ -397,22 +504,19 @@ export function DocumentsClient() {
 
               {/* File Details */}
               <div>
-                <p
-                  className="text-[10px] font-bold uppercase tracking-widest mb-2"
-                  style={{ color: "var(--text-muted)" }}
-                >
+                <p className="section-header">
                   File Details
                 </p>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-2.5 text-sm">
                   <div className="flex justify-between">
                     <span style={{ color: "var(--text-muted)" }}>Size</span>
-                    <span className="font-mono" style={{ color: "var(--text-main)" }}>
+                    <span className="font-mono text-xs" style={{ color: "var(--text-main)" }}>
                       {formatFileSize(selectedDoc.fileSize)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span style={{ color: "var(--text-muted)" }}>Type</span>
-                    <span className="font-mono" style={{ color: "var(--text-main)" }}>
+                    <span className="font-mono text-xs" style={{ color: "var(--text-main)" }}>
                       {selectedDoc.mimeType}
                     </span>
                   </div>
@@ -434,26 +538,81 @@ export function DocumentsClient() {
               {/* Actions */}
               <div className="flex gap-2">
                 <button
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border border-[var(--glass-border)] hover:border-blue-500/30 transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold border border-[var(--glass-border)] hover:border-blue-500/30 transition-all"
                   style={{ color: "var(--text-main)" }}
                 >
                   <DownloadIcon className="w-4 h-4" />
                   Download
                 </button>
                 <button
+                  onClick={() => openEsignModal(selectedDoc)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                >
+                  <SendIcon className="w-4 h-4" />
+                  E-Sign
+                </button>
+                <button
                   onClick={() => handleDelete(selectedDoc.id)}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-all"
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold text-rose-400 border border-rose-500/30 hover:bg-rose-500/10 transition-all"
                 >
                   <TrashIcon className="w-4 h-4" />
                 </button>
               </div>
 
+              {/* E-Signature Status */}
+              {getEsignsForDoc(selectedDoc.id).length > 0 && (
+                <div>
+                  <p className="section-header">
+                    E-Signatures
+                  </p>
+                  <div className="space-y-2">
+                    {getEsignsForDoc(selectedDoc.id).map((es) => (
+                      <div
+                        key={es.id}
+                        className="p-3 rounded-lg border border-[var(--glass-border)]"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                            {es.signerName}
+                          </p>
+                          <span
+                            className={`text-[10px] font-bold uppercase ${ESIGN_STATUS_COLORS[es.status] || "text-gray-400"}`}
+                          >
+                            {es.status}
+                          </span>
+                        </div>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {es.signerEmail}
+                        </p>
+                        {es.signedAt && (
+                          <p className="text-[10px] text-emerald-400 mt-1">
+                            Signed {formatDate(es.signedAt)}
+                          </p>
+                        )}
+                        {es.status === "signed" && es.signatureData && (
+                          <div className="mt-2 p-2 bg-white rounded-lg">
+                            <img
+                              src={es.signatureData}
+                              alt="Signature"
+                              className="h-12 mx-auto"
+                            />
+                          </div>
+                        )}
+                        {es.declineReason && (
+                          <p className="text-[10px] text-rose-400 mt-1 italic">
+                            &quot;{es.declineReason}&quot;
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Notes */}
               <div>
-                <p
-                  className="text-[10px] font-bold uppercase tracking-widest mb-2"
-                  style={{ color: "var(--text-muted)" }}
-                >
+                <p className="section-header">
                   Notes
                 </p>
                 <textarea
@@ -464,7 +623,7 @@ export function DocumentsClient() {
                       updateDocument(selectedDoc.id, { notes: e.target.value });
                     }
                   }}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none focus:border-blue-500 resize-none h-20 transition-colors"
+                  className="w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 resize-none h-24 transition-colors"
                   style={{ color: "var(--text-main)" }}
                 />
               </div>

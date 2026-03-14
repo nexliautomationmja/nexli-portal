@@ -32,10 +32,10 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div>
         <h1
-          className="text-2xl md:text-3xl font-bold"
+          className="text-2xl md:text-3xl font-bold tracking-tight"
           style={{ color: "var(--text-main)" }}
         >
           Welcome back, {firstName}

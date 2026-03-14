@@ -8,13 +8,44 @@ export function middleware(req: NextRequest) {
   if (
     pathname.startsWith("/upload/") ||
     pathname.startsWith("/esign/") ||
+    pathname.startsWith("/engage/") ||
+    pathname.startsWith("/invoice/") ||
     pathname.startsWith("/api/upload/") ||
-    pathname.startsWith("/api/esign/")
+    pathname.startsWith("/api/esign/") ||
+    pathname.startsWith("/api/engage/") ||
+    pathname.startsWith("/api/invoice/") ||
+    pathname.startsWith("/api/preview/")
   ) {
     return NextResponse.next();
   }
 
-  // Check for session token (NextAuth JWT cookie)
+  // ── Portal auth routes (public — no session needed) ──
+  if (pathname.startsWith("/api/portal/auth/")) {
+    return NextResponse.next();
+  }
+
+  // Portal login page
+  if (pathname === "/portal") {
+    const portalToken = req.cookies.get("nexli-portal-session");
+    if (portalToken) {
+      return NextResponse.redirect(new URL("/portal/dashboard", req.url));
+    }
+    return NextResponse.next();
+  }
+
+  // Protected portal routes
+  if (
+    pathname.startsWith("/portal/dashboard") ||
+    pathname.startsWith("/api/portal/")
+  ) {
+    const portalToken = req.cookies.get("nexli-portal-session");
+    if (!portalToken) {
+      return NextResponse.redirect(new URL("/portal", req.url));
+    }
+    return NextResponse.next();
+  }
+
+  // ── Dashboard auth (existing) ──
   const token =
     req.cookies.get("__Secure-authjs.session-token") ||
     req.cookies.get("authjs.session-token");
@@ -40,9 +71,17 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/login",
+    "/portal",
+    "/portal/:path*",
+    "/api/portal/:path*",
     "/upload/:path*",
     "/esign/:path*",
+    "/engage/:path*",
+    "/invoice/:path*",
     "/api/upload/:path*",
     "/api/esign/:path*",
+    "/api/engage/:path*",
+    "/api/invoice/:path*",
+    "/api/preview/:path*",
   ],
 };

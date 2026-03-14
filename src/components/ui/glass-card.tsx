@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 
 interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "compact";
+  variant?: "default" | "compact" | "elevated";
 }
 
 export function GlassCard({
@@ -16,9 +16,9 @@ export function GlassCard({
     <div
       className={cn(
         "glass-card",
-        variant === "default"
-          ? "p-5 md:p-8 rounded-2xl md:rounded-[2rem]"
-          : "p-4 md:p-5 rounded-xl md:rounded-2xl",
+        variant === "default" && "p-5",
+        variant === "compact" && "p-4",
+        variant === "elevated" && "p-5",
         className
       )}
       {...props}

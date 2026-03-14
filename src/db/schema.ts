@@ -450,3 +450,409 @@ export const taxFormSubmissions = pgTable(
     index("tax_form_submissions_client_idx").on(table.clientName),
   ]
 );
+
+// ══════════════════════════════════════════════════════════
+// ══  ENGAGEMENT LETTERS  ═════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const engagementStatusEnum = pgEnum("engagement_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "signed",
+  "declined",
+  "expired",
+]);
+
+// ── Engagement Templates ─────────────────────────────────
+export const engagementTemplates = pgTable(
+  "engagement_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("engagement_templates_owner_idx").on(table.ownerId),
+  ]
+);
+
+// ── Engagements ──────────────────────────────────────────
+export const engagements = pgTable(
+  "engagements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    templateId: uuid("template_id").references(() => engagementTemplates.id, {
+      onDelete: "set null",
+    }),
+    subject: text("subject").notNull(),
+    content: text("content").notNull(),
+    status: engagementStatusEnum("status").default("draft").notNull(),
+    sentAt: timestamp("sent_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("engagements_owner_idx").on(table.ownerId),
+    index("engagements_status_idx").on(table.status),
+  ]
+);
+
+// ── Engagement Signers ──────────────────────────────────────
+export const engagementSigners = pgTable(
+  "engagement_signers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    token: text("token").notNull().unique(),
+    order: integer("order").notNull().default(1),
+    status: engagementStatusEnum("status").default("sent").notNull(),
+    sentAt: timestamp("sent_at"),
+    viewedAt: timestamp("viewed_at"),
+    signedAt: timestamp("signed_at"),
+    declinedAt: timestamp("declined_at"),
+    declineReason: text("decline_reason"),
+    role: text("role"),
+    signatureData: text("signature_data"),
+    signatureIp: text("signature_ip"),
+    signatureUserAgent: text("signature_user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("engagement_signers_token_idx").on(table.token),
+    index("engagement_signers_engagement_idx").on(table.engagementId),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
+// ══  INVOICING  ══════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "paid",
+  "partial",
+  "overdue",
+  "canceled",
+  "void",
+]);
+
+export const recurringIntervalEnum = pgEnum("recurring_interval", [
+  "weekly",
+  "biweekly",
+  "monthly",
+  "quarterly",
+  "yearly",
+]);
+
+export const billingTypeEnum = pgEnum("billing_type", [
+  "one_time",
+  "monthly",
+  "quarterly",
+  "yearly",
+]);
+
+export const invoiceCurrencyEnum = pgEnum("invoice_currency", [
+  "usd",
+  "cad",
+  "gbp",
+  "eur",
+  "aud",
+]);
+
+// ── Invoices ─────────────────────────────────────────────
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // Client info
+    clientName: text("client_name").notNull(),
+    clientEmail: text("client_email").notNull(),
+    clientPhone: text("client_phone"),
+    clientCompany: text("client_company"),
+
+    // Invoice metadata
+    invoiceNumber: text("invoice_number").notNull().unique(),
+    status: invoiceStatusEnum("status").default("draft").notNull(),
+    currency: invoiceCurrencyEnum("currency").default("usd").notNull(),
+    token: text("token").notNull().unique(),
+
+    // Financials (integer cents)
+    subtotal: integer("subtotal").notNull().default(0),
+    taxRate: integer("tax_rate").default(0), // basis points: 825 = 8.25%
+    taxAmount: integer("tax_amount").default(0),
+    total: integer("total").notNull().default(0),
+
+    // Dates
+    issueDate: timestamp("issue_date").defaultNow().notNull(),
+    dueDate: timestamp("due_date").notNull(),
+
+    // Content
+    notes: text("notes"),
+    terms: text("terms"),
+
+    // Stripe references
+    stripeInvoiceId: text("stripe_invoice_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    stripePaymentUrl: text("stripe_payment_url"),
+
+    // Partial payment tracking (integer cents)
+    amountPaid: integer("amount_paid").default(0).notNull(),
+    balanceDue: integer("balance_due").default(0).notNull(),
+
+    // Recurring invoice fields
+    isRecurring: boolean("is_recurring").default(false).notNull(),
+    recurringInterval: recurringIntervalEnum("recurring_interval"),
+    recurringEndDate: timestamp("recurring_end_date"),
+    nextRecurrenceDate: timestamp("next_recurrence_date"),
+    recurringParentId: uuid("recurring_parent_id"),
+
+    // Accounting sync references
+    qbInvoiceId: text("qb_invoice_id"),
+    xeroInvoiceId: text("xero_invoice_id"),
+    customBooksInvoiceId: text("custom_books_invoice_id"),
+
+    // Reminder config (JSONB)
+    // { schedule: [{ dayOffset: -7 }, { dayOffset: 0 }, { dayOffset: 3 }] }
+    reminderConfig: jsonb("reminder_config"),
+
+    // Lifecycle timestamps
+    sentAt: timestamp("sent_at"),
+    viewedAt: timestamp("viewed_at"),
+    paidAt: timestamp("paid_at"),
+    canceledAt: timestamp("canceled_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("invoices_token_idx").on(table.token),
+    uniqueIndex("invoices_number_idx").on(table.invoiceNumber),
+    index("invoices_owner_idx").on(table.ownerId),
+    index("invoices_owner_status_idx").on(table.ownerId, table.status),
+    index("invoices_client_email_idx").on(table.clientEmail),
+    index("invoices_due_date_idx").on(table.dueDate),
+  ]
+);
+
+// ── Invoice Line Items ───────────────────────────────────
+export const invoiceLineItems = pgTable(
+  "invoice_line_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    quantity: integer("quantity").notNull().default(100), // stored * 100 (1.5 → 150)
+    unitPrice: integer("unit_price").notNull(), // cents
+    amount: integer("amount").notNull(), // cents
+    billingType: billingTypeEnum("billing_type").default("one_time").notNull(),
+    order: integer("order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("invoice_line_items_invoice_idx").on(table.invoiceId),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
+// ══  ACCOUNTING INTEGRATIONS  ════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const accountingProviderEnum = pgEnum("accounting_provider", [
+  "quickbooks",
+  "xero",
+  "custombooks",
+]);
+
+export const accountingConnections = pgTable(
+  "accounting_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: accountingProviderEnum("provider").notNull(),
+
+    // OAuth tokens
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at").notNull(),
+
+    // Provider-specific IDs
+    realmId: text("realm_id"), // QuickBooks company ID
+    tenantId: text("tenant_id"), // Xero organization ID
+
+    companyName: text("company_name"),
+    connectedAt: timestamp("connected_at").defaultNow().notNull(),
+    lastSyncAt: timestamp("last_sync_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("accounting_connections_user_provider_idx").on(
+      table.userId,
+      table.provider
+    ),
+    index("accounting_connections_user_idx").on(table.userId),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
+// ══  TAX RETURNS  ════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const taxReturnStatusEnum = pgEnum("tax_return_status", [
+  "not_started",
+  "documents_received",
+  "in_progress",
+  "filed",
+  "accepted",
+]);
+
+export const taxReturnTypeEnum = pgEnum("tax_return_type", [
+  "1040",
+  "1120",
+  "1120S",
+  "1065",
+  "990",
+  "other",
+]);
+
+export const taxReturns = pgTable(
+  "tax_returns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientName: text("client_name").notNull(),
+    clientEmail: text("client_email").notNull(),
+    clientCompany: text("client_company"),
+    taxYear: text("tax_year").notNull(),
+    returnType: taxReturnTypeEnum("return_type").default("1040").notNull(),
+    status: taxReturnStatusEnum("status").default("not_started").notNull(),
+    dueDate: timestamp("due_date"),
+    filedDate: timestamp("filed_date"),
+    acceptedDate: timestamp("accepted_date"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("tax_returns_owner_idx").on(table.ownerId),
+    index("tax_returns_owner_status_idx").on(table.ownerId, table.status),
+    index("tax_returns_owner_year_idx").on(table.ownerId, table.taxYear),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
+// ══  CLIENT PORTAL  ═══════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const portalMagicLinks = pgTable(
+  "portal_magic_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    token: text("token").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("portal_magic_links_token_idx").on(table.token),
+    index("portal_magic_links_email_idx").on(table.email),
+  ]
+);
+
+export const portalSessions = pgTable(
+  "portal_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    sessionToken: text("session_token").notNull().unique(),
+    clientName: text("client_name"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("portal_sessions_token_idx").on(table.sessionToken),
+    index("portal_sessions_email_idx").on(table.email),
+    index("portal_sessions_expires_idx").on(table.expiresAt),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
+// ══  INVOICE REMINDERS  ══════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const invoiceReminders = pgTable(
+  "invoice_reminders",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    dayOffset: integer("day_offset").notNull(), // e.g. -7 = 7 days before due
+    scheduledFor: timestamp("scheduled_for").notNull(),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("invoice_reminders_invoice_idx").on(table.invoiceId),
+    index("invoice_reminders_scheduled_idx").on(table.scheduledFor),
+    uniqueIndex("invoice_reminders_invoice_offset_idx").on(
+      table.invoiceId,
+      table.dayOffset
+    ),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
+// ══  EMAIL LOG  ══════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const emailLog = pgTable(
+  "email_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipientEmail: text("recipient_email").notNull(),
+    recipientName: text("recipient_name"),
+    subject: text("subject").notNull(),
+    emailType: text("email_type").notNull(),
+    relatedId: text("related_id"),
+    status: text("status").default("sent").notNull(),
+    resendMessageId: text("resend_message_id"),
+    error: text("error"),
+    sentBy: uuid("sent_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("email_log_recipient_idx").on(table.recipientEmail),
+    index("email_log_type_idx").on(table.emailType),
+    index("email_log_created_idx").on(table.createdAt),
+    index("email_log_sent_by_idx").on(table.sentBy),
+  ]
+);

@@ -63,19 +63,19 @@ export function PipelineClient() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black tracking-tight" style={{ color: "var(--text-main)" }}>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
             Pipeline
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
             Track opportunities through your sales pipeline
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {/* View toggle */}
-          <div className="flex items-center gap-1 p-1 rounded-xl border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
+          <div className="flex items-center gap-1 p-1 rounded-lg border border-[var(--glass-border)]" style={{ background: "var(--glass-bg)" }}>
             <button
               onClick={() => setView("kanban")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 view === "kanban" ? "bg-blue-500/20 text-blue-400" : ""
               }`}
               style={{ color: view === "kanban" ? undefined : "var(--text-muted)" }}
@@ -84,7 +84,7 @@ export function PipelineClient() {
             </button>
             <button
               onClick={() => setView("list")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 view === "list" ? "bg-blue-500/20 text-blue-400" : ""
               }`}
               style={{ color: view === "list" ? undefined : "var(--text-muted)" }}
@@ -98,7 +98,7 @@ export function PipelineClient() {
             <select
               value={selectedPipeline}
               onChange={(e) => setSelectedPipeline(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-[var(--glass-border)] bg-transparent text-sm outline-none"
+              className="px-3 py-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none"
               style={{ color: "var(--text-main)" }}
             >
               {pipelines.map((p) => (
@@ -110,19 +110,21 @@ export function PipelineClient() {
       </div>
 
       {loading ? (
-        <div className="glass-card rounded-2xl p-12 text-center" style={{ color: "var(--text-muted)" }}>
+        <div className="glass-card p-16 text-center" style={{ color: "var(--text-muted)" }}>
           <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          Loading pipeline...
+          <p className="text-sm">Loading pipeline...</p>
         </div>
       ) : !currentPipeline ? (
-        <div className="glass-card rounded-2xl p-12 text-center" style={{ color: "var(--text-muted)" }}>
-          <KanbanIcon className="w-8 h-8 mx-auto mb-3 opacity-40" />
-          <p className="text-sm font-medium">No pipelines found</p>
-          <p className="text-xs mt-1">Connect your GHL Location ID in Settings.</p>
+        <div className="glass-card p-16">
+          <div className="empty-state">
+            <KanbanIcon className="empty-state-icon" />
+            <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>No pipelines found</p>
+            <p className="text-xs mt-1">Connect your GHL Location ID in Settings.</p>
+          </div>
         </div>
       ) : view === "kanban" ? (
         /* Kanban View */
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
           {currentPipeline.stages.map((stage) => {
             const stageOpps = opportunities.filter(
               (o) => o.pipelineStageId === stage.id
@@ -140,15 +142,15 @@ export function PipelineClient() {
                 {/* Stage header */}
                 <div className="flex items-center justify-between mb-3 px-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                    <h3 className="section-header mb-0">
                       {stage.name}
                     </h3>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/5" style={{ color: "var(--text-muted)" }}>
+                    <span className="badge badge-gray">
                       {stageOpps.length}
                     </span>
                   </div>
                   {stageValue > 0 && (
-                    <span className="text-[10px] font-bold text-green-400">
+                    <span className="text-xs font-semibold text-emerald-400">
                       {formatCurrency(stageValue)}
                     </span>
                   )}
@@ -158,7 +160,7 @@ export function PipelineClient() {
                 <div className="space-y-2">
                   {stageOpps.length === 0 ? (
                     <div
-                      className="border-2 border-dashed border-[var(--glass-border)] rounded-xl p-4 text-center"
+                      className="border-2 border-dashed border-[var(--glass-border)] rounded-lg p-6 text-center"
                     >
                       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                         No opportunities
@@ -168,30 +170,30 @@ export function PipelineClient() {
                     stageOpps.map((opp) => (
                       <div
                         key={opp.id}
-                        className="glass-card rounded-xl p-3 hover:border-blue-500/30 transition-colors cursor-pointer"
+                        className="glass-card rounded-lg p-4 hover:border-blue-500/20 transition-colors cursor-pointer"
                       >
                         <p className="text-sm font-medium mb-1" style={{ color: "var(--text-main)" }}>
                           {opp.name}
                         </p>
                         {opp.contact && (
-                          <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                          <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
                             {opp.contact.name}
                           </p>
                         )}
                         <div className="flex items-center justify-between">
                           {opp.monetaryValue ? (
-                            <span className="text-xs font-bold text-green-400">
+                            <span className="text-xs font-bold text-emerald-400">
                               {formatCurrency(opp.monetaryValue)}
                             </span>
                           ) : (
                             <span />
                           )}
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          <span className={`badge ${
                             opp.status === "open"
-                              ? "bg-blue-500/10 text-blue-400"
+                              ? "badge-blue"
                               : opp.status === "won"
-                              ? "bg-green-500/10 text-green-400"
-                              : "bg-gray-500/10 text-gray-400"
+                              ? "badge-emerald"
+                              : "badge-gray"
                           }`}>
                             {opp.status}
                           </span>
@@ -206,15 +208,15 @@ export function PipelineClient() {
         </div>
       ) : (
         /* List View */
-        <div className="glass-card rounded-2xl overflow-hidden">
-          <table className="w-full">
+        <div className="glass-card overflow-hidden">
+          <table className="data-table">
             <thead>
-              <tr className="text-[10px] font-bold uppercase tracking-widest border-b border-[var(--glass-border)]" style={{ color: "var(--text-muted)" }}>
-                <th className="text-left px-4 py-3">Name</th>
-                <th className="text-left px-4 py-3">Contact</th>
-                <th className="text-left px-4 py-3">Stage</th>
-                <th className="text-left px-4 py-3">Value</th>
-                <th className="text-left px-4 py-3">Status</th>
+              <tr>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Stage</th>
+                <th>Value</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -223,26 +225,28 @@ export function PipelineClient() {
                   (s) => s.id === opp.pipelineStageId
                 );
                 return (
-                  <tr key={opp.id} className="border-b border-[var(--glass-border)] hover:bg-blue-500/5 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                  <tr key={opp.id}>
+                    <td className="font-medium">
                       {opp.name}
                     </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-muted)" }}>
-                      {opp.contact?.name || "—"}
+                    <td>
+                      <span style={{ color: "var(--text-muted)" }}>
+                        {opp.contact?.name || "—"}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-[var(--glass-border)]" style={{ color: "var(--text-muted)" }}>
+                    <td>
+                      <span className="badge badge-gray">
                         {stage?.name || "Unknown"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm font-bold text-green-400">
+                    <td className="font-semibold text-emerald-400">
                       {opp.monetaryValue ? formatCurrency(opp.monetaryValue) : "—"}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
-                        opp.status === "open" ? "bg-blue-500/10 text-blue-400"
-                          : opp.status === "won" ? "bg-green-500/10 text-green-400"
-                          : "bg-gray-500/10 text-gray-400"
+                    <td>
+                      <span className={`badge capitalize ${
+                        opp.status === "open" ? "badge-blue"
+                          : opp.status === "won" ? "badge-emerald"
+                          : "badge-gray"
                       }`}>
                         {opp.status}
                       </span>

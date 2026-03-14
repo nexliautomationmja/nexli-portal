@@ -22,6 +22,13 @@
       "when": 1773168390748,
       "tag": "0002_woozy_mesmero",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773257877436,
+      "tag": "0003_dizzy_doctor_doom",
+      "breakpoints": true
     }
   ]
 }

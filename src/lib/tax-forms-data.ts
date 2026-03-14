@@ -7,6 +7,116 @@ export interface TaxForm {
     description: string;
     category: string;
     state?: string; // only for state forms
+    pdfUrl?: string; // direct link to official IRS/state PDF
+}
+
+// Generate IRS PDF URL from form number
+// IRS convention: https://www.irs.gov/pub/irs-pdf/f{number}.pdf
+const PDF_OVERRIDES: Record<string, string> = {
+    'Schedule 1': 'f1040s1.pdf',
+    'Schedule 2': 'f1040s2.pdf',
+    'Schedule 3': 'f1040s3.pdf',
+    'Schedule A': 'f1040sa.pdf',
+    'Schedule B': 'f1040sb.pdf',
+    'Schedule C': 'f1040sc.pdf',
+    'Schedule D': 'f1040sd.pdf',
+    'Schedule E': 'f1040se.pdf',
+    'Schedule F': 'f1040sf.pdf',
+    'Schedule H': 'f1040sh.pdf',
+    'Schedule J': 'f1040sj.pdf',
+    'Schedule R': 'f1040sr.pdf', // Note: different from Form 1040-SR
+    'Schedule SE': 'f1040sse.pdf',
+    'Schedule 8812': 'f1040s8.pdf',
+    'Schedule K-1 (1065)': 'f1065sk1.pdf',
+    'Schedule K-1 (1120-S)': 'f1120ssk.pdf',
+    'Schedule K-1 (1041)': 'f1041sk1.pdf',
+    'Form 8995': 'f8995.pdf',
+    'I-9': '', // Not an IRS form (DHS/USCIS)
+    'FinCEN 114': '', // Filed via BSA E-Filing, not IRS.gov
+    '1040-PR': 'f1040pr.pdf',
+};
+
+export function getPdfUrl(form: TaxForm): string {
+    if (form.state) return ''; // State forms handled separately
+    const num = form.number;
+    if (PDF_OVERRIDES[num] !== undefined) {
+        return PDF_OVERRIDES[num] ? `https://www.irs.gov/pub/irs-pdf/${PDF_OVERRIDES[num]}` : '';
+    }
+    // Standard: remove hyphens/spaces/parens, lowercase, prefix with f
+    const cleaned = num.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    return `https://www.irs.gov/pub/irs-pdf/f${cleaned}.pdf`;
+}
+
+// Generate IRS instructions URL
+export function getInstructionsUrl(form: TaxForm): string {
+    if (form.state) return '';
+    const num = form.number;
+    if (num.startsWith('Schedule') || num === 'I-9' || num === 'FinCEN 114') return '';
+    const cleaned = num.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    return `https://www.irs.gov/pub/irs-pdf/i${cleaned}.pdf`;
+}
+
+// ── STATE TAX DEPARTMENT URLS ───────────────────────────────────
+// Maps state abbreviation to official tax department forms/downloads page
+const STATE_TAX_URLS: Record<string, string> = {
+    AL: 'https://www.revenue.alabama.gov/individual-corporate/taxes-individual-income-tax-forms/',
+    AK: 'https://tax.alaska.gov/programs/whatsnew.aspx',
+    AZ: 'https://azdor.gov/forms',
+    AR: 'https://www.dfa.arkansas.gov/income-tax/individual-income-tax-forms/',
+    CA: 'https://www.ftb.ca.gov/forms/',
+    CO: 'https://tax.colorado.gov/individual-income-tax-filing-guide',
+    CT: 'https://portal.ct.gov/DRS/DRS-Forms/Current-Year-Forms',
+    DE: 'https://revenue.delaware.gov/frequently-used-forms/',
+    DC: 'https://otr.cfo.dc.gov/page/individual-income-tax-forms',
+    FL: 'https://floridarevenue.com/taxes/taxesfees/Pages/corporate.aspx',
+    GA: 'https://dor.georgia.gov/individual-income-tax-forms',
+    HI: 'https://tax.hawaii.gov/forms/',
+    ID: 'https://tax.idaho.gov/forms/',
+    IL: 'https://tax.illinois.gov/forms.html',
+    IN: 'https://www.in.gov/dor/tax-forms/',
+    IA: 'https://tax.iowa.gov/forms',
+    KS: 'https://www.ksrevenue.gov/forms-indiv.html',
+    KY: 'https://revenue.ky.gov/Individual/Pages/Forms.aspx',
+    LA: 'https://revenue.louisiana.gov/Forms',
+    ME: 'https://www.maine.gov/revenue/tax-return-forms',
+    MD: 'https://www.marylandtaxes.gov/individual/income/income-forms-index.php',
+    MA: 'https://www.mass.gov/info-details/dor-personal-income-tax-forms',
+    MI: 'https://www.michigan.gov/taxes/iit/tax-forms',
+    MN: 'https://www.revenue.state.mn.us/individual-income-tax-forms-instructions',
+    MS: 'https://www.dor.ms.gov/individual/tax-forms',
+    MO: 'https://dor.mo.gov/forms/',
+    MT: 'https://mtrevenue.gov/taxes/individual-income-tax/individual-income-tax-forms/',
+    NE: 'https://revenue.nebraska.gov/individuals/individual-income-tax-forms',
+    NV: 'https://tax.nv.gov/Forms/',
+    NH: 'https://www.revenue.nh.gov/forms/',
+    NJ: 'https://www.nj.gov/treasury/taxation/prntgit.shtml',
+    NM: 'https://www.tax.newmexico.gov/individuals/tax-forms-and-tables/',
+    NY: 'https://www.tax.ny.gov/forms/income_cur_forms.htm',
+    NC: 'https://www.ncdor.gov/taxes-forms/individual-income-tax/individual-income-tax-forms-instructions',
+    ND: 'https://www.tax.nd.gov/forms',
+    OH: 'https://tax.ohio.gov/individual/resources/annual-tax-forms',
+    OK: 'https://oklahoma.gov/tax/individuals/income-tax/income-tax-filing/forms.html',
+    OR: 'https://www.oregon.gov/dor/forms/Pages/default.aspx',
+    PA: 'https://www.revenue.pa.gov/FormsandPublications/FormsforIndividuals/PIT/Pages/default.aspx',
+    RI: 'https://tax.ri.gov/forms',
+    SC: 'https://dor.sc.gov/forms-site/Forms/IITFormsList.aspx',
+    SD: 'https://dor.sd.gov/businesses/taxes/',
+    TN: 'https://www.tn.gov/revenue/tax-resources/forms.html',
+    TX: 'https://comptroller.texas.gov/taxes/franchise/forms/',
+    UT: 'https://incometax.utah.gov/forms',
+    VT: 'https://tax.vermont.gov/individuals/income-tax-returns/forms',
+    VA: 'https://www.tax.virginia.gov/forms',
+    WA: 'https://dor.wa.gov/forms-publications',
+    WV: 'https://tax.wv.gov/Individuals/ElectronicFiling/Pages/IndividualsTaxForms.aspx',
+    WI: 'https://www.revenue.wi.gov/Pages/HTML/formpub.aspx',
+    WY: 'https://revenue.wyo.gov/tax-types',
+};
+
+export function getStateTaxUrl(form: TaxForm): string {
+    if (!form.state) return '';
+    const entry = Object.entries(stateFormData).find(([state]) => state === form.state);
+    if (!entry) return '';
+    return STATE_TAX_URLS[entry[1].abbr] || '';
 }
 
 export const formCategories = [
@@ -741,171 +851,216 @@ export const allStates = Object.keys(stateFormData).sort();
 // Combined forms array
 export const allForms: TaxForm[] = [...federalForms, ...stateForms];
 
-// Form field templates for the fillable demo (based on category)
-export interface FormField {
+// ══════════════════════════════════════════════════════════════
+//  DOCUMENT REQUEST SCENARIOS
+//  Maps tax situations → required supporting documents for collection
+// ══════════════════════════════════════════════════════════════
+
+export interface DocumentRequirement {
     id: string;
     label: string;
-    type: 'text' | 'number' | 'date' | 'select' | 'ssn' | 'ein' | 'phone' | 'checkbox';
-    placeholder?: string;
-    options?: string[];
-    section: string;
+    description: string;
+    category: string;
+    required: boolean;
 }
 
-export function getFormFields(form: TaxForm): FormField[] {
-    const cat = form.category;
-    const num = form.number;
-
-    // Common taxpayer info section
-    const taxpayerInfo: FormField[] = [
-        { id: 'first_name', label: 'First Name', type: 'text', placeholder: 'John', section: 'Taxpayer Information' },
-        { id: 'last_name', label: 'Last Name', type: 'text', placeholder: 'Smith', section: 'Taxpayer Information' },
-        { id: 'ssn', label: 'Social Security Number', type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Taxpayer Information' },
-        { id: 'address', label: 'Street Address', type: 'text', placeholder: '123 Main St', section: 'Taxpayer Information' },
-        { id: 'city', label: 'City', type: 'text', placeholder: 'Austin', section: 'Taxpayer Information' },
-        { id: 'state', label: 'State', type: 'text', placeholder: 'TX', section: 'Taxpayer Information' },
-        { id: 'zip', label: 'ZIP Code', type: 'text', placeholder: '78701', section: 'Taxpayer Information' },
-    ];
-
-    const businessInfo: FormField[] = [
-        { id: 'biz_name', label: 'Business Name', type: 'text', placeholder: 'Acme Corp', section: 'Business Information' },
-        { id: 'ein', label: 'Employer Identification Number', type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Business Information' },
-        { id: 'biz_address', label: 'Business Address', type: 'text', placeholder: '456 Commerce Blvd', section: 'Business Information' },
-        { id: 'biz_type', label: 'Business Type', type: 'select', options: ['Sole Proprietorship', 'Partnership', 'Corporation', 'S Corporation', 'LLC'], section: 'Business Information' },
-        { id: 'fiscal_year', label: 'Tax Year Ending', type: 'date', placeholder: '12/31/2025', section: 'Business Information' },
-    ];
-
-    // Individual tax forms
-    if (cat === 'Individual Tax' || num.includes('1040')) {
-        return [
-            ...taxpayerInfo,
-            { id: 'filing_status', label: 'Filing Status', type: 'select', options: ['Single', 'Married Filing Jointly', 'Married Filing Separately', 'Head of Household', 'Qualifying Surviving Spouse'], section: 'Filing Information' },
-            { id: 'dob', label: 'Date of Birth', type: 'date', placeholder: '01/15/1980', section: 'Filing Information' },
-            { id: 'occupation', label: 'Occupation', type: 'text', placeholder: 'Software Engineer', section: 'Filing Information' },
-            { id: 'wages', label: 'Wages, Salaries, Tips (Box 1 W-2)', type: 'number', placeholder: '75,000', section: 'Income' },
-            { id: 'interest', label: 'Taxable Interest', type: 'number', placeholder: '250', section: 'Income' },
-            { id: 'dividends', label: 'Ordinary Dividends', type: 'number', placeholder: '1,200', section: 'Income' },
-            { id: 'business_income', label: 'Business Income/Loss (Schedule C)', type: 'number', placeholder: '0', section: 'Income' },
-            { id: 'capital_gains', label: 'Capital Gains/Loss (Schedule D)', type: 'number', placeholder: '3,500', section: 'Income' },
-            { id: 'fed_tax_withheld', label: 'Federal Income Tax Withheld', type: 'number', placeholder: '12,000', section: 'Payments & Credits' },
-            { id: 'estimated_paid', label: 'Estimated Tax Payments Made', type: 'number', placeholder: '0', section: 'Payments & Credits' },
-        ];
-    }
-
-    // Business forms
-    if (cat === 'Business Tax') {
-        return [
-            ...businessInfo,
-            { id: 'gross_receipts', label: 'Gross Receipts or Sales', type: 'number', placeholder: '1,250,000', section: 'Income' },
-            { id: 'cost_goods', label: 'Cost of Goods Sold', type: 'number', placeholder: '450,000', section: 'Deductions' },
-            { id: 'compensation', label: 'Compensation of Officers', type: 'number', placeholder: '200,000', section: 'Deductions' },
-            { id: 'rent', label: 'Rents', type: 'number', placeholder: '36,000', section: 'Deductions' },
-            { id: 'taxes_licenses', label: 'Taxes and Licenses', type: 'number', placeholder: '15,000', section: 'Deductions' },
-            { id: 'depreciation', label: 'Depreciation', type: 'number', placeholder: '45,000', section: 'Deductions' },
-            { id: 'total_tax', label: 'Total Tax', type: 'number', placeholder: '105,000', section: 'Tax Computation' },
-            { id: 'payments', label: 'Estimated Tax Payments', type: 'number', placeholder: '90,000', section: 'Tax Computation' },
-        ];
-    }
-
-    // Employment & Payroll
-    if (cat === 'Employment & Payroll') {
-        if (num.startsWith('W-2') || num === 'W-2') {
-            return [
-                { id: 'emp_ein', label: "Employer's EIN", type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Employer Information' },
-                { id: 'emp_name', label: "Employer's Name", type: 'text', placeholder: 'Acme Corp', section: 'Employer Information' },
-                { id: 'emp_address', label: "Employer's Address", type: 'text', placeholder: '456 Commerce Blvd', section: 'Employer Information' },
-                { id: 'ee_ssn', label: "Employee's SSN", type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Employee Information' },
-                { id: 'ee_name', label: "Employee's Name", type: 'text', placeholder: 'John Smith', section: 'Employee Information' },
-                { id: 'wages_box1', label: 'Box 1: Wages, Tips, Other Compensation', type: 'number', placeholder: '75,000', section: 'Wage & Tax Data' },
-                { id: 'fed_withheld_box2', label: 'Box 2: Federal Income Tax Withheld', type: 'number', placeholder: '12,000', section: 'Wage & Tax Data' },
-                { id: 'ss_wages_box3', label: 'Box 3: Social Security Wages', type: 'number', placeholder: '75,000', section: 'Wage & Tax Data' },
-                { id: 'ss_tax_box4', label: 'Box 4: Social Security Tax Withheld', type: 'number', placeholder: '4,650', section: 'Wage & Tax Data' },
-                { id: 'medicare_wages_box5', label: 'Box 5: Medicare Wages', type: 'number', placeholder: '75,000', section: 'Wage & Tax Data' },
-                { id: 'medicare_tax_box6', label: 'Box 6: Medicare Tax Withheld', type: 'number', placeholder: '1,088', section: 'Wage & Tax Data' },
-            ];
-        }
-        if (num === 'W-9') {
-            return [
-                ...taxpayerInfo,
-                { id: 'tax_class', label: 'Federal Tax Classification', type: 'select', options: ['Individual/Sole Proprietor', 'C Corporation', 'S Corporation', 'Partnership', 'Trust/Estate', 'LLC — C Corp', 'LLC — S Corp', 'LLC — Partnership'], section: 'Tax Classification' },
-                { id: 'exempt_payee', label: 'Exempt Payee Code', type: 'text', placeholder: '', section: 'Exemptions' },
-                { id: 'fatca_code', label: 'FATCA Reporting Code', type: 'text', placeholder: '', section: 'Exemptions' },
-                { id: 'tin', label: 'Taxpayer Identification Number', type: 'ssn', placeholder: 'SSN or EIN', section: 'TIN Certification' },
-            ];
-        }
-        return [
-            ...businessInfo,
-            { id: 'num_employees', label: 'Number of Employees', type: 'number', placeholder: '25', section: 'Employment Data' },
-            { id: 'total_wages', label: 'Total Wages Paid', type: 'number', placeholder: '875,000', section: 'Employment Data' },
-            { id: 'fed_withheld', label: 'Federal Income Tax Withheld', type: 'number', placeholder: '125,000', section: 'Tax Withheld' },
-            { id: 'ss_tax', label: 'Social Security Tax', type: 'number', placeholder: '54,250', section: 'Tax Withheld' },
-            { id: 'medicare_tax', label: 'Medicare Tax', type: 'number', placeholder: '12,688', section: 'Tax Withheld' },
-        ];
-    }
-
-    // 1099 series
-    if (cat === 'Information Returns (1099)') {
-        return [
-            { id: 'payer_name', label: "Payer's Name", type: 'text', placeholder: 'ABC Financial Services', section: 'Payer Information' },
-            { id: 'payer_tin', label: "Payer's TIN", type: 'ein', placeholder: 'XX-XXXXXXX', section: 'Payer Information' },
-            { id: 'payer_address', label: "Payer's Address", type: 'text', placeholder: '789 Finance Ave', section: 'Payer Information' },
-            { id: 'recipient_name', label: "Recipient's Name", type: 'text', placeholder: 'John Smith', section: 'Recipient Information' },
-            { id: 'recipient_tin', label: "Recipient's TIN", type: 'ssn', placeholder: 'XXX-XX-XXXX', section: 'Recipient Information' },
-            { id: 'recipient_address', label: "Recipient's Address", type: 'text', placeholder: '123 Main St', section: 'Recipient Information' },
-            { id: 'amount', label: 'Amount Reported', type: 'number', placeholder: '5,000', section: 'Income Reported' },
-            { id: 'fed_withheld', label: 'Federal Income Tax Withheld', type: 'number', placeholder: '0', section: 'Income Reported' },
-        ];
-    }
-
-    // Tax Resolution
-    if (cat === 'Tax Resolution') {
-        return [
-            ...taxpayerInfo,
-            { id: 'tax_periods', label: 'Tax Period(s)', type: 'text', placeholder: '2022, 2023, 2024', section: 'Case Information' },
-            { id: 'total_balance', label: 'Total Balance Owed', type: 'number', placeholder: '45,000', section: 'Case Information' },
-            { id: 'monthly_income', label: 'Monthly Gross Income', type: 'number', placeholder: '6,500', section: 'Financial Information' },
-            { id: 'monthly_expenses', label: 'Monthly Living Expenses', type: 'number', placeholder: '5,200', section: 'Financial Information' },
-            { id: 'bank_balance', label: 'Bank Account Balance', type: 'number', placeholder: '3,400', section: 'Assets' },
-            { id: 'real_estate', label: 'Real Estate Value', type: 'number', placeholder: '250,000', section: 'Assets' },
-            { id: 'vehicles', label: 'Vehicle Value', type: 'number', placeholder: '18,000', section: 'Assets' },
-            { id: 'offer_amount', label: 'Proposed Payment/Offer Amount', type: 'number', placeholder: '12,000', section: 'Resolution Terms' },
-            { id: 'payment_terms', label: 'Payment Terms', type: 'select', options: ['Lump Sum', 'Short-Term (120 days)', 'Long-Term (72 months)', 'Currently Not Collectible'], section: 'Resolution Terms' },
-        ];
-    }
-
-    // Power of Attorney
-    if (cat === 'Power of Attorney') {
-        return [
-            ...taxpayerInfo,
-            { id: 'rep_name', label: 'Representative Name', type: 'text', placeholder: 'Jane CPA', section: 'Representative Information' },
-            { id: 'rep_ptin', label: 'PTIN / CAF Number', type: 'text', placeholder: 'P01234567', section: 'Representative Information' },
-            { id: 'rep_phone', label: 'Representative Phone', type: 'phone', placeholder: '(555) 987-6543', section: 'Representative Information' },
-            { id: 'rep_address', label: 'Representative Address', type: 'text', placeholder: '100 CPA Lane, Suite 200', section: 'Representative Information' },
-            { id: 'tax_matters', label: 'Tax Matters', type: 'select', options: ['Income Tax (1040)', 'Employment Tax (941)', 'Trust Fund Recovery', 'Estate Tax', 'Excise Tax', 'All Matters'], section: 'Authorization' },
-            { id: 'years', label: 'Tax Year(s) or Period(s)', type: 'text', placeholder: '2022, 2023, 2024', section: 'Authorization' },
-            { id: 'acts_authorized', label: 'Specific Acts Authorized', type: 'text', placeholder: 'Signing returns, accessing transcripts, representing at hearings', section: 'Authorization' },
-        ];
-    }
-
-    // State forms
-    if (cat === 'State Forms') {
-        return [
-            ...taxpayerInfo,
-            { id: 'state_id', label: 'State Tax ID / Account Number', type: 'text', placeholder: 'State ID Number', section: 'State Information' },
-            { id: 'fed_agi', label: 'Federal Adjusted Gross Income', type: 'number', placeholder: '85,000', section: 'Income' },
-            { id: 'state_additions', label: 'State Additions', type: 'number', placeholder: '0', section: 'Income' },
-            { id: 'state_subtractions', label: 'State Subtractions', type: 'number', placeholder: '2,500', section: 'Income' },
-            { id: 'state_taxable', label: 'State Taxable Income', type: 'number', placeholder: '82,500', section: 'Tax Computation' },
-            { id: 'state_tax', label: 'State Tax', type: 'number', placeholder: '4,125', section: 'Tax Computation' },
-            { id: 'state_withheld', label: 'State Tax Withheld', type: 'number', placeholder: '4,500', section: 'Payments' },
-            { id: 'state_estimated', label: 'Estimated Tax Payments', type: 'number', placeholder: '0', section: 'Payments' },
-        ];
-    }
-
-    // Default fields for everything else
-    return [
-        ...taxpayerInfo,
-        { id: 'tax_year', label: 'Tax Year', type: 'text', placeholder: '2025', section: 'Form Information' },
-        { id: 'amount_1', label: 'Amount', type: 'number', placeholder: '0', section: 'Form Information' },
-        { id: 'description_1', label: 'Description', type: 'text', placeholder: '', section: 'Form Information' },
-    ];
+export interface DocumentRequestScenario {
+    id: string;
+    name: string;
+    description: string;
+    formNumbers: string[];
+    requirements: DocumentRequirement[];
 }
+
+export const documentRequestScenarios: DocumentRequestScenario[] = [
+    {
+        id: 'individual-1040',
+        name: 'Individual Tax Return (1040)',
+        description: 'Documents needed for individual income tax preparation',
+        formNumbers: ['1040', '1040-SR', '1040-NR'],
+        requirements: [
+            // Income — Required
+            { id: 'w2', label: 'W-2 (all employers)', description: 'Wage and Tax Statement from each employer', category: 'Income', required: true },
+            // Income — Common
+            { id: '1099-int', label: '1099-INT', description: 'Interest income from banks/investments', category: 'Income', required: false },
+            { id: '1099-div', label: '1099-DIV', description: 'Dividend income statements', category: 'Income', required: false },
+            { id: '1099-b', label: '1099-B / Brokerage Statement', description: 'Investment sale proceeds and cost basis', category: 'Income', required: false },
+            { id: '1099-nec', label: '1099-NEC', description: 'Freelance / independent contractor income', category: 'Income', required: false },
+            { id: '1099-misc', label: '1099-MISC', description: 'Rents, royalties, prizes, other income', category: 'Income', required: false },
+            { id: '1099-r', label: '1099-R', description: 'Retirement plan / IRA distributions', category: 'Income', required: false },
+            { id: 'ssa-1099', label: 'SSA-1099', description: 'Social Security benefits statement', category: 'Income', required: false },
+            { id: '1099-g', label: '1099-G', description: 'Unemployment compensation / state tax refunds', category: 'Income', required: false },
+            { id: '1099-k', label: '1099-K', description: 'Payment card / third-party network transactions', category: 'Income', required: false },
+            { id: '1099-s', label: '1099-S', description: 'Real estate sale proceeds', category: 'Income', required: false },
+            { id: 'schedule-k1', label: 'Schedule K-1', description: 'Partnership, S-Corp, or trust income', category: 'Income', required: false },
+            { id: 'rental-income', label: 'Rental Income & Expenses', description: 'Rental property income, expenses, and depreciation records', category: 'Income', required: false },
+            // Deductions
+            { id: '1098', label: '1098 — Mortgage Interest', description: 'Mortgage interest statement from lender', category: 'Deductions', required: false },
+            { id: '1098-e', label: '1098-E — Student Loan Interest', description: 'Student loan interest paid', category: 'Deductions', required: false },
+            { id: '1098-t', label: '1098-T — Tuition Statement', description: 'Tuition paid to educational institution', category: 'Deductions', required: false },
+            { id: 'charitable', label: 'Charitable Donation Receipts', description: 'Receipts for cash and non-cash donations (required for $250+)', category: 'Deductions', required: false },
+            { id: 'property-tax', label: 'Property Tax Statement', description: 'Annual real estate tax bill', category: 'Deductions', required: false },
+            { id: 'medical', label: 'Medical Expense Summary', description: 'Unreimbursed medical and dental expenses', category: 'Deductions', required: false },
+            { id: 'childcare', label: 'Childcare / Dependent Care Receipts', description: 'Daycare provider name, address, TIN, and amounts paid', category: 'Deductions', required: false },
+            { id: 'educator-expenses', label: 'Educator Expenses', description: 'Classroom supplies receipts (K-12 teachers)', category: 'Deductions', required: false },
+            // Health Insurance
+            { id: '1095-a', label: '1095-A — Marketplace Statement', description: 'Health Insurance Marketplace coverage and premium tax credits', category: 'Health Insurance', required: false },
+            // Self-Employment
+            { id: 'business-income-expenses', label: 'Business Income & Expense Records', description: 'Revenue, expenses, receipts for Schedule C', category: 'Self-Employment', required: false },
+            { id: 'home-office', label: 'Home Office Measurements', description: 'Square footage of office and total home for Form 8829', category: 'Self-Employment', required: false },
+            { id: 'vehicle-mileage', label: 'Vehicle Mileage Log', description: 'Business miles driven during the year', category: 'Self-Employment', required: false },
+            // Identity & Reference
+            { id: 'prior-return', label: 'Prior Year Tax Return', description: 'Previous year Form 1040 (all pages including W-2s)', category: 'Reference', required: true },
+            { id: 'id-front', label: 'Photo ID (front)', description: 'Driver license, state ID, or passport', category: 'Identity', required: true },
+            { id: 'id-back', label: 'Photo ID (back)', description: 'Back of driver license or state ID', category: 'Identity', required: true },
+            { id: 'bank-info', label: 'Bank Account Info (for direct deposit)', description: 'Voided check or bank statement showing routing and account number', category: 'Reference', required: false },
+            { id: 'ip-pin', label: 'IRS Identity Protection PIN', description: 'IP PIN letter from IRS (if received)', category: 'Reference', required: false },
+        ],
+    },
+    {
+        id: 'scorp-1120s',
+        name: 'S Corporation Return (1120-S)',
+        description: 'Documents needed for S corporation tax preparation',
+        formNumbers: ['1120-S'],
+        requirements: [
+            { id: 'financial-statements', label: 'Financial Statements', description: 'Balance sheet, income statement, and cash flow statement', category: 'Financial', required: true },
+            { id: 'trial-balance', label: 'Year-End Trial Balance', description: 'General ledger trial balance as of 12/31', category: 'Financial', required: true },
+            { id: 'bank-statements', label: 'Bank Statements (all accounts)', description: 'December bank statements for all business accounts', category: 'Financial', required: true },
+            { id: 'officer-comp', label: 'Officer Compensation Details', description: 'W-2s and compensation breakdown for all officers', category: 'Payroll', required: true },
+            { id: 'payroll-reports', label: 'Annual Payroll Reports', description: 'Annual 941 summary, W-3, and state unemployment reports', category: 'Payroll', required: true },
+            { id: '1099-issued', label: '1099s Issued to Contractors', description: 'Copies of all 1099-NEC/MISC forms issued', category: 'Payroll', required: false },
+            { id: 'depreciation-schedule', label: 'Depreciation Schedule', description: 'Fixed asset list with dates, costs, and depreciation', category: 'Assets', required: true },
+            { id: 'asset-purchases', label: 'Asset Purchase Invoices', description: 'Invoices for equipment, vehicles, or property purchased', category: 'Assets', required: false },
+            { id: 'asset-dispositions', label: 'Asset Sale/Disposal Records', description: 'Records of assets sold, traded, or disposed', category: 'Assets', required: false },
+            { id: 'loan-statements', label: 'Loan Statements', description: 'Year-end statements for all business loans', category: 'Financial', required: false },
+            { id: 'lease-agreements', label: 'Lease Agreements', description: 'Commercial rent and equipment lease agreements', category: 'Financial', required: false },
+            { id: 'shareholder-basis', label: 'Shareholder Basis Schedules', description: 'Stock and debt basis tracking for each shareholder', category: 'Ownership', required: true },
+            { id: 'distributions', label: 'Shareholder Distribution Records', description: 'All distributions paid to shareholders during the year', category: 'Ownership', required: true },
+            { id: 'prior-return-1120s', label: 'Prior Year Form 1120-S', description: 'Previous year return with all schedules and K-1s', category: 'Reference', required: true },
+            { id: 'state-returns', label: 'Prior Year State Returns', description: 'All state returns from prior year', category: 'Reference', required: false },
+        ],
+    },
+    {
+        id: 'ccorp-1120',
+        name: 'C Corporation Return (1120)',
+        description: 'Documents needed for C corporation tax preparation',
+        formNumbers: ['1120'],
+        requirements: [
+            { id: 'financial-statements', label: 'Financial Statements', description: 'Audited or compiled balance sheet, P&L, cash flow', category: 'Financial', required: true },
+            { id: 'trial-balance', label: 'Year-End Trial Balance', description: 'General ledger trial balance', category: 'Financial', required: true },
+            { id: 'bank-statements', label: 'Bank Statements (December)', description: 'All business bank account statements', category: 'Financial', required: true },
+            { id: 'officer-comp', label: 'Officer Compensation', description: 'W-2s and compensation details for all officers/directors', category: 'Payroll', required: true },
+            { id: 'payroll-reports', label: 'Payroll Tax Reports', description: 'Quarterly 941s, annual W-3, state reports', category: 'Payroll', required: true },
+            { id: 'depreciation-schedule', label: 'Depreciation Schedule', description: 'Fixed assets with acquisition dates, costs, depreciation', category: 'Assets', required: true },
+            { id: 'stock-records', label: 'Stock Ownership Records', description: 'Shareholder list, shares issued, and ownership changes', category: 'Ownership', required: true },
+            { id: 'dividend-records', label: 'Dividend Payment Records', description: 'All dividends declared and paid during the year', category: 'Ownership', required: false },
+            { id: 'estimated-payments', label: 'Estimated Tax Payment Records', description: 'Federal and state estimated tax payments made', category: 'Tax Payments', required: true },
+            { id: 'loan-documents', label: 'Loan Agreements & Statements', description: 'All business loan year-end statements', category: 'Financial', required: false },
+            { id: 'insurance-premiums', label: 'Insurance Premium Statements', description: 'Business insurance policies and premiums paid', category: 'Expenses', required: false },
+            { id: 'prior-return-1120', label: 'Prior Year Form 1120', description: 'Previous year corporate return with all schedules', category: 'Reference', required: true },
+        ],
+    },
+    {
+        id: 'partnership-1065',
+        name: 'Partnership Return (1065)',
+        description: 'Documents needed for partnership tax preparation',
+        formNumbers: ['1065'],
+        requirements: [
+            { id: 'partnership-agreement', label: 'Partnership / Operating Agreement', description: 'Current agreement showing profit/loss allocation percentages', category: 'Legal', required: true },
+            { id: 'financial-statements', label: 'Financial Statements', description: 'Balance sheet and income statement', category: 'Financial', required: true },
+            { id: 'trial-balance', label: 'Year-End Trial Balance', description: 'General ledger trial balance', category: 'Financial', required: true },
+            { id: 'bank-statements', label: 'Bank Statements (December)', description: 'All partnership bank account statements', category: 'Financial', required: true },
+            { id: 'guaranteed-payments', label: 'Guaranteed Payment Records', description: 'All guaranteed payments made to partners', category: 'Partners', required: true },
+            { id: 'partner-contributions', label: 'Partner Contribution Records', description: 'Cash and property contributions during the year', category: 'Partners', required: true },
+            { id: 'partner-distributions', label: 'Partner Distribution Records', description: 'All distributions made to partners', category: 'Partners', required: true },
+            { id: 'partner-capital', label: 'Partner Capital Account Schedules', description: 'Beginning and ending capital account for each partner', category: 'Partners', required: true },
+            { id: 'depreciation-schedule', label: 'Depreciation Schedule', description: 'Fixed asset list with depreciation', category: 'Assets', required: true },
+            { id: 'payroll-reports', label: 'Payroll Reports (if applicable)', description: 'Quarterly 941s if partnership has employees', category: 'Payroll', required: false },
+            { id: '1099-issued', label: '1099s Issued', description: 'Copies of 1099s issued to contractors', category: 'Payroll', required: false },
+            { id: 'rental-properties', label: 'Rental Property Records', description: 'Income, expenses, and depreciation for rental properties', category: 'Income', required: false },
+            { id: 'prior-return-1065', label: 'Prior Year Form 1065', description: 'Previous year return with all K-1s', category: 'Reference', required: true },
+        ],
+    },
+    {
+        id: 'estate-trust-1041',
+        name: 'Estate / Trust Return (1041)',
+        description: 'Documents needed for estate or trust tax preparation',
+        formNumbers: ['1041'],
+        requirements: [
+            { id: 'trust-document', label: 'Trust Document / Will', description: 'Trust agreement or last will and testament', category: 'Legal', required: true },
+            { id: 'death-certificate', label: 'Death Certificate (if estate)', description: 'Certified copy of death certificate', category: 'Legal', required: true },
+            { id: 'ein-letter', label: 'EIN Assignment Letter', description: 'IRS letter assigning the estate/trust EIN', category: 'Legal', required: true },
+            { id: 'asset-inventory', label: 'Asset Inventory', description: 'Complete list of assets with date-of-death values', category: 'Assets', required: true },
+            { id: 'income-records', label: 'Income Records (1099s, K-1s)', description: 'All income received by the estate/trust', category: 'Income', required: true },
+            { id: 'bank-statements', label: 'Bank Statements', description: 'All estate/trust bank account statements', category: 'Financial', required: true },
+            { id: 'distribution-records', label: 'Distribution Records', description: 'Amounts distributed to beneficiaries', category: 'Beneficiaries', required: true },
+            { id: 'beneficiary-info', label: 'Beneficiary Information', description: 'Names, SSNs, addresses of all beneficiaries', category: 'Beneficiaries', required: true },
+            { id: 'expense-records', label: 'Estate/Trust Expenses', description: 'Legal fees, accounting fees, trustee fees, property expenses', category: 'Expenses', required: true },
+            { id: 'real-estate-records', label: 'Real Estate Records', description: 'Property valuations, rental income, sale proceeds', category: 'Assets', required: false },
+            { id: 'prior-return-1041', label: 'Prior Year Form 1041', description: 'Previous year fiduciary return', category: 'Reference', required: false },
+        ],
+    },
+    {
+        id: 'new-client',
+        name: 'New Client Onboarding',
+        description: 'Standard documents for onboarding a new tax client',
+        formNumbers: [],
+        requirements: [
+            { id: 'id-front', label: 'Photo ID — Front', description: 'Driver license, state ID, or passport', category: 'Identity', required: true },
+            { id: 'id-back', label: 'Photo ID — Back', description: 'Back of driver license or state ID', category: 'Identity', required: true },
+            { id: 'ssn-card', label: 'Social Security Card', description: 'SSN card for taxpayer (and spouse if MFJ)', category: 'Identity', required: true },
+            { id: 'dep-ssn', label: 'Dependent SSN Cards / Birth Certificates', description: 'SSN cards or birth certificates for all dependents', category: 'Identity', required: false },
+            { id: 'prior-2-returns', label: 'Prior 2 Years Tax Returns', description: 'Most recent 2 years of federal and state returns (all pages)', category: 'Reference', required: true },
+            { id: 'engagement-letter', label: 'Signed Engagement Letter', description: 'Your firm engagement letter / service agreement', category: 'Legal', required: true },
+            { id: 'w9-signed', label: 'Completed W-9', description: 'W-9 for firm records (TIN verification)', category: 'Legal', required: false },
+            { id: 'bank-info', label: 'Bank Account Information', description: 'Voided check or bank statement for direct deposit setup', category: 'Reference', required: false },
+            { id: 'ip-pin', label: 'IRS Identity Protection PIN', description: 'IP PIN letter from IRS (if received)', category: 'Reference', required: false },
+            { id: 'poa-8821', label: 'Signed Form 8821 or 2848', description: 'Tax information authorization or power of attorney', category: 'Legal', required: false },
+        ],
+    },
+    {
+        id: 'tax-resolution',
+        name: 'Tax Resolution / IRS Issue',
+        description: 'Documents needed for tax resolution, installment agreements, or offers in compromise',
+        formNumbers: ['9465', '656', '433-A', '433-A (OIC)', '433-B', '433-F', '2848'],
+        requirements: [
+            { id: 'cp-notices', label: 'IRS Notices / CP Letters', description: 'All IRS letters and notices received (CP14, CP504, etc.)', category: 'IRS Correspondence', required: true },
+            { id: 'tax-transcripts', label: 'Tax Transcripts', description: 'Account transcripts and return transcripts for all years at issue', category: 'IRS Records', required: true },
+            { id: 'unfiled-returns', label: 'Unfiled Tax Returns', description: 'Any returns that still need to be filed', category: 'Tax Returns', required: true },
+            { id: 'prior-returns', label: 'Prior 3 Years Tax Returns', description: 'Filed returns for the 3 most recent tax years', category: 'Tax Returns', required: true },
+            { id: 'pay-stubs', label: 'Recent Pay Stubs', description: 'Last 3 months of pay stubs (all jobs)', category: 'Income Verification', required: true },
+            { id: 'bank-statements-3mo', label: 'Bank Statements (last 3 months)', description: 'All bank account statements for the past 3 months', category: 'Financial', required: true },
+            { id: 'investment-statements', label: 'Investment / Retirement Statements', description: 'Current balances of 401k, IRA, brokerage accounts', category: 'Assets', required: true },
+            { id: 'mortgage-statement', label: 'Mortgage Statement', description: 'Current mortgage balance and monthly payment', category: 'Expenses', required: false },
+            { id: 'vehicle-values', label: 'Vehicle Information', description: 'Year, make, model, mileage, and loan balance for each vehicle', category: 'Assets', required: true },
+            { id: 'real-estate-values', label: 'Real Estate Values', description: 'Property tax assessments or recent appraisals', category: 'Assets', required: false },
+            { id: 'monthly-expenses', label: 'Monthly Living Expense Breakdown', description: 'Housing, food, transportation, healthcare, insurance, etc.', category: 'Expenses', required: true },
+            { id: 'poa-2848', label: 'Signed Form 2848 (Power of Attorney)', description: 'Authorizes representative to act before IRS', category: 'Legal', required: true },
+            { id: 'id-front', label: 'Photo ID', description: 'Driver license or state-issued ID', category: 'Identity', required: true },
+        ],
+    },
+    {
+        id: 'payroll-setup',
+        name: 'Payroll / Employment Tax Setup',
+        description: 'Documents needed for payroll setup and quarterly 941 filings',
+        formNumbers: ['941', '940', 'W-4', 'I-9'],
+        requirements: [
+            { id: 'ein-letter', label: 'EIN Assignment Letter (CP 575)', description: 'IRS letter confirming Employer Identification Number', category: 'Business', required: true },
+            { id: 'state-withholding-id', label: 'State Withholding ID', description: 'State tax withholding registration number', category: 'Business', required: true },
+            { id: 'state-unemployment-id', label: 'State Unemployment ID & Rate', description: 'SUTA registration number and assigned tax rate', category: 'Business', required: true },
+            { id: 'employee-w4s', label: 'W-4 Forms (all employees)', description: 'Completed W-4 withholding certificates', category: 'Employees', required: true },
+            { id: 'employee-i9s', label: 'I-9 Forms (all employees)', description: 'Employment eligibility verification with supporting documents', category: 'Employees', required: true },
+            { id: 'direct-deposit', label: 'Direct Deposit Authorization Forms', description: 'Employee bank routing and account numbers', category: 'Employees', required: false },
+            { id: 'pay-schedule', label: 'Pay Schedule & Rate Information', description: 'Pay frequency, hourly rates or salary amounts, overtime rules', category: 'Compensation', required: true },
+            { id: 'benefits-info', label: 'Employee Benefits Information', description: 'Health insurance, 401k, and other benefit details', category: 'Compensation', required: false },
+            { id: 'prior-941s', label: 'Prior Year 941s', description: 'Quarterly 941 returns from prior year', category: 'Reference', required: false },
+            { id: 'workers-comp', label: "Workers' Compensation Policy", description: 'Current workers comp certificate and policy details', category: 'Insurance', required: false },
+        ],
+    },
+];
+
+// Helper: find scenario by form number
+export function getScenarioForForm(formNumber: string): DocumentRequestScenario | undefined {
+    return documentRequestScenarios.find(s => s.formNumbers.includes(formNumber));
+}
+

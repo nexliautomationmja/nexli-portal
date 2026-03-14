@@ -428,8 +428,15 @@ export function UploadClient({ token }: { token: string }) {
           </div>
         )}
 
+        {/* Portal link */}
+        <div className="mt-6 text-center">
+          <a href="/portal" className="text-[10px] text-blue-500/50 hover:text-blue-400 no-underline">
+            Sign in to Client Portal
+          </a>
+        </div>
+
         {/* Security badge */}
-        <div className="mt-8 flex items-center justify-center gap-4 text-[10px] text-gray-500">
+        <div className="mt-4 flex items-center justify-center gap-4 text-[10px] text-gray-500">
           <div className="flex items-center gap-1">
             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />

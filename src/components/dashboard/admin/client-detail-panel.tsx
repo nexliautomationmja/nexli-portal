@@ -110,7 +110,7 @@ export function ClientDetailPanel({ client }: ClientDetailPanelProps) {
   return (
     <div className="space-y-6">
       {/* Gradient banner */}
-      <div className="h-32 rounded-2xl bg-gradient-to-r from-blue-600/20 via-cyan-500/10 to-transparent relative overflow-hidden">
+      <div className="h-32 rounded-lg bg-gradient-to-r from-blue-600/20 via-cyan-500/10 to-transparent relative overflow-hidden">
         <div className="absolute inset-0 backdrop-blur-[2px]" />
       </div>
 

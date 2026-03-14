@@ -31,7 +31,7 @@ export function DateRangePicker({ className }: { className?: string }) {
             "px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-all duration-200",
             current === r.value
               ? "bg-blue-500/20 text-blue-400"
-              : "text-[var(--text-muted)] hover:bg-[var(--glass-bg)]"
+              : "text-[var(--text-muted)] hover:bg-[var(--input-bg)]"
           )}
         >
           {r.label}
