@@ -9,6 +9,7 @@ import type Stripe from "stripe";
 import { sendEmailWithLog, buildInvoicePaidEmail, buildPaymentReceiptEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncPaymentToAccounting } from "@/lib/accounting-sync";
+import { createNotification } from "@/lib/notifications";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_PORTAL!;
 
@@ -255,6 +256,15 @@ async function handleInvoicePayment(session: Stripe.Checkout.Session) {
   } catch (err) {
     console.error("Failed to send payment receipt to client:", err);
   }
+
+  // In-app notification
+  createNotification({
+    userId: invoice.ownerId,
+    type: "invoice_paid",
+    title: "Invoice Paid",
+    message: `${invoice.clientName} paid invoice ${invoice.invoiceNumber}`,
+    metadata: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, clientName: invoice.clientName },
+  }).catch((err) => console.error("Invoice paid notification failed:", err));
 
   // Sync payment to accounting software (non-blocking)
   syncPaymentToAccounting(invoiceId).catch((err) =>

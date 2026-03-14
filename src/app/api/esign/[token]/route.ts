@@ -8,6 +8,7 @@ import {
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { sendEmailWithLog, buildEsignCompletedEmail } from "@/lib/email";
+import { createNotification } from "@/lib/notifications";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let _supabase: SupabaseClient | null = null;
@@ -179,6 +180,15 @@ export async function POST(
   } catch (err) {
     console.error("Failed to send esign completed email:", err);
   }
+
+  // In-app notification
+  createNotification({
+    userId: result.ownerId,
+    type: "esign_completed",
+    title: "Document Signed",
+    message: `${esign.signerName} signed "${result.documentName}"`,
+    metadata: { esignId: esign.id, documentName: result.documentName, signerName: esign.signerName },
+  }).catch((err) => console.error("E-sign notification failed:", err));
 
   return NextResponse.json({ ok: true, signedAt: new Date().toISOString() });
 }

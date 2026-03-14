@@ -24,6 +24,7 @@ import {
   HamburgerIcon,
   XIcon,
 } from "@/components/ui/icons";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 
 interface SidebarProps {
   isAdmin: boolean;
@@ -178,6 +179,9 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="px-3 pb-4 space-y-0.5 border-t border-[var(--card-border)] pt-3 mt-2">
+        {/* Notifications */}
+        <NotificationBell collapsed={collapsed} />
+
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { engagements, engagementSigners, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { sendEmailWithLog, buildEngagementSignedEmail } from "@/lib/email";
+import { createNotification } from "@/lib/notifications";
 
 // GET — validate token, return engagement info, mark signer as viewed
 export async function GET(
@@ -182,6 +183,15 @@ export async function POST(
   } catch (err) {
     console.error("Failed to send engagement signed email:", err);
   }
+
+  // In-app notification
+  createNotification({
+    userId: engagement.ownerId,
+    type: "engagement_signed",
+    title: "Engagement Letter Signed",
+    message: `${signer.name} signed "${engagement.subject}"`,
+    metadata: { engagementId: engagement.id, signerName: signer.name, subject: engagement.subject },
+  }).catch((err) => console.error("Engagement notification failed:", err));
 
   return NextResponse.json({
     ok: true,

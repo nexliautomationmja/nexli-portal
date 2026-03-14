@@ -412,6 +412,15 @@ html {
   opacity: 0.3;
 }
 
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.3s ease-out;
+}
+
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;

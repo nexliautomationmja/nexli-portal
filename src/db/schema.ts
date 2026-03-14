@@ -856,3 +856,24 @@ export const emailLog = pgTable(
     index("email_log_sent_by_idx").on(table.sentBy),
   ]
 );
+
+// ── Notifications ─────────────────────────────────────────
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    metadata: jsonb("metadata"),
+    read: boolean("read").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("notifications_user_read_idx").on(table.userId, table.read),
+    index("notifications_user_created_idx").on(table.userId, table.createdAt),
+  ]
+);
