@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains"
+  );
+  response.headers.set("X-Frame-Options", "SAMEORIGIN");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()"
+  );
+  return response;
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -16,21 +31,23 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/api/invoice/") ||
     pathname.startsWith("/api/preview/")
   ) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // ── Portal auth routes (public — no session needed) ──
   if (pathname.startsWith("/api/portal/auth/")) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // Portal login page
   if (pathname === "/portal") {
     const portalToken = req.cookies.get("nexli-portal-session");
     if (portalToken) {
-      return NextResponse.redirect(new URL("/portal/dashboard", req.url));
+      return addSecurityHeaders(
+        NextResponse.redirect(new URL("/portal/dashboard", req.url))
+      );
     }
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // Protected portal routes
@@ -40,9 +57,11 @@ export function middleware(req: NextRequest) {
   ) {
     const portalToken = req.cookies.get("nexli-portal-session");
     if (!portalToken) {
-      return NextResponse.redirect(new URL("/portal", req.url));
+      return addSecurityHeaders(
+        NextResponse.redirect(new URL("/portal", req.url))
+      );
     }
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // ── Dashboard auth (existing) ──
@@ -56,15 +75,19 @@ export function middleware(req: NextRequest) {
 
   // Redirect unauthenticated users to login
   if (isOnDashboard && !isLoggedIn) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return addSecurityHeaders(
+      NextResponse.redirect(new URL("/login", req.url))
+    );
   }
 
   // Redirect authenticated users away from login
   if (isOnLogin && isLoggedIn) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return addSecurityHeaders(
+      NextResponse.redirect(new URL("/dashboard", req.url))
+    );
   }
 
-  return NextResponse.next();
+  return addSecurityHeaders(NextResponse.next());
 }
 
 export const config = {

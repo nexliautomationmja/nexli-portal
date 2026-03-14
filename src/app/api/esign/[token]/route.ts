@@ -121,14 +121,29 @@ export async function POST(
     return NextResponse.json({ error: "Already signed" }, { status: 410 });
   }
 
-  const body = await req.json();
-  const { signatureData, typedName } = body;
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const signatureData = typeof body.signatureData === "string" ? body.signatureData : "";
+  const typedName = typeof body.typedName === "string" ? body.typedName.trim() : "";
 
   if (!signatureData || !typedName) {
     return NextResponse.json(
-      { error: "signatureData and typedName are required" },
+      { error: "Signature and name are required" },
       { status: 400 }
     );
+  }
+
+  // Validate input sizes
+  if (typedName.length > 200) {
+    return NextResponse.json({ error: "Name too long" }, { status: 400 });
+  }
+  if (signatureData.length > 500_000) {
+    return NextResponse.json({ error: "Signature data too large" }, { status: 400 });
   }
 
   const ip =
@@ -218,8 +233,14 @@ export async function PATCH(
     return NextResponse.json({ error: "Already signed" }, { status: 410 });
   }
 
-  const body = await req.json();
-  const { reason } = body;
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 1000) : null;
 
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -232,7 +253,7 @@ export async function PATCH(
     .set({
       status: "declined",
       declinedAt: new Date(),
-      declineReason: reason || null,
+      declineReason: reason,
       updatedAt: new Date(),
     })
     .where(eq(eSignatures.id, esign.id));

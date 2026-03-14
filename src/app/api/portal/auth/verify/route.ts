@@ -24,14 +24,13 @@ export async function GET(req: NextRequest) {
 
   const sessionToken = await createPortalSession(result.email);
 
-  const isSecure = req.nextUrl.protocol === "https:";
   const response = NextResponse.redirect(
     new URL("/portal/dashboard", req.url)
   );
 
   response.cookies.set(PORTAL_SESSION_COOKIE, sessionToken, {
     httpOnly: true,
-    secure: isSecure,
+    secure: true,
     sameSite: "lax",
     maxAge: 30 * 24 * 60 * 60, // 30 days
     path: "/",

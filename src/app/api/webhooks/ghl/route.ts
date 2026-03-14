@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { db } from "@/db";
 import { users, leadNotifications } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createNotification } from "@/lib/notifications";
 
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req: NextRequest) {
-  // C3: Verify shared secret if configured
+  // Verify shared secret (timing-safe)
   const webhookSecret = process.env.GHL_WEBHOOK_SECRET;
   if (webhookSecret) {
     const authHeader = req.headers.get("authorization");
     const querySecret = req.nextUrl.searchParams.get("secret");
-    const providedSecret = authHeader?.replace("Bearer ", "") || querySecret;
+    const providedSecret = authHeader?.replace("Bearer ", "") || querySecret || "";
 
-    if (providedSecret !== webhookSecret) {
-      console.error("[GHL Webhook] Invalid or missing webhook secret");
+    if (!safeCompare(providedSecret, webhookSecret)) {
+      console.error("[GHL Webhook] Authentication failed");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
@@ -23,7 +33,7 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     console.error("[GHL Webhook] Invalid JSON body");
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 
   console.log("[GHL Webhook] Received payload:", JSON.stringify(body).slice(0, 500));
@@ -39,7 +49,7 @@ export async function POST(req: NextRequest) {
   // C4: Only match users by locationId — no insecure fallback
   if (!locationId) {
     console.error("[GHL Webhook] No locationId found in payload");
-    return NextResponse.json({ error: "Missing locationId" }, { status: 400 });
+    return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 
   const [user] = await db
