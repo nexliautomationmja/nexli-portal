@@ -94,13 +94,13 @@ export async function createPortalSession(email: string): Promise<string> {
       .limit(1);
 
     if (ownerInvoice) {
-      createNotification({
+      await createNotification({
         userId: ownerInvoice.ownerId,
         type: "portal_login",
         title: "Client Portal Login",
         message: `${clientName || email} signed in to the client portal`,
         metadata: { clientEmail: email, clientName },
-      }).catch(() => {});
+      });
     }
   } catch {
     // Non-critical — don't block session creation

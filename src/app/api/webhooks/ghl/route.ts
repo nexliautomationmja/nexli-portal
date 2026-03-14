@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, leadNotifications } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 import { createNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
@@ -9,39 +9,56 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
+    console.error("[GHL Webhook] Invalid JSON body");
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const locationId =
-    (body.locationId as string) || (body.location_id as string);
+  console.log("[GHL Webhook] Received payload:", JSON.stringify(body).slice(0, 500));
 
-  if (!locationId) {
-    return NextResponse.json(
-      { error: "Missing locationId" },
-      { status: 400 }
-    );
+  // Try multiple possible locationId field names from GHL
+  const locationId =
+    (body.locationId as string) ||
+    (body.location_id as string) ||
+    (body.locationID as string) ||
+    ((body.contact as Record<string, unknown>)?.locationId as string) ||
+    null;
+
+  // Find user by locationId, or fall back to any user with GHL connected
+  let user: { id: string } | undefined;
+
+  if (locationId) {
+    [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.ghlLocationId, locationId))
+      .limit(1);
   }
 
-  // Find the user who owns this GHL location
-  const [user] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.ghlLocationId, locationId))
-    .limit(1);
+  if (!user) {
+    // Fallback: find any user with a GHL location configured
+    [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(isNotNull(users.ghlLocationId))
+      .limit(1);
+  }
 
   if (!user) {
-    // No matching user — acknowledge so GHL doesn't retry
+    console.error("[GHL Webhook] No user found with GHL location connected");
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // Extract contact info from GHL payload
+  // Extract contact info — GHL sends data in various formats
   const contact = (body.contact || body) as Record<string, unknown>;
-  const firstName = (contact.firstName || contact.first_name || "") as string;
-  const lastName = (contact.lastName || contact.last_name || "") as string;
-  const leadName = [firstName, lastName].filter(Boolean).join(" ") || "Unknown";
+  const firstName = (contact.firstName || contact.first_name || contact.firstNameRaw || "") as string;
+  const lastName = (contact.lastName || contact.last_name || contact.lastNameRaw || "") as string;
+  const fullName = (contact.name || contact.full_name || contact.contactName || "") as string;
+  const leadName = [firstName, lastName].filter(Boolean).join(" ") || (fullName as string) || "Unknown";
   const leadEmail = (contact.email || "") as string;
-  const leadPhone = (contact.phone || "") as string;
-  const source = (contact.source || body.source || "GHL") as string;
+  const leadPhone = (contact.phone || contact.phoneNumber || "") as string;
+  const source = (contact.source || body.source || body.workflow_name || "GHL") as string;
+
+  console.log("[GHL Webhook] Processing lead:", { leadName, leadEmail, leadPhone, source, userId: user.id });
 
   // Store in leadNotifications table
   await db.insert(leadNotifications).values({
@@ -62,6 +79,8 @@ export async function POST(req: NextRequest) {
     message: `${contactInfo} — Source: ${source}`,
     metadata: { leadName, leadEmail, leadPhone, source, locationId },
   });
+
+  console.log("[GHL Webhook] Notification created successfully");
 
   return NextResponse.json({ ok: true });
 }
