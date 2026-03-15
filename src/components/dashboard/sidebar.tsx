@@ -64,9 +64,7 @@ const clientNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
   { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
 ];
 
-const adminNav: { href: string; label: string; icon: typeof ShieldIcon }[] = [
-  { href: "/dashboard/admin", label: "All Clients", icon: ShieldIcon },
-];
+const adminNav: { href: string; label: string; icon: typeof ShieldIcon }[] = [];
 
 export function Sidebar({ isAdmin, userName }: SidebarProps) {
   const pathname = usePathname();
