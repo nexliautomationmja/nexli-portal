@@ -19,7 +19,7 @@ declare module "next-auth" {
   }
 }
 
-declare module "next-auth" {
+declare module "@auth/core/jwt" {
   interface JWT {
     role?: "admin" | "client";
     id?: string;
@@ -27,6 +27,7 @@ declare module "next-auth" {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true,
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days

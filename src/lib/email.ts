@@ -95,43 +95,78 @@ export const emailWrapper = (content: string) => `
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark only">
   <meta name="supported-color-schemes" content="dark only">
+  <!--[if mso]>
   <style>
-    :root { color-scheme: dark only; supported-color-schemes: dark only; }
-    body, .body-bg { background-color: #0a0a0f !important; }
+    body, table, td, th, p, a, span, div { background-color: #0a0a0f !important; color: #ffffff !important; }
+  </style>
+  <![endif]-->
+  <style>
+    :root { color-scheme: dark only !important; supported-color-schemes: dark only !important; }
+    body, .body-bg, .body-bg table { background-color: #0a0a0f !important; }
     .card-bg { background-color: #111118 !important; }
+    .card-border { border-color: #1e1e2a !important; }
+    .footer-border { border-color: #1a1a24 !important; }
+    .nxl-white { color: #ffffff !important; }
+    .nxl-gray { color: #9999a8 !important; }
+    .nxl-muted { color: #4a4a5a !important; }
+    .nxl-footer { color: #666675 !important; }
+    .nxl-green { color: #10B981 !important; }
+    .nxl-link { color: #2563EB !important; }
+    .nxl-label { color: #808090 !important; }
+    u + .body-bg { background-color: #0a0a0f !important; }
+    div[style*="margin: 16px 0"] { margin: 0 !important; }
     [data-ogsc] body, [data-ogsc] .body-bg { background-color: #0a0a0f !important; }
     [data-ogsc] .card-bg { background-color: #111118 !important; }
+    [data-ogsc] .nxl-white { color: #ffffff !important; }
+    [data-ogsc] .nxl-gray { color: #9999a8 !important; }
+    [data-ogsc] .nxl-muted { color: #4a4a5a !important; }
+    [data-ogsc] .nxl-green { color: #10B981 !important; }
+    [data-ogsc] .nxl-label { color: #808090 !important; }
+    [data-ogsb] body, [data-ogsb] .body-bg { background-color: #0a0a0f !important; }
+    [data-ogsb] .card-bg { background-color: #111118 !important; }
     @media (prefers-color-scheme: light) {
+      body, .body-bg, u + .body-bg { background-color: #0a0a0f !important; }
+      .card-bg { background-color: #111118 !important; }
+      .nxl-white { color: #ffffff !important; }
+      .nxl-gray { color: #9999a8 !important; }
+      .nxl-muted { color: #4a4a5a !important; }
+      .nxl-footer { color: #666675 !important; }
+      .nxl-green { color: #10B981 !important; }
+      .nxl-link { color: #2563EB !important; }
+      .nxl-label { color: #808090 !important; }
+    }
+    @media (prefers-color-scheme: dark) {
       body, .body-bg { background-color: #0a0a0f !important; }
       .card-bg { background-color: #111118 !important; }
     }
   </style>
 </head>
-<body class="body-bg" style="margin:0;padding:0;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="background-color:#0a0a0f;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" class="card-bg" style="max-width:560px;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
+<body class="body-bg" style="margin:0;padding:0;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#ffffff;">
+  <div class="body-bg" style="background-color:#0a0a0f;">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0a0a0f" class="body-bg" style="background-color:#0a0a0f;padding:40px 20px;">
+    <tr><td align="center" bgcolor="#0a0a0f" style="background-color:#0a0a0f;">
+      <table width="100%" class="card-bg" bgcolor="#111118" style="max-width:560px;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
         <!-- Logo Header -->
-        <tr><td style="padding:32px 32px 0;text-align:center;">
+        <tr><td bgcolor="#111118" style="background-color:#111118;padding:32px 32px 0;text-align:center;">
           <img src="${LOGO_URL}" alt="Nexli" width="130" style="display:inline-block;" />
         </td></tr>
         <!-- Content -->
-        <tr><td style="padding:32px;">
+        <tr><td bgcolor="#111118" style="background-color:#111118;padding:32px;">
           ${content}
         </td></tr>
         <!-- Footer -->
-        <tr><td style="padding:0 32px 32px;border-top:1px solid #1a1a24;padding-top:24px;">
+        <tr><td bgcolor="#111118" class="footer-border" style="background-color:#111118;padding:0 32px 32px;border-top:1px solid #1a1a24;padding-top:24px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr><td align="center" style="padding-bottom:12px;">
               <img src="${LOGO_URL}" alt="Nexli" width="60" style="opacity:0.4;" />
             </td></tr>
             <tr><td align="center">
-              <p style="margin:0;color:#4a4a5a;font-size:11px;">
+              <p class="nxl-muted" style="margin:0;color:#4a4a5a;font-size:11px;">
                 Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
               </p>
             </td></tr>
             <tr><td align="center" style="padding-top:12px;">
-              <a href="${PORTAL_URL}/portal" style="color:#2563EB;font-size:11px;text-decoration:none;opacity:0.6;">
+              <a href="${PORTAL_URL}/portal" class="nxl-link" style="color:#2563EB;font-size:11px;text-decoration:none;opacity:0.6;">
                 Sign in to your Client Portal
               </a>
             </td></tr>
@@ -140,6 +175,7 @@ export const emailWrapper = (content: string) => `
       </table>
     </td></tr>
   </table>
+  </div>
 </body>
 </html>`;
 
