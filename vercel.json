@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/ach-settlement",
-      "schedule": "0 */4 * * *"
+      "schedule": "0 6 * * *"
     }
   ]
 }
