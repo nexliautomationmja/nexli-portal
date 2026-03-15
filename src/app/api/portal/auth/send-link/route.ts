@@ -110,20 +110,24 @@ export async function POST(req: NextRequest) {
 
   const hasData = !!(inv || doc || signer || taxReturn || esign || link);
 
-  if (hasData && clientName) {
-    try {
-      const magicLinkUrl = await generateMagicLink(email);
-      const { subject, html } = buildMagicLinkEmail({
-        clientName,
-        magicLinkUrl,
-        expiresInMinutes: 15,
-      });
-      await sendEmailWithLog({ to: email, subject, html, recipientName: clientName || undefined, emailType: "magic_link" });
-    } catch (err) {
-      console.error("Failed to send magic link:", err);
-    }
+  if (!hasData) {
+    return NextResponse.json(
+      { error: "No account found for this email address. Please contact your provider." },
+      { status: 404 }
+    );
   }
 
-  // Always return success to prevent email enumeration
+  try {
+    const magicLinkUrl = await generateMagicLink(email);
+    const { subject, html } = buildMagicLinkEmail({
+      clientName: clientName!,
+      magicLinkUrl,
+      expiresInMinutes: 15,
+    });
+    await sendEmailWithLog({ to: email, subject, html, recipientName: clientName || undefined, emailType: "magic_link" });
+  } catch (err) {
+    console.error("Failed to send magic link:", err);
+  }
+
   return NextResponse.json({ success: true });
 }
