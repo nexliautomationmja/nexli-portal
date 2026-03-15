@@ -50,6 +50,7 @@ function ChevronRightIcon({ className }: { className?: string }) {
 
 const clientNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutIcon },
+  { href: "/dashboard/clients", label: "Clients", icon: UsersIcon },
   { href: "/dashboard/contacts", label: "Contacts", icon: UsersIcon },
   { href: "/dashboard/pipeline", label: "Pipeline", icon: KanbanIcon },
   { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon },
