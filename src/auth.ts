@@ -43,37 +43,42 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        try {
+          if (!credentials?.email || !credentials?.password) return null;
 
-        const normalizedEmail = (credentials.email as string).toLowerCase().trim();
+          const normalizedEmail = (credentials.email as string).toLowerCase().trim();
 
-        const result = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, normalizedEmail))
-          .limit(1);
+          const result = await db
+            .select()
+            .from(users)
+            .where(eq(users.email, normalizedEmail))
+            .limit(1);
 
-        const user = result[0];
-        if (!user) return null;
+          const user = result[0];
+          if (!user) return null;
 
-        const passwordMatch = await bcrypt.compare(
-          credentials.password as string,
-          user.hashedPassword
-        );
-        if (!passwordMatch) return null;
+          const passwordMatch = await bcrypt.compare(
+            credentials.password as string,
+            user.hashedPassword
+          );
+          if (!passwordMatch) return null;
 
-        // Update last login timestamp
-        await db
-          .update(users)
-          .set({ lastLoginAt: new Date() })
-          .where(eq(users.id, user.id));
+          // Update last login timestamp
+          await db
+            .update(users)
+            .set({ lastLoginAt: new Date() })
+            .where(eq(users.id, user.id));
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        };
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          };
+        } catch (err) {
+          console.error("[AUTH] authorize error:", err);
+          return null;
+        }
       },
     }),
   ],
