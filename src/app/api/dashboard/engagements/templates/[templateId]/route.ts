@@ -61,9 +61,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const { invoiceSchedule } = body;
+
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates.name = name;
   if (content !== undefined) updates.content = content;
+  if (invoiceSchedule !== undefined) updates.invoiceSchedule = invoiceSchedule;
 
   const [updated] = await db
     .update(engagementTemplates)

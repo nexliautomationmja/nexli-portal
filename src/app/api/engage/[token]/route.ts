@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { engagements, engagementSigners, users } from "@/db/schema";
+import {
+  engagements,
+  engagementSigners,
+  engagementTemplates,
+  invoices,
+  invoiceLineItems,
+  users,
+} from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { sendEmailWithLog, buildEngagementSignedEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
+import {
+  generateInvoiceNumber,
+  generateInvoiceToken,
+  calculateLineAmount,
+  calculateInvoiceTotals,
+} from "@/lib/invoice-utils";
 
 // GET — validate token, return engagement info, mark signer as viewed
 export async function GET(
@@ -175,6 +188,9 @@ export async function POST(
       .update(engagements)
       .set({ status: "signed", updatedAt: new Date() })
       .where(eq(engagements.id, engagement.id));
+
+    // Auto-generate invoices from template's invoice schedule
+    await generateInvoicesFromEngagement(engagement, allSigners);
   }
 
   // Notify CPA via email
@@ -264,4 +280,119 @@ export async function PATCH(
     .where(eq(engagements.id, signer.engagementId));
 
   return NextResponse.json({ ok: true });
+}
+
+// ── Auto-generate invoices from engagement template ──────
+interface ScheduleLineItem {
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+  billingType: "one_time" | "monthly" | "quarterly" | "yearly";
+}
+
+interface ScheduleEntry {
+  label: string;
+  daysAfterSigning: number;
+  lineItems: ScheduleLineItem[];
+}
+
+async function generateInvoicesFromEngagement(
+  engagement: typeof engagements.$inferSelect,
+  allSigners: (typeof engagementSigners.$inferSelect)[]
+) {
+  try {
+    if (!engagement.templateId) return;
+
+    const [template] = await db
+      .select()
+      .from(engagementTemplates)
+      .where(eq(engagementTemplates.id, engagement.templateId))
+      .limit(1);
+
+    if (!template?.invoiceSchedule) return;
+
+    const schedule = template.invoiceSchedule as ScheduleEntry[];
+    if (!Array.isArray(schedule) || schedule.length === 0) return;
+
+    // Find the client signer (first non-CPA signer, order > 0)
+    const clientSigner = allSigners
+      .filter((s) => s.order > 0)
+      .sort((a, b) => a.order - b.order)[0];
+
+    if (!clientSigner) return;
+
+    const now = new Date();
+
+    for (const entry of schedule) {
+      const dueDate = new Date(now);
+      dueDate.setDate(dueDate.getDate() + (entry.daysAfterSigning || 0));
+
+      // Process line items
+      const processedItems = entry.lineItems.map((li, i) => {
+        const qty = Math.round(li.quantity * 100); // stored as qty * 100
+        const amount = calculateLineAmount(qty, li.unitPriceCents);
+        return {
+          description: li.description,
+          quantity: qty,
+          unitPrice: li.unitPriceCents,
+          amount,
+          billingType: li.billingType || "one_time",
+          order: i,
+        };
+      });
+
+      const hasRecurring = processedItems.some(
+        (p) => p.billingType !== "one_time"
+      );
+
+      const { subtotal, taxAmount, total } = calculateInvoiceTotals(
+        processedItems,
+        0 // no tax by default — CPA can adjust on the draft
+      );
+
+      const invoiceNumber = await generateInvoiceNumber();
+      const token = generateInvoiceToken();
+
+      const [invoice] = await db
+        .insert(invoices)
+        .values({
+          ownerId: engagement.ownerId,
+          engagementId: engagement.id,
+          clientName: clientSigner.name,
+          clientEmail: clientSigner.email,
+          invoiceNumber,
+          token,
+          currency: "usd",
+          subtotal,
+          taxRate: 0,
+          taxAmount,
+          total,
+          amountPaid: 0,
+          balanceDue: total,
+          isRecurring: hasRecurring,
+          dueDate,
+          notes: `Auto-generated from engagement: ${engagement.subject}`,
+          status: "draft",
+        })
+        .returning();
+
+      for (const item of processedItems) {
+        await db.insert(invoiceLineItems).values({
+          invoiceId: invoice.id,
+          ...item,
+        });
+      }
+    }
+
+    // Notify CPA about auto-generated invoices
+    await createNotification({
+      userId: engagement.ownerId,
+      type: "engagement_signed",
+      title: "Invoices Auto-Generated",
+      message: `${schedule.length} draft invoice(s) created from "${engagement.subject}" — review and send when ready.`,
+      metadata: { engagementId: engagement.id },
+    });
+  } catch (err) {
+    console.error("Failed to auto-generate invoices from engagement:", err);
+  }
 }

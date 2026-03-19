@@ -443,6 +443,9 @@ export const engagementTemplates = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     content: text("content").notNull(),
+    // Auto-invoice schedule: array of invoices to create when engagement is signed
+    // [{ label, daysAfterSigning, lineItems: [{ description, quantity, unitPriceCents, billingType }] }]
+    invoiceSchedule: jsonb("invoice_schedule"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -552,6 +555,11 @@ export const invoices = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+
+    // Engagement link (auto-generated from signed engagement letter)
+    engagementId: uuid("engagement_id").references(() => engagements.id, {
+      onDelete: "set null",
+    }),
 
     // Client info
     clientName: text("client_name").notNull(),

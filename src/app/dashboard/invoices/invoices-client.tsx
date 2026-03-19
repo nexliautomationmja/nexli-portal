@@ -66,6 +66,7 @@ interface Invoice {
   reminderConfig: { schedule: { dayOffset: number }[] } | null;
   stripeSubscriptionId: string | null;
   subscriptionStatus: string | null;
+  engagementId: string | null;
   createdAt: string;
   lineItems: LineItem[];
 }
@@ -720,6 +721,11 @@ export function InvoicesClient() {
                               "bg-gray-500/10 text-gray-400"
                             }`} title={`Subscription ${inv.subscriptionStatus}`}>
                               SUB
+                            </span>
+                          )}
+                          {inv.engagementId && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-500/10 text-violet-500" title="Auto-generated from engagement letter">
+                              ENG
                             </span>
                           )}
                         </div>

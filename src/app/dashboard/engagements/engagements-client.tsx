@@ -21,6 +21,7 @@ interface Engagement {
   subject: string;
   content: string;
   status: "draft" | "sent" | "viewed" | "signed" | "declined" | "expired";
+  templateId: string | null;
   sentAt: string | null;
   expiresAt: string;
   createdAt: string;
@@ -31,6 +32,7 @@ interface Template {
   id: string;
   name: string;
   content: string;
+  invoiceSchedule?: unknown[] | null;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -535,6 +537,11 @@ export function EngagementsClient() {
                       </option>
                     ))}
                   </select>
+                  {selectedTemplate && templates.find((t) => t.id === selectedTemplate)?.invoiceSchedule && (
+                    <p className="mt-1.5 text-xs text-emerald-500">
+                      Auto-invoice enabled — draft invoices will be created when this engagement is signed
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -702,6 +709,16 @@ export function EngagementsClient() {
                 fromCompany={firmInfo.company}
                 date={showDetail.sentAt ? new Date(showDetail.sentAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : undefined}
               />
+
+              {/* Auto-invoice indicator for signed engagements */}
+              {showDetail.status === "signed" && showDetail.templateId && (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                  <p className="text-xs text-emerald-500 font-medium">
+                    Draft invoices auto-generated — check your Invoices tab to review and send
+                  </p>
+                </div>
+              )}
 
               {/* Timeline */}
               <div className="space-y-2">

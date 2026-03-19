@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, content } = body;
+  const { name, content, invoiceSchedule } = body;
 
   if (!name || !content) {
     return NextResponse.json(
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       ownerId: session.user.id,
       name,
       content,
+      invoiceSchedule: invoiceSchedule || null,
     })
     .returning();
 
