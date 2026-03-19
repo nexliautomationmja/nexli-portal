@@ -89,7 +89,7 @@ const LOGO_URL = `${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png`;
 
 export const emailWrapper = (content: string) => `
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" style="background:#0a0a0f;color-scheme:dark only;">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -102,71 +102,74 @@ export const emailWrapper = (content: string) => `
   <![endif]-->
   <style>
     :root { color-scheme: dark only !important; supported-color-schemes: dark only !important; }
-    body, .body-bg, .body-bg table { background-color: #0a0a0f !important; }
-    .card-bg { background-color: #111118 !important; }
+    * { color-scheme: dark only !important; }
+    html, body, .body-bg, .body-bg table, .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
+    .card-bg, .card-bg td { background: #111118 !important; background-color: #111118 !important; }
     .card-border { border-color: #1e1e2a !important; }
     .footer-border { border-color: #1a1a24 !important; }
-    .nxl-white { color: #ffffff !important; }
-    .nxl-gray { color: #9999a8 !important; }
-    .nxl-muted { color: #4a4a5a !important; }
-    .nxl-footer { color: #666675 !important; }
-    .nxl-green { color: #10B981 !important; }
-    .nxl-link { color: #2563EB !important; }
-    .nxl-label { color: #808090 !important; }
-    u + .body-bg { background-color: #0a0a0f !important; }
+    h1, h2, h3, .nxl-white { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
+    .nxl-gray { color: #9999a8 !important; -webkit-text-fill-color: #9999a8 !important; }
+    .nxl-muted { color: #4a4a5a !important; -webkit-text-fill-color: #4a4a5a !important; }
+    .nxl-footer { color: #666675 !important; -webkit-text-fill-color: #666675 !important; }
+    .nxl-green { color: #10B981 !important; -webkit-text-fill-color: #10B981 !important; }
+    .nxl-link { color: #2563EB !important; -webkit-text-fill-color: #2563EB !important; }
+    .nxl-label { color: #808090 !important; -webkit-text-fill-color: #808090 !important; }
+    u + .body-bg { background: #0a0a0f !important; background-color: #0a0a0f !important; }
     div[style*="margin: 16px 0"] { margin: 0 !important; }
-    [data-ogsc] body, [data-ogsc] .body-bg { background-color: #0a0a0f !important; }
-    [data-ogsc] .card-bg { background-color: #111118 !important; }
-    [data-ogsc] .nxl-white { color: #ffffff !important; }
-    [data-ogsc] .nxl-gray { color: #9999a8 !important; }
+    [data-ogsc] body, [data-ogsc] .body-bg, [data-ogsc] .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
+    [data-ogsc] .card-bg, [data-ogsc] .card-bg td { background: #111118 !important; background-color: #111118 !important; }
+    [data-ogsc] h1, [data-ogsc] h2, [data-ogsc] h3, [data-ogsc] .nxl-white { color: #ffffff !important; }
+    [data-ogsc] .nxl-gray, [data-ogsc] p { color: #9999a8 !important; }
     [data-ogsc] .nxl-muted { color: #4a4a5a !important; }
-    [data-ogsc] .nxl-green { color: #10B981 !important; }
+    [data-ogsc] .nxl-green, [data-ogsc] .nxl-green strong { color: #10B981 !important; }
     [data-ogsc] .nxl-label { color: #808090 !important; }
-    [data-ogsb] body, [data-ogsb] .body-bg { background-color: #0a0a0f !important; }
-    [data-ogsb] .card-bg { background-color: #111118 !important; }
+    [data-ogsb] body, [data-ogsb] .body-bg, [data-ogsb] .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
+    [data-ogsb] .card-bg, [data-ogsb] .card-bg td { background: #111118 !important; background-color: #111118 !important; }
     @media (prefers-color-scheme: light) {
-      body, .body-bg, u + .body-bg { background-color: #0a0a0f !important; }
-      .card-bg { background-color: #111118 !important; }
-      .nxl-white { color: #ffffff !important; }
-      .nxl-gray { color: #9999a8 !important; }
-      .nxl-muted { color: #4a4a5a !important; }
-      .nxl-footer { color: #666675 !important; }
-      .nxl-green { color: #10B981 !important; }
-      .nxl-link { color: #2563EB !important; }
-      .nxl-label { color: #808090 !important; }
+      html, body, .body-bg, u + .body-bg, .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
+      .card-bg, .card-bg td { background: #111118 !important; background-color: #111118 !important; }
+      h1, h2, h3, .nxl-white { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
+      .nxl-gray { color: #9999a8 !important; -webkit-text-fill-color: #9999a8 !important; }
+      .nxl-muted { color: #4a4a5a !important; -webkit-text-fill-color: #4a4a5a !important; }
+      .nxl-footer { color: #666675 !important; -webkit-text-fill-color: #666675 !important; }
+      .nxl-green { color: #10B981 !important; -webkit-text-fill-color: #10B981 !important; }
+      .nxl-link { color: #2563EB !important; -webkit-text-fill-color: #2563EB !important; }
+      .nxl-label { color: #808090 !important; -webkit-text-fill-color: #808090 !important; }
     }
     @media (prefers-color-scheme: dark) {
-      body, .body-bg { background-color: #0a0a0f !important; }
-      .card-bg { background-color: #111118 !important; }
+      html, body, .body-bg, .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
+      .card-bg, .card-bg td { background: #111118 !important; background-color: #111118 !important; }
     }
   </style>
 </head>
-<body class="body-bg" style="margin:0;padding:0;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#ffffff;">
-  <div class="body-bg" style="background-color:#0a0a0f;">
-  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0a0a0f" class="body-bg" style="background-color:#0a0a0f;padding:40px 20px;">
-    <tr><td align="center" bgcolor="#0a0a0f" style="background-color:#0a0a0f;">
-      <table width="100%" class="card-bg" bgcolor="#111118" style="max-width:560px;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
+<body class="body-bg" style="margin:0;padding:0;background:#0a0a0f;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#ffffff;-webkit-text-fill-color:#ffffff;">
+  <div class="body-bg" style="background:#0a0a0f;background-color:#0a0a0f;width:100%;min-height:100%;">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0a0a0f" class="body-bg" style="background:#0a0a0f;background-color:#0a0a0f;padding:40px 20px;">
+    <tr><td align="center" bgcolor="#0a0a0f" style="background:#0a0a0f;background-color:#0a0a0f;">
+      <table width="100%" class="card-bg" bgcolor="#111118" style="max-width:560px;background:#111118;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
+        <!-- Gradient Bar -->
+        <tr><td style="height:4px;background:linear-gradient(90deg,#2563EB,#06B6D4);font-size:0;line-height:0;">&nbsp;</td></tr>
         <!-- Logo Header -->
-        <tr><td bgcolor="#111118" style="background-color:#111118;padding:32px 32px 0;text-align:center;">
+        <tr><td bgcolor="#111118" class="card-bg" style="background:#111118;background-color:#111118;padding:32px 32px 0;text-align:center;">
           <img src="${LOGO_URL}" alt="Nexli" width="130" style="display:inline-block;" />
         </td></tr>
         <!-- Content -->
-        <tr><td bgcolor="#111118" style="background-color:#111118;padding:32px;">
+        <tr><td bgcolor="#111118" class="card-bg" style="background:#111118;background-color:#111118;padding:32px;color:#ffffff;">
           ${content}
         </td></tr>
         <!-- Footer -->
-        <tr><td bgcolor="#111118" class="footer-border" style="background-color:#111118;padding:0 32px 32px;border-top:1px solid #1a1a24;padding-top:24px;">
+        <tr><td bgcolor="#111118" class="card-bg footer-border" style="background:#111118;background-color:#111118;padding:0 32px 32px;border-top:1px solid #1a1a24;padding-top:24px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr><td align="center" style="padding-bottom:12px;">
               <img src="${LOGO_URL}" alt="Nexli" width="60" style="opacity:0.4;" />
             </td></tr>
             <tr><td align="center">
-              <p class="nxl-muted" style="margin:0;color:#4a4a5a;font-size:11px;">
+              <p class="nxl-muted" style="margin:0;color:#4a4a5a;font-size:11px;-webkit-text-fill-color:#4a4a5a;">
                 Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
               </p>
             </td></tr>
             <tr><td align="center" style="padding-top:12px;">
-              <a href="${PORTAL_URL}/portal" class="nxl-link" style="color:#2563EB;font-size:11px;text-decoration:none;opacity:0.6;">
+              <a href="${PORTAL_URL}/portal" class="nxl-link" style="color:#2563EB;font-size:11px;text-decoration:none;-webkit-text-fill-color:#2563EB;">
                 Sign in to your Client Portal
               </a>
             </td></tr>
