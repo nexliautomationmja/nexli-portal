@@ -89,100 +89,74 @@ const LOGO_URL = `${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png`;
 
 export const emailWrapper = (content: string) => `
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="en" style="background:#0a0a0f;color-scheme:dark only;">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" dir="ltr" style="background-color:#0a0a0f;">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark only">
   <meta name="supported-color-schemes" content="dark only">
+  <title>Nexli</title>
   <!--[if mso]>
   <style>
     body, table, td, th, p, a, span, div { background-color: #0a0a0f !important; color: #ffffff !important; }
   </style>
   <![endif]-->
   <style>
-    :root { color-scheme: dark only !important; supported-color-schemes: dark only !important; }
+    :root { color-scheme: dark only !important; }
     * { color-scheme: dark only !important; }
-    html, body, .body-bg, .body-bg table, .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
-    .card-bg, .card-bg td { background: #111118 !important; background-color: #111118 !important; }
-    .card-border { border-color: #1e1e2a !important; }
-    .footer-border { border-color: #1a1a24 !important; }
-    h1, h2, h3, .nxl-white { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
-    .nxl-gray { color: #9999a8 !important; -webkit-text-fill-color: #9999a8 !important; }
-    .nxl-muted { color: #4a4a5a !important; -webkit-text-fill-color: #4a4a5a !important; }
-    .nxl-footer { color: #666675 !important; -webkit-text-fill-color: #666675 !important; }
-    .nxl-green { color: #10B981 !important; -webkit-text-fill-color: #10B981 !important; }
-    .nxl-link { color: #2563EB !important; -webkit-text-fill-color: #2563EB !important; }
-    .nxl-label { color: #808090 !important; -webkit-text-fill-color: #808090 !important; }
-    u + .body-bg { background: #0a0a0f !important; background-color: #0a0a0f !important; }
-    div[style*="margin: 16px 0"] { margin: 0 !important; }
-    [data-ogsc] body, [data-ogsc] .body-bg, [data-ogsc] .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
-    [data-ogsc] .card-bg, [data-ogsc] .card-bg td { background: #111118 !important; background-color: #111118 !important; }
-    [data-ogsc] h1, [data-ogsc] h2, [data-ogsc] h3, [data-ogsc] .nxl-white { color: #ffffff !important; }
-    [data-ogsc] .nxl-gray, [data-ogsc] p { color: #9999a8 !important; }
-    [data-ogsc] .nxl-muted { color: #4a4a5a !important; }
-    [data-ogsc] .nxl-green, [data-ogsc] .nxl-green strong { color: #10B981 !important; }
-    [data-ogsc] .nxl-label { color: #808090 !important; }
-    [data-ogsb] body, [data-ogsb] .body-bg, [data-ogsb] .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
-    [data-ogsb] .card-bg, [data-ogsb] .card-bg td { background: #111118 !important; background-color: #111118 !important; }
+    body, table, td { background-color: #0a0a0f; }
+    u + .body-bg { background-color: #0a0a0f !important; }
+    [data-ogsc] body, [data-ogsc] table, [data-ogsc] td { background-color: #0a0a0f !important; color: #ffffff !important; }
+    [data-ogsc] h1, [data-ogsc] h2, [data-ogsc] h3, [data-ogsc] p, [data-ogsc] span, [data-ogsc] a { color: inherit !important; }
+    [data-ogsb] body, [data-ogsb] table, [data-ogsb] td { background-color: #0a0a0f !important; }
     @media (prefers-color-scheme: light) {
-      html, body, .body-bg, u + .body-bg, .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
-      .card-bg, .card-bg td { background: #111118 !important; background-color: #111118 !important; }
-      h1, h2, h3, .nxl-white { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
-      .nxl-gray { color: #9999a8 !important; -webkit-text-fill-color: #9999a8 !important; }
-      .nxl-muted { color: #4a4a5a !important; -webkit-text-fill-color: #4a4a5a !important; }
-      .nxl-footer { color: #666675 !important; -webkit-text-fill-color: #666675 !important; }
-      .nxl-green { color: #10B981 !important; -webkit-text-fill-color: #10B981 !important; }
-      .nxl-link { color: #2563EB !important; -webkit-text-fill-color: #2563EB !important; }
-      .nxl-label { color: #808090 !important; -webkit-text-fill-color: #808090 !important; }
-    }
-    @media (prefers-color-scheme: dark) {
-      html, body, .body-bg, .body-bg td { background: #0a0a0f !important; background-color: #0a0a0f !important; }
-      .card-bg, .card-bg td { background: #111118 !important; background-color: #111118 !important; }
+      body, table, td { background-color: #0a0a0f !important; color: #ffffff !important; }
     }
   </style>
 </head>
-<body class="body-bg" style="margin:0;padding:0;background:#0a0a0f;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#ffffff;-webkit-text-fill-color:#ffffff;">
-  <div class="body-bg" style="background:#0a0a0f;background-color:#0a0a0f;width:100%;min-height:100%;">
-  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0a0a0f" class="body-bg" style="background:#0a0a0f;background-color:#0a0a0f;padding:40px 20px;">
-    <tr><td align="center" bgcolor="#0a0a0f" style="background:#0a0a0f;background-color:#0a0a0f;">
-      <table width="100%" class="card-bg" bgcolor="#111118" style="max-width:560px;background:#111118;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
-        <!-- Gradient Bar -->
-        <tr><td style="height:4px;background:linear-gradient(90deg,#2563EB,#06B6D4);font-size:0;line-height:0;">&nbsp;</td></tr>
-        <!-- Logo Header -->
-        <tr><td bgcolor="#111118" class="card-bg" style="background:#111118;background-color:#111118;padding:32px 32px 0;text-align:center;">
-          <img src="${LOGO_URL}" alt="Nexli" width="130" style="display:inline-block;" />
-        </td></tr>
-        <!-- Content -->
-        <tr><td bgcolor="#111118" class="card-bg" style="background:#111118;background-color:#111118;padding:32px;color:#ffffff;">
-          ${content}
-        </td></tr>
-        <!-- Footer -->
-        <tr><td bgcolor="#111118" class="card-bg footer-border" style="background:#111118;background-color:#111118;padding:0 32px 32px;border-top:1px solid #1a1a24;padding-top:24px;">
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td align="center" style="padding-bottom:12px;">
-              <img src="${LOGO_URL}" alt="Nexli" width="60" style="opacity:0.4;" />
-            </td></tr>
-            <tr><td align="center">
-              <p class="nxl-muted" style="margin:0;color:#4a4a5a;font-size:11px;-webkit-text-fill-color:#4a4a5a;">
-                Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
-              </p>
-            </td></tr>
-            <tr><td align="center" style="padding-top:12px;">
-              <a href="${PORTAL_URL}/portal" class="nxl-link" style="color:#2563EB;font-size:11px;text-decoration:none;-webkit-text-fill-color:#2563EB;">
-                Sign in to your Client Portal
-              </a>
-            </td></tr>
-          </table>
-        </td></tr>
-      </table>
-    </td></tr>
+<body bgcolor="#0a0a0f" style="margin:0;padding:0;width:100%;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#ffffff;">
+  <!--[if mso]><table width="100%" bgcolor="#0a0a0f"><tr><td><![endif]-->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0f" style="background-color:#0a0a0f;">
+    <tr>
+      <td align="center" bgcolor="#0a0a0f" style="background-color:#0a0a0f;padding:40px 20px;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111118" style="max-width:560px;width:100%;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
+          <!-- Gradient Bar -->
+          <tr><td bgcolor="#2563EB" style="height:4px;background-color:#2563EB;font-size:0;line-height:0;">&nbsp;</td></tr>
+          <!-- Logo Header -->
+          <tr><td bgcolor="#111118" style="background-color:#111118;padding:32px 32px 0;text-align:center;">
+            <img src="${LOGO_URL}" alt="Nexli" width="130" style="display:inline-block;" />
+          </td></tr>
+          <!-- Content -->
+          <tr><td bgcolor="#111118" style="background-color:#111118;padding:32px;color:#ffffff;">
+            ${content}
+          </td></tr>
+          <!-- Footer -->
+          <tr><td bgcolor="#111118" style="background-color:#111118;padding:0 32px 32px;border-top:1px solid #1a1a24;padding-top:24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr><td align="center" bgcolor="#111118" style="background-color:#111118;padding-bottom:12px;">
+                <img src="${LOGO_URL}" alt="Nexli" width="60" style="opacity:0.4;" />
+              </td></tr>
+              <tr><td align="center" bgcolor="#111118" style="background-color:#111118;">
+                <p style="margin:0;color:#4a4a5a;font-size:11px;">
+                  Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
+                </p>
+              </td></tr>
+              <tr><td align="center" bgcolor="#111118" style="background-color:#111118;padding-top:12px;">
+                <a href="${PORTAL_URL}/portal" style="color:#2563EB;font-size:11px;text-decoration:none;">
+                  Sign in to your Client Portal
+                </a>
+              </td></tr>
+            </table>
+          </td></tr>
+        </table>
+      </td>
+    </tr>
   </table>
-  </div>
+  <!--[if mso]></td></tr></table><![endif]-->
 </body>
 </html>`;
 
-const buttonStyle = `display:inline-block;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
+const buttonStyle = `display:inline-block;background-color:#2563EB;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
 
 // ── Upload Request Email ─────────────────────────────────
 
@@ -205,16 +179,16 @@ export function buildUploadRequestEmail(params: {
   const docList =
     requiredDocs.length > 0
       ? `
-    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #1e1e2a;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#131319" style="background-color:#131319;padding:16px;">
       <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Documents Needed</p>
       ${requiredDocs.map((d) => `<p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; ${d}</p>`).join("")}
-    </div>`
+    </td></tr></table>`
       : "";
 
   const messageBlock = message
-    ? `<div style="margin:20px 0;padding:16px;background-color:#0f1528;border-left:3px solid #2563EB;border-radius:0 8px 8px 0;">
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border-left:3px solid #2563EB;border-radius:0 8px 8px 0;overflow:hidden;"><tr><td bgcolor="#0f1528" style="background-color:#0f1528;padding:16px;">
       <p style="margin:0;color:#b3b3c0;font-size:13px;font-style:italic;">"${message}"</p>
-    </div>`
+    </td></tr></table>`
     : "";
 
   const html = emailWrapper(`
@@ -264,10 +238,10 @@ export function buildEsignRequestEmail(params: {
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${signerName}, <strong style="color:#fff;">${senderName}</strong> has requested your signature on a document.
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #1e1e2a;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#131319" style="background-color:#131319;padding:16px;">
       <p style="margin:0;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Document</p>
       <p style="margin:8px 0 0;color:#fff;font-size:15px;font-weight:600;">${documentName}</p>
-    </div>
+    </td></tr></table>
     <div style="text-align:center;margin:28px 0;">
       <a href="${signUrl}" style="${buttonStyle}">Review & Sign</a>
     </div>
@@ -307,7 +281,7 @@ export function buildEsignCompletedEmail(params: {
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${senderName}, <strong style="color:#10B981;">${signerName}</strong> has signed your document.
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #133326;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#0c1a16" style="background-color:#0c1a16;padding:16px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="color:#808090;font-size:11px;padding:4px 0;">Document</td>
@@ -322,7 +296,7 @@ export function buildEsignCompletedEmail(params: {
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${signDate}</td>
         </tr>
       </table>
-    </div>
+    </td></tr></table>
     <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View the signed document in your Nexli Portal dashboard.
     </p>
@@ -355,10 +329,10 @@ export function buildEngagementRequestEmail(params: {
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, <strong style="color:#fff;">${senderName}</strong> has sent you an engagement letter for review and signature.
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #1e1e2a;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#131319" style="background-color:#131319;padding:16px;">
       <p style="margin:0;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Subject</p>
       <p style="margin:8px 0 0;color:#fff;font-size:15px;font-weight:600;">${subject}</p>
-    </div>
+    </td></tr></table>
     <div style="text-align:center;margin:28px 0;">
       <a href="${engageUrl}" style="${buttonStyle}">Review & Sign</a>
     </div>
@@ -397,7 +371,7 @@ export function buildEngagementSignedEmail(params: {
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${senderName}, <strong style="color:#10B981;">${clientName}</strong> has signed your engagement letter.
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #133326;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#0c1a16" style="background-color:#0c1a16;padding:16px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="color:#808090;font-size:11px;padding:4px 0;">Subject</td>
@@ -412,7 +386,7 @@ export function buildEngagementSignedEmail(params: {
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${signDate}</td>
         </tr>
       </table>
-    </div>
+    </td></tr></table>
     <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View the signed engagement in your Nexli Portal dashboard.
     </p>
@@ -451,7 +425,7 @@ export function buildInvoiceEmail(params: {
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, you have a new invoice ready for payment.
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #1e1e2a;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#131319" style="background-color:#131319;padding:16px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice</td>
@@ -466,7 +440,7 @@ export function buildInvoiceEmail(params: {
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${dueDateStr}</td>
         </tr>
       </table>
-    </div>
+    </td></tr></table>
     <div style="text-align:center;margin:28px 0;">
       <a href="${invoiceUrl}" style="${buttonStyle}">View &amp; Pay Invoice</a>
     </div>
@@ -506,7 +480,7 @@ export function buildInvoicePaidEmail(params: {
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${senderName}, <strong style="color:#10B981;">${clientName}</strong> has paid invoice ${invoiceNumber}.
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #133326;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#0c1a16" style="background-color:#0c1a16;padding:16px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice</td>
@@ -525,7 +499,7 @@ export function buildInvoicePaidEmail(params: {
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${paidDate}</td>
         </tr>
       </table>
-    </div>
+    </td></tr></table>
     <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View invoice details in your Nexli Portal dashboard.
     </p>
@@ -576,7 +550,7 @@ export function buildInvoiceReminderEmail(params: {
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, ${message}
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:${urgencyBg};border:1px solid ${urgencyBorder};border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid ${urgencyBorder};border-radius:12px;overflow:hidden;"><tr><td bgcolor="${urgencyBg}" style="background-color:${urgencyBg};padding:16px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice</td>
@@ -591,7 +565,7 @@ export function buildInvoiceReminderEmail(params: {
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${dueDateStr}</td>
         </tr>
       </table>
-    </div>
+    </td></tr></table>
     <div style="text-align:center;margin:28px 0;">
       <a href="${invoiceUrl}" style="${buttonStyle}">View &amp; Pay Invoice</a>
     </div>
@@ -626,12 +600,12 @@ export function buildMagicLinkEmail(params: {
     <div style="text-align:center;margin:28px 0;">
       <a href="${magicLinkUrl}" style="${buttonStyle}">Sign In to Portal</a>
     </div>
-    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;text-align:center;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #1e1e2a;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#131319" style="background-color:#131319;padding:16px;text-align:center;">
       <p style="margin:0;color:#808090;font-size:12px;">
         This link expires in ${expiresInMinutes} minutes.<br/>
         If you didn&rsquo;t request this, you can safely ignore this email.
       </p>
-    </div>
+    </td></tr></table>
   `);
 
   return {
@@ -677,7 +651,7 @@ export function buildPaymentReceiptEmail(params: {
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, your payment to <strong style="color:#fff;">${senderName}</strong> has been received. Thank you!
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:#0c1a16;border:1px solid #133326;border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #133326;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#0c1a16" style="background-color:#0c1a16;padding:16px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="color:#808090;font-size:11px;padding:4px 0;">Invoice</td>
@@ -702,7 +676,7 @@ export function buildPaymentReceiptEmail(params: {
           <td style="color:#fff;font-size:13px;text-align:right;padding:4px 0;">${paidDate}</td>
         </tr>
       </table>
-    </div>
+    </td></tr></table>
     <div style="text-align:center;margin:28px 0;">
       <a href="${portalUrl}/portal" style="${buttonStyle}">View in Client Portal</a>
     </div>
