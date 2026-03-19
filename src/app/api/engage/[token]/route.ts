@@ -84,6 +84,17 @@ export async function GET(
     .where(eq(users.id, engagement.ownerId))
     .limit(1);
 
+  // Fetch all signers who have already signed (to show their signatures on the document)
+  const signedSigners = await db
+    .select({
+      name: engagementSigners.name,
+      role: engagementSigners.role,
+      signatureData: engagementSigners.signatureData,
+      signedAt: engagementSigners.signedAt,
+    })
+    .from(engagementSigners)
+    .where(eq(engagementSigners.engagementId, engagement.id));
+
   return NextResponse.json({
     clientName: signer.name,
     subject: engagement.subject,
@@ -95,6 +106,12 @@ export async function GET(
       name: owner?.name || "",
       company: owner?.companyName || "",
     },
+    signers: signedSigners.map((s) => ({
+      name: s.name,
+      role: s.role,
+      signatureData: s.signatureData,
+      signedAt: s.signedAt ? new Date(s.signedAt).toISOString() : null,
+    })),
   });
 }
 

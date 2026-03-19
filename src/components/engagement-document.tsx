@@ -1,5 +1,12 @@
 "use client";
 
+export interface DocumentSigner {
+  name: string;
+  role?: string | null;
+  signatureData?: string | null;
+  signedAt?: string | null;
+}
+
 interface DocumentPreviewProps {
   content: string;
   subject: string;
@@ -7,6 +14,7 @@ interface DocumentPreviewProps {
   fromName: string;
   fromCompany: string;
   date?: string;
+  signers?: DocumentSigner[];
 }
 
 export function DocumentPreview({
@@ -16,6 +24,7 @@ export function DocumentPreview({
   fromName,
   fromCompany,
   date,
+  signers,
 }: DocumentPreviewProps) {
   const displayDate =
     date ||
@@ -250,40 +259,119 @@ export function DocumentPreview({
         >
           Sincerely,
         </p>
-        <div
-          style={{
-            marginTop: 40,
-            borderTop: "1px solid #374151",
-            width: 200,
-            paddingTop: 8,
-          }}
-        >
-          <p
+
+        {signers && signers.length > 0 ? (
+          <div
             style={{
-              margin: 0,
-              fontSize: 13,
-              color: "#111827",
-              fontWeight: 600,
-              fontFamily:
-                "'Inter', 'Helvetica Neue', Arial, sans-serif",
+              display: "grid",
+              gridTemplateColumns: signers.length > 1 ? "1fr 1fr" : "1fr",
+              gap: 32,
+              marginTop: 24,
             }}
           >
-            {fromCompany || fromName || "—"}
-          </p>
-          {fromCompany && fromName && (
+            {signers.map((signer, i) => (
+              <div key={i}>
+                {signer.signatureData ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={signer.signatureData}
+                    alt={`${signer.name}'s signature`}
+                    style={{
+                      height: 56,
+                      maxWidth: 220,
+                      objectFit: "contain",
+                      objectPosition: "left bottom",
+                      display: "block",
+                      marginBottom: 4,
+                    }}
+                  />
+                ) : (
+                  <div style={{ height: 56, marginBottom: 4 }} />
+                )}
+                <div
+                  style={{
+                    borderTop: "1px solid #374151",
+                    width: 220,
+                    paddingTop: 8,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 13,
+                      color: "#111827",
+                      fontWeight: 600,
+                      fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                    }}
+                  >
+                    {signer.name}
+                  </p>
+                  {signer.role && (
+                    <p
+                      style={{
+                        margin: "2px 0 0",
+                        fontSize: 11,
+                        color: "#6b7280",
+                        fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                      }}
+                    >
+                      {signer.role}
+                    </p>
+                  )}
+                  {signer.signedAt && (
+                    <p
+                      style={{
+                        margin: "2px 0 0",
+                        fontSize: 10,
+                        color: "#9ca3af",
+                        fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                      }}
+                    >
+                      Signed {new Date(signer.signedAt).toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div
+            style={{
+              marginTop: 40,
+              borderTop: "1px solid #374151",
+              width: 200,
+              paddingTop: 8,
+            }}
+          >
             <p
               style={{
-                margin: "2px 0 0",
-                fontSize: 12,
-                color: "#6b7280",
-                fontFamily:
-                  "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                margin: 0,
+                fontSize: 13,
+                color: "#111827",
+                fontWeight: 600,
+                fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
               }}
             >
-              {fromName}
+              {fromCompany || fromName || "—"}
             </p>
-          )}
-        </div>
+            {fromCompany && fromName && (
+              <p
+                style={{
+                  margin: "2px 0 0",
+                  fontSize: 12,
+                  color: "#6b7280",
+                  fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                }}
+              >
+                {fromName}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

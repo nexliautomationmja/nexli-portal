@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
     expiresInDays = 30,
     saveAsTemplate,
     templateName,
+    signatureData,
   } = body;
 
   if (
@@ -177,6 +178,7 @@ export async function POST(req: NextRequest) {
     role: companyName
       ? `Authorized Representative, ${companyName}`
       : "Authorized Representative",
+    signatureData: typeof signatureData === "string" ? signatureData : null,
   });
 
   signers.push({ name: senderName, email: cpaEmail, engageUrl: "" });

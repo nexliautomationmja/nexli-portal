@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { DocumentPreview } from "@/components/engagement-document";
+import type { DocumentSigner } from "@/components/engagement-document";
 
 interface EngageData {
   clientName: string;
@@ -14,6 +15,7 @@ interface EngageData {
     name: string;
     company: string;
   };
+  signers?: DocumentSigner[];
 }
 
 export function EngageClient({ token }: { token: string }) {
@@ -346,6 +348,7 @@ export function EngageClient({ token }: { token: string }) {
               fromName={data?.from?.name || ""}
               fromCompany={data?.from?.company || ""}
               date={today}
+              signers={data?.signers?.filter((s) => s.signatureData)}
             />
 
           </div>
