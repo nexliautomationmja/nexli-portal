@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import {
   InvoiceIcon,
@@ -15,6 +15,15 @@ import {
   UsersIcon,
 } from "@/components/ui/icons";
 import { InvoiceDocumentPreview } from "@/components/invoice-document";
+
+interface StripeProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  unitPrice: number;
+  currency: string;
+  billingType: string;
+}
 
 interface LineItem {
   id: string;
@@ -178,6 +187,11 @@ export function InvoicesClient() {
     company: "",
   });
 
+  // Stripe products
+  const [stripeProducts, setStripeProducts] = useState<StripeProduct[]>([]);
+  const [productPickerIndex, setProductPickerIndex] = useState<{ section: "single" | "batch"; index: number } | null>(null);
+  const [productSearch, setProductSearch] = useState("");
+
   // Batch form
   const [batchClients, setBatchClients] = useState([
     { clientName: "", clientEmail: "", clientPhone: "", clientCompany: "" },
@@ -201,7 +215,27 @@ export function InvoicesClient() {
       })
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
+
+    fetch("/api/dashboard/stripe/products")
+      .then((r) => r.json())
+      .then((data) => setStripeProducts(data.products || []))
+      .catch(() => {});
   }, []);
+
+  // Close product picker on outside click
+  const closeProductPicker = useCallback((e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest("[data-product-picker]")) {
+      setProductPickerIndex(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (productPickerIndex) {
+      document.addEventListener("mousedown", closeProductPicker);
+      return () => document.removeEventListener("mousedown", closeProductPicker);
+    }
+  }, [productPickerIndex, closeProductPicker]);
 
   function addLineItem() {
     setLineItems((prev) => [
@@ -939,16 +973,96 @@ export function InvoicesClient() {
                       className="grid gap-2 items-center"
                       style={{ gridTemplateColumns: "1fr 60px 80px 80px 70px 24px" }}
                     >
-                      <input
-                        type="text"
-                        value={item.description}
-                        onChange={(e) =>
-                          updateLineItem(i, "description", e.target.value)
-                        }
-                        placeholder="Description"
-                        className={inputClass}
-                        style={inputStyle}
-                      />
+                      <div className="relative" data-product-picker>
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) =>
+                            updateLineItem(i, "description", e.target.value)
+                          }
+                          onFocus={() => {
+                            if (stripeProducts.length > 0 && !item.description) {
+                              setProductPickerIndex({ section: "single", index: i });
+                              setProductSearch("");
+                            }
+                          }}
+                          placeholder={stripeProducts.length > 0 ? "Type or pick a product…" : "Description"}
+                          className={inputClass}
+                          style={{ ...inputStyle, paddingRight: stripeProducts.length > 0 ? 28 : 12 }}
+                        />
+                        {stripeProducts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductPickerIndex(
+                                productPickerIndex?.section === "single" && productPickerIndex?.index === i
+                                  ? null
+                                  : { section: "single", index: i }
+                              );
+                              setProductSearch("");
+                            }}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-blue-500/10 transition-colors"
+                            title="Pick from Stripe products"
+                          >
+                            <svg className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        )}
+                        {productPickerIndex?.section === "single" && productPickerIndex?.index === i && (
+                          <div
+                            className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border shadow-xl overflow-hidden"
+                            style={{ background: "var(--card-bg)", borderColor: "var(--card-border)" }}
+                          >
+                            <div className="p-2 border-b" style={{ borderColor: "var(--card-border)" }}>
+                              <input
+                                type="text"
+                                value={productSearch}
+                                onChange={(e) => setProductSearch(e.target.value)}
+                                placeholder="Search products…"
+                                className={inputClass}
+                                style={{ ...inputStyle, fontSize: 12 }}
+                                autoFocus
+                              />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              {stripeProducts
+                                .filter((p) =>
+                                  p.name.toLowerCase().includes(productSearch.toLowerCase())
+                                )
+                                .map((product) => (
+                                  <button
+                                    key={product.id}
+                                    type="button"
+                                    onClick={() => {
+                                      updateLineItem(i, "description", product.name);
+                                      updateLineItem(i, "unitPrice", product.unitPrice);
+                                      updateLineItem(i, "billingType", product.billingType);
+                                      setProductPickerIndex(null);
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-500/10 transition-colors flex items-center justify-between"
+                                    style={{ color: "var(--text-main)" }}
+                                  >
+                                    <span className="truncate">{product.name}</span>
+                                    <span className="text-xs font-medium ml-2 shrink-0" style={{ color: "var(--text-muted)" }}>
+                                      ${product.unitPrice.toFixed(2)}
+                                      {product.billingType !== "one_time" && (
+                                        <span className="ml-1 text-[10px]">/{product.billingType.replace("ly", "")}</span>
+                                      )}
+                                    </span>
+                                  </button>
+                                ))}
+                              {stripeProducts.filter((p) =>
+                                p.name.toLowerCase().includes(productSearch.toLowerCase())
+                              ).length === 0 && (
+                                <p className="px-3 py-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                                  No products found
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <input
                         type="number"
                         value={item.quantity || ""}
@@ -1769,22 +1883,106 @@ export function InvoicesClient() {
                       className="grid gap-2 items-center"
                       style={{ gridTemplateColumns: "1fr 60px 80px 80px 70px 24px" }}
                     >
-                      <input
-                        type="text"
-                        value={item.description}
-                        onChange={(e) =>
-                          setBatchLineItems((prev) =>
-                            prev.map((li, idx) =>
-                              idx === i
-                                ? { ...li, description: e.target.value }
-                                : li
+                      <div className="relative" data-product-picker>
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) =>
+                            setBatchLineItems((prev) =>
+                              prev.map((li, idx) =>
+                                idx === i
+                                  ? { ...li, description: e.target.value }
+                                  : li
+                              )
                             )
-                          )
-                        }
-                        placeholder="Description"
-                        className={inputClass}
-                        style={inputStyle}
-                      />
+                          }
+                          onFocus={() => {
+                            if (stripeProducts.length > 0 && !item.description) {
+                              setProductPickerIndex({ section: "batch", index: i });
+                              setProductSearch("");
+                            }
+                          }}
+                          placeholder={stripeProducts.length > 0 ? "Type or pick a product…" : "Description"}
+                          className={inputClass}
+                          style={{ ...inputStyle, paddingRight: stripeProducts.length > 0 ? 28 : 12 }}
+                        />
+                        {stripeProducts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductPickerIndex(
+                                productPickerIndex?.section === "batch" && productPickerIndex?.index === i
+                                  ? null
+                                  : { section: "batch", index: i }
+                              );
+                              setProductSearch("");
+                            }}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-blue-500/10 transition-colors"
+                            title="Pick from Stripe products"
+                          >
+                            <svg className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        )}
+                        {productPickerIndex?.section === "batch" && productPickerIndex?.index === i && (
+                          <div
+                            className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border shadow-xl overflow-hidden"
+                            style={{ background: "var(--card-bg)", borderColor: "var(--card-border)" }}
+                          >
+                            <div className="p-2 border-b" style={{ borderColor: "var(--card-border)" }}>
+                              <input
+                                type="text"
+                                value={productSearch}
+                                onChange={(e) => setProductSearch(e.target.value)}
+                                placeholder="Search products…"
+                                className={inputClass}
+                                style={{ ...inputStyle, fontSize: 12 }}
+                                autoFocus
+                              />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              {stripeProducts
+                                .filter((p) =>
+                                  p.name.toLowerCase().includes(productSearch.toLowerCase())
+                                )
+                                .map((product) => (
+                                  <button
+                                    key={product.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setBatchLineItems((prev) =>
+                                        prev.map((li, idx) =>
+                                          idx === i
+                                            ? { ...li, description: product.name, unitPrice: product.unitPrice, billingType: product.billingType }
+                                            : li
+                                        )
+                                      );
+                                      setProductPickerIndex(null);
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-500/10 transition-colors flex items-center justify-between"
+                                    style={{ color: "var(--text-main)" }}
+                                  >
+                                    <span className="truncate">{product.name}</span>
+                                    <span className="text-xs font-medium ml-2 shrink-0" style={{ color: "var(--text-muted)" }}>
+                                      ${product.unitPrice.toFixed(2)}
+                                      {product.billingType !== "one_time" && (
+                                        <span className="ml-1 text-[10px]">/{product.billingType.replace("ly", "")}</span>
+                                      )}
+                                    </span>
+                                  </button>
+                                ))}
+                              {stripeProducts.filter((p) =>
+                                p.name.toLowerCase().includes(productSearch.toLowerCase())
+                              ).length === 0 && (
+                                <p className="px-3 py-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                                  No products found
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <input
                         type="number"
                         value={item.quantity || ""}

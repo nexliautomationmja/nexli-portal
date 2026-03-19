@@ -99,6 +99,41 @@ export async function createCheckoutSession(params: {
 }
 
 /**
+ * Fetches active products from Stripe with their default prices.
+ */
+export async function listStripeProducts() {
+  const products = await stripe.products.list({
+    active: true,
+    expand: ["data.default_price"],
+    limit: 100,
+  });
+
+  return products.data
+    .map((p) => {
+      const price = p.default_price as Stripe.Price | null;
+      if (!price || !price.unit_amount) return null;
+
+      let billingType = "one_time";
+      if (price.recurring) {
+        const interval = price.recurring.interval;
+        if (interval === "month") billingType = "monthly";
+        else if (interval === "year") billingType = "yearly";
+        else if (interval === "week") billingType = "monthly"; // approximate
+      }
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        unitPrice: price.unit_amount / 100, // cents → dollars
+        currency: price.currency || "usd",
+        billingType,
+      };
+    })
+    .filter(Boolean);
+}
+
+/**
  * Constructs a Stripe webhook event from the raw body and signature header.
  */
 export function constructWebhookEvent(
