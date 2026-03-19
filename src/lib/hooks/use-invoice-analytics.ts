@@ -8,6 +8,9 @@ export interface InvoiceAnalytics {
     totalOutstanding: number;
     overdueCount: number;
     avgDaysToPay: number;
+    mrr: number;
+    collectionsRate: number;
+    activeSubscriptions: number;
   };
   chartData: { month: string; revenue: number; count: number }[];
   statusBreakdown: { status: string; count: number }[];

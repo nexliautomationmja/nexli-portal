@@ -61,6 +61,55 @@ export async function GET() {
       )
     );
 
+  // MRR — sum of recurring invoice totals normalized to monthly
+  const mrrRows = await db
+    .select({
+      total: sql<number>`coalesce(sum(${invoices.total}), 0)`,
+      interval: invoices.recurringInterval,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.ownerId, ownerId),
+        eq(invoices.isRecurring, true),
+        inArray(invoices.status, ["paid", "partial", "sent", "viewed"])
+      )
+    )
+    .groupBy(invoices.recurringInterval);
+
+  let mrr = 0;
+  for (const row of mrrRows) {
+    const total = Number(row.total);
+    switch (row.interval) {
+      case "weekly": mrr += total * 4.33; break;
+      case "biweekly": mrr += total * 2.17; break;
+      case "monthly": mrr += total; break;
+      case "quarterly": mrr += total / 3; break;
+      case "yearly": mrr += total / 12; break;
+      default: mrr += total; break; // treat unknown as monthly
+    }
+  }
+
+  // Active subscriptions count
+  const [activeSubs] = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.ownerId, ownerId),
+        isNotNull(invoices.stripeSubscriptionId),
+        sql`${invoices.subscriptionStatus} = 'active'`
+      )
+    );
+
+  // Collections rate
+  const collectedVal = Number(collected.total);
+  const outstandingVal = Number(outstanding.total);
+  const totalInvoiced = collectedVal + outstandingVal;
+  const collectionsRate = totalInvoiced > 0 ? Math.round((collectedVal / totalInvoiced) * 100) : 0;
+
   // Monthly revenue chart — last 12 months
   const chartData = await db
     .select({
@@ -95,6 +144,9 @@ export async function GET() {
       totalOutstanding: Number(outstanding.total),
       overdueCount: Number(overdueResult.count),
       avgDaysToPay: Math.round(Number(avgDays.avg)),
+      mrr: Math.round(mrr),
+      collectionsRate,
+      activeSubscriptions: Number(activeSubs.count),
     },
     chartData: chartData.map((d) => ({
       month: d.month,

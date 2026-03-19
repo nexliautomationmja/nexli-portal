@@ -102,7 +102,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
       {/* Revenue Section */}
       <div>
         <p className="section-header">Revenue</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           <div className="glass-card p-4">
             <p className="stat-label">Collected</p>
             <p className="stat-value text-emerald-500">
@@ -113,6 +113,22 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
             <p className="stat-label">Outstanding</p>
             <p className="stat-value">
               {analyticsLoading ? "—" : formatCentsToDollars(analytics?.stats.totalOutstanding ?? 0)}
+            </p>
+          </div>
+          <div className="glass-card p-4">
+            <p className="stat-label">MRR</p>
+            <p className="stat-value text-blue-500">
+              {analyticsLoading ? "—" : <>{formatCentsToDollars(analytics?.stats.mrr ?? 0)}<span className="text-sm font-normal text-[var(--text-muted)]">/mo</span></>}
+            </p>
+          </div>
+          <div className="glass-card p-4">
+            <p className="stat-label">Collections Rate</p>
+            <p className={`stat-value ${
+              (analytics?.stats.collectionsRate ?? 0) >= 80 ? "text-emerald-500" :
+              (analytics?.stats.collectionsRate ?? 0) >= 50 ? "text-amber-500" :
+              "text-rose-500"
+            }`}>
+              {analyticsLoading ? "—" : `${analytics?.stats.collectionsRate ?? 0}%`}
             </p>
           </div>
           <div className="glass-card p-4">
