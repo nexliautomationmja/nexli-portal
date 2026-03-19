@@ -582,6 +582,9 @@ export const invoices = pgTable(
     // Stripe references
     stripeCheckoutSessionId: text("stripe_checkout_session_id"),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    stripeCustomerId: text("stripe_customer_id"),
+    subscriptionStatus: text("subscription_status"), // "active" | "past_due" | "canceled" | "unpaid"
     paymentMethod: text("payment_method"), // "card" | "ach"
 
     // Legacy Helcim columns (to be dropped in future migration)
@@ -642,6 +645,8 @@ export const invoiceLineItems = pgTable(
     unitPrice: integer("unit_price").notNull(), // cents
     amount: integer("amount").notNull(), // cents
     billingType: billingTypeEnum("billing_type").default("one_time").notNull(),
+    stripeProductId: text("stripe_product_id"),
+    stripePriceId: text("stripe_price_id"),
     order: integer("order").notNull().default(0),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

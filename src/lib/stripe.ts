@@ -123,6 +123,7 @@ export async function listStripeProducts() {
 
       return {
         id: p.id,
+        priceId: price.id, // Stripe Price ID (price_xxx)
         name: p.name,
         description: p.description,
         unitPrice: price.unit_amount / 100, // cents → dollars
@@ -131,6 +132,81 @@ export async function listStripeProducts() {
       };
     })
     .filter(Boolean);
+}
+
+/**
+ * Creates a Stripe Checkout Session in subscription mode.
+ * Used when invoice has recurring line items with Stripe Price IDs.
+ */
+export async function createSubscriptionCheckout(params: {
+  invoiceNumber: string;
+  clientEmail: string;
+  recurringItems: { stripePriceId: string; quantity: number }[];
+  oneTimeItems: { description: string; amountCents: number; currency: string }[];
+  invoiceId: string;
+  invoiceToken: string;
+}): Promise<{
+  sessionId: string;
+  checkoutUrl: string;
+}> {
+  const portalUrl =
+    process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+
+  // Add recurring items using real Stripe Price IDs
+  for (const item of params.recurringItems) {
+    lineItems.push({
+      price: item.stripePriceId,
+      quantity: item.quantity,
+    });
+  }
+
+  // Add one-time items as ad-hoc price_data
+  for (const item of params.oneTimeItems) {
+    lineItems.push({
+      price_data: {
+        currency: item.currency.toLowerCase(),
+        product_data: { name: item.description },
+        unit_amount: item.amountCents,
+      },
+      quantity: 1,
+    });
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer_email: params.clientEmail,
+    line_items: lineItems,
+    metadata: {
+      invoiceId: params.invoiceId,
+      invoiceNumber: params.invoiceNumber,
+    },
+    subscription_data: {
+      metadata: {
+        invoiceId: params.invoiceId,
+        invoiceNumber: params.invoiceNumber,
+      },
+    },
+    success_url: `${portalUrl}/invoice/${params.invoiceToken}?payment=success`,
+    cancel_url: `${portalUrl}/invoice/${params.invoiceToken}?payment=canceled`,
+  });
+
+  return {
+    sessionId: session.id,
+    checkoutUrl: session.url!,
+  };
+}
+
+/**
+ * Cancels a Stripe subscription at the end of the current billing period.
+ */
+export async function cancelSubscription(
+  subscriptionId: string
+): Promise<void> {
+  await stripe.subscriptions.update(subscriptionId, {
+    cancel_at_period_end: true,
+  });
 }
 
 /**

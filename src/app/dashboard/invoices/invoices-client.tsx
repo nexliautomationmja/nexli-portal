@@ -18,6 +18,7 @@ import { InvoiceDocumentPreview } from "@/components/invoice-document";
 
 interface StripeProduct {
   id: string;
+  priceId: string;
   name: string;
   description: string | null;
   unitPrice: number;
@@ -31,6 +32,8 @@ interface LineItem {
   quantity: number;
   unitPrice: number;
   amount: number;
+  stripeProductId?: string;
+  stripePriceId?: string;
 }
 
 interface Invoice {
@@ -61,6 +64,8 @@ interface Invoice {
   paidAt: string | null;
   canceledAt: string | null;
   reminderConfig: { schedule: { dayOffset: number }[] } | null;
+  stripeSubscriptionId: string | null;
+  subscriptionStatus: string | null;
   createdAt: string;
   lineItems: LineItem[];
 }
@@ -169,8 +174,8 @@ export function InvoicesClient() {
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientCompany, setClientCompany] = useState("");
-  const [lineItems, setLineItems] = useState([
-    { description: "", quantity: 1, unitPrice: 0, billingType: "one_time" as string },
+  const [lineItems, setLineItems] = useState<{ description: string; quantity: number; unitPrice: number; billingType: string; stripeProductId?: string; stripePriceId?: string }[]>([
+    { description: "", quantity: 1, unitPrice: 0, billingType: "one_time" },
   ]);
   const [taxRate, setTaxRate] = useState(0);
   const [dueDate, setDueDate] = useState("");
@@ -196,8 +201,8 @@ export function InvoicesClient() {
   const [batchClients, setBatchClients] = useState([
     { clientName: "", clientEmail: "", clientPhone: "", clientCompany: "" },
   ]);
-  const [batchLineItems, setBatchLineItems] = useState([
-    { description: "", quantity: 1, unitPrice: 0, billingType: "one_time" as string },
+  const [batchLineItems, setBatchLineItems] = useState<{ description: string; quantity: number; unitPrice: number; billingType: string; stripeProductId?: string; stripePriceId?: string }[]>([
+    { description: "", quantity: 1, unitPrice: 0, billingType: "one_time" },
   ]);
   const [batchTaxRate, setBatchTaxRate] = useState(0);
   const [batchDueDate, setBatchDueDate] = useState("");
@@ -251,7 +256,7 @@ export function InvoicesClient() {
 
   function updateLineItem(
     index: number,
-    field: "description" | "quantity" | "unitPrice" | "billingType",
+    field: "description" | "quantity" | "unitPrice" | "billingType" | "stripeProductId" | "stripePriceId",
     value: string | number
   ) {
     setLineItems((prev) =>
@@ -300,6 +305,8 @@ export function InvoicesClient() {
             quantity: li.quantity,
             unitPrice: li.unitPrice,
             billingType: li.billingType,
+            stripeProductId: li.stripeProductId || undefined,
+            stripePriceId: li.stripePriceId || undefined,
           })),
           taxRate: Math.round(taxRate * 100),
           dueDate,
@@ -357,6 +364,23 @@ export function InvoicesClient() {
       )
     );
     setShowDetail(null);
+  }
+
+  async function handleCancelSubscription(id: string) {
+    if (!confirm("Cancel this subscription? The client will not be charged after the current billing period ends.")) return;
+    const res = await fetch(`/api/dashboard/invoices/${id}/cancel-subscription`, {
+      method: "POST",
+    });
+    if (res.ok) {
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === id ? { ...inv, subscriptionStatus: "canceled" } : inv
+        )
+      );
+      if (showDetail?.id === id) {
+        setShowDetail({ ...showDetail, subscriptionStatus: "canceled" });
+      }
+    }
   }
 
   async function handleDelete(id: string) {
@@ -463,6 +487,8 @@ export function InvoicesClient() {
             quantity: li.quantity,
             unitPrice: li.unitPrice,
             billingType: li.billingType,
+            stripeProductId: li.stripeProductId || undefined,
+            stripePriceId: li.stripePriceId || undefined,
           })),
           taxRate: Math.round(batchTaxRate * 100),
           dueDate: batchDueDate,
@@ -685,6 +711,15 @@ export function InvoicesClient() {
                           {inv.isRecurring && (
                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-purple-500" title="Recurring">
                               REC
+                            </span>
+                          )}
+                          {inv.stripeSubscriptionId && (
+                            <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              inv.subscriptionStatus === "active" ? "bg-green-500/10 text-green-500" :
+                              inv.subscriptionStatus === "past_due" ? "bg-amber-500/10 text-amber-500" :
+                              "bg-gray-500/10 text-gray-400"
+                            }`} title={`Subscription ${inv.subscriptionStatus}`}>
+                              SUB
                             </span>
                           )}
                         </div>
@@ -1038,6 +1073,8 @@ export function InvoicesClient() {
                                       updateLineItem(i, "description", product.name);
                                       updateLineItem(i, "unitPrice", product.unitPrice);
                                       updateLineItem(i, "billingType", product.billingType);
+                                      updateLineItem(i, "stripeProductId", product.id);
+                                      updateLineItem(i, "stripePriceId", product.priceId);
                                       setProductPickerIndex(null);
                                     }}
                                     className="w-full text-left px-3 py-2 text-sm hover:bg-blue-500/10 transition-colors flex items-center justify-between"
@@ -1373,6 +1410,20 @@ export function InvoicesClient() {
                     RECURRING {showDetail.recurringInterval?.toUpperCase()}
                   </span>
                 )}
+                {showDetail.stripeSubscriptionId && (
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                    showDetail.subscriptionStatus === "active"
+                      ? "bg-green-500/10 text-green-500"
+                      : showDetail.subscriptionStatus === "past_due"
+                      ? "bg-amber-500/10 text-amber-500"
+                      : "bg-gray-500/10 text-gray-400"
+                  }`}>
+                    {showDetail.subscriptionStatus === "active" ? "AUTO-BILLING ACTIVE" :
+                     showDetail.subscriptionStatus === "past_due" ? "PAYMENT PAST DUE" :
+                     showDetail.subscriptionStatus === "canceled" ? "SUBSCRIPTION CANCELED" :
+                     "SUBSCRIPTION"}
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => setShowDetail(null)}
@@ -1495,6 +1546,14 @@ export function InvoicesClient() {
                     className="px-3 py-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors"
                   >
                     Void
+                  </button>
+                )}
+                {showDetail.stripeSubscriptionId && showDetail.subscriptionStatus === "active" && (
+                  <button
+                    onClick={() => handleCancelSubscription(showDetail.id)}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition-colors"
+                  >
+                    Cancel Subscription
                   </button>
                 )}
               </div>
@@ -1954,7 +2013,7 @@ export function InvoicesClient() {
                                       setBatchLineItems((prev) =>
                                         prev.map((li, idx) =>
                                           idx === i
-                                            ? { ...li, description: product.name, unitPrice: product.unitPrice, billingType: product.billingType }
+                                            ? { ...li, description: product.name, unitPrice: product.unitPrice, billingType: product.billingType, stripeProductId: product.id, stripePriceId: product.priceId }
                                             : li
                                         )
                                       );

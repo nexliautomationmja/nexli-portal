@@ -120,7 +120,8 @@ export async function GET(req: NextRequest) {
         and(
           eq(invoices.isRecurring, true),
           lte(invoices.nextRecurrenceDate, now),
-          not(inArray(invoices.status, ["canceled", "void"]))
+          not(inArray(invoices.status, ["canceled", "void"])),
+          isNull(invoices.stripeSubscriptionId) // Skip Stripe-managed subscriptions
         )
       );
 

@@ -65,6 +65,8 @@ export async function GET(
       clientCompany: invoice.clientCompany,
       paymentUrl: null,
       paidAt: invoice.paidAt,
+      stripeSubscriptionId: invoice.stripeSubscriptionId || null,
+      subscriptionStatus: invoice.subscriptionStatus || null,
     },
     lineItems: lineItems.sort((a, b) => a.order - b.order),
     from: {

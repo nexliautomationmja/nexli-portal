@@ -32,13 +32,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  // Only process checkout completions
-  if (event.type !== "checkout.session.completed") {
-    return NextResponse.json({ received: true });
+  switch (event.type) {
+    case "checkout.session.completed":
+      return handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+
+    case "invoice.paid":
+      return handleInvoicePaid(event.data.object as Stripe.Invoice);
+
+    case "invoice.payment_failed":
+      return handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+
+    case "customer.subscription.updated":
+      return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+
+    case "customer.subscription.deleted":
+      return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+
+    default:
+      return NextResponse.json({ received: true });
   }
+}
 
-  const session = event.data.object as Stripe.Checkout.Session;
-
+// ── checkout.session.completed ─────────────────────────────
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const invoiceId = session.metadata?.invoiceId;
   if (!invoiceId) {
     console.error("Stripe webhook: no invoiceId in session metadata");
@@ -56,17 +72,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // Idempotency: skip if already processed this payment intent
+  // For subscription checkouts, store subscription + customer IDs
+  if (session.mode === "subscription") {
+    const subscriptionId =
+      typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription?.id;
+    const customerId =
+      typeof session.customer === "string"
+        ? session.customer
+        : session.customer?.id;
+
+    await db
+      .update(invoices)
+      .set({
+        stripeSubscriptionId: subscriptionId || null,
+        stripeCustomerId: customerId || null,
+        subscriptionStatus: "active",
+        stripeCheckoutSessionId: session.id,
+        status: "paid",
+        amountPaid: invoice.total,
+        balanceDue: 0,
+        paidAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, invoice.id));
+
+    // Send emails and notifications for subscription start
+    await sendPaymentNotifications(invoice, invoice.total, "paid", 0);
+
+    return NextResponse.json({ received: true });
+  }
+
+  // For one-time payment checkouts (existing flow)
   const paymentIntentId =
     typeof session.payment_intent === "string"
       ? session.payment_intent
       : session.payment_intent?.id;
 
+  // Idempotency: skip if already processed this payment intent
   if (invoice.stripePaymentIntentId === paymentIntentId) {
     return NextResponse.json({ received: true });
   }
 
-  // Calculate amounts (session.amount_total is in smallest currency unit = cents)
   const paymentAmountCents = session.amount_total || 0;
   const newAmountPaid = invoice.amountPaid + paymentAmountCents;
   const newBalanceDue = Math.max(0, invoice.total - newAmountPaid);
@@ -92,7 +140,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const [updated] = await db
+  await db
     .update(invoices)
     .set({
       status: newStatus,
@@ -104,31 +152,228 @@ export async function POST(req: NextRequest) {
       paymentMethod: paymentMethodType,
       updatedAt: new Date(),
     })
-    .where(eq(invoices.id, invoice.id))
-    .returning();
+    .where(eq(invoices.id, invoice.id));
 
-  if (!updated) {
+  await sendPaymentNotifications(invoice, paymentAmountCents, newStatus, newBalanceDue);
+
+  // Sync payment to accounting software (non-blocking)
+  syncPaymentToAccounting(invoice.id).catch((err) =>
+    console.error("Accounting payment sync failed:", err)
+  );
+
+  return NextResponse.json({ received: true });
+}
+
+// ── invoice.paid (subscription renewals) ───────────────────
+async function handleInvoicePaid(stripeInvoice: Stripe.Invoice) {
+  const sub = stripeInvoice.parent?.subscription_details?.subscription;
+  const subscriptionId =
+    typeof sub === "string" ? sub : sub?.id;
+
+  if (!subscriptionId) {
+    // Not a subscription invoice — skip (checkout.session.completed handles one-time)
     return NextResponse.json({ received: true });
   }
 
+  // Find our invoice by stripeSubscriptionId
+  const [invoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.stripeSubscriptionId, subscriptionId))
+    .limit(1);
+
+  if (!invoice) {
+    console.error(`Stripe webhook invoice.paid: no invoice found for subscription ${subscriptionId}`);
+    return NextResponse.json({ received: true });
+  }
+
+  const paymentAmountCents = stripeInvoice.amount_paid || 0;
+
+  // Update payment tracking
+  const newAmountPaid = invoice.amountPaid + paymentAmountCents;
+  await db
+    .update(invoices)
+    .set({
+      amountPaid: newAmountPaid,
+      subscriptionStatus: "active",
+      paidAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, invoice.id));
+
+  // Send payment notifications
+  await sendPaymentNotifications(invoice, paymentAmountCents, "paid", 0);
+
+  return NextResponse.json({ received: true });
+}
+
+// ── invoice.payment_failed ─────────────────────────────────
+async function handleInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
+  const sub = stripeInvoice.parent?.subscription_details?.subscription;
+  const subscriptionId =
+    typeof sub === "string" ? sub : sub?.id;
+
+  if (!subscriptionId) {
+    return NextResponse.json({ received: true });
+  }
+
+  const [invoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.stripeSubscriptionId, subscriptionId))
+    .limit(1);
+
+  if (!invoice) {
+    return NextResponse.json({ received: true });
+  }
+
+  await db
+    .update(invoices)
+    .set({
+      subscriptionStatus: "past_due",
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, invoice.id));
+
+  // Notify CPA about failed payment
+  try {
+    await createNotification({
+      userId: invoice.ownerId,
+      type: "invoice_paid",
+      title: "Payment Failed",
+      message: `Payment failed for ${invoice.clientName}'s subscription (Invoice ${invoice.invoiceNumber}). Stripe will retry automatically.`,
+      metadata: {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        clientName: invoice.clientName,
+      },
+    });
+  } catch (err) {
+    console.error("Payment failed notification error:", err);
+  }
+
+  return NextResponse.json({ received: true });
+}
+
+// ── customer.subscription.updated ──────────────────────────
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  const invoiceId = subscription.metadata?.invoiceId;
+
+  // Try to find by metadata first, then by subscriptionId
+  let invoice;
+  if (invoiceId) {
+    [invoice] = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .limit(1);
+  }
+  if (!invoice) {
+    [invoice] = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.stripeSubscriptionId, subscription.id))
+      .limit(1);
+  }
+  if (!invoice) {
+    return NextResponse.json({ received: true });
+  }
+
+  // Map Stripe subscription status to our status
+  let subscriptionStatus: string;
+  switch (subscription.status) {
+    case "active":
+      subscriptionStatus = "active";
+      break;
+    case "past_due":
+      subscriptionStatus = "past_due";
+      break;
+    case "canceled":
+      subscriptionStatus = "canceled";
+      break;
+    case "unpaid":
+      subscriptionStatus = "unpaid";
+      break;
+    default:
+      subscriptionStatus = subscription.status;
+  }
+
+  await db
+    .update(invoices)
+    .set({
+      subscriptionStatus,
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, invoice.id));
+
+  return NextResponse.json({ received: true });
+}
+
+// ── customer.subscription.deleted ──────────────────────────
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const [invoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.stripeSubscriptionId, subscription.id))
+    .limit(1);
+
+  if (!invoice) {
+    return NextResponse.json({ received: true });
+  }
+
+  await db
+    .update(invoices)
+    .set({
+      subscriptionStatus: "canceled",
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, invoice.id));
+
+  // Notify CPA
+  try {
+    await createNotification({
+      userId: invoice.ownerId,
+      type: "invoice_paid",
+      title: "Subscription Canceled",
+      message: `${invoice.clientName}'s subscription for Invoice ${invoice.invoiceNumber} has been canceled.`,
+      metadata: {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        clientName: invoice.clientName,
+      },
+    });
+  } catch (err) {
+    console.error("Subscription canceled notification error:", err);
+  }
+
+  return NextResponse.json({ received: true });
+}
+
+// ── Shared: send payment notifications ─────────────────────
+async function sendPaymentNotifications(
+  invoice: typeof invoices.$inferSelect,
+  paymentAmountCents: number,
+  newStatus: string,
+  newBalanceDue: number
+) {
   // Send notification email to CPA
   try {
     const [owner] = await db
       .select()
       .from(users)
-      .where(eq(users.id, updated.ownerId))
+      .where(eq(users.id, invoice.ownerId))
       .limit(1);
 
     if (owner?.email) {
       const paidLabel =
         newStatus === "paid"
-          ? formatCurrency(updated.total, updated.currency)
-          : `${formatCurrency(paymentAmountCents, updated.currency)} (partial — ${formatCurrency(newBalanceDue, updated.currency)} remaining)`;
+          ? formatCurrency(invoice.total, invoice.currency)
+          : `${formatCurrency(paymentAmountCents, invoice.currency)} (partial — ${formatCurrency(newBalanceDue, invoice.currency)} remaining)`;
 
       const { subject, html } = buildInvoicePaidEmail({
         senderName: owner.name || owner.email,
-        clientName: updated.clientName,
-        invoiceNumber: updated.invoiceNumber,
+        clientName: invoice.clientName,
+        invoiceNumber: invoice.invoiceNumber,
         total: paidLabel,
         paidAt: new Date(),
       });
@@ -138,7 +383,7 @@ export async function POST(req: NextRequest) {
         html,
         recipientName: owner.name || undefined,
         emailType: "invoice_paid",
-        relatedId: updated.id,
+        relatedId: invoice.id,
       });
     }
   } catch (err) {
@@ -157,7 +402,7 @@ export async function POST(req: NextRequest) {
         companyName: users.companyName,
       })
       .from(users)
-      .where(eq(users.id, updated.ownerId))
+      .where(eq(users.id, invoice.ownerId))
       .limit(1);
 
     const senderLabel =
@@ -168,25 +413,25 @@ export async function POST(req: NextRequest) {
 
     const { subject: receiptSubject, html: receiptHtml } =
       buildPaymentReceiptEmail({
-        clientName: updated.clientName,
+        clientName: invoice.clientName,
         senderName: senderLabel,
-        invoiceNumber: updated.invoiceNumber,
-        amountPaid: formatCurrency(paymentAmountCents, updated.currency),
-        totalInvoice: formatCurrency(updated.total, updated.currency),
+        invoiceNumber: invoice.invoiceNumber,
+        amountPaid: formatCurrency(paymentAmountCents, invoice.currency),
+        totalInvoice: formatCurrency(invoice.total, invoice.currency),
         remainingBalance:
           newBalanceDue > 0
-            ? formatCurrency(newBalanceDue, updated.currency)
+            ? formatCurrency(newBalanceDue, invoice.currency)
             : null,
         paidAt: new Date(),
         portalUrl,
       });
     await sendEmailWithLog({
-      to: updated.clientEmail,
+      to: invoice.clientEmail,
       subject: receiptSubject,
       html: receiptHtml,
-      recipientName: updated.clientName,
+      recipientName: invoice.clientName,
       emailType: "payment_receipt",
-      relatedId: updated.id,
+      relatedId: invoice.id,
     });
   } catch (err) {
     console.error("Failed to send payment receipt:", err);
@@ -195,24 +440,17 @@ export async function POST(req: NextRequest) {
   // In-app notification
   try {
     await createNotification({
-      userId: updated.ownerId,
+      userId: invoice.ownerId,
       type: "invoice_paid",
       title: "Invoice Paid",
-      message: `${updated.clientName} paid invoice ${updated.invoiceNumber}`,
+      message: `${invoice.clientName} paid invoice ${invoice.invoiceNumber}`,
       metadata: {
-        invoiceId: updated.id,
-        invoiceNumber: updated.invoiceNumber,
-        clientName: updated.clientName,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        clientName: invoice.clientName,
       },
     });
   } catch (err) {
     console.error("Invoice paid notification failed:", err);
   }
-
-  // Sync payment to accounting software (non-blocking)
-  syncPaymentToAccounting(invoice.id).catch((err) =>
-    console.error("Accounting payment sync failed:", err)
-  );
-
-  return NextResponse.json({ received: true });
 }

@@ -31,6 +31,8 @@ interface InvoiceData {
   clientCompany: string | null;
   paymentUrl: string | null;
   paidAt: string | null;
+  stripeSubscriptionId: string | null;
+  subscriptionStatus: string | null;
 }
 
 function formatCurrency(cents: number, currency: string = "usd"): string {
@@ -917,6 +919,29 @@ function PayButton({
         textAlign: "center",
       }}
     >
+      {invoice.stripeSubscriptionId && invoice.subscriptionStatus === "active" && (
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 16px",
+            background: "#F0FDF4",
+            border: "1px solid #BBF7D0",
+            borderRadius: 10,
+            marginBottom: 16,
+            fontSize: 13,
+            color: "#166534",
+            fontWeight: 600,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          Auto-billing active — you will be charged automatically each billing period
+        </div>
+      )}
       {hasPartialPayment && (
         <div
           style={{

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { invoices, invoiceLineItems } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { createCheckoutSession } from "@/lib/stripe";
+import { createCheckoutSession, createSubscriptionCheckout } from "@/lib/stripe";
 
 export async function POST(
   _req: NextRequest,
@@ -48,23 +48,61 @@ export async function POST(
     .from(invoiceLineItems)
     .where(eq(invoiceLineItems.invoiceId, invoice.id));
 
-  const { sessionId, checkoutUrl } = await createCheckoutSession({
-    invoiceNumber: invoice.invoiceNumber,
-    clientName: invoice.clientName,
-    clientEmail: invoice.clientEmail,
-    lineItems: lineItems
-      .sort((a, b) => a.order - b.order)
-      .map((li) => ({
+  const sortedItems = lineItems.sort((a, b) => a.order - b.order);
+
+  // Check if this invoice has recurring items with Stripe Price IDs → use subscription mode
+  const recurringStripeItems = sortedItems.filter(
+    (li) => li.billingType !== "one_time" && li.stripePriceId
+  );
+
+  let sessionId: string;
+  let checkoutUrl: string;
+
+  if (recurringStripeItems.length > 0) {
+    // Subscription checkout: use real Stripe Price IDs for recurring items
+    const oneTimeItems = sortedItems.filter(
+      (li) => li.billingType === "one_time" || !li.stripePriceId
+    );
+
+    const result = await createSubscriptionCheckout({
+      invoiceNumber: invoice.invoiceNumber,
+      clientEmail: invoice.clientEmail,
+      recurringItems: recurringStripeItems.map((li) => ({
+        stripePriceId: li.stripePriceId!,
+        quantity: Math.max(1, Math.round(li.quantity / 100)),
+      })),
+      oneTimeItems: oneTimeItems.map((li) => ({
         description: li.description,
-        quantity: li.quantity / 100, // stored *100
+        amountCents: li.amount,
+        currency: invoice.currency,
+      })),
+      invoiceId: invoice.id,
+      invoiceToken: token,
+    });
+
+    sessionId = result.sessionId;
+    checkoutUrl = result.checkoutUrl;
+  } else {
+    // One-time payment checkout (existing flow)
+    const result = await createCheckoutSession({
+      invoiceNumber: invoice.invoiceNumber,
+      clientName: invoice.clientName,
+      clientEmail: invoice.clientEmail,
+      lineItems: sortedItems.map((li) => ({
+        description: li.description,
+        quantity: li.quantity / 100,
         unitPriceCents: li.unitPrice,
       })),
-    taxAmountCents: invoice.taxAmount || 0,
-    currency: invoice.currency,
-    amountCents: balanceDue,
-    invoiceId: invoice.id,
-    invoiceToken: token,
-  });
+      taxAmountCents: invoice.taxAmount || 0,
+      currency: invoice.currency,
+      amountCents: balanceDue,
+      invoiceId: invoice.id,
+      invoiceToken: token,
+    });
+
+    sessionId = result.sessionId;
+    checkoutUrl = result.checkoutUrl;
+  }
 
   // Store the latest checkout session ID
   await db

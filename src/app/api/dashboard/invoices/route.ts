@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
 
   const processedItems = lineItems.map(
     (
-      item: { description: string; quantity: number; unitPrice: number; billingType?: string },
+      item: { description: string; quantity: number; unitPrice: number; billingType?: string; stripeProductId?: string; stripePriceId?: string },
       i: number
     ) => {
       const qty = Math.round(item.quantity * 100);
@@ -133,12 +133,20 @@ export async function POST(req: NextRequest) {
         unitPrice: price,
         amount,
         billingType: bt,
+        stripeProductId: item.stripeProductId || null,
+        stripePriceId: item.stripePriceId || null,
         order: i,
       };
     }
   );
 
   const hasRecurring = processedItems.some((p) => p.billingType !== "one_time");
+
+  // If all recurring items have Stripe Price IDs, Stripe handles billing — skip cron recurrence
+  const allRecurringHaveStripePrice = processedItems
+    .filter((p) => p.billingType !== "one_time")
+    .every((p) => p.stripePriceId);
+  const useStripeSubscription = hasRecurring && allRecurringHaveStripePrice;
 
   const { subtotal, taxAmount, total } = calculateInvoiceTotals(
     processedItems,
@@ -166,9 +174,10 @@ export async function POST(req: NextRequest) {
       amountPaid: 0,
       balanceDue: total,
       isRecurring: hasRecurring,
-      recurringInterval: body.recurringInterval || null,
-      recurringEndDate: body.recurringEndDate ? new Date(body.recurringEndDate) : null,
-      nextRecurrenceDate: hasRecurring ? dueDateObj : null,
+      // Only set cron recurrence if NOT using Stripe subscription
+      recurringInterval: useStripeSubscription ? null : (body.recurringInterval || null),
+      recurringEndDate: useStripeSubscription ? null : (body.recurringEndDate ? new Date(body.recurringEndDate) : null),
+      nextRecurrenceDate: useStripeSubscription ? null : (hasRecurring ? dueDateObj : null),
       dueDate: dueDateObj,
       notes: notes || null,
       terms: terms || null,
