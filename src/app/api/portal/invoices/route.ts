@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     dueDate: inv.dueDate,
     paidAt: inv.paidAt,
     token: inv.token,
-    paymentUrl: inv.paymentUrl,
+    paymentUrl: null,
     terms: inv.terms,
     createdAt: inv.createdAt,
     lineItems: (itemsByInvoice.get(inv.id) || []).map((li) => ({

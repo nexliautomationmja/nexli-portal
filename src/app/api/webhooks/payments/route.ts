@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { invoices, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { verifyHelcimWebhook, getHelcimTransaction } from "@/lib/helcim";
+import { constructWebhookEvent, stripe } from "@/lib/stripe";
 import {
   sendEmailWithLog,
   buildInvoicePaidEmail,
@@ -11,76 +11,86 @@ import {
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 import { createNotification } from "@/lib/notifications";
+import type Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
-  const webhookId = req.headers.get("webhook-id") || "";
-  const webhookTimestamp = req.headers.get("webhook-timestamp") || "";
-  const webhookSignature = req.headers.get("webhook-signature") || "";
+  const signature = req.headers.get("stripe-signature");
 
-  if (!webhookId || !webhookTimestamp || !webhookSignature) {
+  if (!signature) {
     return NextResponse.json(
-      { error: "Missing webhook headers" },
+      { error: "Missing stripe-signature header" },
       { status: 400 }
     );
   }
 
-  const isValid = verifyHelcimWebhook({
-    webhookId,
-    webhookTimestamp,
-    webhookSignature,
-    rawBody,
-  });
-
-  if (!isValid) {
+  let event: Stripe.Event;
+  try {
+    event = constructWebhookEvent(rawBody, signature);
+  } catch (err) {
+    console.error("Stripe webhook signature verification failed:", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const payload = JSON.parse(rawBody) as { id: number; type: string };
-
-  // Only process card/ACH transactions
-  if (payload.type !== "cardTransaction") {
+  // Only process checkout completions
+  if (event.type !== "checkout.session.completed") {
     return NextResponse.json({ received: true });
   }
 
-  // Fetch full transaction details from Helcim
-  const transaction = await getHelcimTransaction(payload.id);
+  const session = event.data.object as Stripe.Checkout.Session;
 
-  // Skip declined transactions
-  if (transaction.statusAuth === 2) {
-    return NextResponse.json({ received: true });
-  }
-
-  // Look up invoice by invoiceNumber (matches our invoiceNumber, has unique index)
-  if (!transaction.invoiceNumber) {
+  const invoiceId = session.metadata?.invoiceId;
+  if (!invoiceId) {
+    console.error("Stripe webhook: no invoiceId in session metadata");
     return NextResponse.json({ received: true });
   }
 
   const [invoice] = await db
     .select()
     .from(invoices)
-    .where(eq(invoices.invoiceNumber, transaction.invoiceNumber))
+    .where(eq(invoices.id, invoiceId))
     .limit(1);
 
   if (!invoice) {
-    console.error(
-      `Helcim webhook: no invoice found for invoiceNumber ${transaction.invoiceNumber}`
-    );
+    console.error(`Stripe webhook: no invoice found for id ${invoiceId}`);
     return NextResponse.json({ received: true });
   }
 
-  // Idempotency guard: skip if we already processed this transaction
-  if (invoice.helcimTransactionId === String(transaction.transactionId)) {
+  // Idempotency: skip if already processed this payment intent
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id;
+
+  if (invoice.stripePaymentIntentId === paymentIntentId) {
     return NextResponse.json({ received: true });
   }
 
-  // Convert Helcim dollars to cents for internal storage
-  const paymentAmountCents = Math.round(transaction.amount * 100);
+  // Calculate amounts (session.amount_total is in smallest currency unit = cents)
+  const paymentAmountCents = session.amount_total || 0;
   const newAmountPaid = invoice.amountPaid + paymentAmountCents;
   const newBalanceDue = Math.max(0, invoice.total - newAmountPaid);
   const newStatus = newBalanceDue <= 0 ? "paid" : "partial";
 
-  const isACH = transaction.statusAuth === 5;
+  // Detect payment method type
+  let paymentMethodType = "card";
+  if (paymentIntentId) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+      if (pi.payment_method) {
+        const pmId =
+          typeof pi.payment_method === "string"
+            ? pi.payment_method
+            : pi.payment_method.id;
+        const pm = await stripe.paymentMethods.retrieve(pmId);
+        if (pm.type === "us_bank_account") {
+          paymentMethodType = "ach";
+        }
+      }
+    } catch {
+      // Default to "card" if we can't determine
+    }
+  }
 
   const [updated] = await db
     .update(invoices)
@@ -89,9 +99,9 @@ export async function POST(req: NextRequest) {
       amountPaid: newAmountPaid,
       balanceDue: newBalanceDue,
       paidAt: newStatus === "paid" ? new Date() : null,
-      helcimTransactionId: String(transaction.transactionId),
-      paymentMethod: isACH ? "ach" : "card",
-      achSettlementStatus: isACH ? "pending" : null,
+      stripePaymentIntentId: paymentIntentId || null,
+      stripeCheckoutSessionId: session.id,
+      paymentMethod: paymentMethodType,
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, invoice.id))
@@ -115,13 +125,11 @@ export async function POST(req: NextRequest) {
           ? formatCurrency(updated.total, updated.currency)
           : `${formatCurrency(paymentAmountCents, updated.currency)} (partial — ${formatCurrency(newBalanceDue, updated.currency)} remaining)`;
 
-      const achNote = isACH ? " (ACH — pending settlement)" : "";
-
       const { subject, html } = buildInvoicePaidEmail({
         senderName: owner.name || owner.email,
         clientName: updated.clientName,
         invoiceNumber: updated.invoiceNumber,
-        total: paidLabel + achNote,
+        total: paidLabel,
         paidAt: new Date(),
       });
       await sendEmailWithLog({
@@ -190,7 +198,7 @@ export async function POST(req: NextRequest) {
       userId: updated.ownerId,
       type: "invoice_paid",
       title: "Invoice Paid",
-      message: `${updated.clientName} paid invoice ${updated.invoiceNumber}${isACH ? " (ACH — pending settlement)" : ""}`,
+      message: `${updated.clientName} paid invoice ${updated.invoiceNumber}`,
       metadata: {
         invoiceId: updated.id,
         invoiceNumber: updated.invoiceNumber,

@@ -63,7 +63,7 @@ export async function GET(
       clientName: invoice.clientName,
       clientEmail: invoice.clientEmail,
       clientCompany: invoice.clientCompany,
-      paymentUrl: invoice.paymentUrl,
+      paymentUrl: null,
       paidAt: invoice.paidAt,
     },
     lineItems: lineItems.sort((a, b) => a.order - b.order),

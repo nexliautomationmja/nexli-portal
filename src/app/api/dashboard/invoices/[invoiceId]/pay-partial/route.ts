@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { invoices } from "@/db/schema";
+import { invoices, invoiceLineItems } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { createCheckoutSession } from "@/lib/stripe";
 
 export async function POST(
   req: NextRequest,
@@ -51,13 +52,38 @@ export async function POST(
     );
   }
 
-  if (!invoice.paymentUrl) {
-    return NextResponse.json(
-      { error: "Payment link not yet available" },
-      { status: 400 }
-    );
-  }
+  // Fetch line items for the Checkout Session
+  const lineItems = await db
+    .select()
+    .from(invoiceLineItems)
+    .where(eq(invoiceLineItems.invoiceId, invoiceId));
 
-  // Helcim hosted page handles partial payments natively
-  return NextResponse.json({ paymentUrl: invoice.paymentUrl });
+  const { sessionId, checkoutUrl } = await createCheckoutSession({
+    invoiceNumber: invoice.invoiceNumber,
+    clientName: invoice.clientName,
+    clientEmail: invoice.clientEmail,
+    lineItems: lineItems
+      .sort((a, b) => a.order - b.order)
+      .map((li) => ({
+        description: li.description,
+        quantity: li.quantity / 100,
+        unitPriceCents: li.unitPrice,
+      })),
+    taxAmountCents: invoice.taxAmount || 0,
+    currency: invoice.currency,
+    amountCents,
+    invoiceId: invoice.id,
+    invoiceToken: invoice.token,
+  });
+
+  // Store the checkout session ID
+  await db
+    .update(invoices)
+    .set({
+      stripeCheckoutSessionId: sessionId,
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, invoice.id));
+
+  return NextResponse.json({ paymentUrl: checkoutUrl });
 }

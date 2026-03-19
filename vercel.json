@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/invoice-reminders",
       "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/ach-settlement",
-      "schedule": "0 6 * * *"
     }
   ]
 }

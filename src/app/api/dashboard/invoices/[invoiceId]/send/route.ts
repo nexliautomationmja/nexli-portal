@@ -3,7 +3,6 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { invoices, invoiceLineItems, invoiceReminders, users } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { createHelcimInvoice } from "@/lib/helcim";
 import { sendEmailWithLog, buildInvoiceEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncInvoiceToAccounting } from "@/lib/accounting-sync";
@@ -49,35 +48,15 @@ export async function POST(
     .map((li) => li.description)
     .join(", ");
 
-  // Create Helcim invoice with payment link
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
 
-  const helcimLineItems = lineItems
-    .sort((a, b) => a.order - b.order)
-    .map((li) => ({
-      description: li.description,
-      quantity: li.quantity / 100, // stored *100 (1.5 → 150)
-      priceCents: li.unitPrice,
-    }));
-
-  const { helcimInvoiceId, paymentUrl } = await createHelcimInvoice({
-    invoiceNumber: invoice.invoiceNumber,
-    clientName: invoice.clientName,
-    clientEmail: invoice.clientEmail,
-    lineItems: helcimLineItems,
-    taxAmountCents: invoice.taxAmount || 0,
-    currency: invoice.currency,
-  });
-
-  // Update invoice status
+  // Update invoice status (Stripe Checkout session is created on-demand when client clicks Pay)
   const [updated] = await db
     .update(invoices)
     .set({
       status: "sent",
       sentAt: new Date(),
-      paymentUrl,
-      helcimInvoiceId: String(helcimInvoiceId),
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, invoiceId))

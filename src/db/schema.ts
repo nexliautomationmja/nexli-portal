@@ -579,12 +579,16 @@ export const invoices = pgTable(
     notes: text("notes"),
     terms: text("terms"),
 
-    // Helcim references
+    // Stripe references
+    stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    paymentMethod: text("payment_method"), // "card" | "ach"
+
+    // Legacy Helcim columns (to be dropped in future migration)
     helcimInvoiceId: text("helcim_invoice_id"),
     helcimTransactionId: text("helcim_transaction_id"),
     paymentUrl: text("payment_url"),
-    paymentMethod: text("payment_method"), // "card" | "ach"
-    achSettlementStatus: text("ach_settlement_status"), // "pending" | "approved" | "declined"
+    achSettlementStatus: text("ach_settlement_status"),
 
     // Partial payment tracking (integer cents)
     amountPaid: integer("amount_paid").default(0).notNull(),

@@ -469,7 +469,7 @@ export function buildInvoiceEmail(params: {
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
-        No account required &bull; Secure payment via Helcim
+        No account required &bull; Secure payment via Stripe
       </p>
     </div>
   `);
@@ -594,7 +594,7 @@ export function buildInvoiceReminderEmail(params: {
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
-        No account required &bull; Secure payment via Helcim
+        No account required &bull; Secure payment via Stripe
       </p>
     </div>
   `);
