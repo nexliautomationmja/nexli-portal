@@ -398,6 +398,142 @@ export function buildEngagementSignedEmail(params: {
   };
 }
 
+// ── Fully Signed Engagement Email (to BOTH parties) ─────
+
+interface EngagementSigner {
+  name: string;
+  role?: string | null;
+  signatureData?: string | null;
+  signedAt?: Date | string | null;
+}
+
+export function buildEngagementCompletedEmail(params: {
+  recipientName: string;
+  subject: string;
+  content: string;
+  signers: EngagementSigner[];
+  completedAt: Date;
+  dashboardUrl?: string;
+}): { subject: string; html: string } {
+  const { recipientName, subject, content, signers, completedAt, dashboardUrl } = params;
+  const completedDate = completedAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  // Build the engagement document body as HTML paragraphs
+  const paragraphs = content
+    ? content.split(/\n\n+/).filter((p: string) => p.trim())
+    : [];
+
+  const bodyHtml = paragraphs
+    .map((paragraph: string) => {
+      const trimmed = paragraph.trim();
+      const isHeading = /^\d{1,2}\.\s+[A-Z]/.test(trimmed);
+      const isTitle =
+        trimmed === trimmed.toUpperCase() &&
+        trimmed.length < 80 &&
+        trimmed.length > 3 &&
+        !/^\d/.test(trimmed);
+
+      if (isHeading) {
+        return `<p style="margin:20px 0 4px;font-size:13px;font-weight:700;color:#111827;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${trimmed}</p>`;
+      }
+      if (isTitle) {
+        return `<p style="margin:16px 0 4px;font-size:14px;font-weight:700;color:#111827;text-align:center;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${trimmed}</p>`;
+      }
+      return `<p style="margin:10px 0;font-size:12px;line-height:1.7;color:#374151;white-space:pre-wrap;">${trimmed}</p>`;
+    })
+    .join("");
+
+  // Build signature blocks
+  const signatureHtml = signers
+    .map((s) => {
+      const signDate = s.signedAt
+        ? new Date(s.signedAt).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "";
+
+      const sigLine = s.signatureData
+        ? `<p style="margin:0 0 4px;font-size:26px;font-family:'Dancing Script','Brush Script MT','Segoe Script',cursive;color:#1e293b;line-height:1.3;">${s.signatureData}</p>`
+        : `<div style="height:36px;"></div>`;
+
+      return `
+        <td style="vertical-align:top;padding:8px;">
+          ${sigLine}
+          <div style="border-top:1px solid #374151;width:180px;padding-top:6px;">
+            <p style="margin:0;font-size:12px;color:#111827;font-weight:600;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${s.name}</p>
+            ${s.role ? `<p style="margin:2px 0 0;font-size:10px;color:#6b7280;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${s.role}</p>` : ""}
+            ${signDate ? `<p style="margin:2px 0 0;font-size:9px;color:#9ca3af;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">Signed ${signDate}</p>` : ""}
+          </div>
+        </td>`;
+    })
+    .join("");
+
+  const ctaButton = dashboardUrl
+    ? `<div style="text-align:center;margin:24px 0 0;">
+        <a href="${dashboardUrl}" style="${buttonStyle}">View in Dashboard</a>
+      </div>`
+    : "";
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Engagement Fully Signed</h1>
+    <p style="margin:0 0 8px;color:#9999a8;font-size:14px;">
+      Hi ${recipientName}, all parties have signed the engagement letter <strong style="color:#fff;">&ldquo;${subject}&rdquo;</strong>.
+    </p>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:13px;">
+      A copy of the signed engagement letter is included below for your records.
+    </p>
+
+    <!-- Signed document embedded -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;">
+      <!-- Document header -->
+      <tr><td bgcolor="#0a0a0f" style="background-color:#0a0a0f;padding:14px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td><img src="${LOGO_URL}" alt="Nexli" width="80" style="display:inline-block;" /></td>
+          <td style="text-align:right;color:rgba(255,255,255,0.4);font-size:10px;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;">Engagement Letter</td>
+        </tr></table>
+      </td></tr>
+      <!-- Date + meta -->
+      <tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 24px 0;">
+        <p style="margin:0 0 12px;font-size:11px;color:#6b7280;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${completedDate}</p>
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="width:50%;vertical-align:top;">
+            <p style="margin:0 0 2px;font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">Re</p>
+            <p style="margin:0;font-size:12px;color:#111827;font-weight:600;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${subject}</p>
+          </td>
+        </tr></table>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0 0;" />
+      </td></tr>
+      <!-- Document body -->
+      <tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:16px 24px;">
+        ${bodyHtml}
+      </td></tr>
+      <!-- Signatures -->
+      <tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:8px 24px 28px;">
+        <p style="margin:0 0 16px;font-size:12px;color:#374151;font-family:'Georgia','Times New Roman',serif;">Sincerely,</p>
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          ${signatureHtml}
+        </tr></table>
+      </td></tr>
+    </table>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;border:1px solid #133326;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#0c1a16" style="background-color:#0c1a16;padding:12px 16px;text-align:center;">
+      <p style="margin:0;color:#10B981;font-size:13px;font-weight:600;">&#x2714; All parties have signed this engagement letter</p>
+    </td></tr></table>
+    ${ctaButton}
+  `);
+
+  return {
+    subject: `Fully signed: "${subject}" — Engagement Letter`,
+    html,
+  };
+}
+
 // ══════════════════════════════════════════════════════════
 // ══  INVOICE EMAILS  ═════════════════════════════════════
 // ══════════════════════════════════════════════════════════

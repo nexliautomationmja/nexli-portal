@@ -9,7 +9,7 @@ import {
   users,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { sendEmailWithLog, buildEngagementSignedEmail, buildInvoiceEmail } from "@/lib/email";
+import { sendEmailWithLog, buildEngagementSignedEmail, buildEngagementCompletedEmail, buildInvoiceEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import {
   generateInvoiceNumber,
@@ -211,25 +211,91 @@ export async function POST(
     firstInvoiceToken = await generateFirstInvoiceFromEngagement(engagement, allSigners);
   }
 
-  // Notify CPA via email
-  try {
-    const [owner] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, engagement.ownerId))
-      .limit(1);
+  // Fetch owner for emails
+  const [owner] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, engagement.ownerId))
+    .limit(1);
 
-    if (owner?.email) {
-      const { subject, html } = buildEngagementSignedEmail({
-        senderName: owner.name || owner.email,
-        clientName: signer.name,
-        subject: engagement.subject,
-        signedAt: new Date(),
-      });
-      await sendEmailWithLog({ to: owner.email, subject, html, recipientName: owner.name || undefined, emailType: "engagement_signed", relatedId: engagement.id });
+  if (allSigned) {
+    // Send fully-signed engagement document to BOTH parties
+    try {
+      const portalUrl =
+        process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+      const dashboardUrl = `${portalUrl}/dashboard/engagements`;
+
+      // Re-fetch all signers with updated signature data
+      const completedSigners = await db
+        .select()
+        .from(engagementSigners)
+        .where(eq(engagementSigners.engagementId, engagement.id));
+
+      const signerData = completedSigners
+        .sort((a, b) => a.order - b.order)
+        .map((s) => ({
+          name: s.name,
+          role: s.role,
+          signatureData: s.signatureData,
+          signedAt: s.signedAt,
+        }));
+
+      // Send to CPA (owner)
+      if (owner?.email) {
+        const { subject, html } = buildEngagementCompletedEmail({
+          recipientName: owner.name || owner.email,
+          subject: engagement.subject,
+          content: engagement.content,
+          signers: signerData,
+          completedAt: new Date(),
+          dashboardUrl,
+        });
+        await sendEmailWithLog({
+          to: owner.email,
+          subject,
+          html,
+          recipientName: owner.name || undefined,
+          emailType: "engagement_completed",
+          relatedId: engagement.id,
+        });
+      }
+
+      // Send to all client signers (order > 0)
+      for (const cs of completedSigners.filter((s) => s.order > 0)) {
+        const { subject, html } = buildEngagementCompletedEmail({
+          recipientName: cs.name,
+          subject: engagement.subject,
+          content: engagement.content,
+          signers: signerData,
+          completedAt: new Date(),
+        });
+        await sendEmailWithLog({
+          to: cs.email,
+          subject,
+          html,
+          recipientName: cs.name,
+          emailType: "engagement_completed",
+          relatedId: engagement.id,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to send engagement completed emails:", err);
     }
-  } catch (err) {
-    console.error("Failed to send engagement signed email:", err);
+  } else {
+    // Not all signed yet — just notify CPA that this signer signed
+    try {
+      if (owner?.email) {
+        const { subject, html } = buildEngagementSignedEmail({
+          senderName: owner.name || owner.email,
+          clientName: signer.name,
+          subject: engagement.subject,
+          signedAt: new Date(),
+        });
+        await sendEmailWithLog({ to: owner.email, subject, html, recipientName: owner.name || undefined, emailType: "engagement_signed", relatedId: engagement.id });
+      }
+    } catch (err) {
+      console.error("Failed to send engagement signed email:", err);
+    }
   }
 
   // In-app notification
@@ -237,8 +303,10 @@ export async function POST(
     await createNotification({
       userId: engagement.ownerId,
       type: "engagement_signed",
-      title: "Engagement Letter Signed",
-      message: `${signer.name} signed "${engagement.subject}"`,
+      title: allSigned ? "Engagement Fully Signed" : "Engagement Letter Signed",
+      message: allSigned
+        ? `All parties have signed "${engagement.subject}"`
+        : `${signer.name} signed "${engagement.subject}"`,
       metadata: { engagementId: engagement.id, signerName: signer.name, subject: engagement.subject },
     });
   } catch (err) {
