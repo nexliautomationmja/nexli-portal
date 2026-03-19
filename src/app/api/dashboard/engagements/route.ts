@@ -161,9 +161,8 @@ export async function POST(req: NextRequest) {
     .limit(1);
   const companyName = ownerInfo?.companyName || "";
 
-  // Add the CPA (sender) as the first signer (order 0)
+  // Add the CPA (sender) as the first signer (order 0) — auto-signed
   const cpaToken = crypto.randomBytes(32).toString("base64url");
-  const cpaEngageUrl = `${portalUrl}/engage/${cpaToken}`;
 
   await db.insert(engagementSigners).values({
     engagementId: engagement.id,
@@ -171,31 +170,16 @@ export async function POST(req: NextRequest) {
     email: cpaEmail,
     token: cpaToken,
     order: 0,
-    status: "sent",
+    status: "signed",
     sentAt: new Date(),
+    signedAt: new Date(),
+    viewedAt: new Date(),
     role: companyName
       ? `Authorized Representative, ${companyName}`
       : "Authorized Representative",
   });
 
-  signers.push({ name: senderName, email: cpaEmail, engageUrl: cpaEngageUrl });
-
-  // Send signing email to the CPA
-  try {
-    const { subject: cpaSubject, html: cpaHtml } = buildEngagementRequestEmail({
-      clientName: senderName,
-      senderName: "Nexli",
-      subject,
-      engageUrl: cpaEngageUrl,
-      expiresAt,
-    });
-    await sendEmailWithLog({ to: cpaEmail, subject: cpaSubject, html: cpaHtml, recipientName: senderName, emailType: "engagement_request", relatedId: engagement.id, sentBy: session.user.id });
-  } catch (err) {
-    console.error(`Failed to send engagement email to CPA ${cpaEmail}:`, err);
-    emailErrors.push(
-      `${cpaEmail}: ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
+  signers.push({ name: senderName, email: cpaEmail, engageUrl: "" });
 
   // Add client recipients as signers (order 1+)
   for (let i = 0; i < recipients.length; i++) {

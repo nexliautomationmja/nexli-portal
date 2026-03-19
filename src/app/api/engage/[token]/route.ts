@@ -9,13 +9,14 @@ import {
   users,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { sendEmailWithLog, buildEngagementSignedEmail } from "@/lib/email";
+import { sendEmailWithLog, buildEngagementSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import {
   generateInvoiceNumber,
   generateInvoiceToken,
   calculateLineAmount,
   calculateInvoiceTotals,
+  formatCurrency,
 } from "@/lib/invoice-utils";
 
 // GET — validate token, return engagement info, mark signer as viewed
@@ -229,11 +230,14 @@ export async function POST(
     console.error("Engagement notification failed:", err);
   }
 
+  // Only redirect client signers (order > 0) to the invoice, not the owner
+  const isClientSigner = signer.order > 0;
+
   return NextResponse.json({
     ok: true,
     signedAt: new Date().toISOString(),
     allSigned,
-    invoiceToken: firstInvoiceToken,
+    invoiceToken: isClientSigner ? firstInvoiceToken : null,
   });
 }
 
@@ -330,7 +334,9 @@ async function generateFirstInvoiceFromEngagement(
     const firstEntry = schedule[0];
     const now = new Date();
     const dueDate = new Date(now);
-    dueDate.setDate(dueDate.getDate() + (firstEntry.daysAfterSigning || 0));
+    // Minimum 1 day out so the invoice doesn't show as overdue immediately
+    const daysOut = Math.max(firstEntry.daysAfterSigning || 0, 1);
+    dueDate.setDate(dueDate.getDate() + daysOut);
 
     const processedItems = firstEntry.lineItems.map((li, i) => {
       const qty = Math.round(li.quantity * 100);
@@ -396,12 +402,48 @@ async function generateFirstInvoiceFromEngagement(
       });
     }
 
+    // Send invoice email to the client so they have a link to pay
+    try {
+      const portalUrl =
+        process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+      const invoiceUrl = `${portalUrl}/invoice/${invToken}`;
+
+      const [owner] = await db
+        .select({ name: users.name, email: users.email, companyName: users.companyName })
+        .from(users)
+        .where(eq(users.id, engagement.ownerId))
+        .limit(1);
+
+      const senderName =
+        owner?.companyName || owner?.name || owner?.email || "Your Service Provider";
+
+      const { subject: invSubject, html: invHtml } = buildInvoiceEmail({
+        clientName: clientSigner.name,
+        senderName,
+        invoiceNumber,
+        total: formatCurrency(total, "usd"),
+        dueDate,
+        invoiceUrl,
+      });
+
+      await sendEmailWithLog({
+        to: clientSigner.email,
+        subject: invSubject,
+        html: invHtml,
+        recipientName: clientSigner.name,
+        emailType: "invoice",
+        relatedId: invoice.id,
+      });
+    } catch (err) {
+      console.error("Failed to send initial invoice email:", err);
+    }
+
     // Notify CPA about the auto-generated invoice
     await createNotification({
       userId: engagement.ownerId,
       type: "engagement_signed",
       title: "Invoice Auto-Generated",
-      message: `Initial setup invoice created and sent to ${clientSigner.name} from "${engagement.subject}".${pendingSchedule ? ` Next invoice will be created automatically when this one is paid.` : ""}`,
+      message: `Initial setup invoice created and emailed to ${clientSigner.name} from "${engagement.subject}".${pendingSchedule ? ` Next invoice will be created automatically when this one is paid.` : ""}`,
       metadata: { engagementId: engagement.id, invoiceId: invoice.id },
     });
 
