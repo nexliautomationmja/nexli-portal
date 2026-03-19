@@ -164,20 +164,65 @@ export function DocumentPreview({
       {/* Letter Body */}
       <div style={{ padding: "28px 48px 16px" }}>
         {paragraphs.length > 0 ? (
-          paragraphs.map((paragraph, i) => (
-            <p
-              key={i}
-              style={{
-                margin: i === 0 ? 0 : "16px 0 0",
-                fontSize: 14,
-                lineHeight: 1.85,
-                color: "#374151",
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {paragraph}
-            </p>
-          ))
+          paragraphs.map((paragraph, i) => {
+            const trimmed = paragraph.trim();
+            // Detect numbered section headings like "1. SCOPE OF SERVICES" or "14. ELECTRONIC SIGNATURES"
+            const isHeading = /^\d{1,2}\.\s+[A-Z]/.test(trimmed);
+            // Detect document title lines (all caps, no number prefix, short)
+            const isTitle = trimmed === trimmed.toUpperCase() && trimmed.length < 80 && trimmed.length > 3 && !/^\d/.test(trimmed);
+
+            if (isHeading) {
+              return (
+                <h3
+                  key={i}
+                  style={{
+                    margin: i === 0 ? 0 : "28px 0 0",
+                    fontSize: 15,
+                    lineHeight: 1.6,
+                    color: "#111827",
+                    fontWeight: 700,
+                    fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                  }}
+                >
+                  {trimmed}
+                </h3>
+              );
+            }
+
+            if (isTitle) {
+              return (
+                <h2
+                  key={i}
+                  style={{
+                    margin: i === 0 ? 0 : "24px 0 0",
+                    fontSize: 17,
+                    lineHeight: 1.5,
+                    color: "#111827",
+                    fontWeight: 700,
+                    textAlign: "center",
+                    fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                  }}
+                >
+                  {trimmed}
+                </h2>
+              );
+            }
+
+            return (
+              <p
+                key={i}
+                style={{
+                  margin: i === 0 ? 0 : "16px 0 0",
+                  fontSize: 14,
+                  lineHeight: 1.85,
+                  color: "#374151",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {paragraph}
+              </p>
+            );
+          })
         ) : (
           <p
             style={{
