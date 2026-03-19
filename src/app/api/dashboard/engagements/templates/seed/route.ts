@@ -24,7 +24,7 @@ Phase 1 — Setup & Build (30 Days Maximum)
 
 a) Website Development & Deployment — Design and build a professional website under Client's domain. Client must provide DNS editor access with their hosting provider to enable deployment.
 
-b) GoHighLevel (GHL) Dashboard Setup — Configure Client's dedicated GHL account with automated workflows and client management capabilities.
+b) Nexli Whitelabel Dashboard Setup — Configure Client's dedicated whitelabel dashboard with automated workflows and client management capabilities.
 
 c) AI Automation Implementation — Deploy AI-powered automations including lead capture, follow-up sequences, appointment scheduling, and client communication workflows.
 
@@ -89,7 +89,7 @@ b) In no event shall Provider be liable for any indirect, incidental, consequent
 
 c) Provider does not guarantee specific business results, revenue increases, lead generation volumes, or return on investment. Results depend on market conditions, Client's industry, and Client's use of the system.
 
-d) Provider is not liable for any third-party service disruptions, including but not limited to GoHighLevel, Stripe, DNS providers, or telecommunications carriers.
+d) Provider is not liable for any third-party service disruptions, including but not limited to Stripe, DNS providers, or telecommunications carriers.
 
 
 8. INDEMNIFICATION
