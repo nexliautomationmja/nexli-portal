@@ -149,6 +149,14 @@ export function EngageClient({ token }: { token: string }) {
         setError(body.error || "Signing failed");
         return;
       }
+      const result = await res.json();
+
+      // If an invoice was auto-generated, redirect to it
+      if (result.invoiceToken) {
+        window.location.href = `/invoice/${result.invoiceToken}`;
+        return;
+      }
+
       setSigned(true);
       setStep(3);
     } catch {
@@ -485,6 +493,21 @@ export function EngageClient({ token }: { token: string }) {
           )}
         </div>
       </main>
+
+      {/* ═══ Sticky Start Button (bottom-right, visible during review step) ═══ */}
+      {step === 1 && (
+        <button
+          onClick={handleStart}
+          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-6 py-3.5 rounded-full text-sm font-bold text-white shadow-xl hover:scale-105 transition-transform"
+          style={{ background: "linear-gradient(135deg, #D4A017, #B8860B)" }}
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M12 20h9" />
+            <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+          </svg>
+          Start Signing
+        </button>
+      )}
 
       <Footer />
 

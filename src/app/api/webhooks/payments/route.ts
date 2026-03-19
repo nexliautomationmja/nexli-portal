@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { invoices, users } from "@/db/schema";
+import { invoices, invoiceLineItems, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { constructWebhookEvent, stripe } from "@/lib/stripe";
 import {
   sendEmailWithLog,
   buildInvoicePaidEmail,
   buildPaymentReceiptEmail,
+  buildInvoiceEmail,
 } from "@/lib/email";
-import { formatCurrency } from "@/lib/invoice-utils";
+import {
+  formatCurrency,
+  generateInvoiceNumber,
+  generateInvoiceToken,
+  calculateLineAmount,
+  calculateInvoiceTotals,
+} from "@/lib/invoice-utils";
 import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 import { createNotification } from "@/lib/notifications";
 import type Stripe from "stripe";
@@ -101,6 +108,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     // Send emails and notifications for subscription start
     await sendPaymentNotifications(invoice, invoice.total, "paid", 0);
 
+    // If this invoice has a pending engagement schedule, generate the next invoice
+    await generateNextEngagementInvoice(invoice).catch((err) =>
+      console.error("Failed to generate next engagement invoice:", err)
+    );
+
     return NextResponse.json({ received: true });
   }
 
@@ -160,6 +172,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   syncPaymentToAccounting(invoice.id).catch((err) =>
     console.error("Accounting payment sync failed:", err)
   );
+
+  // If fully paid and has a pending engagement schedule, generate the next invoice
+  if (newStatus === "paid") {
+    await generateNextEngagementInvoice(invoice).catch((err) =>
+      console.error("Failed to generate next engagement invoice:", err)
+    );
+  }
 
   return NextResponse.json({ received: true });
 }
@@ -453,4 +472,160 @@ async function sendPaymentNotifications(
   } catch (err) {
     console.error("Invoice paid notification failed:", err);
   }
+}
+
+// ── Generate next invoice from engagement schedule ──────────
+// When an engagement-linked invoice is fully paid, check if it has a
+// pendingEngagementSchedule in reminderConfig. If so, create and email
+// the next invoice (e.g. $10k remaining + $997/mo due 30 days from now).
+interface ScheduleLineItem {
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+  billingType: "one_time" | "monthly" | "quarterly" | "yearly";
+}
+
+interface ScheduleEntry {
+  label: string;
+  daysAfterSigning: number;
+  lineItems: ScheduleLineItem[];
+}
+
+async function generateNextEngagementInvoice(
+  paidInvoice: typeof invoices.$inferSelect
+) {
+  // Check if this invoice has a pending engagement schedule
+  const config = paidInvoice.reminderConfig as {
+    pendingEngagementSchedule?: ScheduleEntry[];
+    schedule?: unknown;
+  } | null;
+
+  if (!config?.pendingEngagementSchedule?.length) return;
+
+  const schedule = config.pendingEngagementSchedule;
+  const nextEntry = schedule[0];
+  const remainingSchedule = schedule.slice(1);
+
+  // Due date is 30 days from NOW (when the previous invoice was paid),
+  // not from the original signing date
+  const now = new Date();
+  const dueDate = new Date(now);
+  dueDate.setDate(dueDate.getDate() + (nextEntry.daysAfterSigning || 30));
+
+  const processedItems = nextEntry.lineItems.map((li, i) => {
+    const qty = Math.round(li.quantity * 100);
+    const amount = calculateLineAmount(qty, li.unitPriceCents);
+    return {
+      description: li.description,
+      quantity: qty,
+      unitPrice: li.unitPriceCents,
+      amount,
+      billingType: li.billingType || ("one_time" as const),
+      order: i,
+    };
+  });
+
+  const hasRecurring = processedItems.some(
+    (p) => p.billingType !== "one_time"
+  );
+
+  const { subtotal, taxAmount, total } = calculateInvoiceTotals(
+    processedItems,
+    0
+  );
+
+  const invoiceNumber = await generateInvoiceNumber();
+  const token = generateInvoiceToken();
+
+  const [newInvoice] = await db
+    .insert(invoices)
+    .values({
+      ownerId: paidInvoice.ownerId,
+      engagementId: paidInvoice.engagementId,
+      clientName: paidInvoice.clientName,
+      clientEmail: paidInvoice.clientEmail,
+      invoiceNumber,
+      token,
+      currency: "usd",
+      subtotal,
+      taxRate: 0,
+      taxAmount,
+      total,
+      amountPaid: 0,
+      balanceDue: total,
+      isRecurring: hasRecurring,
+      dueDate,
+      notes: `Follow-up invoice — ${nextEntry.label}`,
+      status: "sent",
+      sentAt: new Date(),
+      // Pass remaining schedule forward if there are more entries
+      reminderConfig: remainingSchedule.length > 0
+        ? { pendingEngagementSchedule: remainingSchedule }
+        : undefined,
+    })
+    .returning();
+
+  for (const item of processedItems) {
+    await db.insert(invoiceLineItems).values({
+      invoiceId: newInvoice.id,
+      ...item,
+    });
+  }
+
+  // Clear the pending schedule from the paid invoice
+  await db
+    .update(invoices)
+    .set({
+      reminderConfig: config.schedule ? { schedule: config.schedule } : null,
+    })
+    .where(eq(invoices.id, paidInvoice.id));
+
+  // Send the invoice email to the client
+  try {
+    const portalUrl =
+      process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+    const invoiceUrl = `${portalUrl}/invoice/${token}`;
+
+    const [owner] = await db
+      .select({ name: users.name, email: users.email, companyName: users.companyName })
+      .from(users)
+      .where(eq(users.id, paidInvoice.ownerId))
+      .limit(1);
+
+    const senderName =
+      owner?.companyName || owner?.name || owner?.email || "Your Service Provider";
+
+    const { subject, html } = buildInvoiceEmail({
+      clientName: paidInvoice.clientName,
+      senderName,
+      invoiceNumber,
+      total: formatCurrency(total, "usd"),
+      dueDate,
+      invoiceUrl,
+    });
+
+    await sendEmailWithLog({
+      to: paidInvoice.clientEmail,
+      subject,
+      html,
+      recipientName: paidInvoice.clientName,
+      emailType: "invoice",
+      relatedId: newInvoice.id,
+    });
+  } catch (err) {
+    console.error("Failed to send follow-up invoice email:", err);
+  }
+
+  // Notify the CPA
+  await createNotification({
+    userId: paidInvoice.ownerId,
+    type: "invoice_paid",
+    title: "Follow-Up Invoice Sent",
+    message: `${nextEntry.label} invoice ($${(total / 100).toFixed(2)}) auto-sent to ${paidInvoice.clientName}, due ${dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.`,
+    metadata: {
+      invoiceId: newInvoice.id,
+      invoiceNumber,
+      clientName: paidInvoice.clientName,
+    },
+  });
 }

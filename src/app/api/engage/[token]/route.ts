@@ -183,14 +183,16 @@ export async function POST(
     (s) => s.id === signer.id || s.status === "signed"
   );
 
+  let firstInvoiceToken: string | null = null;
+
   if (allSigned) {
     await db
       .update(engagements)
       .set({ status: "signed", updatedAt: new Date() })
       .where(eq(engagements.id, engagement.id));
 
-    // Auto-generate invoices from template's invoice schedule
-    await generateInvoicesFromEngagement(engagement, allSigners);
+    // Auto-generate FIRST invoice from template's invoice schedule
+    firstInvoiceToken = await generateFirstInvoiceFromEngagement(engagement, allSigners);
   }
 
   // Notify CPA via email
@@ -231,6 +233,7 @@ export async function POST(
     ok: true,
     signedAt: new Date().toISOString(),
     allSigned,
+    invoiceToken: firstInvoiceToken,
   });
 }
 
@@ -282,7 +285,9 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-// ── Auto-generate invoices from engagement template ──────
+// ── Auto-generate FIRST invoice from engagement template ──────
+// Only the first invoice (daysAfterSigning=0) is created immediately.
+// Subsequent invoices are created when the first is paid (see payments webhook).
 interface ScheduleLineItem {
   description: string;
   quantity: number;
@@ -296,12 +301,12 @@ interface ScheduleEntry {
   lineItems: ScheduleLineItem[];
 }
 
-async function generateInvoicesFromEngagement(
+async function generateFirstInvoiceFromEngagement(
   engagement: typeof engagements.$inferSelect,
   allSigners: (typeof engagementSigners.$inferSelect)[]
-) {
+): Promise<string | null> {
   try {
-    if (!engagement.templateId) return;
+    if (!engagement.templateId) return null;
 
     const [template] = await db
       .select()
@@ -309,90 +314,100 @@ async function generateInvoicesFromEngagement(
       .where(eq(engagementTemplates.id, engagement.templateId))
       .limit(1);
 
-    if (!template?.invoiceSchedule) return;
+    if (!template?.invoiceSchedule) return null;
 
     const schedule = template.invoiceSchedule as ScheduleEntry[];
-    if (!Array.isArray(schedule) || schedule.length === 0) return;
+    if (!Array.isArray(schedule) || schedule.length === 0) return null;
 
     // Find the client signer (first non-CPA signer, order > 0)
     const clientSigner = allSigners
       .filter((s) => s.order > 0)
       .sort((a, b) => a.order - b.order)[0];
 
-    if (!clientSigner) return;
+    if (!clientSigner) return null;
 
+    // Only create the FIRST schedule entry (immediate invoice)
+    const firstEntry = schedule[0];
     const now = new Date();
+    const dueDate = new Date(now);
+    dueDate.setDate(dueDate.getDate() + (firstEntry.daysAfterSigning || 0));
 
-    for (const entry of schedule) {
-      const dueDate = new Date(now);
-      dueDate.setDate(dueDate.getDate() + (entry.daysAfterSigning || 0));
+    const processedItems = firstEntry.lineItems.map((li, i) => {
+      const qty = Math.round(li.quantity * 100);
+      const amount = calculateLineAmount(qty, li.unitPriceCents);
+      return {
+        description: li.description,
+        quantity: qty,
+        unitPrice: li.unitPriceCents,
+        amount,
+        billingType: li.billingType || "one_time",
+        order: i,
+      };
+    });
 
-      // Process line items
-      const processedItems = entry.lineItems.map((li, i) => {
-        const qty = Math.round(li.quantity * 100); // stored as qty * 100
-        const amount = calculateLineAmount(qty, li.unitPriceCents);
-        return {
-          description: li.description,
-          quantity: qty,
-          unitPrice: li.unitPriceCents,
-          amount,
-          billingType: li.billingType || "one_time",
-          order: i,
-        };
+    const hasRecurring = processedItems.some(
+      (p) => p.billingType !== "one_time"
+    );
+
+    const { subtotal, taxAmount, total } = calculateInvoiceTotals(
+      processedItems,
+      0
+    );
+
+    const invoiceNumber = await generateInvoiceNumber();
+    const invToken = generateInvoiceToken();
+
+    // Store remaining schedule entries as pendingSchedule so the
+    // payments webhook can create the next invoice when this one is paid
+    const pendingSchedule = schedule.length > 1 ? schedule.slice(1) : null;
+
+    const [invoice] = await db
+      .insert(invoices)
+      .values({
+        ownerId: engagement.ownerId,
+        engagementId: engagement.id,
+        clientName: clientSigner.name,
+        clientEmail: clientSigner.email,
+        invoiceNumber,
+        token: invToken,
+        currency: "usd",
+        subtotal,
+        taxRate: 0,
+        taxAmount,
+        total,
+        amountPaid: 0,
+        balanceDue: total,
+        isRecurring: hasRecurring,
+        dueDate,
+        notes: `Auto-generated from engagement: ${engagement.subject}`,
+        status: "sent",
+        sentAt: new Date(),
+        // Store remaining schedule for deferred invoice creation
+        reminderConfig: pendingSchedule
+          ? { pendingEngagementSchedule: pendingSchedule }
+          : undefined,
+      })
+      .returning();
+
+    for (const item of processedItems) {
+      await db.insert(invoiceLineItems).values({
+        invoiceId: invoice.id,
+        ...item,
       });
-
-      const hasRecurring = processedItems.some(
-        (p) => p.billingType !== "one_time"
-      );
-
-      const { subtotal, taxAmount, total } = calculateInvoiceTotals(
-        processedItems,
-        0 // no tax by default — CPA can adjust on the draft
-      );
-
-      const invoiceNumber = await generateInvoiceNumber();
-      const token = generateInvoiceToken();
-
-      const [invoice] = await db
-        .insert(invoices)
-        .values({
-          ownerId: engagement.ownerId,
-          engagementId: engagement.id,
-          clientName: clientSigner.name,
-          clientEmail: clientSigner.email,
-          invoiceNumber,
-          token,
-          currency: "usd",
-          subtotal,
-          taxRate: 0,
-          taxAmount,
-          total,
-          amountPaid: 0,
-          balanceDue: total,
-          isRecurring: hasRecurring,
-          dueDate,
-          notes: `Auto-generated from engagement: ${engagement.subject}`,
-          status: "draft",
-        })
-        .returning();
-
-      for (const item of processedItems) {
-        await db.insert(invoiceLineItems).values({
-          invoiceId: invoice.id,
-          ...item,
-        });
-      }
     }
 
-    // Notify CPA about auto-generated invoices
+    // Notify CPA about the auto-generated invoice
     await createNotification({
       userId: engagement.ownerId,
       type: "engagement_signed",
-      title: "Invoices Auto-Generated",
-      message: `${schedule.length} draft invoice(s) created from "${engagement.subject}" — review and send when ready.`,
-      metadata: { engagementId: engagement.id },
+      title: "Invoice Auto-Generated",
+      message: `Initial setup invoice created and sent to ${clientSigner.name} from "${engagement.subject}".${pendingSchedule ? ` Next invoice will be created automatically when this one is paid.` : ""}`,
+      metadata: { engagementId: engagement.id, invoiceId: invoice.id },
     });
+
+    return invToken;
   } catch (err) {
-    console.error("Failed to auto-generate invoices from engagement:", err);
+    console.error("Failed to auto-generate invoice from engagement:", err);
+    return null;
   }
 }
