@@ -1000,7 +1000,7 @@ function PayButton({
           fontSize: 12,
         }}
       >
-        Secure payment via Stripe
+        Secure ACH bank transfer via Stripe
       </p>
     </div>
   );

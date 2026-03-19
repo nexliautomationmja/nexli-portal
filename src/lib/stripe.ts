@@ -83,7 +83,12 @@ export async function createCheckoutSession(params: {
     mode: "payment",
     customer_email: params.clientEmail,
     line_items: stripeLineItems,
-    payment_method_types: ["card"],
+    payment_method_types: ["us_bank_account"],
+    payment_method_options: {
+      us_bank_account: {
+        financial_connections: { permissions: ["payment_method"] },
+      },
+    },
     metadata: {
       invoiceId: params.invoiceId,
       invoiceNumber: params.invoiceNumber,
@@ -178,6 +183,12 @@ export async function createSubscriptionCheckout(params: {
     mode: "subscription",
     customer_email: params.clientEmail,
     line_items: lineItems,
+    payment_method_types: ["us_bank_account"],
+    payment_method_options: {
+      us_bank_account: {
+        financial_connections: { permissions: ["payment_method"] },
+      },
+    },
     metadata: {
       invoiceId: params.invoiceId,
       invoiceNumber: params.invoiceNumber,
