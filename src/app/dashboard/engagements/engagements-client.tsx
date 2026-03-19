@@ -53,8 +53,10 @@ export function EngagementsClient() {
 
   // Compose form
   const [recipients, setRecipients] = useState([{ name: "", email: "" }]);
+  const [clientCompany, setClientCompany] = useState("");
   const [subject, setSubject] = useState("");
   const [content, setContent] = useState("");
+  const [rawTemplateContent, setRawTemplateContent] = useState(""); // template with placeholders
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [expiresInDays, setExpiresInDays] = useState(30);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
@@ -82,11 +84,19 @@ export function EngagementsClient() {
       .finally(() => setLoading(false));
   }, []);
 
+  function applyTemplatePlaceholders(raw: string, name: string, company: string) {
+    const clientLabel = company ? `${name}, ${company}` : name || "[CLIENT NAME / COMPANY]";
+    return raw.replace(/\[CLIENT NAME \/ COMPANY\]/g, clientLabel);
+  }
+
   function handleTemplateSelect(templateId: string) {
     setSelectedTemplate(templateId);
     const tmpl = templates.find((t) => t.id === templateId);
     if (tmpl) {
-      setContent(tmpl.content);
+      setRawTemplateContent(tmpl.content);
+      setContent(applyTemplatePlaceholders(tmpl.content, recipients[0]?.name || "", clientCompany));
+    } else {
+      setRawTemplateContent("");
     }
   }
 
@@ -101,9 +111,21 @@ export function EngagementsClient() {
   }
 
   function updateRecipient(index: number, field: "name" | "email", value: string) {
-    setRecipients((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, [field]: value } : r))
-    );
+    setRecipients((prev) => {
+      const updated = prev.map((r, i) => (i === index ? { ...r, [field]: value } : r));
+      // Re-apply template placeholder when first recipient name changes
+      if (index === 0 && field === "name" && rawTemplateContent) {
+        setContent(applyTemplatePlaceholders(rawTemplateContent, value, clientCompany));
+      }
+      return updated;
+    });
+  }
+
+  function handleCompanyChange(value: string) {
+    setClientCompany(value);
+    if (rawTemplateContent) {
+      setContent(applyTemplatePlaceholders(rawTemplateContent, recipients[0]?.name || "", value));
+    }
   }
 
   const allRecipientsValid = recipients.every((r) => r.name.trim() && r.email.trim());
@@ -176,8 +198,10 @@ export function EngagementsClient() {
 
   function resetForm() {
     setRecipients([{ name: "", email: "" }]);
+    setClientCompany("");
     setSubject("");
     setContent("");
+    setRawTemplateContent("");
     setSelectedTemplate("");
     setExpiresInDays(30);
     setSaveAsTemplate(false);
@@ -454,6 +478,12 @@ export function EngagementsClient() {
                     } else if (recipients.length < 5) {
                       setRecipients((prev) => [...prev, { name: c.name, email: c.email }]);
                     }
+                    if (c.company) handleCompanyChange(c.company);
+                    // Re-apply template with selected name
+                    if (rawTemplateContent) {
+                      const name = emptyIdx === 0 || recipients.length === 0 ? c.name : recipients[0]?.name || c.name;
+                      setContent(applyTemplatePlaceholders(rawTemplateContent, name, c.company || clientCompany));
+                    }
                   }}
                   placeholder="Search existing clients..."
                 />
@@ -501,6 +531,21 @@ export function EngagementsClient() {
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* Client Company */}
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
+                  Client Company
+                </label>
+                <input
+                  type="text"
+                  value={clientCompany}
+                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  placeholder="e.g. Acme Corporation"
+                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
+                />
               </div>
 
               {/* Subject */}
