@@ -156,21 +156,19 @@ export async function POST(
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const signatureData = typeof body.signatureData === "string" ? body.signatureData : "";
   const typedName = typeof body.typedName === "string" ? body.typedName.trim() : "";
+  // signatureData is now the typed name (rendered in script font on the frontend)
+  const signatureData = typeof body.signatureData === "string" ? body.signatureData.trim() : typedName;
 
-  if (!signatureData || !typedName) {
+  if (!typedName) {
     return NextResponse.json(
-      { error: "Signature and name are required" },
+      { error: "Name is required" },
       { status: 400 }
     );
   }
 
   if (typedName.length > 200) {
     return NextResponse.json({ error: "Name too long" }, { status: 400 });
-  }
-  if (signatureData.length > 500_000) {
-    return NextResponse.json({ error: "Signature data too large" }, { status: 400 });
   }
 
   const ip =

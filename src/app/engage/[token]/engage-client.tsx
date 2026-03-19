@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DocumentPreview } from "@/components/engagement-document";
 import type { DocumentSigner } from "@/components/engagement-document";
 
@@ -35,11 +35,7 @@ export function EngageClient({ token }: { token: string }) {
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
 
-  // Canvas state
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const signSectionRef = useRef<HTMLDivElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [hasDrawn, setHasDrawn] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -61,71 +57,6 @@ export function EngageClient({ token }: { token: string }) {
     load();
   }, [token]);
 
-  const getCanvasCoords = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-
-      if ("touches" in e) {
-        const touch = e.touches[0];
-        return {
-          x: (touch.clientX - rect.left) * scaleX,
-          y: (touch.clientY - rect.top) * scaleY,
-        };
-      }
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY,
-      };
-    },
-    []
-  );
-
-  function startDrawing(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const { x, y } = getCanvasCoords(e);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    setIsDrawing(true);
-    setHasDrawn(true);
-  }
-
-  function draw(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const { x, y } = getCanvasCoords(e);
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = "#1e293b";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke();
-  }
-
-  function stopDrawing() {
-    setIsDrawing(false);
-  }
-
-  function clearSignature() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasDrawn(false);
-  }
-
   function handleStart() {
     setStep(2);
     setTimeout(() => {
@@ -134,17 +65,14 @@ export function EngageClient({ token }: { token: string }) {
   }
 
   async function handleSign() {
-    if (!data || !agreed || !hasDrawn || !typedName.trim()) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!data || !agreed || !typedName.trim()) return;
 
     setSigning(true);
     try {
-      const signatureData = canvas.toDataURL("image/png");
       const res = await fetch(`/api/engage/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signatureData, typedName: typedName.trim() }),
+        body: JSON.stringify({ signatureData: typedName.trim(), typedName: typedName.trim() }),
       });
       if (!res.ok) {
         const body = await res.json();
@@ -182,7 +110,7 @@ export function EngageClient({ token }: { token: string }) {
     }
   }
 
-  const canSign = agreed && hasDrawn && typedName.trim().length > 0;
+  const canSign = agreed && typedName.trim().length > 0;
 
   const today = new Date().toLocaleDateString("en-US", {
     month: "long",
@@ -355,49 +283,123 @@ export function EngageClient({ token }: { token: string }) {
 
           {/* ═══ SIGNATURE BLOCK ═══ */}
           <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden" ref={signSectionRef}>
+            {/* eslint-disable-next-line @next/next/no-css-tags */}
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap" />
             <div className="px-10 py-8">
               {step >= 2 ? (
-                <div className="border-2 border-[#D4A017] rounded-lg overflow-hidden">
-                  {/* Yellow Sign Here tab */}
-                  <div className="bg-[#D4A017] px-4 py-2 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 20h9" />
-                      <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
-                    </svg>
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">Sign Here</span>
-                    {hasDrawn && (
-                      <button
-                        onClick={clearSignature}
-                        className="ml-auto text-xs text-white/80 hover:text-white font-semibold transition-colors"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  {/* Canvas */}
-                  <div className="bg-white">
-                    <canvas
-                      ref={canvasRef}
-                      width={600}
-                      height={180}
-                      className="w-full cursor-crosshair touch-none"
-                      onMouseDown={startDrawing}
-                      onMouseMove={draw}
-                      onMouseUp={stopDrawing}
-                      onMouseLeave={stopDrawing}
-                      onTouchStart={startDrawing}
-                      onTouchMove={draw}
-                      onTouchEnd={stopDrawing}
-                    />
-                  </div>
-                  {!hasDrawn && (
-                    <div className="bg-[#FFFDF0] px-4 py-2 flex items-center gap-2 border-t border-[#F5E6A3]">
-                      <svg className="w-3.5 h-3.5 text-[#B8860B] animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="m5 12 7 7 7-7" />
+                <div className="space-y-5">
+                  {/* Representative role banner */}
+                  {data?.role && (
+                    <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200">
+                      <svg className="w-4 h-4 text-blue-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                       </svg>
-                      <span className="text-xs text-[#7A5C00]">Draw your signature above using your mouse or finger</span>
+                      <span className="text-xs font-semibold text-blue-800">
+                        Signing as: {data.role}
+                      </span>
                     </div>
                   )}
+
+                  {/* Typed name = signature */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
+                      Type your full name to sign
+                    </label>
+                    <input
+                      type="text"
+                      value={typedName}
+                      onChange={(e) => setTypedName(e.target.value)}
+                      placeholder={data?.clientName || "Full name"}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                    />
+                  </div>
+
+                  {/* Signature preview */}
+                  {typedName.trim() && (
+                    <div className="border-2 border-[#D4A017] rounded-lg overflow-hidden">
+                      <div className="bg-[#D4A017] px-4 py-2 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 20h9" />
+                          <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                        </svg>
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">Your Signature</span>
+                      </div>
+                      <div className="bg-white px-6 py-4">
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 36,
+                            fontFamily: "'Dancing Script', cursive",
+                            color: "#1e293b",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {typedName}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!typedName.trim() && (
+                    <div className="border-2 border-dashed border-[#D4A017] rounded-lg p-6 text-center">
+                      <div className="flex items-center justify-center gap-2 text-[#B8860B]">
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 20h9" />
+                          <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                        </svg>
+                        <span className="text-sm font-medium">Type your name above to see your signature</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Agreement */}
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={agreed}
+                      onChange={(e) => setAgreed(e.target.checked)}
+                      className="mt-0.5 w-5 h-5 rounded border-gray-300 accent-blue-600"
+                    />
+                    <span className="text-xs text-gray-600 leading-relaxed group-hover:text-gray-900 transition-colors">
+                      {data?.role ? (
+                        <>
+                          I have read the engagement letter above and, as {data.role}, agree to sign electronically
+                          on behalf of the organization.
+                          By signing, I acknowledge that my electronic signature is the legal equivalent
+                          of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
+                          My signature, role, IP address, and timestamp will be recorded.
+                        </>
+                      ) : (
+                        <>
+                          I have read the engagement letter above and agree to sign electronically.
+                          By signing, I acknowledge that my electronic signature is the legal equivalent
+                          of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
+                          My signature, IP address, and timestamp will be recorded.
+                        </>
+                      )}
+                    </span>
+                  </label>
+
+                  {/* Buttons */}
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      onClick={handleSign}
+                      disabled={!canSign || signing}
+                      className="flex-1 py-3.5 rounded-lg text-sm font-bold text-white disabled:opacity-40 transition-all shadow-sm"
+                      style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                    >
+                      {signing ? "Signing..." : "Finish"}
+                    </button>
+                    <button
+                      onClick={() => setShowDeclineModal(true)}
+                      className="px-5 py-3.5 rounded-lg text-sm font-medium text-gray-500 border border-gray-300 hover:border-red-300 hover:text-red-500 transition-all"
+                    >
+                      Decline
+                    </button>
+                  </div>
                 </div>
               ) : (
                 /* Preview signature placeholder before step 2 */
@@ -414,86 +416,6 @@ export function EngageClient({ token }: { token: string }) {
               )}
             </div>
           </div>
-
-          {/* ═══ SIGN ACTIONS (below document) ═══ */}
-          {step >= 2 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-5">
-              {/* Representative role banner */}
-              {data?.role && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200">
-                  <svg className="w-4 h-4 text-blue-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                  <span className="text-xs font-semibold text-blue-800">
-                    Signing as: {data.role}
-                  </span>
-                </div>
-              )}
-
-              {/* Typed name */}
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
-                  Type your full name to confirm
-                </label>
-                <input
-                  type="text"
-                  value={typedName}
-                  onChange={(e) => setTypedName(e.target.value)}
-                  placeholder={data?.clientName || "Full name"}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                />
-              </div>
-
-              {/* Agreement */}
-              <label className="flex items-start gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={agreed}
-                  onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 w-5 h-5 rounded border-gray-300 accent-blue-600"
-                />
-                <span className="text-xs text-gray-600 leading-relaxed group-hover:text-gray-900 transition-colors">
-                  {data?.role ? (
-                    <>
-                      I have read the engagement letter above and, as {data.role}, agree to sign electronically
-                      on behalf of the organization.
-                      By signing, I acknowledge that my electronic signature is the legal equivalent
-                      of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
-                      My signature, role, IP address, and timestamp will be recorded.
-                    </>
-                  ) : (
-                    <>
-                      I have read the engagement letter above and agree to sign electronically.
-                      By signing, I acknowledge that my electronic signature is the legal equivalent
-                      of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
-                      My signature, IP address, and timestamp will be recorded.
-                    </>
-                  )}
-                </span>
-              </label>
-
-              {/* Buttons */}
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={handleSign}
-                  disabled={!canSign || signing}
-                  className="flex-1 py-3.5 rounded-lg text-sm font-bold text-white disabled:opacity-40 transition-all shadow-sm"
-                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-                >
-                  {signing ? "Signing..." : "Finish"}
-                </button>
-                <button
-                  onClick={() => setShowDeclineModal(true)}
-                  className="px-5 py-3.5 rounded-lg text-sm font-medium text-gray-500 border border-gray-300 hover:border-red-300 hover:text-red-500 transition-all"
-                >
-                  Decline
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </main>
 

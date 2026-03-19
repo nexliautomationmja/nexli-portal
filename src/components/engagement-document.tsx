@@ -1,5 +1,8 @@
 "use client";
 
+const SIGNATURE_FONT = "'Dancing Script', 'Brush Script MT', 'Segoe Script', cursive";
+const SIGNATURE_FONT_URL = "https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap";
+
 export interface DocumentSigner {
   name: string;
   role?: string | null;
@@ -53,6 +56,9 @@ export function DocumentPreview({
           "'Georgia', 'Times New Roman', 'Garamond', serif",
       }}
     >
+      {/* Load signature font */}
+      {/* eslint-disable-next-line @next/next/no-css-tags */}
+      <link rel="stylesheet" href={SIGNATURE_FONT_URL} />
       {/* Dark branded header with Nexli logo */}
       <div
         style={{
@@ -269,74 +275,92 @@ export function DocumentPreview({
               marginTop: 24,
             }}
           >
-            {signers.map((signer, i) => (
-              <div key={i}>
-                {signer.signatureData ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={signer.signatureData}
-                    alt={`${signer.name}'s signature`}
+            {signers.map((signer, i) => {
+              const isImage = signer.signatureData?.startsWith("data:image");
+              return (
+                <div key={i}>
+                  {signer.signatureData ? (
+                    isImage ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={signer.signatureData}
+                        alt={`${signer.name}'s signature`}
+                        style={{
+                          height: 56,
+                          maxWidth: 220,
+                          objectFit: "contain",
+                          objectPosition: "left bottom",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      />
+                    ) : (
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 32,
+                          fontFamily: SIGNATURE_FONT,
+                          color: "#1e293b",
+                          lineHeight: 1.4,
+                          minHeight: 48,
+                        }}
+                      >
+                        {signer.signatureData}
+                      </p>
+                    )
+                  ) : (
+                    <div style={{ height: 48, marginBottom: 4 }} />
+                  )}
+                  <div
                     style={{
-                      height: 56,
-                      maxWidth: 220,
-                      objectFit: "contain",
-                      objectPosition: "left bottom",
-                      display: "block",
-                      marginBottom: 4,
-                    }}
-                  />
-                ) : (
-                  <div style={{ height: 56, marginBottom: 4 }} />
-                )}
-                <div
-                  style={{
-                    borderTop: "1px solid #374151",
-                    width: 220,
-                    paddingTop: 8,
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 13,
-                      color: "#111827",
-                      fontWeight: 600,
-                      fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                      borderTop: "1px solid #374151",
+                      width: 220,
+                      paddingTop: 8,
                     }}
                   >
-                    {signer.name}
-                  </p>
-                  {signer.role && (
                     <p
                       style={{
-                        margin: "2px 0 0",
-                        fontSize: 11,
-                        color: "#6b7280",
+                        margin: 0,
+                        fontSize: 13,
+                        color: "#111827",
+                        fontWeight: 600,
                         fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
                       }}
                     >
-                      {signer.role}
+                      {signer.name}
                     </p>
-                  )}
-                  {signer.signedAt && (
-                    <p
-                      style={{
-                        margin: "2px 0 0",
-                        fontSize: 10,
-                        color: "#9ca3af",
-                        fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-                      }}
-                    >
-                      Signed {new Date(signer.signedAt).toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </p>
-                  )}
+                    {signer.role && (
+                      <p
+                        style={{
+                          margin: "2px 0 0",
+                          fontSize: 11,
+                          color: "#6b7280",
+                          fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                        }}
+                      >
+                        {signer.role}
+                      </p>
+                    )}
+                    {signer.signedAt && (
+                      <p
+                        style={{
+                          margin: "2px 0 0",
+                          fontSize: 10,
+                          color: "#9ca3af",
+                          fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                        }}
+                      >
+                        Signed {new Date(signer.signedAt).toLocaleDateString("en-US", {
+                          month: "long",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
-import type { DocumentSigner } from "@/components/engagement-document";
 
 interface Signer {
   id: string;
@@ -68,62 +67,8 @@ export function EngagementsClient() {
   const [showPreview, setShowPreview] = useState(false);
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
-  // Signature canvas for CPA
-  const sigCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [sigIsDrawing, setSigIsDrawing] = useState(false);
-  const [sigHasDrawn, setSigHasDrawn] = useState(false);
-
-  const getSigCoords = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      const canvas = sigCanvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      if ("touches" in e) {
-        const touch = e.touches[0];
-        return { x: (touch.clientX - rect.left) * scaleX, y: (touch.clientY - rect.top) * scaleY };
-      }
-      return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
-    },
-    []
-  );
-
-  function sigStartDrawing(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    const ctx = sigCanvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    const { x, y } = getSigCoords(e);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    setSigIsDrawing(true);
-    setSigHasDrawn(true);
-  }
-
-  function sigDraw(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    if (!sigIsDrawing) return;
-    const ctx = sigCanvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    const { x, y } = getSigCoords(e);
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = "#1e293b";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke();
-  }
-
-  function sigStopDrawing() {
-    setSigIsDrawing(false);
-  }
-
-  function sigClear() {
-    const canvas = sigCanvasRef.current;
-    if (!canvas) return;
-    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
-    setSigHasDrawn(false);
-  }
+  // Typed signature for CPA
+  const [sigTypedName, setSigTypedName] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -191,10 +136,9 @@ export function EngagementsClient() {
   const allRecipientsValid = recipients.every((r) => r.name.trim() && r.email.trim());
 
   async function handleSend() {
-    if (!allRecipientsValid || !subject || !content || !sigHasDrawn) return;
+    if (!allRecipientsValid || !subject || !content || !sigTypedName.trim()) return;
     setSending(true);
     try {
-      const signatureData = sigCanvasRef.current?.toDataURL("image/png") || "";
       const res = await fetch("/api/dashboard/engagements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -206,7 +150,7 @@ export function EngagementsClient() {
           expiresInDays,
           saveAsTemplate,
           templateName: saveAsTemplate ? templateName : undefined,
-          signatureData,
+          signatureData: sigTypedName.trim(),
         }),
       });
       const data = await res.json();
@@ -268,7 +212,7 @@ export function EngagementsClient() {
     setExpiresInDays(30);
     setSaveAsTemplate(false);
     setTemplateName("");
-    sigClear();
+    setSigTypedName("");
   }
 
   function formatDate(dateStr: string | null) {
@@ -714,42 +658,41 @@ export function EngagementsClient() {
 
               {/* Your Signature */}
               <div>
+                {/* eslint-disable-next-line @next/next/no-css-tags */}
+                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap" />
                 <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
                   Your Signature *
                 </label>
-                <div
-                  className="rounded-lg border overflow-hidden"
-                  style={{ borderColor: sigHasDrawn ? "var(--card-border)" : "#f59e0b", background: "#fff" }}
-                >
-                  <div className="flex items-center justify-between px-3 py-1.5" style={{ background: "var(--input-bg)" }}>
-                    <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                      Draw your signature
-                    </span>
-                    {sigHasDrawn && (
-                      <button
-                        onClick={sigClear}
-                        className="text-[10px] font-semibold text-red-400 hover:text-red-500 transition-colors"
-                      >
-                        Clear
-                      </button>
-                    )}
+                <input
+                  type="text"
+                  value={sigTypedName}
+                  onChange={(e) => setSigTypedName(e.target.value)}
+                  placeholder="Type your full name"
+                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
+                />
+                {sigTypedName.trim() && (
+                  <div
+                    className="mt-2 rounded-lg border px-4 py-3"
+                    style={{ borderColor: "var(--card-border)", background: "#fff" }}
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--text-muted)" }}>
+                      Signature Preview
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 32,
+                        fontFamily: "'Dancing Script', cursive",
+                        color: "#1e293b",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {sigTypedName}
+                    </p>
                   </div>
-                  <canvas
-                    ref={sigCanvasRef}
-                    width={500}
-                    height={120}
-                    className="w-full cursor-crosshair touch-none"
-                    style={{ display: "block" }}
-                    onMouseDown={sigStartDrawing}
-                    onMouseMove={sigDraw}
-                    onMouseUp={sigStopDrawing}
-                    onMouseLeave={sigStopDrawing}
-                    onTouchStart={sigStartDrawing}
-                    onTouchMove={sigDraw}
-                    onTouchEnd={sigStopDrawing}
-                  />
-                </div>
-                {!sigHasDrawn && (
+                )}
+                {!sigTypedName.trim() && (
                   <p className="text-[10px] mt-1 text-amber-500">
                     Your signature will appear on the engagement letter sent to the client.
                   </p>
@@ -769,7 +712,7 @@ export function EngagementsClient() {
               </button>
               <button
                 onClick={handleSend}
-                disabled={!allRecipientsValid || !subject || !content || !sigHasDrawn || sending}
+                disabled={!allRecipientsValid || !subject || !content || !sigTypedName.trim() || sending}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-all hover:opacity-90"
                 style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
               >
