@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
+import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon, DownloadIcon } from "@/components/ui/icons";
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
 
@@ -200,6 +200,31 @@ export function EngagementsClient() {
     await fetch(`/api/dashboard/engagements/${id}`, { method: "DELETE" });
     setEngagements((prev) => prev.filter((e) => e.id !== id));
     setShowDetail(null);
+  }
+
+  async function handleDownloadPDF(eng: Engagement) {
+    const { generateEngagementPDF } = await import("@/lib/engagement-pdf");
+    generateEngagementPDF({
+      subject: eng.subject,
+      content: eng.content,
+      signers: eng.signers
+        .filter((s) => s.signatureData)
+        .map((s) => ({
+          name: s.name,
+          role: s.role,
+          signatureData: s.signatureData,
+          signedAt: s.signedAt,
+        })),
+      fromName: firmInfo.name,
+      fromCompany: firmInfo.company,
+      date: eng.sentAt
+        ? new Date(eng.sentAt).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+        : undefined,
+    });
   }
 
   function resetForm() {
@@ -742,12 +767,25 @@ export function EngagementsClient() {
                   {showDetail.signers.length} recipient{showDetail.signers.length !== 1 ? "s" : ""}
                 </p>
               </div>
-              <button
-                onClick={() => setShowDetail(null)}
-                className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
-              >
-                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
-              </button>
+              <div className="flex items-center gap-2">
+                {showDetail.status === "signed" && (
+                  <button
+                    onClick={() => handleDownloadPDF(showDetail)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                    style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                    title="Save as PDF"
+                  >
+                    <DownloadIcon className="w-3.5 h-3.5" />
+                    PDF
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowDetail(null)}
+                  className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+                >
+                  <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                </button>
+              </div>
             </div>
 
             {/* Body */}
