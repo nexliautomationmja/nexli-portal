@@ -970,40 +970,6 @@ export const hiddenClients = pgTable(
   ]
 );
 
-// ══════════════════════════════════════════════════════════
-// ══  CALENDAR CONNECTIONS  ════════════════════════════════
-// ══════════════════════════════════════════════════════════
-
-export const calendarProviderEnum = pgEnum("calendar_provider", [
-  "google",
-  "calcom",
-]);
-
-export const calendarConnections = pgTable(
-  "calendar_connections",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    provider: calendarProviderEnum("provider").notNull(),
-    accessToken: text("access_token").notNull(),
-    refreshToken: text("refresh_token").notNull(),
-    tokenExpiresAt: timestamp("token_expires_at").notNull(),
-    accountEmail: text("account_email"),
-    connectedAt: timestamp("connected_at").defaultNow().notNull(),
-    lastSyncAt: timestamp("last_sync_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("calendar_connections_user_provider_idx").on(
-      table.userId,
-      table.provider
-    ),
-  ]
-);
-
 // ── Notifications ─────────────────────────────────────────
 export const notifications = pgTable(
   "notifications",

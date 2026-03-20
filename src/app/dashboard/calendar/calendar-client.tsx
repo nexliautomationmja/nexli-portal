@@ -1,38 +1,24 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { CalendarIcon } from "@/components/ui/icons";
 
 interface CalendarEvent {
   id: string;
+  calendarId: string;
   title?: string;
   status: string;
+  contactId: string;
   startTime: string;
   endTime: string;
-  source?: "ghl" | "google" | "calcom";
-  // Legacy GHL fields
-  calendarId?: string;
-  contactId?: string;
 }
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-const SOURCE_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  ghl: { bg: "bg-blue-500/10", text: "text-blue-400", label: "GoHighLevel" },
-  google: { bg: "bg-red-500/10", text: "text-red-400", label: "Google Calendar" },
-  calcom: { bg: "bg-purple-500/10", text: "text-purple-400", label: "Cal.com" },
-};
-
-const SOURCE_DOTS: Record<string, string> = {
-  ghl: "#3b82f6",
-  google: "#ef4444",
-  calcom: "#a855f7",
-};
 
 export function CalendarClient() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [activeSources, setActiveSources] = useState<string[]>([]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -48,16 +34,10 @@ export function CalendarClient() {
       end: end.toISOString(),
     });
 
-    fetch(`/api/dashboard/calendar?${params}`)
+    fetch(`/api/dashboard/ghl/calendar?${params}`)
       .then((r) => r.json())
-      .then((data) => {
-        setEvents(data.events || []);
-        setActiveSources(data.sources || []);
-      })
-      .catch(() => {
-        setEvents([]);
-        setActiveSources([]);
-      })
+      .then((data) => setEvents(data.events || []))
+      .catch(() => setEvents([]))
       .finally(() => setLoading(false));
   }, [year, month]);
 
@@ -95,27 +75,6 @@ export function CalendarClient() {
   const isToday = (day: number) =>
     day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
 
-  function getEventStyle(evt: CalendarEvent) {
-    if (evt.status === "cancelled") {
-      return "bg-rose-500/10 text-rose-400 line-through";
-    }
-    const source = evt.source || "ghl";
-    const colors = SOURCE_COLORS[source] || SOURCE_COLORS.ghl;
-    return `${colors.bg} ${colors.text}`;
-  }
-
-  function getSourceDot(source?: string) {
-    const color = SOURCE_DOTS[source || "ghl"] || SOURCE_DOTS.ghl;
-    return color;
-  }
-
-  // Determine connected sources for legend
-  const connectedSources = useMemo(() => {
-    const sources = new Set<string>();
-    events.forEach((e) => sources.add(e.source || "ghl"));
-    return Array.from(sources);
-  }, [events]);
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -124,14 +83,11 @@ export function CalendarClient() {
           Calendar
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          View appointments and events
-          {activeSources.length > 0 && (
-            <> from {activeSources.map((s) => SOURCE_COLORS[s]?.label || s).join(", ")}</>
-          )}
+          View appointments and events from GoHighLevel
         </p>
       </div>
 
-      {/* Month navigation + Source legend */}
+      {/* Month navigation */}
       <div className="flex items-center justify-between">
         <button
           onClick={prevMonth}
@@ -140,26 +96,9 @@ export function CalendarClient() {
         >
           Previous
         </button>
-        <div className="text-center">
-          <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
-            {monthName}
-          </h2>
-          {connectedSources.length > 1 && (
-            <div className="flex items-center justify-center gap-3 mt-1">
-              {connectedSources.map((source) => (
-                <div key={source} className="flex items-center gap-1">
-                  <span
-                    className="w-2 h-2 rounded-full inline-block"
-                    style={{ background: SOURCE_DOTS[source] || "#3b82f6" }}
-                  />
-                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    {SOURCE_COLORS[source]?.label || source}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
+          {monthName}
+        </h2>
         <button
           onClick={nextMonth}
           className="px-4 py-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm font-semibold hover:border-blue-500/30 transition-colors"
@@ -217,21 +156,19 @@ export function CalendarClient() {
                           {dayEvents.slice(0, 3).map((evt) => (
                             <div
                               key={evt.id}
-                              className={`text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium flex items-center gap-1 ${getEventStyle(evt)}`}
+                              className={`text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium ${
+                                evt.status === "cancelled"
+                                  ? "bg-rose-500/10 text-rose-400 line-through"
+                                  : evt.status === "confirmed"
+                                  ? "bg-emerald-500/10 text-emerald-400"
+                                  : "bg-blue-500/10 text-blue-400"
+                              }`}
                             >
-                              {connectedSources.length > 1 && (
-                                <span
-                                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                                  style={{ background: getSourceDot(evt.source) }}
-                                />
-                              )}
-                              <span className="truncate">
-                                {new Date(evt.startTime).toLocaleTimeString([], {
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                })}{" "}
-                                {evt.title || "Event"}
-                              </span>
+                              {new Date(evt.startTime).toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}{" "}
+                              {evt.title || "Event"}
                             </div>
                           ))}
                           {dayEvents.length > 3 && (
@@ -249,22 +186,6 @@ export function CalendarClient() {
           </>
         )}
       </div>
-
-      {/* No sources connected message */}
-      {!loading && activeSources.length === 0 && events.length === 0 && (
-        <div className="glass-card p-8 text-center">
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            No calendar sources connected.{" "}
-            <a
-              href="/dashboard/settings"
-              className="text-blue-400 hover:text-blue-300 underline"
-            >
-              Connect Google Calendar or Cal.com in Settings
-            </a>{" "}
-            to see your appointments here.
-          </p>
-        </div>
-      )}
 
       {/* Upcoming Events list */}
       {events.length > 0 && (
@@ -297,20 +218,11 @@ export function CalendarClient() {
                       {new Date(evt.endTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {connectedSources.length > 1 && evt.source && (
-                      <span
-                        className="w-2 h-2 rounded-full"
-                        style={{ background: SOURCE_DOTS[evt.source] || "#3b82f6" }}
-                        title={SOURCE_COLORS[evt.source]?.label}
-                      />
-                    )}
-                    <span className={`badge ${
-                      evt.status === "confirmed" ? "badge-emerald" : "badge-blue"
-                    }`}>
-                      {evt.status}
-                    </span>
-                  </div>
+                  <span className={`badge ${
+                    evt.status === "confirmed" ? "badge-emerald" : "badge-blue"
+                  }`}>
+                    {evt.status}
+                  </span>
                 </div>
               ))}
           </div>

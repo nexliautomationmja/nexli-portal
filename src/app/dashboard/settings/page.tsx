@@ -1,14 +1,13 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { users, accountingConnections, calendarConnections } from "@/db/schema";
+import { users, accountingConnections } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { GlassCard } from "@/components/ui/glass-card";
 import { PasswordForm } from "@/components/dashboard/settings/password-form";
 import { GHLConnection } from "@/components/dashboard/settings/ghl-connection";
 import { TrackingSnippet } from "@/components/dashboard/settings/tracking-snippet";
 import { AccountingConnections } from "@/components/dashboard/settings/accounting-connections";
-import { CalendarConnections } from "@/components/dashboard/settings/calendar-connections";
 import { EmailLog } from "@/components/dashboard/settings/email-log";
 
 export default async function SettingsPage({
@@ -25,16 +24,10 @@ export default async function SettingsPage({
     .from(users)
     .where(eq(users.id, session.user.id!));
 
-  const [acctConnections, calConns] = await Promise.all([
-    db
-      .select()
-      .from(accountingConnections)
-      .where(eq(accountingConnections.userId, session.user.id!)),
-    db
-      .select()
-      .from(calendarConnections)
-      .where(eq(calendarConnections.userId, session.user.id!)),
-  ]);
+  const acctConnections = await db
+    .select()
+    .from(accountingConnections)
+    .where(eq(accountingConnections.userId, session.user.id!));
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -113,25 +106,6 @@ export default async function SettingsPage({
             companyName: c.companyName,
             connectedAt: c.connectedAt.toISOString(),
             lastSyncAt: c.lastSyncAt?.toISOString() || null,
-          }))}
-          error={connectError}
-        />
-      </GlassCard>
-
-      {/* Calendar Integrations */}
-      <GlassCard>
-        <h3
-          className="text-sm font-semibold mb-5"
-          style={{ color: "var(--text-main)" }}
-        >
-          Calendar Integrations
-        </h3>
-        <CalendarConnections
-          connections={calConns.map((c) => ({
-            id: c.id,
-            provider: c.provider,
-            accountEmail: c.accountEmail,
-            connectedAt: c.connectedAt.toISOString(),
           }))}
           error={connectError}
         />
