@@ -387,6 +387,7 @@ const individual1040Sections: OrganizerSection[] = [
       { key: "heading_bank", label: "Bank Account Information", type: "heading" },
       { key: "routing_number", label: "Routing Number", type: "text", half: true },
       { key: "account_number", label: "Account Number", type: "text", half: true },
+      { key: "confirm_account_number", label: "Confirm Account Number", type: "text", half: true },
       { key: "account_type", label: "Account Type", type: "radio", options: [
         { value: "checking", label: "Checking" }, { value: "savings", label: "Savings" },
       ]},

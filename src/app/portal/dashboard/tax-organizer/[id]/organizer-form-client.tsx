@@ -91,13 +91,14 @@ function BankIcon({ className }: { className?: string }) {
 /*  Bank Name Lookup for Routing Number                                */
 /* ================================================================== */
 
-function BankNameLookup({ routingNumber }: { routingNumber: string }) {
+function BankNameLookup({ routingNumber, accountNumber, confirmAccountNumber }: { routingNumber: string; accountNumber: string; confirmAccountNumber: string }) {
   const [bankInfo, setBankInfo] = useState<{ bankName: string; city?: string; state?: string } | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const lastLookedUp = useRef("");
 
+  const digits = (routingNumber || "").replace(/\D/g, "");
+
   useEffect(() => {
-    const digits = (routingNumber || "").replace(/\D/g, "");
     if (digits.length === 9 && digits !== lastLookedUp.current) {
       lastLookedUp.current = digits;
       setLookingUp(true);
@@ -116,32 +117,53 @@ function BankNameLookup({ routingNumber }: { routingNumber: string }) {
       setBankInfo(null);
       lastLookedUp.current = "";
     }
-  }, [routingNumber]);
+  }, [digits]);
 
-  if (lookingUp) {
-    return (
-      <div className="col-span-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
-        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>Looking up bank...</span>
-      </div>
-    );
-  }
+  const acct = (accountNumber || "").trim();
+  const confirmAcct = (confirmAccountNumber || "").trim();
+  const accountMismatch = acct.length > 0 && confirmAcct.length > 0 && acct !== confirmAcct;
+  const accountMatch = acct.length > 0 && confirmAcct.length > 0 && acct === confirmAcct;
 
-  if (!bankInfo) return null;
+  const hasContent = lookingUp || bankInfo || accountMismatch || accountMatch;
+  if (!hasContent) return null;
 
   return (
-    <div className="col-span-2 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-      <BankIcon className="w-4 h-4 text-emerald-400 shrink-0" />
-      <div>
-        <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-          {bankInfo.bankName}
-        </p>
-        {(bankInfo.city || bankInfo.state) && (
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {[bankInfo.city, bankInfo.state].filter(Boolean).join(", ")}
-          </p>
-        )}
-      </div>
+    <div className="mt-3 space-y-2">
+      {lookingUp && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
+          <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>Looking up bank...</span>
+        </div>
+      )}
+
+      {!lookingUp && bankInfo && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+          <BankIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+              {bankInfo.bankName}
+            </p>
+            {(bankInfo.city || bankInfo.state) && (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {[bankInfo.city, bankInfo.state].filter(Boolean).join(", ")}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {accountMismatch && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+          <span className="text-red-400 text-sm">Account numbers do not match</span>
+        </div>
+      )}
+
+      {accountMatch && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+          <CheckIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="text-emerald-400 text-sm">Account numbers match</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -999,11 +1021,16 @@ export function OrganizerFormClient() {
                 );
               })}
 
-              {/* Bank name lookup for refund/payment section */}
-              {currentSection.key === "refund_payment" && (currentData.routing_number as string)?.replace(/\D/g, "").length === 9 && (
-                <BankNameLookup routingNumber={(currentData.routing_number as string) || ""} />
-              )}
             </div>
+
+            {/* Bank name lookup + account confirmation for refund/payment section */}
+            {currentSection.key === "refund_payment" && (
+              <BankNameLookup
+                routingNumber={(currentData.routing_number as string) || ""}
+                accountNumber={(currentData.account_number as string) || ""}
+                confirmAccountNumber={(currentData.confirm_account_number as string) || ""}
+              />
+            )}
           </div>
 
           {/* Navigation buttons */}
