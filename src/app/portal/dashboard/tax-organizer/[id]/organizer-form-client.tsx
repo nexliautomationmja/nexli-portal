@@ -224,7 +224,7 @@ function FieldRenderer({
     case "phone":
     case "email":
       return (
-        <div className={field.half ? "" : "col-span-2 sm:col-span-1"}>
+        <div className={field.half ? "" : "sm:col-span-2"}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -247,7 +247,7 @@ function FieldRenderer({
           ? `${rawSsn.slice(0, 3)}-${rawSsn.slice(3)}`
           : rawSsn;
       return (
-        <div className={field.half ? "" : "col-span-2 sm:col-span-1"}>
+        <div className={field.half ? "" : "sm:col-span-2"}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -270,7 +270,7 @@ function FieldRenderer({
 
     case "date":
       return (
-        <div className={field.half ? "" : "col-span-2 sm:col-span-1"}>
+        <div className={field.half ? "" : "sm:col-span-2"}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -286,7 +286,7 @@ function FieldRenderer({
 
     case "currency":
       return (
-        <div className={field.half ? "" : "col-span-2 sm:col-span-1"}>
+        <div className={field.half ? "" : "sm:col-span-2"}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -310,7 +310,7 @@ function FieldRenderer({
 
     case "select":
       return (
-        <div className={field.half ? "" : "col-span-2 sm:col-span-1"}>
+        <div className={field.half ? "" : "sm:col-span-2"}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -497,7 +497,7 @@ function RepeaterField({
             {field.subFields?.map((sf) => {
               const inputClasses = "w-full px-3 py-2.5 sm:py-2 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors";
               return (
-                <div key={sf.key} className={sf.half ? "" : "col-span-2 sm:col-span-1"}>
+                <div key={sf.key} className={sf.half ? "" : "sm:col-span-2"}>
                   <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
                     {sf.label}{sf.required && <span className="text-red-400"> *</span>}
                   </label>
