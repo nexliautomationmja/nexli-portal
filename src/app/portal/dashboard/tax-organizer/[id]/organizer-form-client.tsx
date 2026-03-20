@@ -75,6 +75,31 @@ function TrashIcon({ className }: { className?: string }) {
 }
 
 /* ================================================================== */
+/*  SSN Input helper                                                   */
+/* ================================================================== */
+
+function SsnInput({ value, onChange, className }: { value: string; onChange: (v: string) => void; className: string }) {
+  const raw = (value || "").replace(/\D/g, "").slice(0, 9);
+  const formatted = raw.length > 5
+    ? `${raw.slice(0, 3)}-${raw.slice(3, 5)}-${raw.slice(5)}`
+    : raw.length > 3
+      ? `${raw.slice(0, 3)}-${raw.slice(3)}`
+      : raw;
+  return (
+    <input
+      type="password"
+      value={formatted}
+      onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 9))}
+      placeholder="XXX-XX-XXXX"
+      maxLength={11}
+      className={className}
+      style={{ color: "var(--text-main)" }}
+      autoComplete="off"
+    />
+  );
+}
+
+/* ================================================================== */
 /*  Return type labels                                                 */
 /* ================================================================== */
 
@@ -138,7 +163,13 @@ function FieldRenderer({
         </div>
       );
 
-    case "ssn":
+    case "ssn": {
+      const rawSsn = ((value as string) || "").replace(/\D/g, "").slice(0, 9);
+      const formattedSsn = rawSsn.length > 5
+        ? `${rawSsn.slice(0, 3)}-${rawSsn.slice(3, 5)}-${rawSsn.slice(5)}`
+        : rawSsn.length > 3
+          ? `${rawSsn.slice(0, 3)}-${rawSsn.slice(3)}`
+          : rawSsn;
       return (
         <div className={field.half ? "" : "col-span-2 sm:col-span-1"}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
@@ -146,15 +177,20 @@ function FieldRenderer({
           </label>
           <input
             type="password"
-            value={(value as string) || ""}
-            onChange={(e) => onChange(field.key, e.target.value)}
+            value={formattedSsn}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "").slice(0, 9);
+              onChange(field.key, digits);
+            }}
             placeholder="XXX-XX-XXXX"
+            maxLength={11}
             className={inputClasses}
             style={{ color: "var(--text-main)" }}
             autoComplete="off"
           />
         </div>
       );
+    }
 
     case "date":
       return (
@@ -221,13 +257,15 @@ function FieldRenderer({
     case "radio":
       return (
         <div className="col-span-2">
-          <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-main)" }}>
+          <p className="block text-sm font-medium mb-2" style={{ color: "var(--text-main)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
-          </label>
+          </p>
           <div className="flex flex-wrap gap-3">
             {field.options?.map((opt) => (
-              <label
+              <button
                 key={opt.value}
+                type="button"
+                onClick={() => onChange(field.key, opt.value)}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors text-sm",
                   value === opt.value
@@ -247,7 +285,7 @@ function FieldRenderer({
                   )}
                 </div>
                 {opt.label}
-              </label>
+              </button>
             ))}
           </div>
         </div>
@@ -273,18 +311,23 @@ function FieldRenderer({
     case "checkbox-group":
       return (
         <div className="col-span-2">
-          <label className="block text-sm font-medium mb-3" style={{ color: "var(--text-main)" }}>
+          <p className="block text-sm font-medium mb-3" style={{ color: "var(--text-main)" }}>
             {field.label}
-          </label>
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {field.items?.map((item) => {
               const group = (value as Record<string, boolean>) || {};
               const checked = !!group[item.key];
               return (
-                <label
+                <button
                   key={item.key}
+                  type="button"
+                  onClick={() => {
+                    const updated = { ...group, [item.key]: !checked };
+                    onChange(field.key, updated);
+                  }}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors text-sm",
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors text-sm text-left",
                     checked
                       ? "border-blue-500 bg-blue-500/10"
                       : "border-[var(--card-border)] hover:bg-[var(--input-bg)]"
@@ -300,7 +343,7 @@ function FieldRenderer({
                     {checked && <CheckIcon className="w-3 h-3 text-white" />}
                   </div>
                   {item.label}
-                </label>
+                </button>
               );
             })}
           </div>
@@ -395,14 +438,10 @@ function RepeaterField({
                       ))}
                     </select>
                   ) : sf.type === "ssn" ? (
-                    <input
-                      type="password"
+                    <SsnInput
                       value={(item[sf.key] as string) || ""}
-                      onChange={(e) => updateItem(idx, sf.key, e.target.value)}
-                      placeholder="XXX-XX-XXXX"
+                      onChange={(v) => updateItem(idx, sf.key, v)}
                       className={inputClasses}
-                      style={{ color: "var(--text-main)" }}
-                      autoComplete="off"
                     />
                   ) : sf.type === "date" ? (
                     <input
@@ -577,7 +616,7 @@ export function OrganizerFormClient() {
   async function goToPrev() {
     if (currentSectionIdx > 0) {
       // Save current before navigating
-      const currentKey = questionDefs[currentSectionIdx].key;
+      const currentKey = visibleDefs[currentSectionIdx].key;
       const data = sectionFormData[currentKey] || {};
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       await saveSection(currentKey, data, false);
@@ -588,9 +627,9 @@ export function OrganizerFormClient() {
 
   // Navigate to next section
   async function goToNext() {
-    if (currentSectionIdx < questionDefs.length - 1) {
+    if (currentSectionIdx < visibleDefs.length - 1) {
       // Save current as complete before navigating
-      const currentKey = questionDefs[currentSectionIdx].key;
+      const currentKey = visibleDefs[currentSectionIdx].key;
       const data = sectionFormData[currentKey] || {};
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       await saveSection(currentKey, data, true);
@@ -604,7 +643,7 @@ export function OrganizerFormClient() {
     setSubmitting(true);
     try {
       // Save the last section as complete
-      const lastKey = questionDefs[currentSectionIdx].key;
+      const lastKey = visibleDefs[currentSectionIdx].key;
       const lastData = sectionFormData[lastKey] || {};
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       const result = await saveSection(lastKey, lastData, true);
@@ -618,7 +657,7 @@ export function OrganizerFormClient() {
           key: s.sectionKey,
           isComplete: s.sectionKey === lastKey ? true : s.isComplete,
         }));
-        const firstIncomplete = questionDefs.findIndex((def) => {
+        const firstIncomplete = visibleDefs.findIndex((def) => {
           const saved = allSectionsData.find((s) => s.key === def.key);
           return !saved?.isComplete;
         });
@@ -635,7 +674,7 @@ export function OrganizerFormClient() {
   // Jump to a specific section
   async function jumpToSection(idx: number) {
     if (idx === currentSectionIdx) return;
-    const currentKey = questionDefs[currentSectionIdx].key;
+    const currentKey = visibleDefs[currentSectionIdx].key;
     const data = sectionFormData[currentKey] || {};
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     await saveSection(currentKey, data, false);
@@ -732,11 +771,26 @@ export function OrganizerFormClient() {
     );
   }
 
-  const currentSection = questionDefs[currentSectionIdx];
-  const currentData = sectionFormData[currentSection.key] || {};
+  // Filter out sections that shouldn't be shown based on cross-section logic
+  const visibleDefs = questionDefs.filter((def) => {
+    // Spouse section only shows for MFJ or MFS filing status
+    if (def.key === "spouse_info") {
+      const filingStatus = sectionFormData["personal_info"]?.filing_status;
+      return filingStatus === "mfj" || filingStatus === "mfs";
+    }
+    return true;
+  });
+
+  // Clamp index if sections changed (e.g. spouse hidden)
+  const clampedIdx = Math.min(currentSectionIdx, visibleDefs.length - 1);
+  if (clampedIdx !== currentSectionIdx) {
+    setCurrentSectionIdx(clampedIdx);
+  }
+  const currentSection = visibleDefs[clampedIdx];
+  const currentData = sectionFormData[currentSection?.key] || {};
   const completedCount = sections.filter((s) => s.isComplete).length;
-  const totalSections = questionDefs.length;
-  const isLastSection = currentSectionIdx === questionDefs.length - 1;
+  const totalSections = visibleDefs.length;
+  const isLastSection = currentSectionIdx === visibleDefs.length - 1;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -771,7 +825,7 @@ export function OrganizerFormClient() {
             <div className="text-xs font-medium mb-3" style={{ color: "var(--text-muted)" }}>
               {completedCount} of {totalSections} sections
             </div>
-            {questionDefs.map((def, idx) => {
+            {visibleDefs.map((def, idx) => {
               const sectionSaved = sections.find((s) => s.sectionKey === def.key);
               const isComplete = sectionSaved?.isComplete ?? false;
               const isCurrent = idx === currentSectionIdx;
