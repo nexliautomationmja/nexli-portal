@@ -79,7 +79,7 @@ export function PortalEngagementsClient() {
 
   async function handleDownloadPDF(eng: EngagementItem) {
     const { generateEngagementPDF } = await import("@/lib/engagement-pdf");
-    generateEngagementPDF({
+    await generateEngagementPDF({
       subject: eng.subject,
       content: eng.content,
       signers: eng.signers.filter((s) => s.signatureData),

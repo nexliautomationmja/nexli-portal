@@ -27,18 +27,37 @@ function fmtDate(dateStr: string | Date): string {
   }
 }
 
+/** Load an image from a URL and return its base64 data URL */
+function loadImage(src: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas not supported"));
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+    img.src = src;
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Main export                                                        */
 /* ------------------------------------------------------------------ */
 
-export function generateEngagementPDF(params: {
+export async function generateEngagementPDF(params: {
   subject: string;
   content: string;
   signers: SignerInfo[];
   fromName: string;
   fromCompany: string;
   date?: string;
-}): void {
+}): Promise<void> {
   const { subject, content, signers, fromName, fromCompany, date } = params;
 
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
@@ -52,7 +71,14 @@ export function generateEngagementPDF(params: {
   const DARK = "#111111";
   const MUTED = "#666666";
   const LIGHT_MUTED = "#9CA3AF";
-  const BLUE = "#2563EB";
+
+  /* ------ load logo ------ */
+  let logoData: string | null = null;
+  try {
+    logoData = await loadImage("/logos/nexli-logo-white-wordmark@2x.png");
+  } catch {
+    // Fall back to text if logo can't be loaded
+  }
 
   /* ================================================================ */
   /*  Helper: check if we need a new page                             */
@@ -72,11 +98,19 @@ export function generateEngagementPDF(params: {
   doc.setFillColor("#0a0a0f");
   doc.rect(0, 0, pageWidth, 48, "F");
 
-  // "NEXLI" text in header (since we can't embed the logo image easily)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor("#FFFFFF");
-  doc.text("NEXLI", margin, 31);
+  if (logoData) {
+    // Embed actual logo — scale to ~28pt height, maintaining aspect ratio
+    const logoH = 20;
+    // The logo is roughly 4:1 aspect ratio
+    const logoW = logoH * 4.5;
+    doc.addImage(logoData, "PNG", margin, 14, logoW, logoH);
+  } else {
+    // Fallback: text
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor("#FFFFFF");
+    doc.text("NEXLI", margin, 31);
+  }
 
   // "Engagement Letter" label
   doc.setFont("helvetica", "bold");
@@ -252,10 +286,6 @@ export function generateEngagementPDF(params: {
   /* ================================================================ */
 
   const footerY = pageHeight - 30;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(LIGHT_MUTED);
-  doc.text("Powered by Nexli", pageWidth / 2, footerY, { align: "center" });
 
   // Add footer to all pages
   const totalPages = doc.getNumberOfPages();

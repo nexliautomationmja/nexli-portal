@@ -204,7 +204,7 @@ export function EngagementsClient() {
 
   async function handleDownloadPDF(eng: Engagement) {
     const { generateEngagementPDF } = await import("@/lib/engagement-pdf");
-    generateEngagementPDF({
+    await generateEngagementPDF({
       subject: eng.subject,
       content: eng.content,
       signers: eng.signers
