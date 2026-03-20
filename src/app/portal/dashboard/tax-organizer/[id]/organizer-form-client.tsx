@@ -74,6 +74,78 @@ function TrashIcon({ className }: { className?: string }) {
   );
 }
 
+function BankIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="10" width="20" height="10" rx="1" />
+      <path d="M12 2 2 10h20L12 2Z" />
+      <path d="M6 10v10" />
+      <path d="M10 10v10" />
+      <path d="M14 10v10" />
+      <path d="M18 10v10" />
+    </svg>
+  );
+}
+
+/* ================================================================== */
+/*  Bank Name Lookup for Routing Number                                */
+/* ================================================================== */
+
+function BankNameLookup({ routingNumber }: { routingNumber: string }) {
+  const [bankInfo, setBankInfo] = useState<{ bankName: string; city?: string; state?: string } | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const lastLookedUp = useRef("");
+
+  useEffect(() => {
+    const digits = (routingNumber || "").replace(/\D/g, "");
+    if (digits.length === 9 && digits !== lastLookedUp.current) {
+      lastLookedUp.current = digits;
+      setLookingUp(true);
+      fetch(`/api/portal/routing-lookup?rn=${digits}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.bankName) {
+            setBankInfo({ bankName: data.bankName, city: data.city, state: data.state });
+          } else {
+            setBankInfo(null);
+          }
+        })
+        .catch(() => setBankInfo(null))
+        .finally(() => setLookingUp(false));
+    } else if (digits.length < 9) {
+      setBankInfo(null);
+      lastLookedUp.current = "";
+    }
+  }, [routingNumber]);
+
+  if (lookingUp) {
+    return (
+      <div className="col-span-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
+        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>Looking up bank...</span>
+      </div>
+    );
+  }
+
+  if (!bankInfo) return null;
+
+  return (
+    <div className="col-span-2 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+      <BankIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+      <div>
+        <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+          {bankInfo.bankName}
+        </p>
+        {(bankInfo.city || bankInfo.state) && (
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {[bankInfo.city, bankInfo.state].filter(Boolean).join(", ")}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ================================================================== */
 /*  SSN Input helper                                                   */
 /* ================================================================== */
@@ -136,12 +208,12 @@ function FieldRenderer({
     }
   }
 
-  const inputClasses = "w-full px-3 py-2 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors";
+  const inputClasses = "w-full px-3 py-2.5 sm:py-2 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors";
 
   switch (field.type) {
     case "heading":
       return (
-        <div className="col-span-2 pt-4 pb-1 border-b border-[var(--card-border)]">
+        <div className="col-span-1 sm:col-span-2 pt-5 pb-1 border-b border-[var(--card-border)]">
           <h3 className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>
             {field.label}
           </h3>
@@ -260,18 +332,18 @@ function FieldRenderer({
 
     case "radio":
       return (
-        <div className="col-span-2">
+        <div className="col-span-1 sm:col-span-2">
           <p className="block text-sm font-medium mb-2" style={{ color: "var(--text-main)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             {field.options?.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => onChange(field.key, opt.value)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors text-sm",
+                  "flex items-center gap-2 px-4 py-2.5 sm:py-2 rounded-lg border cursor-pointer transition-colors text-sm min-h-[44px] sm:min-h-0",
                   value === opt.value
                     ? "border-blue-500 bg-blue-500/10"
                     : "border-[var(--card-border)] hover:bg-[var(--input-bg)]"
@@ -280,7 +352,7 @@ function FieldRenderer({
               >
                 <div
                   className={cn(
-                    "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                    "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
                     value === opt.value ? "border-blue-500" : "border-[var(--card-border)]"
                   )}
                 >
@@ -297,7 +369,7 @@ function FieldRenderer({
 
     case "textarea":
       return (
-        <div className="col-span-2">
+        <div className="col-span-1 sm:col-span-2">
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -314,7 +386,7 @@ function FieldRenderer({
 
     case "checkbox-group":
       return (
-        <div className="col-span-2">
+        <div className="col-span-1 sm:col-span-2">
           <p className="block text-sm font-medium mb-3" style={{ color: "var(--text-main)" }}>
             {field.label}
           </p>
@@ -331,7 +403,7 @@ function FieldRenderer({
                     onChange(field.key, updated);
                   }}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors text-sm text-left",
+                    "flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-lg border cursor-pointer transition-colors text-sm text-left min-h-[44px]",
                     checked
                       ? "border-blue-500 bg-blue-500/10"
                       : "border-[var(--card-border)] hover:bg-[var(--input-bg)]"
@@ -340,7 +412,7 @@ function FieldRenderer({
                 >
                   <div
                     className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                      "w-5 h-5 sm:w-4 sm:h-4 rounded border flex items-center justify-center shrink-0",
                       checked ? "bg-blue-500 border-blue-500" : "border-[var(--card-border)]"
                     )}
                   >
@@ -402,13 +474,13 @@ function RepeaterField({
   }
 
   return (
-    <div className="col-span-2 space-y-3">
+    <div className="col-span-1 sm:col-span-2 space-y-3">
       <label className="block text-sm font-medium" style={{ color: "var(--text-main)" }}>
         {field.label}
       </label>
 
       {items.map((item, idx) => (
-        <div key={idx} className="p-4 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)]/30 space-y-3">
+        <div key={idx} className="p-3 sm:p-4 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)]/30 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
               #{idx + 1}
@@ -416,14 +488,14 @@ function RepeaterField({
             <button
               type="button"
               onClick={() => removeItem(idx)}
-              className="text-red-400 hover:text-red-300 transition-colors"
+              className="text-red-400 hover:text-red-300 transition-colors p-1 min-h-[44px] min-w-[44px] flex items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0"
             >
               <TrashIcon className="w-4 h-4" />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {field.subFields?.map((sf) => {
-              const inputClasses = "w-full px-3 py-2 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors";
+              const inputClasses = "w-full px-3 py-2.5 sm:py-2 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors";
               return (
                 <div key={sf.key} className={sf.half ? "" : "col-span-2 sm:col-span-1"}>
                   <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
@@ -797,9 +869,9 @@ export function OrganizerFormClient() {
   const isLastSection = currentSectionIdx === visibleDefs.length - 1;
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto px-1 sm:px-0">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <Link
           href="/portal/dashboard/tax-organizer"
           className="text-xs no-underline hover:underline mb-2 inline-flex items-center gap-1"
@@ -809,7 +881,7 @@ export function OrganizerFormClient() {
           Back to Tax Organizers
         </Link>
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold" style={{ color: "var(--text-main)" }}>
+          <h1 className="text-lg sm:text-xl font-bold" style={{ color: "var(--text-main)" }}>
             {returnTypeLabels[organizer.returnType] || organizer.returnType}
           </h1>
           <span className="badge badge-gray">{organizer.taxYear}</span>
@@ -869,8 +941,8 @@ export function OrganizerFormClient() {
         <div className="flex-1 min-w-0">
           {/* Mobile progress bar */}
           <div className="lg:hidden mb-4">
-            <div className="flex items-center justify-between text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-              <span>Section {currentSectionIdx + 1} of {totalSections}</span>
+            <div className="flex items-center justify-between text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>
+              <span className="font-medium">Step {currentSectionIdx + 1} of {totalSections}</span>
               <span>{completedCount} completed</span>
             </div>
             <div className="h-2 rounded-full bg-[var(--input-bg)]">
@@ -879,10 +951,13 @@ export function OrganizerFormClient() {
                 style={{ width: `${((currentSectionIdx + 1) / totalSections) * 100}%` }}
               />
             </div>
+            <p className="text-xs font-medium mt-1.5 truncate" style={{ color: "var(--accent-blue)" }}>
+              {currentSection.title}
+            </p>
           </div>
 
           {/* Section content */}
-          <div className="glass-card p-6 sm:p-8">
+          <div className="glass-card p-4 sm:p-6 md:p-8">
             <div className="mb-6">
               <h2 className="text-lg font-semibold" style={{ color: "var(--text-main)" }}>
                 {currentSection.title}
@@ -894,7 +969,7 @@ export function OrganizerFormClient() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {currentSection.fields.map((field) => {
                 if (field.type === "checkbox-group") {
                   return (
@@ -913,7 +988,6 @@ export function OrganizerFormClient() {
                   );
                 }
 
-                // For checkbox-group items, we need to wrap the onChange
                 return (
                   <FieldRenderer
                     key={field.key}
@@ -924,19 +998,24 @@ export function OrganizerFormClient() {
                   />
                 );
               })}
+
+              {/* Bank name lookup for refund/payment section */}
+              {currentSection.key === "refund_payment" && (currentData.routing_number as string)?.replace(/\D/g, "").length === 9 && (
+                <BankNameLookup routingNumber={(currentData.routing_number as string) || ""} />
+              )}
             </div>
           </div>
 
           {/* Navigation buttons */}
-          <div className="flex items-center justify-between mt-6 gap-4">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between mt-6 gap-3 sm:gap-4">
             <button
               onClick={goToPrev}
               disabled={currentSectionIdx === 0 || saving}
               className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center justify-center gap-2 px-4 py-3 sm:py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]",
                 currentSectionIdx === 0
                   ? "opacity-30 cursor-not-allowed"
-                  : "hover:bg-[var(--input-bg)]"
+                  : "hover:bg-[var(--input-bg)] border border-[var(--card-border)] sm:border-0"
               )}
               style={{ color: "var(--text-muted)" }}
             >
@@ -946,7 +1025,7 @@ export function OrganizerFormClient() {
 
             <div className="flex items-center gap-3">
               {saving && (
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                <span className="text-xs hidden sm:inline" style={{ color: "var(--text-muted)" }}>
                   Saving...
                 </span>
               )}
@@ -955,7 +1034,7 @@ export function OrganizerFormClient() {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || saving}
-                  className="btn-primary px-6 py-2.5 text-sm font-medium disabled:opacity-50"
+                  className="btn-primary w-full sm:w-auto px-6 py-3 sm:py-2.5 text-sm font-medium disabled:opacity-50 min-h-[44px]"
                 >
                   {submitting ? "Submitting..." : "Submit Organizer"}
                 </button>
@@ -963,7 +1042,7 @@ export function OrganizerFormClient() {
                 <button
                   onClick={goToNext}
                   disabled={saving}
-                  className="btn-primary flex items-center gap-2 px-6 py-2.5 text-sm font-medium disabled:opacity-50"
+                  className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 text-sm font-medium disabled:opacity-50 min-h-[44px]"
                 >
                   Next
                   <ChevronRightIcon className="w-4 h-4" />
