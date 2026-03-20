@@ -129,7 +129,11 @@ function FieldRenderer({
   // Check showIf condition
   if (field.showIf) {
     const condVal = sectionData[field.showIf.field];
-    if (condVal !== field.showIf.value) return null;
+    if (Array.isArray(field.showIf.value)) {
+      if (!field.showIf.value.includes(condVal as string)) return null;
+    } else {
+      if (condVal !== field.showIf.value) return null;
+    }
   }
 
   const inputClasses = "w-full px-3 py-2 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors";

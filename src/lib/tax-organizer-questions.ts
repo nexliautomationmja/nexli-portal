@@ -34,8 +34,8 @@ export interface Field {
   subFields?: Field[];
   /** For checkbox-group — items */
   items?: { key: string; label: string }[];
-  /** Conditional: only show if another field has a specific value */
-  showIf?: { field: string; value: string | boolean };
+  /** Conditional: only show if another field has a specific value (or one of multiple values) */
+  showIf?: { field: string; value: string | boolean | string[] };
   /** Half-width (side by side) */
   half?: boolean;
 }
@@ -112,10 +112,10 @@ const individual1040Sections: OrganizerSection[] = [
         { value: "state_id", label: "State Issued ID Card" },
         { value: "none", label: "I don't have a Driver's License or ID Card" },
       ]},
-      { key: "id_number", label: "ID Number", type: "text", showIf: { field: "id_type", value: "drivers_license" } },
-      { key: "id_state", label: "Issuing State", type: "select", options: US_STATES, showIf: { field: "id_type", value: "drivers_license" } },
-      { key: "id_issue_date", label: "Issue Date", type: "date", half: true, showIf: { field: "id_type", value: "drivers_license" } },
-      { key: "id_expiration_date", label: "Expiration Date", type: "date", half: true, showIf: { field: "id_type", value: "drivers_license" } },
+      { key: "id_number", label: "ID Number", type: "text", required: true, showIf: { field: "id_type", value: ["drivers_license", "state_id"] } },
+      { key: "id_state", label: "Issuing State", type: "select", options: US_STATES, showIf: { field: "id_type", value: ["drivers_license", "state_id"] } },
+      { key: "id_issue_date", label: "Issue Date", type: "date", half: true, showIf: { field: "id_type", value: ["drivers_license", "state_id"] } },
+      { key: "id_expiration_date", label: "Expiration Date", type: "date", half: true, showIf: { field: "id_type", value: ["drivers_license", "state_id"] } },
       { key: "filing_status", label: "Filing Status", type: "select", required: true, options: [
         { value: "single", label: "Single" },
         { value: "mfj", label: "Married Filing Jointly" },
@@ -123,6 +123,10 @@ const individual1040Sections: OrganizerSection[] = [
         { value: "hoh", label: "Head of Household" },
         { value: "qw", label: "Qualifying Surviving Spouse" },
       ]},
+      { key: "spouse_death_year", label: "What year did your spouse pass away?", type: "select", required: true, showIf: { field: "filing_status", value: "qw" }, options: Array.from({ length: 5 }, (_, i) => {
+        const y = new Date().getFullYear() - i;
+        return { value: String(y), label: String(y) };
+      })},
     ],
   },
 
@@ -149,10 +153,10 @@ const individual1040Sections: OrganizerSection[] = [
         { value: "state_id", label: "State Issued ID Card" },
         { value: "none", label: "No ID" },
       ]},
-      { key: "spouse_id_number", label: "ID Number", type: "text", showIf: { field: "spouse_id_type", value: "drivers_license" } },
-      { key: "spouse_id_state", label: "Issuing State", type: "select", options: US_STATES, showIf: { field: "spouse_id_type", value: "drivers_license" } },
-      { key: "spouse_id_issue_date", label: "Issue Date", type: "date", half: true, showIf: { field: "spouse_id_type", value: "drivers_license" } },
-      { key: "spouse_id_expiration_date", label: "Expiration Date", type: "date", half: true, showIf: { field: "spouse_id_type", value: "drivers_license" } },
+      { key: "spouse_id_number", label: "ID Number", type: "text", required: true, showIf: { field: "spouse_id_type", value: ["drivers_license", "state_id"] } },
+      { key: "spouse_id_state", label: "Issuing State", type: "select", options: US_STATES, showIf: { field: "spouse_id_type", value: ["drivers_license", "state_id"] } },
+      { key: "spouse_id_issue_date", label: "Issue Date", type: "date", half: true, showIf: { field: "spouse_id_type", value: ["drivers_license", "state_id"] } },
+      { key: "spouse_id_expiration_date", label: "Expiration Date", type: "date", half: true, showIf: { field: "spouse_id_type", value: ["drivers_license", "state_id"] } },
     ],
   },
 
@@ -240,7 +244,10 @@ const individual1040Sections: OrganizerSection[] = [
       { key: "children_born_adopted", label: "Were any children born or adopted?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { key: "death_in_family", label: "Did the taxpayer, spouse, or a dependent pass away during the year?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { key: "armed_forces", label: "Were you a member of the Armed Forces?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+      { key: "armed_forces_duty_type", label: "Select your duty type", type: "radio", showIf: { field: "armed_forces", value: "yes" }, options: [{ value: "active", label: "Active" }, { value: "reserve_guard", label: "Reserve or National Guard" }] },
+      { key: "armed_forces_pcs", label: "Did you move because of a permanent change of station?", type: "radio", showIf: { field: "armed_forces_duty_type", value: "active" }, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { key: "prior_firm_prep", label: "Did our firm prepare your prior year tax returns?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+      { key: "first_time_filing", label: "Is this your first time filing a tax return?", type: "radio", showIf: { field: "prior_firm_prep", value: "no" }, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
     ],
   },
 
@@ -255,6 +262,7 @@ const individual1040Sections: OrganizerSection[] = [
       { key: "retirement_rollover", label: "Did you convert or roll over any retirement accounts?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { key: "digital_assets", label: "Did you receive, sell, exchange, gift, or otherwise dispose of a digital asset?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { key: "foreign_accounts", label: "Did you have a financial interest in or signature authority over a foreign account or trust?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
+      { key: "foreign_accounts_over_10k", label: "Did the combined value of all foreign accounts exceed $10,000 at any time during the year?", type: "radio", showIf: { field: "foreign_accounts", value: "yes" }, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { key: "large_gifts", label: "Did you gift $19,000 or more to another individual?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { key: "marketplace_insurance", label: "Did you purchase health insurance through the Marketplace or a public exchange?", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
       { key: "health_coverage_full_year", label: "Did you have health insurance coverage for the entire year? (CA, DC, MA, NJ, and RI only)", type: "radio", required: true, options: [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] },
