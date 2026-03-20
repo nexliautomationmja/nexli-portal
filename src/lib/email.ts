@@ -827,3 +827,132 @@ export function buildPaymentReceiptEmail(params: {
 
   return { subject, html };
 }
+
+// ── Tax Organizer Request Email ─────────────────────────
+
+const returnTypeEmailLabels: Record<string, string> = {
+  "1040": "Individual Tax Return (1040)",
+  "1120": "C Corporation (1120)",
+  "1120S": "S Corporation (1120-S)",
+  "1065": "Partnership (1065)",
+  "1041": "Estate / Trust (1041)",
+};
+
+export function buildOrganizerRequestEmail(params: {
+  clientName: string;
+  senderName: string;
+  companyName: string;
+  organizerUrl: string;
+  taxYear: string;
+  returnType: string;
+  message?: string;
+  expiresAt: Date;
+}): { subject: string; html: string } {
+  const {
+    clientName,
+    senderName,
+    companyName,
+    organizerUrl,
+    taxYear,
+    returnType,
+    message,
+    expiresAt,
+  } = params;
+
+  const expDate = expiresAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const rtLabel = returnTypeEmailLabels[returnType] || returnType;
+
+  const messageBlock = message
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border-left:3px solid #2563EB;border-radius:0 8px 8px 0;overflow:hidden;"><tr><td bgcolor="#0f1528" style="background-color:#0f1528;padding:16px;">
+      <p style="margin:0;color:#b3b3c0;font-size:13px;font-style:italic;">"${message}"</p>
+    </td></tr></table>`
+    : "";
+
+  const html = emailWrapper(`
+    <h2 style="margin:0 0 8px;color:#ffffff;font-size:22px;font-weight:700;">Tax Organizer</h2>
+    <p style="margin:0 0 20px;color:#808090;font-size:13px;">
+      ${senderName}${companyName ? ` at ${companyName}` : ""} has sent you a tax organizer to complete.
+    </p>
+
+    <p style="margin:0 0 4px;color:#ccccda;font-size:14px;">Hi ${clientName},</p>
+    <p style="margin:0 0 20px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+      Please complete the following tax organizer to help us prepare your ${taxYear} ${rtLabel}.
+      This questionnaire collects the information we need and will tell you exactly which documents to upload.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #1e1e2a;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#131319" style="background-color:#131319;padding:16px;">
+      <p style="margin:0 0 8px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Details</p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Tax Year: <strong>${taxYear}</strong></p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Return Type: <strong>${rtLabel}</strong></p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Expires: <strong>${expDate}</strong></p>
+    </td></tr></table>
+
+    ${messageBlock}
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;"><tr><td align="center">
+      <a href="${organizerUrl}" style="${buttonStyle}" target="_blank">
+        Complete Tax Organizer
+      </a>
+    </td></tr></table>
+
+    <p style="margin:20px 0 0;color:#4a4a5a;font-size:11px;text-align:center;">
+      Or copy this link: <a href="${organizerUrl}" style="color:#2563EB;word-break:break-all;">${organizerUrl}</a>
+    </p>
+
+    <p style="margin:20px 0 0;color:#4a4a5a;font-size:11px;">
+      Your information is encrypted and securely stored. IRS Publication 4557 Compliant.
+    </p>
+  `);
+
+  const subject = `${senderName} sent you a ${taxYear} Tax Organizer`;
+
+  return { subject, html };
+}
+
+// ── Tax Organizer Completed Email (to CPA) ──────────────
+
+export function buildOrganizerCompletedEmail(params: {
+  clientName: string;
+  taxYear: string;
+  returnType: string;
+  dashboardUrl: string;
+  documentCount: number;
+}): { subject: string; html: string } {
+  const { clientName, taxYear, returnType, dashboardUrl, documentCount } = params;
+  const rtLabel = returnTypeEmailLabels[returnType] || returnType;
+
+  const html = emailWrapper(`
+    <h2 style="margin:0 0 8px;color:#ffffff;font-size:22px;font-weight:700;">Tax Organizer Completed</h2>
+    <p style="margin:0 0 20px;color:#808090;font-size:13px;">
+      ${clientName} has completed their ${taxYear} ${rtLabel} tax organizer.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #1e1e2a;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#131319" style="background-color:#131319;padding:16px;">
+      <p style="margin:0 0 8px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Summary</p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Client: <strong>${clientName}</strong></p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Tax Year: <strong>${taxYear}</strong></p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Return Type: <strong>${rtLabel}</strong></p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Documents Requested: <strong>${documentCount}</strong></p>
+    </td></tr></table>
+
+    <p style="margin:0 0 20px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+      A document upload request has been automatically generated based on the client's answers.
+      Review their responses and the document list in your dashboard.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;"><tr><td align="center">
+      <a href="${dashboardUrl}" style="${buttonStyle}" target="_blank">
+        View in Dashboard
+      </a>
+    </td></tr></table>
+  `);
+
+  const subject = `${clientName} completed their ${taxYear} Tax Organizer`;
+
+  return { subject, html };
+}

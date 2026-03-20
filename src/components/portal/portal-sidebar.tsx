@@ -12,6 +12,7 @@ import {
   PenLineIcon,
   KanbanIcon,
   MessageIcon,
+  FormIcon,
   SunIcon,
   MoonIcon,
   LogOutIcon,
@@ -47,6 +48,7 @@ const portalNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
   { href: "/portal/dashboard/messages", label: "Messages", icon: MessageIcon },
   { href: "/portal/dashboard/engagements", label: "Engagements", icon: PenLineIcon },
   { href: "/portal/dashboard/tax-returns", label: "Tax Returns", icon: KanbanIcon },
+  { href: "/portal/dashboard/tax-organizer", label: "Tax Organizer", icon: FormIcon },
 ];
 
 export function PortalSidebar({ clientName, clientEmail }: PortalSidebarProps) {

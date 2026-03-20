@@ -876,6 +876,81 @@ export const portalMessages = pgTable(
   ]
 );
 
+// ══════════════════════════════════════════════════════════
+// ══  TAX ORGANIZERS  ═════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+
+export const organizerReturnTypeEnum = pgEnum("organizer_return_type", [
+  "1040",
+  "1120",
+  "1120S",
+  "1065",
+  "1041",
+]);
+
+export const organizerStatusEnum = pgEnum("organizer_status", [
+  "draft",
+  "sent",
+  "in_progress",
+  "completed",
+  "reviewed",
+]);
+
+export const taxOrganizers = pgTable(
+  "tax_organizers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    clientName: text("client_name").notNull(),
+    clientEmail: text("client_email").notNull(),
+    clientPhone: text("client_phone"),
+    taxYear: text("tax_year").notNull(),
+    returnType: organizerReturnTypeEnum("return_type").default("1040").notNull(),
+    status: organizerStatusEnum("status").default("draft").notNull(),
+    message: text("message"),
+    generatedDocuments: jsonb("generated_documents"), // auto-generated doc request list
+    sentAt: timestamp("sent_at"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    reviewedAt: timestamp("reviewed_at"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("tax_organizers_token_idx").on(table.token),
+    index("tax_organizers_owner_idx").on(table.ownerId),
+    index("tax_organizers_owner_status_idx").on(table.ownerId, table.status),
+    index("tax_organizers_client_email_idx").on(table.clientEmail),
+  ]
+);
+
+export const taxOrganizerSections = pgTable(
+  "tax_organizer_sections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizerId: uuid("organizer_id")
+      .notNull()
+      .references(() => taxOrganizers.id, { onDelete: "cascade" }),
+    sectionKey: text("section_key").notNull(), // e.g. "personal_info", "income"
+    data: jsonb("data").notNull().default({}), // section answers (encrypted for sensitive fields)
+    isComplete: boolean("is_complete").default(false).notNull(),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("tax_organizer_sections_organizer_idx").on(table.organizerId),
+    uniqueIndex("tax_organizer_sections_organizer_key_idx").on(
+      table.organizerId,
+      table.sectionKey
+    ),
+  ]
+);
+
 // ── Notifications ─────────────────────────────────────────
 export const notifications = pgTable(
   "notifications",
