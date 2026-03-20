@@ -7,6 +7,7 @@ import {
   engagementSigners,
   portalMessages,
   portalMagicLinks,
+  hiddenClients,
 } from "@/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -83,11 +84,18 @@ export async function GET() {
   const messageMap = new Map(messageCounts.map((r) => [r.email, r]));
   const portalMap = new Map(portalAccess.map((r) => [r.email, r]));
 
-  // Collect all unique client emails
+  // 5. Get hidden client emails for this owner
+  const hiddenRows = await db
+    .select({ email: hiddenClients.clientEmail })
+    .from(hiddenClients)
+    .where(eq(hiddenClients.ownerId, ownerId));
+  const hiddenEmails = new Set(hiddenRows.map((r) => r.email));
+
+  // Collect all unique client emails (excluding hidden)
   const allEmails = new Set<string>();
-  invoiceStats.forEach((r) => allEmails.add(r.email));
-  engagementStats.forEach((r) => allEmails.add(r.email));
-  messageCounts.forEach((r) => allEmails.add(r.email));
+  invoiceStats.forEach((r) => { if (!hiddenEmails.has(r.email)) allEmails.add(r.email); });
+  engagementStats.forEach((r) => { if (!hiddenEmails.has(r.email)) allEmails.add(r.email); });
+  messageCounts.forEach((r) => { if (!hiddenEmails.has(r.email)) allEmails.add(r.email); });
 
   // Build unified client list
   const clients = Array.from(allEmails).map((email) => {

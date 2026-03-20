@@ -148,6 +148,15 @@ function BuildingIcon({ className }: { className?: string }) {
   );
 }
 
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────
 
 type DetailTab = "invoices" | "engagements" | "messages" | "payments" | "portal";
@@ -159,6 +168,8 @@ export function ClientsClient() {
   const [detail, setDetail] = useState<ClientDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>("invoices");
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -191,6 +202,25 @@ export function ClientsClient() {
     const params = new URLSearchParams(searchParams.toString());
     params.set("client", email);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  async function removeClient(email: string) {
+    setRemoving(true);
+    try {
+      const res = await fetch(`/api/dashboard/clients/${encodeURIComponent(email)}/hide`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        setClients((prev) => prev.filter((c) => c.email !== email));
+        setDetail(null);
+        setShowRemoveConfirm(false);
+        router.push(pathname, { scroll: false });
+      }
+    } catch {
+      // silent
+    } finally {
+      setRemoving(false);
+    }
   }
 
   const filteredClients = clients.filter((c) => {
@@ -304,7 +334,15 @@ export function ClientsClient() {
                 </div>
               </GlassCard>
             ) : detail ? (
-              <ClientDetailPanel detail={detail} activeTab={activeTab} setActiveTab={setActiveTab} />
+              <ClientDetailPanel
+                detail={detail}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                showRemoveConfirm={showRemoveConfirm}
+                setShowRemoveConfirm={setShowRemoveConfirm}
+                removing={removing}
+                onRemove={() => removeClient(detail.client.email)}
+              />
             ) : (
               <GlassCard>
                 <div className="py-24 text-center">
@@ -410,10 +448,18 @@ function ClientDetailPanel({
   detail,
   activeTab,
   setActiveTab,
+  showRemoveConfirm,
+  setShowRemoveConfirm,
+  removing,
+  onRemove,
 }: {
   detail: ClientDetail;
   activeTab: DetailTab;
   setActiveTab: (tab: DetailTab) => void;
+  showRemoveConfirm: boolean;
+  setShowRemoveConfirm: (v: boolean) => void;
+  removing: boolean;
+  onRemove: () => void;
 }) {
   const { client } = detail;
   const initial = (client.company || client.name).charAt(0).toUpperCase();
@@ -428,6 +474,43 @@ function ClientDetailPanel({
 
   return (
     <div className="space-y-4">
+      {/* Remove confirmation modal */}
+      {showRemoveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowRemoveConfirm(false)} />
+          <div
+            className="relative w-full max-w-md rounded-xl border p-6"
+            style={{ background: "var(--glass-bg)", borderColor: "var(--glass-border)" }}
+          >
+            <h3 className="text-lg font-bold mb-2" style={{ color: "var(--text-main)" }}>
+              Remove Client
+            </h3>
+            <p className="text-sm mb-1" style={{ color: "var(--text-muted)" }}>
+              Are you sure you want to remove <strong style={{ color: "var(--text-main)" }}>{client.company || client.name}</strong> from your clients list?
+            </p>
+            <p className="text-xs mb-6" style={{ color: "var(--text-muted)" }}>
+              Their invoices, engagements, and messages will not be deleted. This only removes them from this list.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowRemoveConfirm(false)}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-[var(--glass-border)] hover:bg-[var(--input-bg)] transition-colors"
+                style={{ color: "var(--text-main)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onRemove}
+                disabled={removing}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+              >
+                {removing ? "Removing..." : "Remove Client"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Client header */}
       <GlassCard>
         <div className="flex items-start gap-4">
@@ -438,14 +521,25 @@ function ClientDetailPanel({
             {initial}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold" style={{ color: "var(--text-main)" }}>
-              {client.company || client.name}
-            </h2>
-            {client.company && (
-              <p className="text-sm mt-0.5" style={{ color: "var(--text-main)" }}>
-                {client.name}
-              </p>
-            )}
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold" style={{ color: "var(--text-main)" }}>
+                  {client.company || client.name}
+                </h2>
+                {client.company && (
+                  <p className="text-sm mt-0.5" style={{ color: "var(--text-main)" }}>
+                    {client.name}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setShowRemoveConfirm(true)}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <TrashIcon className="w-3.5 h-3.5" />
+                Remove
+              </button>
+            </div>
             <div className="flex flex-wrap items-center gap-4 mt-3">
               <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
                 <MailIcon className="w-3.5 h-3.5" />

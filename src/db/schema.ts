@@ -951,6 +951,25 @@ export const taxOrganizerSections = pgTable(
   ]
 );
 
+// ── Hidden Clients ────────────────────────────────────────
+export const hiddenClients = pgTable(
+  "hidden_clients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientEmail: text("client_email").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("hidden_clients_owner_email_idx").on(
+      table.ownerId,
+      table.clientEmail
+    ),
+  ]
+);
+
 // ── Notifications ─────────────────────────────────────────
 export const notifications = pgTable(
   "notifications",
