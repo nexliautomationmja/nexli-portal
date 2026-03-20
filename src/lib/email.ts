@@ -956,3 +956,64 @@ export function buildOrganizerCompletedEmail(params: {
 
   return { subject, html };
 }
+
+// ── Document Reminder Email ──────────────────────────────
+
+export function buildDocumentReminderEmail(params: {
+  clientName: string;
+  senderName: string;
+  uploadUrl: string;
+  missingDocs: string[];
+  totalRequired: number;
+  uploadedCount: number;
+}): { subject: string; html: string } {
+  const { clientName, senderName, uploadUrl, missingDocs, totalRequired, uploadedCount } = params;
+
+  const progressPct = totalRequired > 0 ? Math.round((uploadedCount / totalRequired) * 100) : 0;
+
+  const docList = missingDocs.length > 0
+    ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;border:1px solid #1e1e2a;border-radius:12px;overflow:hidden;"><tr><td bgcolor="#131319" style="background-color:#131319;padding:16px;">
+      <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Still Needed (${missingDocs.length} remaining)</p>
+      ${missingDocs.map((d) => `<p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; ${d}</p>`).join("")}
+    </td></tr></table>`
+    : "";
+
+  const progressBar = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;">
+      <tr><td>
+        <p style="margin:0 0 6px;color:#808090;font-size:11px;">${uploadedCount} of ${totalRequired} documents uploaded (${progressPct}%)</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-radius:6px;overflow:hidden;">
+          <tr>
+            <td bgcolor="#1a1a24" style="background-color:#1a1a24;height:8px;border-radius:6px;">
+              <table role="presentation" width="${progressPct}%" cellpadding="0" cellspacing="0" border="0">
+                <tr><td bgcolor="#2563EB" style="background-color:#2563EB;height:8px;border-radius:6px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>`;
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Document Reminder</h1>
+    <p style="margin:0 0 20px;color:#9999a8;font-size:14px;">
+      Hi ${clientName || "there"}, this is a friendly reminder from <strong style="color:#fff;">${senderName}</strong> that some documents are still needed.
+    </p>
+    ${progressBar}
+    ${docList}
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${uploadUrl}" style="${buttonStyle}">Upload Documents</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        Please upload your remaining documents as soon as possible.
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: `Reminder: ${missingDocs.length} document${missingDocs.length !== 1 ? "s" : ""} still needed — ${senderName}`,
+    html,
+  };
+}
