@@ -228,11 +228,13 @@ function FieldRenderer({
   value,
   onChange,
   sectionData,
+  hasError,
 }: {
   field: Field;
   value: unknown;
   onChange: (key: string, val: unknown) => void;
   sectionData: Record<string, unknown>;
+  hasError?: boolean;
 }) {
   // Check showIf condition
   if (field.showIf) {
@@ -244,7 +246,16 @@ function FieldRenderer({
     }
   }
 
-  const inputClasses = "w-full px-3 py-2.5 sm:py-2 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors";
+  const inputClasses = cn(
+    "w-full px-3 py-2.5 sm:py-2 rounded-lg border bg-[var(--input-bg)] text-base sm:text-sm focus:outline-none focus:ring-2 transition-colors",
+    hasError
+      ? "border-red-500 focus:ring-red-500/40"
+      : "border-[var(--card-border)] focus:ring-blue-500/40"
+  );
+
+  const errorMsg = hasError ? (
+    <p className="text-xs text-red-400 mt-1">This field is required</p>
+  ) : null;
 
   switch (field.type) {
     case "heading":
@@ -260,7 +271,7 @@ function FieldRenderer({
     case "phone":
     case "email":
       return (
-        <div className={field.half ? "" : "sm:col-span-2"}>
+        <div className={field.half ? "" : "sm:col-span-2"} {...(hasError ? { "data-validation-error": true } : {})}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -272,6 +283,7 @@ function FieldRenderer({
             className={inputClasses}
             style={{ color: "var(--text-main)" }}
           />
+          {errorMsg}
         </div>
       );
 
@@ -283,7 +295,7 @@ function FieldRenderer({
           ? `${rawSsn.slice(0, 3)}-${rawSsn.slice(3)}`
           : rawSsn;
       return (
-        <div className={field.half ? "" : "sm:col-span-2"}>
+        <div className={field.half ? "" : "sm:col-span-2"} {...(hasError ? { "data-validation-error": true } : {})}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -300,13 +312,14 @@ function FieldRenderer({
             style={{ color: "var(--text-main)" }}
             autoComplete="off"
           />
+          {errorMsg}
         </div>
       );
     }
 
     case "date":
       return (
-        <div className={field.half ? "" : "sm:col-span-2"}>
+        <div className={field.half ? "" : "sm:col-span-2"} {...(hasError ? { "data-validation-error": true } : {})}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -317,12 +330,13 @@ function FieldRenderer({
             className={inputClasses}
             style={{ color: "var(--text-main)" }}
           />
+          {errorMsg}
         </div>
       );
 
     case "currency":
       return (
-        <div className={field.half ? "" : "sm:col-span-2"}>
+        <div className={field.half ? "" : "sm:col-span-2"} {...(hasError ? { "data-validation-error": true } : {})}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -341,12 +355,13 @@ function FieldRenderer({
               style={{ color: "var(--text-main)" }}
             />
           </div>
+          {errorMsg}
         </div>
       );
 
     case "select":
       return (
-        <div className={field.half ? "" : "sm:col-span-2"}>
+        <div className={field.half ? "" : "sm:col-span-2"} {...(hasError ? { "data-validation-error": true } : {})}>
           <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </label>
@@ -363,12 +378,13 @@ function FieldRenderer({
               </option>
             ))}
           </select>
+          {errorMsg}
         </div>
       );
 
     case "radio":
       return (
-        <div className="col-span-1 sm:col-span-2">
+        <div className="col-span-1 sm:col-span-2" {...(hasError ? { "data-validation-error": true } : {})}>
           <p className="block text-sm font-medium mb-2" style={{ color: "var(--text-main)" }}>
             {field.label}{field.required && <span className="text-red-400"> *</span>}
           </p>
@@ -382,7 +398,9 @@ function FieldRenderer({
                   "flex items-center gap-2 px-4 py-2.5 sm:py-2 rounded-lg border cursor-pointer transition-colors text-sm min-h-[44px] sm:min-h-0",
                   value === opt.value
                     ? "border-blue-500 bg-blue-500/10"
-                    : "border-[var(--card-border)] hover:bg-[var(--input-bg)]"
+                    : hasError
+                      ? "border-red-500/50 hover:bg-[var(--input-bg)]"
+                      : "border-[var(--card-border)] hover:bg-[var(--input-bg)]"
                 )}
                 style={{ color: "var(--text-main)" }}
               >
@@ -400,6 +418,7 @@ function FieldRenderer({
               </button>
             ))}
           </div>
+          {errorMsg}
         </div>
       );
 
@@ -625,6 +644,7 @@ export function OrganizerFormClient() {
   const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
   const [sectionFormData, setSectionFormData] = useState<Record<string, Record<string, unknown>>>({});
   const [showComplete, setShowComplete] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -703,6 +723,14 @@ export function OrganizerFormClient() {
 
   // Handle field change with checkbox-group support
   function handleFieldChange(sectionKey: string, fieldKey: string, value: unknown) {
+    // Clear validation error for this field when user fills it
+    if (validationErrors.has(fieldKey)) {
+      setValidationErrors((prev) => {
+        const next = new Set(prev);
+        next.delete(fieldKey);
+        return next;
+      });
+    }
     setSectionFormData((prev) => {
       const sectionData = { ...prev[sectionKey], [fieldKey]: value };
       const updated = { ...prev, [sectionKey]: sectionData };
@@ -724,10 +752,36 @@ export function OrganizerFormClient() {
     });
   }
 
+  // Validate required fields in a section, returns set of field keys with errors
+  function validateSection(sectionDef: OrganizerSection, data: Record<string, unknown>): Set<string> {
+    const errors = new Set<string>();
+    for (const field of sectionDef.fields) {
+      if (field.type === "heading") continue;
+
+      // Check showIf — skip validation if field isn't visible
+      if (field.showIf) {
+        const condVal = data[field.showIf.field];
+        if (Array.isArray(field.showIf.value)) {
+          if (!field.showIf.value.includes(condVal as string)) continue;
+        } else {
+          if (condVal !== field.showIf.value) continue;
+        }
+      }
+
+      if (field.required) {
+        const val = data[field.key];
+        if (val === undefined || val === null || val === "") {
+          errors.add(field.key);
+        }
+      }
+    }
+    return errors;
+  }
+
   // Navigate to previous section
   async function goToPrev() {
     if (currentSectionIdx > 0) {
-      // Save current before navigating
+      setValidationErrors(new Set());
       const currentKey = visibleDefs[currentSectionIdx].key;
       const data = sectionFormData[currentKey] || {};
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -740,11 +794,22 @@ export function OrganizerFormClient() {
   // Navigate to next section
   async function goToNext() {
     if (currentSectionIdx < visibleDefs.length - 1) {
-      // Save current as complete before navigating
-      const currentKey = visibleDefs[currentSectionIdx].key;
-      const data = sectionFormData[currentKey] || {};
+      const currentDef = visibleDefs[currentSectionIdx];
+      const data = sectionFormData[currentDef.key] || {};
+
+      // Validate required fields
+      const errors = validateSection(currentDef, data);
+      if (errors.size > 0) {
+        setValidationErrors(errors);
+        // Scroll to first error
+        const firstErrorEl = document.querySelector("[data-validation-error]");
+        firstErrorEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      setValidationErrors(new Set());
+
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      await saveSection(currentKey, data, true);
+      await saveSection(currentDef.key, data, true);
       setCurrentSectionIdx(currentSectionIdx + 1);
       window.scrollTo(0, 0);
     }
@@ -752,11 +817,23 @@ export function OrganizerFormClient() {
 
   // Submit the entire organizer
   async function handleSubmit() {
+    // Validate current section first
+    const currentDef = visibleDefs[currentSectionIdx];
+    const currentSectionData = sectionFormData[currentDef.key] || {};
+    const errors = validateSection(currentDef, currentSectionData);
+    if (errors.size > 0) {
+      setValidationErrors(errors);
+      const firstErrorEl = document.querySelector("[data-validation-error]");
+      firstErrorEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setValidationErrors(new Set());
+
     setSubmitting(true);
     try {
       // Save the last section as complete
-      const lastKey = visibleDefs[currentSectionIdx].key;
-      const lastData = sectionFormData[lastKey] || {};
+      const lastKey = currentDef.key;
+      const lastData = currentSectionData;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       const result = await saveSection(lastKey, lastData, true);
 
@@ -786,6 +863,7 @@ export function OrganizerFormClient() {
   // Jump to a specific section
   async function jumpToSection(idx: number) {
     if (idx === currentSectionIdx) return;
+    setValidationErrors(new Set());
     const currentKey = visibleDefs[currentSectionIdx].key;
     const data = sectionFormData[currentKey] || {};
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1005,6 +1083,12 @@ export function OrganizerFormClient() {
               )}
             </div>
 
+            {validationErrors.size > 0 && (
+              <div className="mb-4 px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
+                <p className="text-sm text-red-400">Please fill in all required fields before continuing.</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {currentSection.fields.map((field) => {
                 if (field.type === "checkbox-group") {
@@ -1020,6 +1104,7 @@ export function OrganizerFormClient() {
                         }
                       }}
                       sectionData={currentData}
+                      hasError={validationErrors.has(field.key)}
                     />
                   );
                 }
@@ -1031,6 +1116,7 @@ export function OrganizerFormClient() {
                     value={currentData[field.key]}
                     onChange={(key, val) => handleFieldChange(currentSection.key, key, val)}
                     sectionData={currentData}
+                    hasError={validationErrors.has(field.key)}
                   />
                 );
               })}
