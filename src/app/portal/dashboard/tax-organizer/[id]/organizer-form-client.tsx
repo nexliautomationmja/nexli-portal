@@ -93,6 +93,7 @@ function BankIcon({ className }: { className?: string }) {
 
 function BankNameLookup({ routingNumber, accountNumber, confirmAccountNumber }: { routingNumber: string; accountNumber: string; confirmAccountNumber: string }) {
   const [bankInfo, setBankInfo] = useState<{ bankName: string; city?: string; state?: string } | null>(null);
+  const [invalid, setInvalid] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const lastLookedUp = useRef("");
 
@@ -102,19 +103,26 @@ function BankNameLookup({ routingNumber, accountNumber, confirmAccountNumber }: 
     if (digits.length === 9 && digits !== lastLookedUp.current) {
       lastLookedUp.current = digits;
       setLookingUp(true);
+      setInvalid(false);
       fetch(`/api/portal/routing-lookup?rn=${digits}`)
         .then((r) => r.json())
         .then((data) => {
-          if (data.bankName) {
+          if (data.error && !data.bankName) {
+            setBankInfo(null);
+            setInvalid(true);
+          } else if (data.bankName) {
             setBankInfo({ bankName: data.bankName, city: data.city, state: data.state });
+            setInvalid(false);
           } else {
             setBankInfo(null);
+            setInvalid(false);
           }
         })
-        .catch(() => setBankInfo(null))
+        .catch(() => { setBankInfo(null); setInvalid(false); })
         .finally(() => setLookingUp(false));
     } else if (digits.length < 9) {
       setBankInfo(null);
+      setInvalid(false);
       lastLookedUp.current = "";
     }
   }, [digits]);
@@ -124,7 +132,7 @@ function BankNameLookup({ routingNumber, accountNumber, confirmAccountNumber }: 
   const accountMismatch = acct.length > 0 && confirmAcct.length > 0 && acct !== confirmAcct;
   const accountMatch = acct.length > 0 && confirmAcct.length > 0 && acct === confirmAcct;
 
-  const hasContent = lookingUp || bankInfo || accountMismatch || accountMatch;
+  const hasContent = lookingUp || bankInfo || invalid || accountMismatch || accountMatch;
   if (!hasContent) return null;
 
   return (
@@ -149,6 +157,12 @@ function BankNameLookup({ routingNumber, accountNumber, confirmAccountNumber }: 
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {!lookingUp && invalid && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+          <span className="text-red-400 text-sm">Invalid routing number</span>
         </div>
       )}
 

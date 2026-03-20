@@ -285,6 +285,6 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Not found in our database
-  return NextResponse.json({ bankName: null });
+  // Valid routing number but not in our database — still confirm it's valid
+  return NextResponse.json({ bankName: "Valid Financial Institution", city: null, state: null });
 }
