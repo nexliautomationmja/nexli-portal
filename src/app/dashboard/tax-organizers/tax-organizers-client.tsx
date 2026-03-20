@@ -97,6 +97,7 @@ export function TaxOrganizersClient() {
     expiresInDays: 90,
   });
   const [creating, setCreating] = useState(false);
+  const [clientPicked, setClientPicked] = useState(false);
 
   async function loadOrganizers() {
     try {
@@ -137,6 +138,7 @@ export function TaxOrganizersClient() {
           message: "",
           expiresInDays: 90,
         });
+        setClientPicked(false);
         await loadOrganizers();
       }
     } catch {
@@ -471,25 +473,38 @@ export function TaxOrganizersClient() {
                   Client
                 </label>
                 <ClientPicker
-                  onSelect={(c) =>
+                  onSelect={(c) => {
                     setCreateForm((prev) => ({
                       ...prev,
                       clientName: c.name,
                       clientEmail: c.email,
                       clientPhone: c.phone || "",
-                    }))
-                  }
+                    }));
+                    setClientPicked(true);
+                  }}
                   placeholder="Search clients..."
                 />
-                {createForm.clientName && (
-                  <p className="text-xs mt-1" style={{ color: "var(--text-main)" }}>
-                    {createForm.clientName} ({createForm.clientEmail})
-                  </p>
+                {clientPicked && createForm.clientName && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-xs" style={{ color: "var(--text-main)" }}>
+                      {createForm.clientName} ({createForm.clientEmail})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientPicked(false);
+                        setCreateForm((p) => ({ ...p, clientName: "", clientEmail: "", clientPhone: "" }));
+                      }}
+                      className="text-xs text-red-400 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 )}
               </div>
 
               {/* Or manual entry */}
-              {!createForm.clientName && (
+              {!clientPicked && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
