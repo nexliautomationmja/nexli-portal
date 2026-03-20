@@ -123,8 +123,8 @@ export async function POST(req: NextRequest) {
       relatedId: organizer.id,
       sentBy: session.user.id,
     });
-  } catch {
-    // Email failure shouldn't block organizer creation
+  } catch (err) {
+    console.error("Tax organizer email failed:", err);
   }
 
   return NextResponse.json({ organizer }, { status: 201 });

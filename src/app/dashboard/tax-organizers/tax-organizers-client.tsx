@@ -537,38 +537,21 @@ export function TaxOrganizersClient() {
                 </>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-muted)" }}>
-                    Tax Year *
-                  </label>
-                  <select
-                    value={createForm.taxYear}
-                    onChange={(e) => setCreateForm((p) => ({ ...p, taxYear: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border text-sm"
-                    style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                  >
-                    {[0, 1, 2, 3].map((offset) => {
-                      const y = new Date().getFullYear() - offset;
-                      return <option key={y} value={y}>{y}</option>;
-                    })}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-muted)" }}>
-                    Return Type
-                  </label>
-                  <select
-                    value={createForm.returnType}
-                    onChange={(e) => setCreateForm((p) => ({ ...p, returnType: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border text-sm"
-                    style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                  >
-                    {Object.entries(returnTypeLabels).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-muted)" }}>
+                  Tax Year *
+                </label>
+                <select
+                  value={createForm.taxYear}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, taxYear: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
+                >
+                  {[0, 1, 2, 3].map((offset) => {
+                    const y = new Date().getFullYear() - offset;
+                    return <option key={y} value={y}>{y}</option>;
+                  })}
+                </select>
               </div>
 
               <div>
