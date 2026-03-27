@@ -61,7 +61,7 @@ export function PipelineClient() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
             Pipeline
@@ -208,55 +208,94 @@ export function PipelineClient() {
         </div>
       ) : (
         /* List View */
-        <div className="glass-card overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Contact</th>
-                <th>Stage</th>
-                <th>Value</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {opportunities.map((opp) => {
-                const stage = currentPipeline.stages.find(
-                  (s) => s.id === opp.pipelineStageId
-                );
-                return (
-                  <tr key={opp.id}>
-                    <td className="font-medium">
+        <>
+          {/* Mobile card list */}
+          <div className="space-y-2 md:hidden">
+            {opportunities.map((opp) => {
+              const stage = currentPipeline.stages.find(
+                (s) => s.id === opp.pipelineStageId
+              );
+              return (
+                <div key={opp.id} className="glass-card p-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
                       {opp.name}
-                    </td>
-                    <td>
-                      <span style={{ color: "var(--text-muted)" }}>
-                        {opp.contact?.name || "—"}
+                    </p>
+                    <span className={`badge capitalize ${
+                      opp.status === "open" ? "badge-blue"
+                        : opp.status === "won" ? "badge-emerald"
+                        : "badge-gray"
+                    }`}>
+                      {opp.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+                    <div className="flex items-center gap-2">
+                      <span>{opp.contact?.name || "No contact"}</span>
+                      <span className="badge badge-gray">{stage?.name || "Unknown"}</span>
+                    </div>
+                    {opp.monetaryValue ? (
+                      <span className="font-semibold text-emerald-400">
+                        {formatCurrency(opp.monetaryValue)}
                       </span>
-                    </td>
-                    <td>
-                      <span className="badge badge-gray">
-                        {stage?.name || "Unknown"}
-                      </span>
-                    </td>
-                    <td className="font-semibold text-emerald-400">
-                      {opp.monetaryValue ? formatCurrency(opp.monetaryValue) : "—"}
-                    </td>
-                    <td>
-                      <span className={`badge capitalize ${
-                        opp.status === "open" ? "badge-blue"
-                          : opp.status === "won" ? "badge-emerald"
-                          : "badge-gray"
-                      }`}>
-                        {opp.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block glass-card overflow-hidden">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Contact</th>
+                  <th>Stage</th>
+                  <th>Value</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {opportunities.map((opp) => {
+                  const stage = currentPipeline.stages.find(
+                    (s) => s.id === opp.pipelineStageId
+                  );
+                  return (
+                    <tr key={opp.id}>
+                      <td className="font-medium">
+                        {opp.name}
+                      </td>
+                      <td>
+                        <span style={{ color: "var(--text-muted)" }}>
+                          {opp.contact?.name || "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge badge-gray">
+                          {stage?.name || "Unknown"}
+                        </span>
+                      </td>
+                      <td className="font-semibold text-emerald-400">
+                        {opp.monetaryValue ? formatCurrency(opp.monetaryValue) : "—"}
+                      </td>
+                      <td>
+                        <span className={`badge capitalize ${
+                          opp.status === "open" ? "badge-blue"
+                            : opp.status === "won" ? "badge-emerald"
+                            : "badge-gray"
+                        }`}>
+                          {opp.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

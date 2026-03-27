@@ -141,7 +141,7 @@ export function LinksClient() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
             <Link
@@ -196,7 +196,7 @@ export function LinksClient() {
               return (
                 <div
                   key={link.id}
-                  className={`p-5 flex items-center justify-between gap-4 ${inactive ? "opacity-60" : ""}`}
+                  className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${inactive ? "opacity-60" : ""}`}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
@@ -291,7 +291,7 @@ export function LinksClient() {
       {showCreate && (
         <>
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={() => setShowCreate(false)} />
-          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto z-50 glass-card p-6 max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 md:inset-x-4 md:top-1/2 md:-translate-y-1/2 md:max-h-[90vh] max-w-lg mx-auto z-50 glass-card p-6 overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                 Create Secure Upload Link
@@ -317,7 +317,7 @@ export function LinksClient() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block section-header mb-1.5">
                     Email

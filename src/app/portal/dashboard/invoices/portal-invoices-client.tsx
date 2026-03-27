@@ -179,76 +179,128 @@ export function PortalInvoicesClient() {
           </p>
         </div>
       ) : (
-        /* Invoice table */
-        <div className="glass-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Date</th>
-                  <th>Due Date</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((inv) => (
-                  <tr key={inv.id}>
-                    <td>
-                      <p className="font-medium" style={{ color: "var(--text-main)" }}>
-                        {inv.invoiceNumber}
-                      </p>
-                    </td>
-                    <td>{formatDate(inv.issueDate || inv.createdAt)}</td>
-                    <td>{formatDate(inv.dueDate)}</td>
-                    <td>
-                      <span className="font-medium" style={{ color: "var(--text-main)" }}>
-                        {formatCents(inv.total, inv.currency)}
-                      </span>
-                      {inv.balanceDue > 0 && inv.balanceDue !== inv.total && (
-                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          {formatCents(inv.balanceDue, inv.currency)} due
-                        </p>
-                      )}
-                    </td>
-                    <td>
-                      <span className={statusBadge[inv.status] || "badge badge-gray"}>
-                        {statusLabel[inv.status] || inv.status}
-                      </span>
-                    </td>
-                    <td>
-                      {["sent", "viewed", "overdue", "partial"].includes(inv.status) ? (
-                        <a
-                          href={`/invoice/${inv.token}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium no-underline hover:underline"
-                          style={{ color: "var(--accent-blue)" }}
-                        >
-                          View & Pay
-                        </a>
-                      ) : inv.status === "paid" ? (
-                        <a
-                          href={`/invoice/${inv.token}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm no-underline hover:underline"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          View
-                        </a>
-                      ) : (
-                        <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          {/* Mobile card list */}
+          <div className="space-y-2 md:hidden">
+            {filtered.map((inv) => (
+              <div key={inv.id} className="glass-card p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                    {inv.invoiceNumber}
+                  </p>
+                  <span className={statusBadge[inv.status] || "badge badge-gray"}>
+                    {statusLabel[inv.status] || inv.status}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span>Due {formatDate(inv.dueDate)}</span>
+                  <span className="font-medium" style={{ color: "var(--text-main)" }}>
+                    {formatCents(inv.total, inv.currency)}
+                  </span>
+                </div>
+                {inv.balanceDue > 0 && inv.balanceDue !== inv.total && (
+                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                    {formatCents(inv.balanceDue, inv.currency)} remaining
+                  </p>
+                )}
+                <div className="mt-3">
+                  {["sent", "viewed", "overdue", "partial"].includes(inv.status) ? (
+                    <a
+                      href={`/invoice/${inv.token}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center px-4 py-2 rounded-full text-sm font-bold text-white no-underline"
+                      style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                    >
+                      View & Pay
+                    </a>
+                  ) : inv.status === "paid" ? (
+                    <a
+                      href={`/invoice/${inv.token}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center px-4 py-2 rounded-full text-sm font-medium no-underline"
+                      style={{ color: "var(--text-muted)", background: "var(--input-bg)" }}
+                    >
+                      View
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block glass-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Date</th>
+                    <th>Due Date</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((inv) => (
+                    <tr key={inv.id}>
+                      <td>
+                        <p className="font-medium" style={{ color: "var(--text-main)" }}>
+                          {inv.invoiceNumber}
+                        </p>
+                      </td>
+                      <td>{formatDate(inv.issueDate || inv.createdAt)}</td>
+                      <td>{formatDate(inv.dueDate)}</td>
+                      <td>
+                        <span className="font-medium" style={{ color: "var(--text-main)" }}>
+                          {formatCents(inv.total, inv.currency)}
+                        </span>
+                        {inv.balanceDue > 0 && inv.balanceDue !== inv.total && (
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {formatCents(inv.balanceDue, inv.currency)} due
+                          </p>
+                        )}
+                      </td>
+                      <td>
+                        <span className={statusBadge[inv.status] || "badge badge-gray"}>
+                          {statusLabel[inv.status] || inv.status}
+                        </span>
+                      </td>
+                      <td>
+                        {["sent", "viewed", "overdue", "partial"].includes(inv.status) ? (
+                          <a
+                            href={`/invoice/${inv.token}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium no-underline hover:underline"
+                            style={{ color: "var(--accent-blue)" }}
+                          >
+                            View & Pay
+                          </a>
+                        ) : inv.status === "paid" ? (
+                          <a
+                            href={`/invoice/${inv.token}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm no-underline hover:underline"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            View
+                          </a>
+                        ) : (
+                          <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

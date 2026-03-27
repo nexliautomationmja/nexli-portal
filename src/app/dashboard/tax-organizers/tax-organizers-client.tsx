@@ -306,7 +306,7 @@ export function TaxOrganizersClient() {
                   )}
                 </div>
                 {section.isComplete && Object.keys(section.data).length > 0 && (
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-1">
                     {Object.entries(section.data).map(([key, value]) => {
                       if (key.startsWith("heading") || value === null || value === undefined || value === "") return null;
                       const displayValue = typeof value === "object" ? JSON.stringify(value) : String(value);
@@ -354,7 +354,7 @@ export function TaxOrganizersClient() {
   // ── List View ──
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "var(--text-main)" }}>
             Tax Organizers
@@ -365,7 +365,7 @@ export function TaxOrganizersClient() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white self-start sm:self-auto"
           style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
         >
           <PlusIcon className="w-4 h-4" />
@@ -452,9 +452,9 @@ export function TaxOrganizersClient() {
 
       {/* Create Modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
           <div
-            className="w-full max-w-lg rounded-2xl border p-6 space-y-5"
+            className="w-full h-full md:h-auto md:max-h-[90vh] overflow-y-auto md:max-w-lg rounded-t-2xl md:rounded-2xl border p-6 space-y-5"
             style={{ background: "var(--card-bg)", borderColor: "var(--card-border)" }}
           >
             <div className="flex items-center justify-between">
@@ -506,7 +506,7 @@ export function TaxOrganizersClient() {
               {/* Or manual entry */}
               {!clientPicked && (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-muted)" }}>
                         Client Name *

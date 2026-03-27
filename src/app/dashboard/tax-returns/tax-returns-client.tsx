@@ -238,7 +238,7 @@ export function TaxReturnsClient() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1
             className="text-2xl font-bold tracking-tight"
@@ -458,6 +458,40 @@ export function TaxReturnsClient() {
       ) : (
         /* ═══ List View ═══ */
         <div className="glass-card overflow-hidden">
+          {/* Mobile card list */}
+          <div className="md:hidden divide-y divide-[var(--card-border)]">
+            {filtered.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>No tax returns found</p>
+              </div>
+            ) : (
+              filtered.map((tr) => (
+                <button
+                  key={tr.id}
+                  onClick={() => openDetail(tr)}
+                  className="w-full text-left p-4 hover:bg-[var(--input-bg)] transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate" style={{ color: "var(--text-main)" }}>{tr.clientName}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                        {tr.returnType} &middot; {tr.taxYear}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 badge ${getBadgeClass(tr.status)}`}>{getStageLabel(tr.status)}</span>
+                  </div>
+                  {tr.dueDate && (
+                    <p className="text-xs mt-1.5" style={{ color: new Date(tr.dueDate) < new Date() && tr.status !== "filed" && tr.status !== "accepted" ? "#ef4444" : "var(--text-muted)" }}>
+                      Due {formatDate(tr.dueDate)}
+                    </p>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block">
           <table className="data-table">
             <thead>
               <tr>
@@ -548,6 +582,7 @@ export function TaxReturnsClient() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -562,7 +597,7 @@ export function TaxReturnsClient() {
             }}
           />
           <div
-            className="fixed inset-x-4 top-[10%] bottom-[10%] max-w-lg mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            className="fixed inset-0 md:inset-x-4 md:top-[10%] md:bottom-[10%] max-w-lg md:mx-auto z-50 md:rounded-lg border overflow-hidden flex flex-col"
             style={{
               background: "var(--card-bg)",
               borderColor: "var(--card-border)",
@@ -603,7 +638,7 @@ export function TaxReturnsClient() {
                   }}
                   placeholder="Search existing clients..."
                 />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="text"
                     value={clientName}
@@ -632,7 +667,7 @@ export function TaxReturnsClient() {
               </div>
 
               {/* Tax year + Return type */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label
                     className="text-xs font-medium block mb-1.5"
@@ -751,7 +786,7 @@ export function TaxReturnsClient() {
             onClick={() => setShowDetail(null)}
           />
           <div
-            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-lg mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            className="fixed inset-0 md:inset-x-4 md:top-[5%] md:bottom-[5%] max-w-lg md:mx-auto z-50 md:rounded-lg border overflow-hidden flex flex-col"
             style={{
               background: "var(--card-bg)",
               borderColor: "var(--card-border)",
@@ -819,7 +854,7 @@ export function TaxReturnsClient() {
               </div>
 
               {/* Client info */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p
                     className="text-[10px] font-bold uppercase tracking-widest mb-1"

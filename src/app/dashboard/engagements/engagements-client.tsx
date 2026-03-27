@@ -288,7 +288,7 @@ export function EngagementsClient() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1
             className="text-2xl font-bold tracking-tight"
@@ -302,7 +302,7 @@ export function EngagementsClient() {
         </div>
         <button
           onClick={() => setShowCompose(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 self-start sm:self-auto"
           style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
         >
           <PlusIcon className="w-4 h-4" />
@@ -352,7 +352,48 @@ export function EngagementsClient() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile card list */}
+          <div className="md:hidden divide-y divide-[var(--card-border)]">
+            {engagements.map((eng) => {
+              const overallStatus = getOverallStatus(eng);
+              const sc = statusConfig[overallStatus] || statusConfig.draft;
+              return (
+                <button
+                  key={eng.id}
+                  onClick={() => setShowDetail(eng)}
+                  className="w-full text-left p-4 hover:bg-[var(--input-bg)] transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate" style={{ color: "var(--text-main)" }}>
+                        {getSignerSummary(eng.signers)}
+                      </p>
+                      <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
+                        {eng.subject}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${sc.color} ${sc.bg}`}>
+                      {sc.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Sent {formatDate(eng.sentAt)}
+                    </span>
+                    {eng.signers.length > 1 && (
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {getSignedCount(eng.signers)}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--card-border)]">
@@ -436,6 +477,7 @@ export function EngagementsClient() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
@@ -444,7 +486,7 @@ export function EngagementsClient() {
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowCompose(false)} />
           <div
-            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            className="fixed inset-0 md:inset-x-4 md:top-[5%] md:bottom-[5%] max-w-2xl md:mx-auto z-50 md:rounded-lg border overflow-hidden flex flex-col"
             style={{ background: "var(--card-bg)", borderColor: "var(--card-border)" }}
           >
             {/* Modal header */}
@@ -754,7 +796,7 @@ export function EngagementsClient() {
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowDetail(null)} />
           <div
-            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            className="fixed inset-0 md:inset-x-4 md:top-[5%] md:bottom-[5%] max-w-2xl md:mx-auto z-50 md:rounded-lg border overflow-hidden flex flex-col"
             style={{ background: "var(--card-bg)", borderColor: "var(--card-border)" }}
           >
             {/* Header */}

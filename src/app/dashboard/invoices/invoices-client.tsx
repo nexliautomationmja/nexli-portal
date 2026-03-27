@@ -566,7 +566,7 @@ export function InvoicesClient() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1
             className="text-2xl font-bold tracking-tight"
@@ -584,24 +584,26 @@ export function InvoicesClient() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowBatch(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--input-bg)]"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--input-bg)]"
             style={{
               borderColor: "var(--card-border)",
               color: "var(--text-main)",
             }}
           >
             <UsersIcon className="w-4 h-4" />
-            Batch Invoice
+            <span className="hidden sm:inline">Batch Invoice</span>
+            <span className="sm:hidden">Batch</span>
           </button>
           <button
             onClick={() => setShowCompose(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
             style={{
               background: "linear-gradient(135deg, #2563EB, #06B6D4)",
             }}
           >
             <PlusIcon className="w-4 h-4" />
-            New Invoice
+            <span className="hidden sm:inline">New Invoice</span>
+            <span className="sm:hidden">New</span>
           </button>
         </div>
       </div>
@@ -660,7 +662,55 @@ export function InvoicesClient() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile card list */}
+          <div className="md:hidden divide-y divide-[var(--card-border)]">
+            {invoices.map((inv) => {
+              const sc = statusConfig[inv.status] || statusConfig.draft;
+              return (
+                <button
+                  key={inv.id}
+                  onClick={() => setShowDetail(inv)}
+                  className="w-full text-left p-4 hover:bg-[var(--input-bg)] transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold truncate" style={{ color: "var(--text-main)" }}>
+                          {inv.clientName}
+                        </p>
+                        {inv.isRecurring && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-purple-500">REC</span>
+                        )}
+                        {inv.engagementId && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-500/10 text-violet-500">ENG</span>
+                        )}
+                      </div>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                        {inv.invoiceNumber} &middot; Due {formatDate(inv.dueDate)}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
+                        {formatCurrency(inv.total, inv.currency)}
+                      </p>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold mt-1 ${sc.color} ${sc.bg}`}>
+                        {sc.label}
+                      </span>
+                    </div>
+                  </div>
+                  {inv.amountPaid > 0 && inv.status !== "paid" && (
+                    <p className="text-xs mt-1.5 text-emerald-500">
+                      {formatCurrency(inv.amountPaid, inv.currency)} paid
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--card-border)]">
@@ -839,6 +889,7 @@ export function InvoicesClient() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
@@ -850,7 +901,7 @@ export function InvoicesClient() {
             onClick={() => { setShowCompose(false); setShowPreview(false); }}
           />
           <div
-            className="fixed inset-x-4 top-[3%] bottom-[3%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            className="fixed inset-0 md:inset-x-4 md:top-[3%] md:bottom-[3%] max-w-2xl md:mx-auto z-50 md:rounded-lg border overflow-hidden flex flex-col"
             style={{
               background: "var(--card-bg)",
               borderColor: "var(--card-border)",
@@ -935,7 +986,7 @@ export function InvoicesClient() {
                   }}
                   placeholder="Search existing clients..."
                 />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="text"
                     value={clientName}
@@ -989,7 +1040,7 @@ export function InvoicesClient() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  <div className="grid gap-2 px-1" style={{ gridTemplateColumns: "1fr 60px 80px 80px 70px 24px" }}>
+                  <div className="hidden md:grid gap-2 px-1" style={{ gridTemplateColumns: "1fr 60px 80px 80px 70px 24px" }}>
                     <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
                       Description
                     </span>
@@ -1011,7 +1062,7 @@ export function InvoicesClient() {
                   {lineItems.map((item, i) => (
                     <div
                       key={i}
-                      className="grid gap-2 items-center"
+                      className="hidden md:grid gap-2 items-center"
                       style={{ gridTemplateColumns: "1fr 60px 80px 80px 70px 24px" }}
                     >
                       <div className="relative" data-product-picker>
@@ -1172,6 +1223,53 @@ export function InvoicesClient() {
                       </div>
                     </div>
                   ))}
+
+                  {/* Mobile line items */}
+                  {lineItems.map((item, i) => (
+                    <div key={`mobile-${i}`} className="md:hidden glass-card p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Item {i + 1}</span>
+                        {lineItems.length > 1 && (
+                          <button onClick={() => removeLineItem(i)} className="p-1 rounded hover:bg-red-500/10 transition-colors">
+                            <XIcon className="w-3 h-3 text-red-400" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative" data-product-picker>
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => updateLineItem(i, "description", e.target.value)}
+                          placeholder={stripeProducts.length > 0 ? "Type or pick a product…" : "Description"}
+                          className={inputClass}
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <span className="text-[10px] font-medium block mb-1" style={{ color: "var(--text-muted)" }}>Qty</span>
+                          <input type="number" value={item.quantity || ""} onChange={(e) => updateLineItem(i, "quantity", parseFloat(e.target.value) || 0)} placeholder="1" min="0.01" step="0.01" className={inputClass} style={inputStyle} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-medium block mb-1" style={{ color: "var(--text-muted)" }}>Rate ($)</span>
+                          <input type="number" value={item.unitPrice || ""} onChange={(e) => updateLineItem(i, "unitPrice", parseFloat(e.target.value) || 0)} placeholder="0.00" min="0" step="0.01" className={inputClass} style={inputStyle} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-medium block mb-1" style={{ color: "var(--text-muted)" }}>Terms</span>
+                          <select value={item.billingType} onChange={(e) => updateLineItem(i, "billingType", e.target.value)} className={inputClass} style={{ ...inputStyle, fontSize: 11 }}>
+                            <option value="one_time">One-time</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-[var(--card-border)]">
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>Amount</span>
+                        <span className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>{formatCurrency(Math.round(getLineTotal(item) * 100), currency)}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Subtotal */}
@@ -1230,7 +1328,7 @@ export function InvoicesClient() {
               </div>
 
               {/* Due Date + Currency */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label
                     className="text-xs font-medium block mb-1.5"
@@ -1276,7 +1374,7 @@ export function InvoicesClient() {
 
 
               {/* Notes + Terms */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label
                     className="text-xs font-medium block mb-1.5"
@@ -1390,7 +1488,7 @@ export function InvoicesClient() {
             onClick={() => setShowDetail(null)}
           />
           <div
-            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            className="fixed inset-0 md:inset-x-4 md:top-[5%] md:bottom-[5%] max-w-2xl md:mx-auto z-50 md:rounded-lg border overflow-hidden flex flex-col"
             style={{
               background: "var(--card-bg)",
               borderColor: "var(--card-border)",
@@ -1536,7 +1634,7 @@ export function InvoicesClient() {
             </div>
 
             {/* Footer actions */}
-            <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-between">
+            <div className="p-4 border-t border-[var(--card-border)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
               <div className="flex gap-2">
                 <button
                   onClick={() => handleDelete(showDetail.id)}
@@ -1618,7 +1716,7 @@ export function InvoicesClient() {
             }}
           />
           <div
-            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            className="fixed inset-0 md:inset-x-4 md:top-[5%] md:bottom-[5%] max-w-2xl md:mx-auto z-50 md:rounded-lg border overflow-hidden flex flex-col"
             style={{
               background: "var(--card-bg)",
               borderColor: "var(--card-border)",
@@ -2171,7 +2269,7 @@ export function InvoicesClient() {
               </div>
 
               {/* Due Date + Currency */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label
                     className="text-xs font-medium block mb-1.5"

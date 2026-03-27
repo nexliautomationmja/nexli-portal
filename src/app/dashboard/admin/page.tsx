@@ -272,7 +272,29 @@ export default function AdminPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile card list */}
+            <div className="divide-y divide-[var(--glass-border)] md:hidden">
+              {portalData.sessions.map((s) => (
+                <div key={s.id} className="p-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                      {s.clientName || "—"}
+                    </p>
+                    <span className={`badge ${s.isActive ? "badge-emerald" : "badge-gray"}`}>
+                      {s.isActive ? "Active" : "Expired"}
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{s.email}</p>
+                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                    Signed in {timeAgo(s.createdAt)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -321,6 +343,7 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </GlassCard>
       </div>

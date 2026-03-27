@@ -90,13 +90,40 @@ export function ContactsClient() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile card list */}
+          <div className="divide-y divide-[var(--glass-border)] md:hidden">
+            {contacts.map((contact) => (
+              <div
+                key={contact.id}
+                className="p-4 cursor-pointer active:bg-[var(--input-bg)] transition-colors"
+                onClick={() => setSelectedContact(contact)}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                    {contact.firstName || ""} {contact.lastName || ""}
+                  </p>
+                  <span className="badge badge-gray">
+                    {contact.source || "Direct"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                  {contact.email && <span>{contact.email}</span>}
+                  {contact.phone && <span>{contact.phone}</span>}
+                  <span>{timeAgo(contact.dateAdded)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th className="hidden md:table-cell">Email</th>
-                  <th className="hidden md:table-cell">Phone</th>
+                  <th>Email</th>
+                  <th>Phone</th>
                   <th>Source</th>
                   <th>Added</th>
                 </tr>
@@ -113,12 +140,12 @@ export function ContactsClient() {
                         {contact.firstName || ""} {contact.lastName || ""}
                       </p>
                     </td>
-                    <td className="hidden md:table-cell">
+                    <td>
                       <span style={{ color: "var(--text-muted)" }}>
                         {contact.email || "—"}
                       </span>
                     </td>
-                    <td className="hidden md:table-cell">
+                    <td>
                       <span style={{ color: "var(--text-muted)" }}>
                         {contact.phone || "—"}
                       </span>
@@ -138,6 +165,7 @@ export function ContactsClient() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
@@ -145,7 +173,7 @@ export function ContactsClient() {
       {selectedContact && (
         <>
           <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setSelectedContact(null)} />
-          <div className="fixed right-0 top-0 bottom-0 w-full max-w-sm z-50 glass-card border-l border-[var(--glass-border)] overflow-y-auto">
+          <div className="fixed inset-0 md:left-auto md:right-0 md:top-0 md:bottom-0 md:w-full md:max-w-sm z-50 glass-card md:border-l border-[var(--glass-border)] overflow-y-auto">
             <div className="p-6 space-y-6">
               <div className="flex items-start justify-between">
                 <div>

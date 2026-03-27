@@ -237,7 +237,39 @@ export function PortalDocumentsClient() {
       {(data.sharedDocuments || []).length > 0 && (
         <div>
           <h2 className="section-header mb-4">Documents from Your CPA</h2>
-          <div className="glass-card overflow-hidden">
+          {/* Mobile card list */}
+          <div className="space-y-2 md:hidden">
+            {data.sharedDocuments.map((doc) => (
+              <div key={doc.id} className="glass-card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileIcon className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span className="text-sm font-medium truncate" style={{ color: "var(--text-main)" }}>
+                    {doc.fileName}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span>{doc.category || "Uncategorized"} &bull; {formatFileSize(doc.fileSize)}</span>
+                  <span>{formatDate(doc.sharedAt)}</span>
+                </div>
+                <button
+                  onClick={() => handleDownload(doc)}
+                  disabled={downloading === doc.id}
+                  className="mt-3 w-full flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold text-white disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                >
+                  {downloading === doc.id ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <DownloadIcon className="w-3.5 h-3.5" />
+                  )}
+                  Download
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block glass-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>
@@ -297,7 +329,44 @@ export function PortalDocumentsClient() {
       {(pendingEsigns.length > 0 || completedEsigns.length > 0) && (
         <div>
           <h2 className="section-header mb-4">Signature Requests</h2>
-          <div className="glass-card overflow-hidden">
+          {/* Mobile card list */}
+          <div className="space-y-2 md:hidden">
+            {[...pendingEsigns, ...completedEsigns].map((es) => (
+              <div key={es.id} className="glass-card p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <PenLineIcon className="w-4 h-4 shrink-0 text-purple-400" />
+                    <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                      E-Signature Request
+                    </span>
+                  </div>
+                  <span className={esignStatusBadge[es.status] || "badge badge-gray"}>
+                    {es.status === "signed"
+                      ? "Signed"
+                      : es.status.charAt(0).toUpperCase() + es.status.slice(1)}
+                  </span>
+                </div>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {formatDate(es.createdAt)}
+                  {es.status === "signed" && es.signedAt && ` · Signed ${formatDate(es.signedAt)}`}
+                </p>
+                {["pending", "sent", "viewed"].includes(es.status) && (
+                  <a
+                    href={`/esign/${es.token}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 block text-center px-4 py-2 rounded-full text-sm font-bold text-white no-underline"
+                    style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
+                  >
+                    Review & Sign
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block glass-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>
@@ -355,7 +424,42 @@ export function PortalDocumentsClient() {
       {data.documents.length > 0 && (
         <div>
           <h2 className="section-header mb-4">Your Documents</h2>
-          <div className="glass-card overflow-hidden">
+          {/* Mobile card list */}
+          <div className="space-y-2 md:hidden">
+            {data.documents.map((doc) => (
+              <div key={doc.id} className="glass-card p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileIcon className="w-4 h-4 shrink-0 text-cyan-400" />
+                    <span className="text-sm font-medium truncate" style={{ color: "var(--text-main)" }}>
+                      {doc.fileName}
+                    </span>
+                  </div>
+                  <span
+                    className={
+                      doc.status === "reviewed"
+                        ? "badge badge-emerald"
+                        : doc.status === "archived"
+                        ? "badge badge-gray"
+                        : "badge badge-blue"
+                    }
+                  >
+                    {doc.status === "new"
+                      ? "Received"
+                      : doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span>{doc.category || "Uncategorized"}</span>
+                  <span>{formatFileSize(doc.fileSize)}</span>
+                  <span>{formatDate(doc.createdAt)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block glass-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>

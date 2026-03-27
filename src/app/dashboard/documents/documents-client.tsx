@@ -151,7 +151,7 @@ export function DocumentsClient() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1
             className="text-2xl font-bold tracking-tight"
@@ -259,7 +259,36 @@ export function DocumentsClient() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile card list */}
+          <div className="md:hidden divide-y divide-[var(--card-border)]">
+            {documents.map((doc) => (
+              <button
+                key={doc.id}
+                onClick={() => setSelectedDoc(doc)}
+                className="w-full text-left p-4 hover:bg-[var(--input-bg)] transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate" style={{ color: "var(--text-main)" }}>
+                      {doc.clientName || "Unknown"}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <FileIcon className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{doc.fileName}</p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className={`badge uppercase ${STATUS_COLORS[doc.status]}`}>{doc.status}</span>
+                    <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>{timeAgo(doc.createdAt)}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
@@ -347,6 +376,7 @@ export function DocumentsClient() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {/* Pagination info */}
@@ -364,7 +394,7 @@ export function DocumentsClient() {
       {showEsignModal && (
         <>
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={() => setShowEsignModal(false)} />
-          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 glass-card p-6">
+          <div className="fixed inset-0 md:inset-x-4 md:top-1/2 md:-translate-y-1/2 md:bottom-auto max-w-md md:mx-auto z-50 glass-card p-6 overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
                 Request E-Signature
@@ -433,7 +463,7 @@ export function DocumentsClient() {
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
             onClick={() => setSelectedDoc(null)}
           />
-          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 glass-card border-l border-[var(--glass-border)] overflow-y-auto">
+          <div className="fixed inset-0 md:right-0 md:top-0 md:bottom-0 md:left-auto md:w-full md:max-w-md z-50 glass-card md:border-l border-[var(--glass-border)] overflow-y-auto">
             <div className="p-6 space-y-6">
               {/* Header */}
               <div className="flex items-start justify-between">
