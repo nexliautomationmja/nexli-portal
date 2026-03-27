@@ -93,8 +93,8 @@ export const emailWrapper = (content: string) => `
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="dark only">
-  <meta name="supported-color-schemes" content="dark only">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <title>Nexli</title>
   <!--[if mso]>
   <style>
@@ -102,20 +102,35 @@ export const emailWrapper = (content: string) => `
   </style>
   <![endif]-->
   <style>
-    :root { color-scheme: dark only !important; }
-    * { color-scheme: dark only !important; }
-    body, table, td { background-color: #0a0a0f; }
+    :root { color-scheme: light dark; }
+    body, table, td, tr, div { background-color: #0a0a0f; color: #ffffff; }
+    h1, h2, h3 { color: #ffffff; }
     u + .body-bg { background-color: #0a0a0f !important; }
-    [data-ogsc] body, [data-ogsc] table, [data-ogsc] td { background-color: #0a0a0f !important; color: #ffffff !important; }
-    [data-ogsc] h1, [data-ogsc] h2, [data-ogsc] h3, [data-ogsc] p, [data-ogsc] span, [data-ogsc] a { color: inherit !important; }
-    [data-ogsb] body, [data-ogsb] table, [data-ogsb] td { background-color: #0a0a0f !important; }
+    div[style*="margin: 16px 0"] { margin: 0 !important; }
+    [data-ogsc] body, [data-ogsc] table, [data-ogsc] td,
+    [data-ogsc] div, [data-ogsc] tr {
+      background-color: #0a0a0f !important;
+      color: #ffffff !important;
+    }
+    [data-ogsc] h1, [data-ogsc] h2, [data-ogsc] h3 { color: #ffffff !important; }
+    [data-ogsc] p, [data-ogsc] span, [data-ogsc] a { color: inherit !important; }
+    [data-ogsb] body, [data-ogsb] table, [data-ogsb] td,
+    [data-ogsb] div, [data-ogsb] tr {
+      background-color: #0a0a0f !important;
+    }
     @media (prefers-color-scheme: light) {
-      body, table, td { background-color: #0a0a0f !important; color: #ffffff !important; }
+      body, table, td, tr, div { background-color: #0a0a0f !important; color: #ffffff !important; }
+      h1, h2, h3 { color: #ffffff !important; }
+    }
+    @media (prefers-color-scheme: dark) {
+      body, table, td, tr, div { background-color: #0a0a0f !important; color: #ffffff !important; }
+      h1, h2, h3 { color: #ffffff !important; }
     }
   </style>
 </head>
 <body bgcolor="#0a0a0f" style="margin:0;padding:0;width:100%;background-color:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#ffffff;">
   <!--[if mso]><table width="100%" bgcolor="#0a0a0f"><tr><td><![endif]-->
+  <div class="body-bg" style="background-color:#0a0a0f;width:100%;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0f" style="background-color:#0a0a0f;">
     <tr>
       <td align="center" bgcolor="#0a0a0f" style="background-color:#0a0a0f;padding:40px 20px;">
@@ -153,6 +168,7 @@ export const emailWrapper = (content: string) => `
     </tr>
   </table>
   <!--[if mso]></td></tr></table><![endif]-->
+  </div>
 </body>
 </html>`;
 
