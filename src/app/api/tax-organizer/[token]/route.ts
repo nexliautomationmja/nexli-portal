@@ -57,11 +57,13 @@ export async function GET(
     .set({ lastAccessedAt: new Date() })
     .where(eq(taxOrganizerLinks.id, link.id));
 
-  await db.insert(documentAuditLog).values({
-    linkId: link.id,
-    action: "link_accessed",
-    actorName: link.clientName,
-  });
+  try {
+    await db.insert(documentAuditLog).values({
+      action: "link_accessed",
+      actorName: link.clientName,
+      metadata: { taxOrganizerLinkId: link.id },
+    });
+  } catch {}
 
   return NextResponse.json({
     clientName: link.clientName,
@@ -176,21 +178,23 @@ export async function POST(
 
       uploadedDocIds.push(doc.id);
 
-      await db.insert(documentAuditLog).values({
-        documentId: doc.id,
-        linkId: link.id,
-        action: "uploaded",
-        actorName: link.clientName,
-        actorIp:
-          req.headers.get("x-forwarded-for") ||
-          req.headers.get("x-real-ip"),
-        actorUserAgent: req.headers.get("user-agent"),
-        metadata: {
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type,
-        },
-      });
+      try {
+        await db.insert(documentAuditLog).values({
+          documentId: doc.id,
+          action: "uploaded",
+          actorName: link.clientName,
+          actorIp:
+            req.headers.get("x-forwarded-for") ||
+            req.headers.get("x-real-ip"),
+          actorUserAgent: req.headers.get("user-agent"),
+          metadata: {
+            taxOrganizerLinkId: link.id,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          },
+        });
+      } catch {}
     }
   }
 
@@ -243,15 +247,16 @@ export async function POST(
   }
 
   // Audit log
-  await db.insert(documentAuditLog).values({
-    linkId: link.id,
-    action: "tax_organizer_submitted",
-    actorName: link.clientName,
-    actorIp:
-      req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip"),
-    actorUserAgent: req.headers.get("user-agent"),
-    metadata: { documentsUploaded: uploadedDocIds.length },
-  });
+  try {
+    await db.insert(documentAuditLog).values({
+      action: "tax_organizer_submitted",
+      actorName: link.clientName,
+      actorIp:
+        req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip"),
+      actorUserAgent: req.headers.get("user-agent"),
+      metadata: { taxOrganizerLinkId: link.id, documentsUploaded: uploadedDocIds.length },
+    });
+  } catch {}
 
   return NextResponse.json({ ok: true, submissionId: submission.id });
 }

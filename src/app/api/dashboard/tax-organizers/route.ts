@@ -122,18 +122,22 @@ export async function POST(req: NextRequest) {
     console.error("Tax organizer email failed:", err);
   }
 
-  // Audit log
-  await db.insert(documentAuditLog).values({
-    linkId: link.id,
-    action: "tax_organizer_sent",
-    actorId: session.user.id,
-    actorName: session.user.name || session.user.email,
-    metadata: {
-      clientEmail,
-      expiresAt: expiresAt.toISOString(),
-      emailSent,
-    },
-  });
+  // Audit log — linkId FK references documentLinks, so omit it for tax organizer entries
+  try {
+    await db.insert(documentAuditLog).values({
+      action: "tax_organizer_sent",
+      actorId: session.user.id,
+      actorName: session.user.name || session.user.email,
+      metadata: {
+        taxOrganizerLinkId: link.id,
+        clientEmail,
+        expiresAt: expiresAt.toISOString(),
+        emailSent,
+      },
+    });
+  } catch (err) {
+    console.error("Tax organizer audit log failed:", err);
+  }
 
   return NextResponse.json({ link, organizerUrl, emailSent }, { status: 201 });
 }
