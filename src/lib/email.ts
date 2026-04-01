@@ -179,7 +179,7 @@ export const emailWrapper = (content: string) => `
 </body>
 </html>`;
 
-const buttonStyle = `display:inline-block;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
+const buttonStyle = `display:inline-block;background-color:#2563EB;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
 
 // ── Upload Request Email ─────────────────────────────────
 
