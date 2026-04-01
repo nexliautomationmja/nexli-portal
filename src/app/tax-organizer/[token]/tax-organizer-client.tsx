@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   getFormSections,
   getDocCategories,
+  getConditionalDocs,
   type FormSection,
   type Question,
   type SelectQuestion,
   type RepeaterQuestion,
   type CheckboxGroupQuestion,
+  type ConditionalDoc,
 } from "@/lib/tax-organizer-forms";
 
 interface LinkMeta {
@@ -77,6 +79,16 @@ function PlusIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+function InfoIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
     </svg>
   );
 }
@@ -577,6 +589,38 @@ export function TaxOrganizerClient({ token }: { token: string }) {
   const [dragging, setDragging] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("Other");
 
+  // Compute conditional document recommendations based on form answers
+  const conditionalDocs = useMemo(() => {
+    if (!meta) return [];
+    return getConditionalDocs(meta.returnType, formData);
+  }, [meta, formData]);
+
+  const allDocCategories = useMemo(() => {
+    if (!meta) return [];
+    const base = getDocCategories(meta.returnType);
+    const conditionalNames = conditionalDocs.map((d) => d.category);
+    const baseSet = new Set(base);
+    const merged = base.filter((c) => c !== "Other");
+    for (const name of conditionalNames) {
+      if (!baseSet.has(name)) {
+        merged.push(name);
+      }
+    }
+    merged.push("Other");
+    return merged;
+  }, [meta, conditionalDocs]);
+
+  const conditionalCategorySet = useMemo(
+    () => new Set(conditionalDocs.map((d) => d.category)),
+    [conditionalDocs]
+  );
+
+  const conditionalReasonMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const doc of conditionalDocs) map.set(doc.category, doc.reason);
+    return map;
+  }, [conditionalDocs]);
+
   // Validate token on mount
   useEffect(() => {
     fetch(`/api/tax-organizer/${token}`)
@@ -752,7 +796,6 @@ export function TaxOrganizerClient({ token }: { token: string }) {
   if (!meta) return null;
 
   const sections = getFormSections(meta.returnType);
-  const docCategories = getDocCategories(meta.returnType);
   const totalSections = sections.length + 1; // +1 for document upload
 
   return (
@@ -828,22 +871,47 @@ export function TaxOrganizerClient({ token }: { token: string }) {
             You can also skip this and provide them later.
           </p>
 
+          {conditionalDocs.length > 0 && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 mb-4">
+              <InfoIcon className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-400/80">
+                Based on your answers, we recommend uploading the highlighted documents below.
+              </p>
+            </div>
+          )}
+
           {/* Category pills */}
           <div className="flex flex-wrap gap-1.5 mb-4">
-            {docCategories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
-                  selectedCategory === cat
-                    ? "border-blue-500/40 bg-blue-500/20 text-blue-400"
-                    : "border-[#1e1e2a] text-[#808090] hover:border-[#2a2a3a]"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+            {allDocCategories.map((cat) => {
+              const isConditional = conditionalCategorySet.has(cat);
+              const isSelected = selectedCategory === cat;
+              const reason = conditionalReasonMap.get(cat);
+              return (
+                <div key={cat} className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                      isSelected
+                        ? "border-blue-500/40 bg-blue-500/20 text-blue-400"
+                        : isConditional
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:border-amber-500/60"
+                        : "border-[#1e1e2a] text-[#808090] hover:border-[#2a2a3a]"
+                    }`}
+                  >
+                    {isConditional && !isSelected && (
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 align-middle" />
+                    )}
+                    {cat}
+                  </button>
+                  {reason && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-lg bg-[#1e1e2a] border border-[#2a2a3a] text-[10px] text-[#808090] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                      {reason}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Drop zone */}

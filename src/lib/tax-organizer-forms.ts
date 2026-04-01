@@ -61,6 +61,11 @@ export interface FormSection {
   questions: Question[];
 }
 
+export interface ConditionalDoc {
+  category: string;
+  reason: string;
+}
+
 // ── 1040 Individual ────────────────────────────────────────────
 
 const FORM_1040: FormSection[] = [
@@ -1275,4 +1280,74 @@ export const DOC_CATEGORIES: Record<string, string[]> = {
 
 export function getDocCategories(returnType: string): string[] {
   return DOC_CATEGORIES[returnType] || DOC_CATEGORIES["default"];
+}
+
+// ── Conditional Document Mappings ────────────────────────────────
+// Documents recommended based on specific form answers.
+
+const CONDITIONAL_DOCS_1040_CHECKBOX: Record<
+  string,
+  Record<string, ConditionalDoc>
+> = {
+  incomeSources: {
+    w2: { category: "W-2", reason: "You indicated W-2 employment income" },
+    selfEmployment: { category: "1099-NEC", reason: "You indicated self-employment income" },
+    interest: { category: "1099-INT", reason: "You indicated interest income" },
+    dividends: { category: "1099-DIV", reason: "You indicated dividend income" },
+    rental: { category: "Rental Income Statements", reason: "You indicated rental income" },
+    socialSecurity: { category: "SSA-1099", reason: "You indicated Social Security benefits" },
+    retirement: { category: "1099-R", reason: "You indicated retirement distributions" },
+    capitalGains: { category: "1099-B", reason: "You indicated capital gains/losses" },
+    unemployment: { category: "1099-G", reason: "You indicated unemployment compensation" },
+    crypto: { category: "Crypto Transaction Records", reason: "You indicated cryptocurrency transactions" },
+  },
+  deductions: {
+    mortgage: { category: "1098 (Mortgage Interest)", reason: "You indicated mortgage interest deduction" },
+    studentLoan: { category: "1098-E (Student Loan Interest)", reason: "You indicated student loan interest" },
+    education: { category: "1098-T (Tuition)", reason: "You indicated education credits/tuition" },
+    childcare: { category: "Child/Dependent Care Statements", reason: "You indicated child/dependent care" },
+    charitable: { category: "Charitable Donation Receipts", reason: "You indicated charitable donations" },
+    medical: { category: "Medical Expense Records", reason: "You indicated medical expenses" },
+    hsa: { category: "1099-SA / 5498-SA", reason: "You indicated HSA contributions" },
+    ira: { category: "Form 5498 (IRA)", reason: "You indicated IRA contributions" },
+    homeOffice: { category: "Home Office Records", reason: "You indicated home office expenses" },
+    estimatedTax: { category: "Estimated Tax Payment Receipts", reason: "You indicated estimated tax payments" },
+  },
+};
+
+const CONDITIONAL_DOCS_BUSINESS_YESNO: Record<string, ConditionalDoc> = {
+  paid600Nonemployee: { category: "1099-NEC (for each payee)", reason: "You paid $600+ to non-employees" },
+  pppLoan: { category: "PPP Loan Forgiveness Documents", reason: "You had a forgiven PPP loan" },
+  digitalAssets: { category: "Crypto/Digital Asset Records", reason: "You had digital asset transactions" },
+  foreignAccount: { category: "FBAR / Foreign Account Records", reason: "You had a foreign financial account" },
+};
+
+export function getConditionalDocs(
+  returnType: string,
+  formData: Record<string, unknown>
+): ConditionalDoc[] {
+  const results: ConditionalDoc[] = [];
+  const seen = new Set<string>();
+
+  if (returnType === "1040") {
+    for (const [fieldId, optionMap] of Object.entries(CONDITIONAL_DOCS_1040_CHECKBOX)) {
+      const selected = formData[fieldId];
+      if (!(selected instanceof Set)) continue;
+      for (const [optionId, doc] of Object.entries(optionMap)) {
+        if (selected.has(optionId) && !seen.has(doc.category)) {
+          seen.add(doc.category);
+          results.push(doc);
+        }
+      }
+    }
+  } else if (["1065", "1120", "1120S"].includes(returnType)) {
+    for (const [fieldId, doc] of Object.entries(CONDITIONAL_DOCS_BUSINESS_YESNO)) {
+      if (formData[fieldId] === "yes" && !seen.has(doc.category)) {
+        seen.add(doc.category);
+        results.push(doc);
+      }
+    }
+  }
+
+  return results;
 }
