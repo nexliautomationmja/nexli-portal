@@ -200,7 +200,7 @@ export async function POST(
     .values({
       linkId: link.id,
       ownerId: link.ownerId,
-      taxReturnId: link.taxReturnId,
+      taxReturnId: link.taxReturnId || null,
       clientName: link.clientName,
       clientEmail: link.clientEmail,
       formData: parsedFormData,
@@ -217,11 +217,13 @@ export async function POST(
     .set({ submittedAt: new Date() })
     .where(eq(taxOrganizerLinks.id, link.id));
 
-  // Update tax return status to documents_received
-  await db
-    .update(taxReturns)
-    .set({ status: "documents_received", updatedAt: new Date() })
-    .where(eq(taxReturns.id, link.taxReturnId));
+  // Update tax return status to documents_received (if linked to a return)
+  if (link.taxReturnId) {
+    await db
+      .update(taxReturns)
+      .set({ status: "documents_received", updatedAt: new Date() })
+      .where(eq(taxReturns.id, link.taxReturnId));
+  }
 
   // Notify CPA
   try {

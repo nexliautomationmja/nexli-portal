@@ -748,9 +748,9 @@ export const taxOrganizerLinks = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    taxReturnId: uuid("tax_return_id")
-      .notNull()
-      .references(() => taxReturns.id, { onDelete: "cascade" }),
+    taxReturnId: uuid("tax_return_id").references(() => taxReturns.id, {
+      onDelete: "cascade",
+    }),
     token: text("token").notNull().unique(),
     clientName: text("client_name"),
     clientEmail: text("client_email"),
@@ -781,9 +781,9 @@ export const taxOrganizerSubmissions = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    taxReturnId: uuid("tax_return_id")
-      .notNull()
-      .references(() => taxReturns.id, { onDelete: "cascade" }),
+    taxReturnId: uuid("tax_return_id").references(() => taxReturns.id, {
+      onDelete: "cascade",
+    }),
     clientName: text("client_name"),
     clientEmail: text("client_email"),
     formData: jsonb("form_data").notNull(),
