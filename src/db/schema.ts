@@ -261,6 +261,8 @@ export const auditActionEnum = pgEnum("audit_action", [
   "esign_sent",
   "esign_signed",
   "esign_declined",
+  "tax_organizer_sent",
+  "tax_organizer_submitted",
 ]);
 
 // ── Document Links (secure upload links for clients) ─────
@@ -579,9 +581,9 @@ export const invoices = pgTable(
     notes: text("notes"),
     terms: text("terms"),
 
-    // Helcim references
-    helcimInvoiceId: text("helcim_invoice_id"),
-    helcimTransactionId: text("helcim_transaction_id"),
+    // Stripe references
+    stripeSessionId: text("stripe_session_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
     paymentUrl: text("payment_url"),
     paymentMethod: text("payment_method"), // "card" | "ach"
     achSettlementStatus: text("ach_settlement_status"), // "pending" | "approved" | "declined"
@@ -735,6 +737,65 @@ export const taxReturns = pgTable(
     index("tax_returns_owner_idx").on(table.ownerId),
     index("tax_returns_owner_status_idx").on(table.ownerId, table.status),
     index("tax_returns_owner_year_idx").on(table.ownerId, table.taxYear),
+  ]
+);
+
+// ── Tax Organizer Links (secure token-based, no login required) ──
+export const taxOrganizerLinks = pgTable(
+  "tax_organizer_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    taxReturnId: uuid("tax_return_id")
+      .notNull()
+      .references(() => taxReturns.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    clientName: text("client_name"),
+    clientEmail: text("client_email"),
+    taxYear: text("tax_year").notNull(),
+    returnType: text("return_type").notNull(),
+    status: documentLinkStatusEnum("status").default("active").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    lastAccessedAt: timestamp("last_accessed_at"),
+    submittedAt: timestamp("submitted_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("tax_organizer_links_token_idx").on(table.token),
+    index("tax_organizer_links_owner_idx").on(table.ownerId),
+    index("tax_organizer_links_tax_return_idx").on(table.taxReturnId),
+    index("tax_organizer_links_expires_idx").on(table.expiresAt),
+  ]
+);
+
+// ── Tax Organizer Submissions ────────────────────────────
+export const taxOrganizerSubmissions = pgTable(
+  "tax_organizer_submissions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    linkId: uuid("link_id")
+      .notNull()
+      .references(() => taxOrganizerLinks.id, { onDelete: "cascade" }),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    taxReturnId: uuid("tax_return_id")
+      .notNull()
+      .references(() => taxReturns.id, { onDelete: "cascade" }),
+    clientName: text("client_name"),
+    clientEmail: text("client_email"),
+    formData: jsonb("form_data").notNull(),
+    uploadedDocumentIds: jsonb("uploaded_document_ids"),
+    submitterIp: text("submitter_ip"),
+    submitterUserAgent: text("submitter_user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("tax_organizer_submissions_link_idx").on(table.linkId),
+    index("tax_organizer_submissions_owner_idx").on(table.ownerId),
+    index("tax_organizer_submissions_tax_return_idx").on(table.taxReturnId),
   ]
 );
 

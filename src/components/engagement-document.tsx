@@ -193,6 +193,49 @@ export function DocumentPreview({
         )}
       </div>
 
+      {/* Payment Processing Disclosure */}
+      <div
+        style={{
+          padding: "20px 48px 0",
+          borderTop: "1px solid #e5e7eb",
+          marginTop: 8,
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 6px",
+            fontSize: 10,
+            fontWeight: 700,
+            color: "#9ca3af",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+          }}
+        >
+          Payment Processing Disclosure
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            lineHeight: 1.75,
+            color: "#6b7280",
+          }}
+        >
+          Payments for services rendered under this engagement are processed
+          through Stripe, Inc., a third-party payment processor. By executing
+          this agreement, you acknowledge and agree that{" "}
+          {fromCompany || fromName} and Nexli are not responsible for any
+          payment holds, account freezes, processing delays, or disputes
+          imposed by Stripe or your financial institution. To minimize
+          processing issues, we recommend maintaining a complete and accurate
+          business profile with your payment provider. All payment data is
+          handled directly by Stripe in accordance with their security and
+          privacy policies; neither {fromCompany || fromName} nor Nexli
+          stores your full payment credentials.
+        </p>
+      </div>
+
       {/* Signature Block */}
       <div style={{ padding: "20px 48px 44px" }}>
         <p

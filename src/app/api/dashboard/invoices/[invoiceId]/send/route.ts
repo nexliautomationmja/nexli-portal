@@ -3,7 +3,6 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { invoices, invoiceLineItems, invoiceReminders, users } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { createHelcimInvoice } from "@/lib/helcim";
 import { sendEmailWithLog, buildInvoiceEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncInvoiceToAccounting } from "@/lib/accounting-sync";
@@ -38,53 +37,22 @@ export async function POST(
     );
   }
 
-  // Get line items for description
-  const lineItems = await db
-    .select()
-    .from(invoiceLineItems)
-    .where(eq(invoiceLineItems.invoiceId, invoiceId));
-
-  const description = lineItems
-    .sort((a, b) => a.order - b.order)
-    .map((li) => li.description)
-    .join(", ");
-
-  // Create Helcim invoice with payment link
-  const portalUrl =
-    process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-
-  const helcimLineItems = lineItems
-    .sort((a, b) => a.order - b.order)
-    .map((li) => ({
-      description: li.description,
-      quantity: li.quantity / 100, // stored *100 (1.5 → 150)
-      priceCents: li.unitPrice,
-    }));
-
-  const { helcimInvoiceId, paymentUrl } = await createHelcimInvoice({
-    invoiceNumber: invoice.invoiceNumber,
-    clientName: invoice.clientName,
-    clientEmail: invoice.clientEmail,
-    lineItems: helcimLineItems,
-    taxAmountCents: invoice.taxAmount || 0,
-    currency: invoice.currency,
-  });
-
-  // Update invoice status
+  // Update invoice status (Stripe Checkout Session is created at checkout time)
   const [updated] = await db
     .update(invoices)
     .set({
       status: "sent",
       sentAt: new Date(),
-      paymentUrl,
-      helcimInvoiceId: String(helcimInvoiceId),
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, invoiceId))
     .returning();
 
   // Send email to client
-  const senderName = session.user.name || session.user.email || "Your Service Provider";
+  const portalUrl =
+    process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+  const senderName =
+    session.user.name || session.user.email || "Your Service Provider";
   const invoiceUrl = `${portalUrl}/invoice/${invoice.token}`;
 
   try {
@@ -96,7 +64,15 @@ export async function POST(
       dueDate: invoice.dueDate,
       invoiceUrl,
     });
-    await sendEmailWithLog({ to: invoice.clientEmail, subject, html, recipientName: invoice.clientName, emailType: "invoice", relatedId: invoice.id, sentBy: session.user.id });
+    await sendEmailWithLog({
+      to: invoice.clientEmail,
+      subject,
+      html,
+      recipientName: invoice.clientName,
+      emailType: "invoice",
+      relatedId: invoice.id,
+      sentBy: session.user.id,
+    });
   } catch (err) {
     console.error("Failed to send invoice email:", err);
   }

@@ -10,7 +10,8 @@ export type NotificationType =
   | "new_lead"
   | "portal_login"
   | "document_viewed"
-  | "portal_message";
+  | "portal_message"
+  | "tax_organizer_submitted";
 
 interface CreateNotificationParams {
   userId: string;
@@ -36,6 +37,7 @@ const TYPE_CONFIG: Record<
   portal_login: { emoji: "\u{1F511}", color: "#06B6D4" },
   document_viewed: { emoji: "\u{1F441}", color: "#F59E0B" },
   portal_message: { emoji: "\u{1F4AC}", color: "#2563EB" },
+  tax_organizer_submitted: { emoji: "\u{1F4CB}", color: "#10B981" },
 };
 
 export async function createNotification({

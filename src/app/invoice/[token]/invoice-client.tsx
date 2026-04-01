@@ -975,7 +975,7 @@ function PayButton({
           fontSize: 12,
         }}
       >
-        Secure payment via Helcim
+        Secure payment via Stripe
       </p>
     </div>
   );

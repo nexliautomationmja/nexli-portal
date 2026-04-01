@@ -240,6 +240,66 @@ export function buildUploadRequestEmail(params: {
   };
 }
 
+// ── Tax Organizer Request Email ───────────────────────────
+
+export function buildTaxOrganizerEmail(params: {
+  clientName: string;
+  senderName: string;
+  taxYear: string;
+  returnType: string;
+  organizerUrl: string;
+  expiresAt: Date;
+}): { subject: string; html: string } {
+  const { clientName, senderName, taxYear, returnType, organizerUrl, expiresAt } =
+    params;
+  const expDate = expiresAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const returnTypeLabels: Record<string, string> = {
+    "1040": "Individual Tax Return (1040)",
+    "1120": "C-Corp (1120)",
+    "1120S": "S-Corp (1120S)",
+    "1065": "Partnership (1065)",
+    "990": "Nonprofit (990)",
+    other: "Tax Return",
+  };
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Tax Organizer</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
+      ${clientName || "Hi there"}, <strong style="color:#fff;">${senderName}</strong> has sent you a tax organizer to complete.
+    </p>
+    <p style="margin:0 0 20px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+      Please complete the following tax organizer to help us prepare your ${taxYear} ${returnTypeLabels[returnType] || returnType}. This questionnaire collects the information we need and will tell you exactly which documents to upload.
+    </p>
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+      <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Details</p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Tax Year: <strong style="color:#fff;">${taxYear}</strong></p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Return Type: <strong style="color:#fff;">${returnTypeLabels[returnType] || returnType}</strong></p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Expires: <strong style="color:#fff;">${expDate}</strong></p>
+    </div>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${organizerUrl}" style="${buttonStyle}">Complete Tax Organizer</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        This link expires ${expDate} &bull; No account required
+      </p>
+      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
+        Or copy this link: ${organizerUrl}
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: `${senderName} sent your tax organizer for ${taxYear}`,
+    html,
+  };
+}
+
 // ── E-Sign Request Email ─────────────────────────────────
 
 export function buildEsignRequestEmail(params: {
@@ -469,7 +529,7 @@ export function buildInvoiceEmail(params: {
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
-        No account required &bull; Secure payment via Helcim
+        No account required &bull; Secure payment via Stripe
       </p>
     </div>
   `);
@@ -594,7 +654,7 @@ export function buildInvoiceReminderEmail(params: {
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
-        No account required &bull; Secure payment via Helcim
+        No account required &bull; Secure payment via Stripe
       </p>
     </div>
   `);

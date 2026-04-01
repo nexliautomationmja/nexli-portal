@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { invoices } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { createCheckoutSession } from "@/lib/stripe";
 
 export async function POST(
   _req: NextRequest,
@@ -41,12 +42,36 @@ export async function POST(
     );
   }
 
-  if (!invoice.paymentUrl) {
+  const portalUrl =
+    process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+  const invoicePageUrl = `${portalUrl}/invoice/${token}`;
+
+  try {
+    const { sessionId, checkoutUrl } = await createCheckoutSession({
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      clientEmail: invoice.clientEmail,
+      amountCents: balanceDue,
+      currency: invoice.currency,
+      successUrl: `${invoicePageUrl}?payment=success`,
+      cancelUrl: `${invoicePageUrl}?payment=canceled`,
+    });
+
+    // Store the session ID for reference
+    await db
+      .update(invoices)
+      .set({
+        stripeSessionId: sessionId,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, invoice.id));
+
+    return NextResponse.json({ checkoutUrl });
+  } catch (err) {
+    console.error("Failed to create Stripe checkout session:", err);
     return NextResponse.json(
-      { error: "Payment link not yet available" },
-      { status: 400 }
+      { error: "Failed to create payment session" },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({ checkoutUrl: invoice.paymentUrl });
 }

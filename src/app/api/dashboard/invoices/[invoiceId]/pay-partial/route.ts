@@ -51,13 +51,11 @@ export async function POST(
     );
   }
 
-  if (!invoice.paymentUrl) {
-    return NextResponse.json(
-      { error: "Payment link not yet available" },
-      { status: 400 }
-    );
-  }
-
-  // Helcim hosted page handles partial payments natively
-  return NextResponse.json({ paymentUrl: invoice.paymentUrl });
+  // Stripe Checkout Sessions are created at checkout time via the public
+  // checkout route. Return the invoice page URL for the normal payment flow.
+  const portalUrl =
+    process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+  return NextResponse.json({
+    paymentUrl: `${portalUrl}/invoice/${invoice.token}`,
+  });
 }

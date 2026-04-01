@@ -8,6 +8,7 @@ import {
   XIcon,
   TrashIcon,
   EyeIcon,
+  SendIcon,
 } from "@/components/ui/icons";
 
 interface TaxReturn {
@@ -83,6 +84,9 @@ export function TaxReturnsClient() {
   // Detail editing
   const [detailNotes, setDetailNotes] = useState("");
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Send organizer
+  const [sendingOrganizer, setSendingOrganizer] = useState(false);
 
   useEffect(() => {
     fetchTaxReturns();
@@ -195,6 +199,38 @@ export function TaxReturnsClient() {
   function openDetail(tr: TaxReturn) {
     setShowDetail(tr);
     setDetailNotes(tr.notes || "");
+  }
+
+  async function handleSendOrganizer(returnId: string) {
+    if (
+      !confirm(
+        "Send tax organizer to the client? They will receive an email with a secure link to complete."
+      )
+    )
+      return;
+    setSendingOrganizer(true);
+    try {
+      const res = await fetch(
+        `/api/dashboard/tax-returns/${returnId}/send-organizer`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expiresInDays: 30 }),
+        }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        alert(
+          data.emailSent
+            ? "Tax organizer sent! The client will receive an email with a secure link."
+            : "Tax organizer link created. Email delivery may have failed — check logs."
+        );
+      } else {
+        alert(data.error || "Failed to send organizer.");
+      }
+    } finally {
+      setSendingOrganizer(false);
+    }
   }
 
   function getBadgeClass(status: string) {
@@ -530,6 +566,16 @@ export function TaxReturnsClient() {
                           title="View"
                         >
                           <EyeIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSendOrganizer(tr.id);
+                          }}
+                          className="p-1.5 rounded hover:bg-blue-500/10 transition-colors"
+                          title="Send Tax Organizer"
+                        >
+                          <SendIcon className="w-3.5 h-3.5 text-blue-400" />
                         </button>
                         <button
                           onClick={(e) => {
@@ -970,16 +1016,29 @@ export function TaxReturnsClient() {
               >
                 Delete Return
               </button>
-              <button
-                onClick={() => setShowDetail(null)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors"
-                style={{
-                  borderColor: "var(--card-border)",
-                  color: "var(--text-main)",
-                }}
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleSendOrganizer(showDetail.id)}
+                  disabled={sendingOrganizer}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-40"
+                  style={{
+                    background: "linear-gradient(135deg, #2563EB, #06B6D4)",
+                  }}
+                >
+                  <SendIcon className="w-3.5 h-3.5" />
+                  {sendingOrganizer ? "Sending..." : "Send Organizer"}
+                </button>
+                <button
+                  onClick={() => setShowDetail(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border transition-colors"
+                  style={{
+                    borderColor: "var(--card-border)",
+                    color: "var(--text-main)",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </>
