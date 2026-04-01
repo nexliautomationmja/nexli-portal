@@ -1332,9 +1332,16 @@ export function getConditionalDocs(
   if (returnType === "1040") {
     for (const [fieldId, optionMap] of Object.entries(CONDITIONAL_DOCS_1040_CHECKBOX)) {
       const selected = formData[fieldId];
-      if (!(selected instanceof Set)) continue;
+      // Handle both Set (client-side) and Array (server-side JSON)
+      const selectedSet =
+        selected instanceof Set
+          ? selected
+          : Array.isArray(selected)
+            ? new Set(selected as string[])
+            : null;
+      if (!selectedSet) continue;
       for (const [optionId, doc] of Object.entries(optionMap)) {
-        if (selected.has(optionId) && !seen.has(doc.category)) {
+        if (selectedSet.has(optionId) && !seen.has(doc.category)) {
           seen.add(doc.category);
           results.push(doc);
         }
@@ -1350,4 +1357,32 @@ export function getConditionalDocs(
   }
 
   return results;
+}
+
+/**
+ * Returns a deduplicated list of all recommended document category names
+ * for a given return type and form data. Conditional docs (from answers)
+ * come first, followed by base categories for the return type.
+ */
+export function getRecommendedDocNames(
+  returnType: string,
+  formData: Record<string, unknown>
+): string[] {
+  const conditional = getConditionalDocs(returnType, formData);
+  const base = getDocCategories(returnType).filter((c) => c !== "Other");
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const doc of conditional) {
+    if (!seen.has(doc.category)) {
+      seen.add(doc.category);
+      result.push(doc.category);
+    }
+  }
+  for (const cat of base) {
+    if (!seen.has(cat)) {
+      seen.add(cat);
+      result.push(cat);
+    }
+  }
+  return result;
 }

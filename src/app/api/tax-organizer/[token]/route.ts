@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import cryptoNode from "crypto";
 import { db } from "@/db";
 import {
   taxOrganizerLinks,
   taxOrganizerSubmissions,
   taxReturns,
   documents,
+  documentLinks,
   documentAuditLog,
+  users,
 } from "@/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notifications";
+import { getRecommendedDocNames } from "@/lib/tax-organizer-forms";
+import {
+  sendEmailWithLog,
+  buildTaxOrganizerConfirmationEmail,
+} from "@/lib/email";
 
 function getSupabase() {
   return createClient(
@@ -257,6 +265,67 @@ export async function POST(
       metadata: { taxOrganizerLinkId: link.id, documentsUploaded: uploadedDocIds.length },
     });
   } catch {}
+
+  // Create follow-up upload link and send confirmation email
+  try {
+    const returnType =
+      (parsedFormData._returnType as string) || link.returnType;
+    const recommendedDocs = getRecommendedDocNames(returnType, parsedFormData);
+
+    if (recommendedDocs.length > 0 && link.clientEmail) {
+      // Create a document upload link for remaining documents
+      const uploadToken = cryptoNode.randomBytes(32).toString("base64url");
+      const uploadExpiresAt = new Date();
+      uploadExpiresAt.setDate(uploadExpiresAt.getDate() + 30);
+
+      await db.insert(documentLinks).values({
+        ownerId: link.ownerId,
+        token: uploadToken,
+        clientName: link.clientName,
+        clientEmail: link.clientEmail,
+        requiredDocuments: recommendedDocs,
+        maxUploads: 25,
+        expiresAt: uploadExpiresAt,
+        message: `tax-organizer:${submission.id}`,
+      });
+
+      // Get CPA name for email
+      const [owner] = await db
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, link.ownerId))
+        .limit(1);
+      const senderName =
+        owner?.name || owner?.email || "Your Tax Professional";
+
+      const portalUrl =
+        process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+      const uploadUrl = `${portalUrl}/upload/${uploadToken}`;
+
+      const { subject, html } = buildTaxOrganizerConfirmationEmail({
+        clientName: link.clientName || "Client",
+        senderName,
+        taxYear: link.taxYear,
+        returnType,
+        recommendedDocs,
+        uploadedCount: uploadedDocIds.length,
+        uploadUrl,
+        expiresAt: uploadExpiresAt,
+      });
+
+      await sendEmailWithLog({
+        to: link.clientEmail,
+        subject,
+        html,
+        recipientName: link.clientName || undefined,
+        emailType: "tax_organizer_confirmation",
+        relatedId: submission.id,
+        sentBy: link.ownerId,
+      });
+    }
+  } catch (err) {
+    console.error("Tax organizer confirmation email failed:", err);
+  }
 
   return NextResponse.json({ ok: true, submissionId: submission.id });
 }

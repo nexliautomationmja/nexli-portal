@@ -301,6 +301,135 @@ export function buildTaxOrganizerEmail(params: {
   };
 }
 
+// ── Tax Organizer Submission Confirmation Email ───────────
+
+export function buildTaxOrganizerConfirmationEmail(params: {
+  clientName: string;
+  senderName: string;
+  taxYear: string;
+  returnType: string;
+  recommendedDocs: string[];
+  uploadedCount: number;
+  uploadUrl: string;
+  expiresAt: Date;
+}): { subject: string; html: string } {
+  const {
+    clientName,
+    senderName,
+    taxYear,
+    returnType,
+    recommendedDocs,
+    uploadedCount,
+    uploadUrl,
+    expiresAt,
+  } = params;
+
+  const returnTypeLabels: Record<string, string> = {
+    "1040": "Individual Tax Return (1040)",
+    "1041": "Estate/Trust (1041)",
+    "1065": "Partnership (1065)",
+    "1120": "C-Corp (1120)",
+    "1120S": "S-Corp (1120S)",
+  };
+
+  const expDate = expiresAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const uploadedNote =
+    uploadedCount > 0
+      ? `<p style="margin:0 0 16px;color:#10B981;font-size:13px;">&#x2705; You uploaded ${uploadedCount} document${uploadedCount === 1 ? "" : "s"} with your submission.</p>`
+      : "";
+
+  const docList =
+    recommendedDocs.length > 0
+      ? `
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+      <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Documents Needed</p>
+      ${recommendedDocs.map((d) => `<p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; ${d}</p>`).join("")}
+    </div>`
+      : "";
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Tax Organizer Received</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
+      Thank you, ${clientName || "there"}! Your ${taxYear} ${returnTypeLabels[returnType] || returnType} tax organizer has been submitted to <strong style="color:#fff;">${senderName}</strong>.
+    </p>
+    ${uploadedNote}
+    ${recommendedDocs.length > 0 ? `<p style="margin:0 0 4px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+      Based on your answers, please upload the following documents so we can begin preparing your return:
+    </p>` : ""}
+    ${docList}
+    ${recommendedDocs.length > 0 ? `<div style="text-align:center;margin:28px 0;">
+      <a href="${uploadUrl}" style="${buttonStyle}">Upload Documents</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        This link expires ${expDate} &bull; No account required
+      </p>
+    </div>` : `<p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
+      We&rsquo;ll be in touch if we need any additional information.
+    </p>`}
+  `);
+
+  return {
+    subject: `Your ${taxYear} tax organizer has been received — documents needed`,
+    html,
+  };
+}
+
+// ── Tax Organizer Document Reminder Email ─────────────────
+
+export function buildTaxOrganizerDocReminderEmail(params: {
+  clientName: string;
+  senderName: string;
+  taxYear: string;
+  recommendedDocs: string[];
+  uploadUrl: string;
+  expiresAt: Date;
+}): { subject: string; html: string } {
+  const { clientName, senderName, taxYear, recommendedDocs, uploadUrl, expiresAt } =
+    params;
+
+  const expDate = expiresAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const docList = `
+    <div style="margin:20px 0;padding:16px;background-color:#1f1a0d;border:1px solid #3d3010;border-radius:12px;">
+      <p style="margin:0 0 12px;color:#F59E0B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Documents Still Needed</p>
+      ${recommendedDocs.map((d) => `<p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; ${d}</p>`).join("")}
+    </div>`;
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Document Reminder</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
+      Hi ${clientName || "there"}, <strong style="color:#fff;">${senderName}</strong> is still waiting on documents for your ${taxYear} tax return.
+    </p>
+    <p style="margin:0 0 4px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+      Please upload the following documents as soon as possible so we can begin preparing your return:
+    </p>
+    ${docList}
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${uploadUrl}" style="${buttonStyle}">Upload Documents</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        This link expires ${expDate} &bull; No account required
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: `Reminder: Documents needed for your ${taxYear} tax return`,
+    html,
+  };
+}
+
 // ── E-Sign Request Email ─────────────────────────────────
 
 export function buildEsignRequestEmail(params: {
