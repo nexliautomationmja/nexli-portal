@@ -1,6 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  getFormSections,
+  getDocCategories,
+  type FormSection,
+  type Question,
+  type SelectQuestion,
+  type RepeaterQuestion,
+  type CheckboxGroupQuestion,
+} from "@/lib/tax-organizer-forms";
 
 interface LinkMeta {
   clientName: string | null;
@@ -20,57 +29,10 @@ const RETURN_TYPE_LABELS: Record<string, string> = {
   "1120": "C-Corp (1120)",
   "1120S": "S-Corp (1120S)",
   "1065": "Partnership (1065)",
+  "1041": "Estate/Trust (1041)",
   "990": "Nonprofit (990)",
   other: "Tax Return",
 };
-
-const FILING_STATUSES = [
-  "Single",
-  "Married Filing Jointly",
-  "Married Filing Separately",
-  "Head of Household",
-  "Qualifying Surviving Spouse",
-];
-
-const INCOME_SOURCES = [
-  { id: "w2", label: "W-2 Employment" },
-  { id: "selfEmployment", label: "Self-Employment / 1099-NEC" },
-  { id: "interest", label: "Interest Income (1099-INT)" },
-  { id: "dividends", label: "Dividends (1099-DIV)" },
-  { id: "rental", label: "Rental Income" },
-  { id: "socialSecurity", label: "Social Security Benefits" },
-  { id: "retirement", label: "Retirement Distributions" },
-  { id: "capitalGains", label: "Capital Gains / Losses" },
-  { id: "unemployment", label: "Unemployment Compensation" },
-  { id: "crypto", label: "Cryptocurrency Transactions" },
-];
-
-const DEDUCTIONS = [
-  { id: "mortgage", label: "Mortgage Interest (1098)" },
-  { id: "propertyTax", label: "Property Taxes" },
-  { id: "charitable", label: "Charitable Donations" },
-  { id: "medical", label: "Medical Expenses" },
-  { id: "studentLoan", label: "Student Loan Interest" },
-  { id: "education", label: "Education Credits / Tuition" },
-  { id: "childcare", label: "Child / Dependent Care" },
-  { id: "estimatedTax", label: "Estimated Tax Payments Made" },
-  { id: "hsa", label: "HSA Contributions" },
-  { id: "ira", label: "IRA Contributions" },
-  { id: "homeOffice", label: "Home Office Expenses" },
-  { id: "stateLocalTax", label: "State & Local Taxes (SALT)" },
-];
-
-const DOC_CATEGORIES = [
-  "W-2",
-  "1099-INT",
-  "1099-DIV",
-  "1099-NEC",
-  "1099-MISC",
-  "1098",
-  "Bank Statement",
-  "ID / License",
-  "Other",
-];
 
 // ── Inline Icons ──────────────────────────────────────────
 
@@ -110,6 +72,494 @@ function FileIcon({ className }: { className?: string }) {
   );
 }
 
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────
+
+const inputClass =
+  "w-full px-3 py-2.5 rounded-lg border border-[#1e1e2a] bg-[#0a0a12] text-sm text-white outline-none focus:border-blue-500 transition-colors placeholder:text-[#4a4a5a]";
+const labelClass =
+  "text-[10px] font-bold uppercase tracking-widest text-[#808090] block mb-1.5";
+const sectionClass =
+  "rounded-2xl border border-[#1e1e2a] bg-[#0d0d15] p-5 md:p-6";
+
+// ── Currency Input ────────────────────────────────────────
+
+function CurrencyInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4a5a] text-sm">$</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value.replace(/[^0-9.,]/g, "");
+          onChange(v);
+        }}
+        placeholder={placeholder}
+        className={inputClass + " pl-7"}
+      />
+    </div>
+  );
+}
+
+// ── Yes/No Toggle ─────────────────────────────────────────
+
+function YesNoToggle({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => onChange(value === "yes" ? "" : "yes")}
+        className={`px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${
+          value === "yes"
+            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+            : "border-[#1e1e2a] text-[#808090] hover:border-[#2a2a3a]"
+        }`}
+      >
+        Yes
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(value === "no" ? "" : "no")}
+        className={`px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${
+          value === "no"
+            ? "border-red-500/40 bg-red-500/10 text-red-400"
+            : "border-[#1e1e2a] text-[#808090] hover:border-[#2a2a3a]"
+        }`}
+      >
+        No
+      </button>
+    </div>
+  );
+}
+
+// ── Radio Group ───────────────────────────────────────────
+
+function RadioGroup({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(value === opt.value ? "" : opt.value)}
+          className={`px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${
+            value === opt.value
+              ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+              : "border-[#1e1e2a] text-[#808090] hover:border-[#2a2a3a]"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Repeater Field ────────────────────────────────────────
+
+function RepeaterField({
+  question,
+  rows,
+  onChange,
+}: {
+  question: RepeaterQuestion;
+  rows: Record<string, string>[];
+  onChange: (rows: Record<string, string>[]) => void;
+}) {
+  const addRow = () => {
+    const empty: Record<string, string> = {};
+    for (const f of question.fields) {
+      empty[f.id] = "";
+    }
+    onChange([...rows, empty]);
+  };
+
+  const updateRow = (rowIdx: number, fieldId: string, value: string) => {
+    onChange(
+      rows.map((row, i) =>
+        i === rowIdx ? { ...row, [fieldId]: value } : row
+      )
+    );
+  };
+
+  const removeRow = (rowIdx: number) => {
+    onChange(rows.filter((_, i) => i !== rowIdx));
+  };
+
+  return (
+    <div>
+      {rows.length === 0 && (
+        <p className="text-xs text-[#4a4a5a] mb-2">
+          No entries added. Click below to add one.
+        </p>
+      )}
+      {rows.map((row, rowIdx) => (
+        <div
+          key={rowIdx}
+          className="rounded-lg border border-[#1e1e2a] bg-[#0a0a12] p-3 mb-2"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#4a4a5a]">
+              #{rowIdx + 1}
+            </span>
+            <button
+              type="button"
+              onClick={() => removeRow(rowIdx)}
+              className="p-1 rounded hover:bg-red-500/10 text-red-400 transition-colors"
+            >
+              <XIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {question.fields.map((field) => (
+              <div key={field.id} className={field.width || ""}>
+                <label className={labelClass}>{field.label}</label>
+                {field.type === "currency" ? (
+                  <CurrencyInput
+                    value={row[field.id] || ""}
+                    onChange={(v) => updateRow(rowIdx, field.id, v)}
+                    placeholder={field.placeholder}
+                  />
+                ) : field.type === "yesNo" ? (
+                  <YesNoToggle
+                    value={row[field.id] || ""}
+                    onChange={(v) => updateRow(rowIdx, field.id, v)}
+                  />
+                ) : field.type === "select" && field.options ? (
+                  <select
+                    value={row[field.id] || ""}
+                    onChange={(e) => updateRow(rowIdx, field.id, e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Select...</option>
+                    {field.options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={field.type === "date" ? "date" : field.type === "number" ? "number" : "text"}
+                    value={row[field.id] || ""}
+                    onChange={(e) => updateRow(rowIdx, field.id, e.target.value)}
+                    placeholder={field.placeholder}
+                    className={inputClass}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={addRow}
+        className="flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors mt-1"
+      >
+        <PlusIcon className="w-3.5 h-3.5" />
+        {question.addLabel}
+      </button>
+    </div>
+  );
+}
+
+// ── Checkbox Group ────────────────────────────────────────
+
+function CheckboxGroupField({
+  question,
+  selected,
+  onChange,
+}: {
+  question: CheckboxGroupQuestion;
+  selected: Set<string>;
+  onChange: (selected: Set<string>) => void;
+}) {
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      {question.options.map((opt) => (
+        <label
+          key={opt.id}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+            selected.has(opt.id)
+              ? "border-blue-500/40 bg-blue-500/10"
+              : "border-[#1e1e2a] hover:border-[#2a2a3a]"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={selected.has(opt.id)}
+            onChange={() => toggle(opt.id)}
+            className="w-4 h-4 rounded accent-blue-500"
+          />
+          <span className="text-sm text-white">{opt.label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+// ── Generic Question Renderer ─────────────────────────────
+
+function QuestionRenderer({
+  question,
+  formData,
+  setFormValue,
+}: {
+  question: Question;
+  formData: Record<string, unknown>;
+  setFormValue: (id: string, value: unknown) => void;
+}) {
+  const value = (formData[question.id] as string) || "";
+
+  switch (question.type) {
+    case "text":
+    case "email":
+    case "phone":
+      return (
+        <div className={question.halfWidth ? "" : "md:col-span-2"}>
+          <label className={labelClass}>
+            {question.label}
+            {question.required && " *"}
+          </label>
+          <input
+            type={question.type === "email" ? "email" : question.type === "phone" ? "tel" : "text"}
+            required={question.required}
+            value={value}
+            onChange={(e) => setFormValue(question.id, e.target.value)}
+            placeholder={question.placeholder}
+            className={inputClass}
+          />
+        </div>
+      );
+
+    case "number":
+      return (
+        <div className={question.halfWidth ? "" : "md:col-span-2"}>
+          <label className={labelClass}>
+            {question.label}
+            {question.required && " *"}
+          </label>
+          <input
+            type="number"
+            value={value}
+            onChange={(e) => setFormValue(question.id, e.target.value)}
+            placeholder={question.placeholder}
+            className={inputClass}
+          />
+        </div>
+      );
+
+    case "date":
+      return (
+        <div className={question.halfWidth ? "" : "md:col-span-2"}>
+          <label className={labelClass}>
+            {question.label}
+            {question.required && " *"}
+          </label>
+          <input
+            type="date"
+            value={value}
+            onChange={(e) => setFormValue(question.id, e.target.value)}
+            className={inputClass}
+          />
+        </div>
+      );
+
+    case "currency":
+      return (
+        <div className={question.halfWidth ? "" : "md:col-span-2"}>
+          <label className={labelClass}>
+            {question.label}
+            {question.required && " *"}
+          </label>
+          <CurrencyInput
+            value={value}
+            onChange={(v) => setFormValue(question.id, v)}
+            placeholder={question.placeholder}
+          />
+        </div>
+      );
+
+    case "yesNo":
+      return (
+        <div className="md:col-span-2">
+          <div className="flex items-start justify-between gap-4 py-1">
+            <label className="text-sm text-white leading-snug flex-1">
+              {question.label}
+            </label>
+            <YesNoToggle
+              value={value}
+              onChange={(v) => setFormValue(question.id, v)}
+            />
+          </div>
+        </div>
+      );
+
+    case "select":
+      return (
+        <div className={question.halfWidth ? "" : "md:col-span-2"}>
+          <label className={labelClass}>
+            {question.label}
+            {question.required && " *"}
+          </label>
+          <select
+            required={question.required}
+            value={value}
+            onChange={(e) => setFormValue(question.id, e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Select...</option>
+            {(question as SelectQuestion).options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+
+    case "radio":
+      return (
+        <div className="md:col-span-2">
+          <label className={labelClass}>
+            {question.label}
+            {question.required && " *"}
+          </label>
+          <RadioGroup
+            options={(question as SelectQuestion).options}
+            value={value}
+            onChange={(v) => setFormValue(question.id, v)}
+          />
+        </div>
+      );
+
+    case "textarea":
+      return (
+        <div className="md:col-span-2">
+          <label className={labelClass}>
+            {question.label}
+            {question.required && " *"}
+          </label>
+          <textarea
+            value={value}
+            onChange={(e) => setFormValue(question.id, e.target.value)}
+            placeholder={question.placeholder}
+            rows={4}
+            className={inputClass + " resize-none"}
+          />
+        </div>
+      );
+
+    case "checkboxGroup":
+      return (
+        <div className="md:col-span-2">
+          <CheckboxGroupField
+            question={question as CheckboxGroupQuestion}
+            selected={(formData[question.id] as Set<string>) || new Set()}
+            onChange={(selected) => setFormValue(question.id, selected)}
+          />
+        </div>
+      );
+
+    case "repeater":
+      return (
+        <div className="md:col-span-2">
+          <RepeaterField
+            question={question as RepeaterQuestion}
+            rows={(formData[question.id] as Record<string, string>[]) || []}
+            onChange={(rows) => setFormValue(question.id, rows)}
+          />
+        </div>
+      );
+
+    default:
+      return null;
+  }
+}
+
+// ── Section Renderer ──────────────────────────────────────
+
+function SectionRenderer({
+  section,
+  sectionIndex,
+  formData,
+  setFormValue,
+  taxYear,
+}: {
+  section: FormSection;
+  sectionIndex: number;
+  formData: Record<string, unknown>;
+  setFormValue: (id: string, value: unknown) => void;
+  taxYear: string;
+}) {
+  return (
+    <div className={sectionClass}>
+      <h2 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+        <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center shrink-0">
+          {sectionIndex + 1}
+        </span>
+        {section.title}
+      </h2>
+      {section.description && (
+        <p className="text-xs text-[#808090] mb-4 ml-8">
+          {section.description.replace("{taxYear}", taxYear)}
+        </p>
+      )}
+      {!section.description && <div className="mb-4" />}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {section.questions.map((question) => (
+          <QuestionRenderer
+            key={question.id}
+            question={question}
+            formData={formData}
+            setFormValue={setFormValue}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────
 
 export function TaxOrganizerClient({ token }: { token: string }) {
@@ -119,17 +569,8 @@ export function TaxOrganizerClient({ token }: { token: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  // Form state
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [filingStatus, setFilingStatus] = useState("");
-  const [incomeSources, setIncomeSources] = useState<Set<string>>(new Set());
-  const [incomeOther, setIncomeOther] = useState("");
-  const [deductions, setDeductions] = useState<Set<string>>(new Set());
-  const [deductionOther, setDeductionOther] = useState("");
-  const [dependents, setDependents] = useState<{ name: string; relationship: string; dob: string }[]>([]);
-  const [notes, setNotes] = useState("");
+  // Generic form data store — all question values keyed by question ID
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
 
   // File upload state
   const [files, setFiles] = useState<SelectedFile[]>([]);
@@ -147,44 +588,22 @@ export function TaxOrganizerClient({ token }: { token: string }) {
         }
         const data = await res.json();
         setMeta(data);
-        if (data.clientName) setFullName(data.clientName);
-        if (data.clientEmail) setEmail(data.clientEmail);
+        // Pre-fill known values
+        const initial: Record<string, unknown> = {};
+        if (data.clientName) initial.fullName = data.clientName;
+        if (data.clientEmail) initial.email = data.clientEmail;
+        // For S-Corp/C-Corp/Partnership, pre-fill legalName and representative email
+        if (data.clientName) initial.legalName = data.clientName;
+        if (data.clientEmail) initial.representativeEmail = data.clientEmail;
+        setFormData(initial);
       })
       .catch(() => setError("Unable to verify this link."))
       .finally(() => setLoading(false));
   }, [token]);
 
-  const toggleIncome = (id: string) => {
-    setIncomeSources((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleDeduction = (id: string) => {
-    setDeductions((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const addDependent = () => {
-    setDependents((prev) => [...prev, { name: "", relationship: "", dob: "" }]);
-  };
-
-  const updateDependent = (index: number, field: string, value: string) => {
-    setDependents((prev) =>
-      prev.map((d, i) => (i === index ? { ...d, [field]: value } : d))
-    );
-  };
-
-  const removeDependent = (index: number) => {
-    setDependents((prev) => prev.filter((_, i) => i !== index));
-  };
+  const setFormValue = useCallback((id: string, value: unknown) => {
+    setFormData((prev) => ({ ...prev, [id]: value }));
+  }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -219,33 +638,35 @@ export function TaxOrganizerClient({ token }: { token: string }) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Serialize form data for submission — convert Sets to arrays, etc.
+  const serializeFormData = () => {
+    const serialized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(formData)) {
+      if (value instanceof Set) {
+        serialized[key] = Array.from(value);
+      } else {
+        serialized[key] = value;
+      }
+    }
+    // Include return type for context
+    serialized._returnType = meta?.returnType;
+    return serialized;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
 
-    const formDataObj = {
-      fullName,
-      email,
-      phone,
-      filingStatus,
-      dependents: dependents.filter((d) => d.name.trim()),
-      incomeSources: Array.from(incomeSources),
-      incomeOther: incomeOther.trim(),
-      deductions: Array.from(deductions),
-      deductionOther: deductionOther.trim(),
-      notes: notes.trim(),
-    };
-
-    const formData = new FormData();
-    formData.append("formData", JSON.stringify(formDataObj));
+    const fd = new FormData();
+    fd.append("formData", JSON.stringify(serializeFormData()));
     for (const f of files) {
-      formData.append("files", f.file);
+      fd.append("files", f.file);
     }
 
     try {
       const res = await fetch(`/api/tax-organizer/${token}`, {
         method: "POST",
-        body: formData,
+        body: fd,
       });
 
       if (!res.ok) {
@@ -262,12 +683,16 @@ export function TaxOrganizerClient({ token }: { token: string }) {
     }
   };
 
-  const inputClass =
-    "w-full px-3 py-2.5 rounded-lg border border-[#1e1e2a] bg-[#0a0a12] text-sm text-white outline-none focus:border-blue-500 transition-colors placeholder:text-[#4a4a5a]";
-  const labelClass =
-    "text-[10px] font-bold uppercase tracking-widest text-[#808090] block mb-1.5";
-  const sectionClass =
-    "rounded-2xl border border-[#1e1e2a] bg-[#0d0d15] p-5 md:p-6";
+  // Determine if form has minimum required fields filled
+  const isFormValid = () => {
+    if (!meta) return false;
+    const rt = meta.returnType;
+    if (rt === "1040") {
+      return !!(formData.fullName && formData.email && formData.filingStatus);
+    }
+    // For business forms, require legal name and EIN
+    return !!(formData.legalName && formData.ein);
+  };
 
   // ── Loading State ──
   if (loading) {
@@ -301,6 +726,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
 
   // ── Success State ──
   if (submitted) {
+    const displayName = (formData.fullName as string) || (formData.legalName as string) || "";
     return (
       <div className="min-h-screen bg-[#08080e] flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center">
@@ -309,7 +735,11 @@ export function TaxOrganizerClient({ token }: { token: string }) {
           </div>
           <h1 className="text-xl font-bold text-white mb-3">Tax Organizer Submitted</h1>
           <p className="text-sm text-[#808090] leading-relaxed">
-            Thank you, {fullName || "your information"}! Your tax organizer and {files.length > 0 ? `${files.length} document${files.length > 1 ? "s" : ""} have` : "responses have"} been securely submitted.
+            Thank you{displayName ? `, ${displayName}` : ""}! Your tax organizer and{" "}
+            {files.length > 0
+              ? `${files.length} document${files.length > 1 ? "s" : ""} have`
+              : "responses have"}{" "}
+            been securely submitted.
           </p>
           <p className="text-xs text-[#4a4a5a] mt-4">
             Your provider will review everything before your appointment. You can close this page.
@@ -321,7 +751,10 @@ export function TaxOrganizerClient({ token }: { token: string }) {
 
   if (!meta) return null;
 
-  // ── Form ──
+  const sections = getFormSections(meta.returnType);
+  const docCategories = getDocCategories(meta.returnType);
+  const totalSections = sections.length + 1; // +1 for document upload
+
   return (
     <div className="min-h-screen bg-[#08080e]">
       {/* Header */}
@@ -342,7 +775,8 @@ export function TaxOrganizerClient({ token }: { token: string }) {
               Tax Organizer
             </p>
             <p className="text-xs text-[#4a4a5a]">
-              {meta.taxYear} &bull; {RETURN_TYPE_LABELS[meta.returnType] || meta.returnType}
+              {meta.taxYear} &bull;{" "}
+              {RETURN_TYPE_LABELS[meta.returnType] || meta.returnType}
             </p>
           </div>
         </div>
@@ -356,7 +790,10 @@ export function TaxOrganizerClient({ token }: { token: string }) {
             Complete Your Tax Organizer
           </h1>
           <p className="text-sm text-[#808090] max-w-lg mx-auto">
-            {meta.clientName ? `Hi ${meta.clientName}, please` : "Please"} fill out the information below and upload any relevant documents to help prepare your {meta.taxYear} tax return.
+            {meta.clientName ? `Hi ${meta.clientName}, please` : "Please"} fill
+            out the information below and upload any relevant documents to help
+            prepare your {meta.taxYear}{" "}
+            {RETURN_TYPE_LABELS[meta.returnType]?.toLowerCase() || "tax"} return.
           </p>
         </div>
 
@@ -366,201 +803,34 @@ export function TaxOrganizerClient({ token }: { token: string }) {
           </div>
         )}
 
-        {/* Section 1: Personal Info */}
+        {/* Dynamic form sections */}
+        {sections.map((section, idx) => (
+          <SectionRenderer
+            key={section.id}
+            section={section}
+            sectionIndex={idx}
+            formData={formData}
+            setFormValue={setFormValue}
+            taxYear={meta.taxYear}
+          />
+        ))}
+
+        {/* Document Upload section (always shown) */}
         <div className={sectionClass}>
           <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center">1</span>
-            Personal Information
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Full Name *</label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Your full legal name"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Email *</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Phone</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="(555) 123-4567"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Filing Status *</label>
-              <select
-                required
-                value={filingStatus}
-                onChange={(e) => setFilingStatus(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Select filing status...</option>
-                {FILING_STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Dependents */}
-          <div className="mt-5">
-            <div className="flex items-center justify-between mb-3">
-              <label className={labelClass + " mb-0"}>Dependents</label>
-              <button
-                type="button"
-                onClick={addDependent}
-                className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                + Add Dependent
-              </button>
-            </div>
-            {dependents.length === 0 && (
-              <p className="text-xs text-[#4a4a5a]">No dependents added. Click &ldquo;+ Add Dependent&rdquo; if applicable.</p>
-            )}
-            {dependents.map((dep, i) => (
-              <div key={i} className="flex items-start gap-2 mb-2">
-                <input
-                  type="text"
-                  value={dep.name}
-                  onChange={(e) => updateDependent(i, "name", e.target.value)}
-                  placeholder="Name"
-                  className={inputClass + " flex-1"}
-                />
-                <input
-                  type="text"
-                  value={dep.relationship}
-                  onChange={(e) => updateDependent(i, "relationship", e.target.value)}
-                  placeholder="Relationship"
-                  className={inputClass + " w-32"}
-                />
-                <input
-                  type="date"
-                  value={dep.dob}
-                  onChange={(e) => updateDependent(i, "dob", e.target.value)}
-                  className={inputClass + " w-36"}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeDependent(i)}
-                  className="p-2 rounded hover:bg-red-500/10 text-red-400 transition-colors mt-0.5"
-                >
-                  <XIcon className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Section 2: Income Sources */}
-        <div className={sectionClass}>
-          <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center">2</span>
-            Income Sources
-          </h2>
-          <p className="text-xs text-[#808090] mb-4">Select all that apply for {meta.taxYear}.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {INCOME_SOURCES.map((source) => (
-              <label
-                key={source.id}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
-                  incomeSources.has(source.id)
-                    ? "border-blue-500/40 bg-blue-500/10"
-                    : "border-[#1e1e2a] hover:border-[#2a2a3a]"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={incomeSources.has(source.id)}
-                  onChange={() => toggleIncome(source.id)}
-                  className="w-4 h-4 rounded accent-blue-500"
-                />
-                <span className="text-sm text-white">{source.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="mt-3">
-            <label className={labelClass}>Other Income (describe)</label>
-            <input
-              type="text"
-              value={incomeOther}
-              onChange={(e) => setIncomeOther(e.target.value)}
-              placeholder="Any other income sources..."
-              className={inputClass}
-            />
-          </div>
-        </div>
-
-        {/* Section 3: Deductions & Credits */}
-        <div className={sectionClass}>
-          <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center">3</span>
-            Deductions &amp; Credits
-          </h2>
-          <p className="text-xs text-[#808090] mb-4">Select all that may apply.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {DEDUCTIONS.map((item) => (
-              <label
-                key={item.id}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
-                  deductions.has(item.id)
-                    ? "border-blue-500/40 bg-blue-500/10"
-                    : "border-[#1e1e2a] hover:border-[#2a2a3a]"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={deductions.has(item.id)}
-                  onChange={() => toggleDeduction(item.id)}
-                  className="w-4 h-4 rounded accent-blue-500"
-                />
-                <span className="text-sm text-white">{item.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="mt-3">
-            <label className={labelClass}>Other Deductions (describe)</label>
-            <input
-              type="text"
-              value={deductionOther}
-              onChange={(e) => setDeductionOther(e.target.value)}
-              placeholder="Any other deductions or credits..."
-              className={inputClass}
-            />
-          </div>
-        </div>
-
-        {/* Section 4: Document Upload */}
-        <div className={sectionClass}>
-          <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center">4</span>
+            <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center">
+              {totalSections}
+            </span>
             Upload Documents
           </h2>
           <p className="text-xs text-[#808090] mb-4">
-            Upload W-2s, 1099s, and any other relevant tax documents. You can also skip this and provide them later.
+            Upload financial statements, tax forms, and any other relevant documents.
+            You can also skip this and provide them later.
           </p>
 
           {/* Category pills */}
           <div className="flex flex-wrap gap-1.5 mb-4">
-            {DOC_CATEGORIES.map((cat) => (
+            {docCategories.map((cat) => (
               <button
                 key={cat}
                 type="button"
@@ -578,7 +848,10 @@ export function TaxOrganizerClient({ token }: { token: string }) {
 
           {/* Drop zone */}
           <div
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
             className={`relative rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
@@ -636,25 +909,10 @@ export function TaxOrganizerClient({ token }: { token: string }) {
           )}
         </div>
 
-        {/* Section 5: Additional Notes */}
-        <div className={sectionClass}>
-          <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center">5</span>
-            Additional Notes
-          </h2>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Anything else your tax professional should know? (life changes, new business, questions, etc.)"
-            rows={4}
-            className={inputClass + " resize-none"}
-          />
-        </div>
-
         {/* Submit */}
         <button
           type="submit"
-          disabled={submitting || !fullName || !email || !filingStatus}
+          disabled={submitting || !isFormValid()}
           className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-base font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
           style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
         >
@@ -672,7 +930,8 @@ export function TaxOrganizerClient({ token }: { token: string }) {
         </button>
 
         <p className="text-[10px] text-center text-[#4a4a5a]">
-          Your information is encrypted and transmitted securely. This link expires{" "}
+          Your information is encrypted and transmitted securely. This link
+          expires{" "}
           {new Date(meta.expiresAt).toLocaleDateString("en-US", {
             month: "long",
             day: "numeric",
