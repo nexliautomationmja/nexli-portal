@@ -260,9 +260,10 @@ export function buildTaxOrganizerEmail(params: {
 
   const returnTypeLabels: Record<string, string> = {
     "1040": "Individual Tax Return (1040)",
+    "1041": "Estate/Trust (1041)",
+    "1065": "Partnership (1065)",
     "1120": "C-Corp (1120)",
     "1120S": "S-Corp (1120S)",
-    "1065": "Partnership (1065)",
     "990": "Nonprofit (990)",
     other: "Tax Return",
   };

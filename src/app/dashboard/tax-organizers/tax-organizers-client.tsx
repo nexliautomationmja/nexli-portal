@@ -129,7 +129,17 @@ export function TaxOrganizersClient() {
         alert(data.error || "Failed to send organizer.");
       }
     } catch {
-      alert("Network error.");
+      // Server may have succeeded but response timed out — refresh list
+      setShowCreate(false);
+      setCreateForm({
+        clientName: "",
+        clientEmail: "",
+        taxYear: new Date().getFullYear().toString(),
+        returnType: "1040",
+        expiresInDays: 30,
+      });
+      setClientPicked(false);
+      await loadOrganizers();
     } finally {
       setCreating(false);
     }
