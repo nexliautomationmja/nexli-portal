@@ -9,6 +9,7 @@ import {
   index,
   uniqueIndex,
   integer,
+  real,
 } from "drizzle-orm/pg-core";
 
 // ── Enums ──────────────────────────────────────────────
@@ -943,5 +944,28 @@ export const notifications = pgTable(
   (table) => [
     index("notifications_user_read_idx").on(table.userId, table.read),
     index("notifications_user_created_idx").on(table.userId, table.createdAt),
+  ]
+);
+
+// ── VSL Video Tracking ────────────────────────────────────
+export const vslTracking = pgTable(
+  "vsl_tracking",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: text("session_id").notNull(),
+    email: text("email"), // Nullable - set when user submits form
+    eventType: text("event_type").notNull(), // 'play', 'pause', 'progress', 'milestone', 'complete'
+    videoPosition: real("video_position").default(0).notNull(), // Current time in seconds
+    videoDuration: real("video_duration").default(0).notNull(), // Total duration in seconds
+    completionPercentage: real("completion_percentage").default(0).notNull(), // 0-100
+    milestone: integer("milestone"), // 25, 50, 75, 100 for milestone events
+    userAgent: text("user_agent"),
+    ipAddress: text("ip_address"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("vsl_tracking_session_idx").on(table.sessionId),
+    index("vsl_tracking_email_idx").on(table.email),
+    index("vsl_tracking_created_idx").on(table.createdAt),
   ]
 );
