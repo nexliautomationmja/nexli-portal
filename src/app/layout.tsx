@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Outfit, Plus_Jakarta_Sans, Syne } from "next/font/google";
+import { Outfit, Plus_Jakarta_Sans, Syne, Dancing_Script } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -21,6 +21,13 @@ const syne = Syne({
   weight: ["400", "500", "600", "700", "800"],
 });
 
+const dancingScript = Dancing_Script({
+  variable: "--font-signature",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Nexli Dashboard | Client Analytics & Reporting",
   description:
@@ -39,7 +46,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${outfit.variable} ${plusJakarta.variable} ${syne.variable} antialiased`}
+        className={`${outfit.variable} ${plusJakarta.variable} ${syne.variable} ${dancingScript.variable} antialiased`}
       >
         <ThemeProvider>{children}</ThemeProvider>
       </body>

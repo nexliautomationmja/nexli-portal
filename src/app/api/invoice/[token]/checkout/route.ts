@@ -61,7 +61,7 @@ export async function POST(
     await db
       .update(invoices)
       .set({
-        stripeSessionId: sessionId,
+        stripeCheckoutSessionId: sessionId,
         updatedAt: new Date(),
       })
       .where(eq(invoices.id, invoice.id));

@@ -28,6 +28,7 @@ import {
   SendIcon,
 } from "@/components/ui/icons";
 import { ClientPicker } from "@/components/dashboard/client-picker";
+import { SignatureCertificate } from "@/components/signature-certificate";
 
 const STATUS_COLORS = {
   new: "badge-blue",
@@ -85,6 +86,7 @@ export function DocumentsClient() {
   const [esignEmail, setEsignEmail] = useState("");
   const [esignSending, setEsignSending] = useState(false);
   const { esignatures, refetch: refetchEsign } = useESignatures();
+  const [viewingCertificate, setViewingCertificate] = useState<ESignature | null>(null);
 
   const { documents, total, loading, refetch } = useDocuments({
     status: statusFilter !== "all" ? statusFilter : undefined,
@@ -604,6 +606,15 @@ export function DocumentsClient() {
                             &quot;{es.declineReason}&quot;
                           </p>
                         )}
+                        {(es.status === "signed" || es.status === "declined") && (
+                          <button
+                            onClick={() => setViewingCertificate(es)}
+                            className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-blue-400 hover:text-blue-300"
+                          >
+                            <EyeIcon className="w-3 h-3" />
+                            View Certificate
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -627,6 +638,65 @@ export function DocumentsClient() {
                   style={{ color: "var(--text-main)" }}
                 />
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Signature Certificate Modal */}
+      {viewingCertificate && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/60 z-50"
+            onClick={() => setViewingCertificate(null)}
+          />
+          <div
+            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            style={{
+              background: "var(--card-bg)",
+              borderColor: "var(--card-border)",
+            }}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[var(--card-border)]">
+              <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
+                Signature Certificate
+              </h2>
+              <button
+                onClick={() => setViewingCertificate(null)}
+                className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+              >
+                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <SignatureCertificate
+                documentName={viewingCertificate.documentName || "Document"}
+                status={viewingCertificate.status}
+                signerName={viewingCertificate.signerName}
+                signerEmail={viewingCertificate.signerEmail}
+                signatureData={viewingCertificate.signatureData}
+                signatureIp={viewingCertificate.signatureIp}
+                sentAt={viewingCertificate.sentAt}
+                viewedAt={viewingCertificate.viewedAt}
+                signedAt={viewingCertificate.signedAt}
+                declinedAt={viewingCertificate.declinedAt}
+                declineReason={viewingCertificate.declineReason}
+                senderName={viewingCertificate.senderName}
+                senderCompany={viewingCertificate.senderCompany}
+                senderEmail={viewingCertificate.senderEmail}
+              />
+            </div>
+            <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-end">
+              <button
+                onClick={() => setViewingCertificate(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)]"
+                style={{
+                  borderColor: "var(--card-border)",
+                  color: "var(--text-main)",
+                }}
+              >
+                Close
+              </button>
             </div>
           </div>
         </>

@@ -7,6 +7,25 @@ interface DocumentPreviewProps {
   fromName: string;
   fromCompany: string;
   date?: string;
+  /** Sender's signature data URL (PNG or SVG). When omitted no image is shown. */
+  senderSignatureData?: string | null;
+  senderSignedAt?: Date | string | null;
+  senderRole?: string | null;
+  /** Client's signature data URL (PNG). When omitted, an "awaiting" placeholder shows. */
+  clientSignatureData?: string | null;
+  clientSignedAt?: Date | string | null;
+  clientSignedName?: string | null;
+}
+
+function formatSignedDate(input: Date | string | null | undefined): string {
+  if (!input) return "";
+  const d = typeof input === "string" ? new Date(input) : input;
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export function DocumentPreview({
@@ -16,6 +35,12 @@ export function DocumentPreview({
   fromName,
   fromCompany,
   date,
+  senderSignatureData,
+  senderSignedAt,
+  senderRole,
+  clientSignatureData,
+  clientSignedAt,
+  clientSignedName,
 }: DocumentPreviewProps) {
   const displayDate =
     date ||
@@ -236,7 +261,7 @@ export function DocumentPreview({
         </p>
       </div>
 
-      {/* Signature Block */}
+      {/* Signature Block — two columns: sender (left) + recipient (right) */}
       <div style={{ padding: "20px 48px 44px" }}>
         <p
           style={{
@@ -250,37 +275,192 @@ export function DocumentPreview({
         </p>
         <div
           style={{
-            marginTop: 40,
-            borderTop: "1px solid #374151",
-            width: 200,
-            paddingTop: 8,
+            marginTop: 24,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 32,
           }}
         >
-          <p
-            style={{
-              margin: 0,
-              fontSize: 13,
-              color: "#111827",
-              fontWeight: 600,
-              fontFamily:
-                "'Inter', 'Helvetica Neue', Arial, sans-serif",
-            }}
-          >
-            {fromCompany || fromName || "—"}
-          </p>
-          {fromCompany && fromName && (
+          {/* Sender signature */}
+          <div>
+            <p
+              style={{
+                margin: "0 0 6px",
+                fontSize: 9,
+                fontWeight: 700,
+                color: "#9ca3af",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                fontFamily:
+                  "'Inter', 'Helvetica Neue', Arial, sans-serif",
+              }}
+            >
+              Service Provider
+            </p>
+            <div
+              style={{
+                height: 64,
+                display: "flex",
+                alignItems: "flex-end",
+                borderBottom: "1px solid #374151",
+                marginBottom: 6,
+              }}
+            >
+              {senderSignatureData ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={senderSignatureData}
+                  alt="Sender signature"
+                  style={{
+                    maxHeight: 56,
+                    maxWidth: "100%",
+                    objectFit: "contain",
+                    objectPosition: "left bottom",
+                  }}
+                />
+              ) : (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "#9ca3af",
+                    fontStyle: "italic",
+                    fontFamily:
+                      "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                  }}
+                >
+                  Awaiting signature
+                </span>
+              )}
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "#111827",
+                fontWeight: 600,
+                fontFamily:
+                  "'Inter', 'Helvetica Neue', Arial, sans-serif",
+              }}
+            >
+              {fromName || fromCompany || "—"}
+            </p>
             <p
               style={{
                 margin: "2px 0 0",
-                fontSize: 12,
+                fontSize: 11,
                 color: "#6b7280",
                 fontFamily:
                   "'Inter', 'Helvetica Neue', Arial, sans-serif",
               }}
             >
-              {fromName}
+              {senderRole ||
+                (fromCompany
+                  ? `Authorized Representative, ${fromCompany}`
+                  : "Authorized Representative")}
             </p>
-          )}
+            {senderSignedAt && (
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 10,
+                  color: "#9ca3af",
+                  fontFamily:
+                    "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                }}
+              >
+                Signed {formatSignedDate(senderSignedAt)}
+              </p>
+            )}
+          </div>
+
+          {/* Client signature */}
+          <div>
+            <p
+              style={{
+                margin: "0 0 6px",
+                fontSize: 9,
+                fontWeight: 700,
+                color: "#9ca3af",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                fontFamily:
+                  "'Inter', 'Helvetica Neue', Arial, sans-serif",
+              }}
+            >
+              Client
+            </p>
+            <div
+              style={{
+                height: 64,
+                display: "flex",
+                alignItems: "flex-end",
+                borderBottom: "1px solid #374151",
+                marginBottom: 6,
+              }}
+            >
+              {clientSignatureData ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={clientSignatureData}
+                  alt="Client signature"
+                  style={{
+                    maxHeight: 56,
+                    maxWidth: "100%",
+                    objectFit: "contain",
+                    objectPosition: "left bottom",
+                  }}
+                />
+              ) : (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "#9ca3af",
+                    fontStyle: "italic",
+                    fontFamily:
+                      "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                  }}
+                >
+                  Awaiting signature
+                </span>
+              )}
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "#111827",
+                fontWeight: 600,
+                fontFamily:
+                  "'Inter', 'Helvetica Neue', Arial, sans-serif",
+              }}
+            >
+              {clientSignedName || clientName || "—"}
+            </p>
+            <p
+              style={{
+                margin: "2px 0 0",
+                fontSize: 11,
+                color: "#6b7280",
+                fontFamily:
+                  "'Inter', 'Helvetica Neue', Arial, sans-serif",
+              }}
+            >
+              Client
+            </p>
+            {clientSignedAt && (
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 10,
+                  color: "#9ca3af",
+                  fontFamily:
+                    "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                }}
+              >
+                Signed {formatSignedDate(clientSignedAt)}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

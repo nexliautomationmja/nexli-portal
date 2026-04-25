@@ -20,6 +20,9 @@ export interface ESignature {
   declineReason: string | null;
   createdAt: string;
   documentName?: string;
+  senderName?: string;
+  senderCompany?: string;
+  senderEmail?: string;
 }
 
 interface CreateEsignParams {

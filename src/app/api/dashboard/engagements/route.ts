@@ -10,6 +10,7 @@ import {
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { sendEmailWithLog, buildEngagementRequestEmail } from "@/lib/email";
+import { generateSenderSignatureSvgDataUrl } from "@/lib/signature";
 
 export async function GET() {
   const session = await auth();
@@ -161,9 +162,17 @@ export async function POST(req: NextRequest) {
     .limit(1);
   const companyName = ownerInfo?.companyName || "";
 
-  // Add the CPA (sender) as the first signer (order 0)
+  // Add the CPA (sender) as the first signer (order 0) — auto-signed.
+  // The sender's signature is generated as a cursive SVG using their name and
+  // attached immediately so the engagement letter ships pre-signed on the
+  // Nexli side. The recipient just needs to add their signature.
   const cpaToken = crypto.randomBytes(32).toString("base64url");
   const cpaEngageUrl = `${portalUrl}/engage/${cpaToken}`;
+  const senderSignatureSvg = generateSenderSignatureSvgDataUrl(senderName);
+  const senderIp =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "system";
 
   await db.insert(engagementSigners).values({
     engagementId: engagement.id,
@@ -171,8 +180,12 @@ export async function POST(req: NextRequest) {
     email: cpaEmail,
     token: cpaToken,
     order: 0,
-    status: "sent",
+    status: "signed",
     sentAt: new Date(),
+    signedAt: new Date(),
+    signatureData: senderSignatureSvg,
+    signatureIp: senderIp,
+    signatureUserAgent: "Auto-signed by sender on document creation",
     role: companyName
       ? `Authorized Representative, ${companyName}`
       : "Authorized Representative",
@@ -180,22 +193,8 @@ export async function POST(req: NextRequest) {
 
   signers.push({ name: senderName, email: cpaEmail, engageUrl: cpaEngageUrl });
 
-  // Send signing email to the CPA
-  try {
-    const { subject: cpaSubject, html: cpaHtml } = buildEngagementRequestEmail({
-      clientName: senderName,
-      senderName: "Nexli",
-      subject,
-      engageUrl: cpaEngageUrl,
-      expiresAt,
-    });
-    await sendEmailWithLog({ to: cpaEmail, subject: cpaSubject, html: cpaHtml, recipientName: senderName, emailType: "engagement_request", relatedId: engagement.id, sentBy: session.user.id });
-  } catch (err) {
-    console.error(`Failed to send engagement email to CPA ${cpaEmail}:`, err);
-    emailErrors.push(
-      `${cpaEmail}: ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
+  // The CPA is auto-signed on creation, so no "please sign" email is sent
+  // to them. They still receive a notification when each recipient signs.
 
   // Add client recipients as signers (order 1+)
   for (let i = 0; i < recipients.length; i++) {

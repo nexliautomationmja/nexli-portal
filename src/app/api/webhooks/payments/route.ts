@@ -11,6 +11,7 @@ import {
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 import { createNotification } from "@/lib/notifications";
+import { triggerDrsPostInitialPaid } from "@/lib/digital-rainmaker";
 import type Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
@@ -108,6 +109,24 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       .where(eq(invoices.id, invoice.id));
 
     await sendPaymentNotifications(invoice, amountCents, false);
+
+    // Digital Rainmaker System auto-invoicing: if this paid invoice was the
+    // DRS Initial Setup Fee, generate and send the Final Setup Fee + first
+    // Monthly Subscription invoices (both due in 30 days).
+    if (newStatus === "paid") {
+      try {
+        const [refreshed] = await db
+          .select()
+          .from(invoices)
+          .where(eq(invoices.id, invoice.id))
+          .limit(1);
+        if (refreshed) {
+          await triggerDrsPostInitialPaid(refreshed);
+        }
+      } catch (err) {
+        console.error("DRS post-paid trigger failed:", err);
+      }
+    }
   } else if (session.payment_status === "unpaid") {
     // ACH initiated — pending settlement
     await db
@@ -143,6 +162,22 @@ async function handleAsyncPaymentSucceeded(
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, invoiceId));
+
+  // Digital Rainmaker System auto-invoicing: ACH payments only count as
+  // truly settled here. If the now-settled invoice is the DRS Initial Setup
+  // Fee and is fully paid, kick off the Final + Monthly invoices.
+  try {
+    const [refreshed] = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .limit(1);
+    if (refreshed && refreshed.status === "paid") {
+      await triggerDrsPostInitialPaid(refreshed);
+    }
+  } catch (err) {
+    console.error("DRS post-paid (ACH) trigger failed:", err);
+  }
 }
 
 // ── checkout.session.async_payment_failed ──

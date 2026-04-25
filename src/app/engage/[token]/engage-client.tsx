@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DocumentPreview } from "@/components/engagement-document";
 
 interface EngageData {
@@ -14,6 +14,12 @@ interface EngageData {
     name: string;
     company: string;
   };
+  sender?: {
+    name: string;
+    role: string | null;
+    signedAt: string | null;
+    signatureData: string | null;
+  } | null;
 }
 
 export function EngageClient({ token }: { token: string }) {
@@ -33,11 +39,9 @@ export function EngageClient({ token }: { token: string }) {
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
 
-  // Canvas state
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Hidden canvas used to render typed signature into PNG for the API
+  const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
   const signSectionRef = useRef<HTMLDivElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [hasDrawn, setHasDrawn] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -59,71 +63,6 @@ export function EngageClient({ token }: { token: string }) {
     load();
   }, [token]);
 
-  const getCanvasCoords = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-
-      if ("touches" in e) {
-        const touch = e.touches[0];
-        return {
-          x: (touch.clientX - rect.left) * scaleX,
-          y: (touch.clientY - rect.top) * scaleY,
-        };
-      }
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY,
-      };
-    },
-    []
-  );
-
-  function startDrawing(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const { x, y } = getCanvasCoords(e);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    setIsDrawing(true);
-    setHasDrawn(true);
-  }
-
-  function draw(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const { x, y } = getCanvasCoords(e);
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = "#1e293b";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke();
-  }
-
-  function stopDrawing() {
-    setIsDrawing(false);
-  }
-
-  function clearSignature() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasDrawn(false);
-  }
-
   function handleStart() {
     setStep(2);
     setTimeout(() => {
@@ -131,14 +70,53 @@ export function EngageClient({ token }: { token: string }) {
     }, 100);
   }
 
+  // Render the typed name into the hidden canvas using the cursive font.
+  // Returns a PNG data URL we can ship to the existing API.
+  async function renderTypedSignatureToPng(name: string): Promise<string | null> {
+    const canvas = hiddenCanvasRef.current;
+    if (!canvas) return null;
+
+    // Wait for the cursive font to be loaded so it actually renders correctly.
+    if (typeof document !== "undefined" && document.fonts) {
+      try {
+        await document.fonts.load('48px "Dancing Script"');
+        await document.fonts.ready;
+      } catch {
+        /* ignore — fall back to whatever the system has */
+      }
+    }
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#1e293b";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+
+    // Auto-shrink font so long names fit
+    let fontSize = 72;
+    const maxWidth = canvas.width - 40;
+    do {
+      ctx.font = `${fontSize}px "Dancing Script", "Snell Roundhand", "Brush Script MT", cursive`;
+      if (ctx.measureText(name).width <= maxWidth) break;
+      fontSize -= 4;
+    } while (fontSize > 24);
+
+    ctx.fillText(name, canvas.width / 2, canvas.height / 2);
+    return canvas.toDataURL("image/png");
+  }
+
   async function handleSign() {
-    if (!data || !agreed || !hasDrawn || !typedName.trim()) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!data || !agreed || !typedName.trim()) return;
 
     setSigning(true);
     try {
-      const signatureData = canvas.toDataURL("image/png");
+      const signatureData = await renderTypedSignatureToPng(typedName.trim());
+      if (!signatureData) {
+        setError("Signing failed. Please try again.");
+        return;
+      }
       const res = await fetch(`/api/engage/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -172,7 +150,7 @@ export function EngageClient({ token }: { token: string }) {
     }
   }
 
-  const canSign = agreed && hasDrawn && typedName.trim().length > 0;
+  const canSign = agreed && typedName.trim().length > 0;
 
   const today = new Date().toLocaleDateString("en-US", {
     month: "long",
@@ -325,12 +303,13 @@ export function EngageClient({ token }: { token: string }) {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 py-8">
+      <main className="flex-1 pt-8 pb-32">
         <div className="max-w-4xl mx-auto px-6 space-y-6">
 
           {/* ═══ THE DOCUMENT ═══ */}
           <div className="rounded-lg shadow-lg overflow-hidden">
-            {/* Document Preview */}
+            {/* Document Preview — shows pre-attached sender signature, plus
+                a live preview of the client's typed name in the client block. */}
             <DocumentPreview
               content={data?.content || ""}
               subject={data?.subject || ""}
@@ -338,6 +317,15 @@ export function EngageClient({ token }: { token: string }) {
               fromName={data?.from?.name || ""}
               fromCompany={data?.from?.company || ""}
               date={today}
+              senderSignatureData={data?.sender?.signatureData || null}
+              senderSignedAt={data?.sender?.signedAt || null}
+              senderRole={data?.sender?.role || null}
+              clientSignatureData={
+                typedName.trim()
+                  ? buildPreviewSignatureSvg(typedName.trim())
+                  : null
+              }
+              clientSignedName={typedName.trim() || data?.clientName || ""}
             />
 
           </div>
@@ -354,39 +342,35 @@ export function EngageClient({ token }: { token: string }) {
                       <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
                     </svg>
                     <span className="text-xs font-bold text-white uppercase tracking-wider">Sign Here</span>
-                    {hasDrawn && (
-                      <button
-                        onClick={clearSignature}
-                        className="ml-auto text-xs text-white/80 hover:text-white font-semibold transition-colors"
+                  </div>
+                  {/* Cursive signature preview */}
+                  <div className="bg-white px-6 py-8 min-h-[180px] flex items-center justify-center">
+                    {typedName.trim() ? (
+                      <span
+                        className="text-slate-800 text-center break-words leading-none"
+                        style={{
+                          fontFamily:
+                            'var(--font-signature), "Snell Roundhand", "Brush Script MT", cursive',
+                          fontSize: "clamp(2.25rem, 7vw, 4rem)",
+                        }}
                       >
-                        Clear
-                      </button>
+                        {typedName.trim()}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 italic text-sm">
+                        Type your full name below to sign
+                      </span>
                     )}
                   </div>
-                  {/* Canvas */}
-                  <div className="bg-white">
-                    <canvas
-                      ref={canvasRef}
-                      width={600}
-                      height={180}
-                      className="w-full cursor-crosshair touch-none"
-                      onMouseDown={startDrawing}
-                      onMouseMove={draw}
-                      onMouseUp={stopDrawing}
-                      onMouseLeave={stopDrawing}
-                      onTouchStart={startDrawing}
-                      onTouchMove={draw}
-                      onTouchEnd={stopDrawing}
-                    />
+                  <div className="bg-[#FFFDF0] px-4 py-2 flex items-center gap-2 border-t border-[#F5E6A3]">
+                    <svg className="w-3.5 h-3.5 text-[#B8860B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 20h9" />
+                      <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                    </svg>
+                    <span className="text-xs text-[#7A5C00]">
+                      Your typed name will be your legal electronic signature
+                    </span>
                   </div>
-                  {!hasDrawn && (
-                    <div className="bg-[#FFFDF0] px-4 py-2 flex items-center gap-2 border-t border-[#F5E6A3]">
-                      <svg className="w-3.5 h-3.5 text-[#B8860B] animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="m5 12 7 7 7-7" />
-                      </svg>
-                      <span className="text-xs text-[#7A5C00]">Draw your signature above using your mouse or finger</span>
-                    </div>
-                  )}
                 </div>
               ) : (
                 /* Preview signature placeholder before step 2 */
@@ -398,7 +382,7 @@ export function EngageClient({ token }: { token: string }) {
                     </svg>
                     <span className="text-sm font-medium">Signature Required</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">Click &ldquo;Start&rdquo; above to begin signing</p>
+                  <p className="text-xs text-gray-400 mt-1">Click &ldquo;Start&rdquo; to begin signing</p>
                 </div>
               )}
             </div>
@@ -487,6 +471,62 @@ export function EngageClient({ token }: { token: string }) {
       </main>
 
       <Footer />
+
+      {/* Hidden canvas used to render typed signature into PNG for the API */}
+      <canvas
+        ref={hiddenCanvasRef}
+        width={600}
+        height={180}
+        style={{ position: "absolute", left: "-10000px", top: "-10000px" }}
+        aria-hidden="true"
+      />
+
+      {/* ═══ Sticky Floating Action Button ═══ */}
+      {step < 3 && (
+        <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
+          {step === 2 && !canSign && (
+            <div className="bg-white border border-gray-200 shadow-lg rounded-lg px-3 py-2 text-[11px] text-gray-600 font-medium max-w-[220px]">
+              {!typedName.trim()
+                ? "Type your full name to sign"
+                : "Check the agreement box to finish"}
+            </div>
+          )}
+          {step === 1 ? (
+            <button
+              onClick={handleStart}
+              className="px-6 py-3.5 rounded-full text-sm font-bold text-white shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+              style={{ background: "linear-gradient(135deg, #D4A017, #B8860B)" }}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+              </svg>
+              Start
+            </button>
+          ) : (
+            <button
+              onClick={handleSign}
+              disabled={!canSign || signing}
+              className="px-6 py-3.5 rounded-full text-sm font-bold text-white shadow-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:scale-[1.02] enabled:active:scale-[0.98] flex items-center gap-2"
+              style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+            >
+              {signing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  Signing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Finish &amp; Sign
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ═══ Decline Modal ═══ */}
       {showDeclineModal && (
@@ -578,6 +618,34 @@ function Footer() {
       </div>
     </footer>
   );
+}
+
+// Cursive SVG preview of typed name — used for the live document preview only.
+// The actual saved signature is rendered to PNG via a hidden canvas in
+// `renderTypedSignatureToPng` so it matches what the recipient sees on submit.
+function buildPreviewSignatureSvg(name: string): string {
+  const escaped = name.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case "&": return "&amp;";
+      case "'": return "&apos;";
+      case '"': return "&quot;";
+      default: return c;
+    }
+  });
+  const length = name.length;
+  let fontSize = 84;
+  if (length > 12) fontSize = 72;
+  if (length > 18) fontSize = 60;
+  if (length > 26) fontSize = 48;
+  if (length > 36) fontSize = 38;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="600" height="180"><text x="300" y="105" font-family="'Brush Script MT','Snell Roundhand','Lucida Handwriting','Apple Chancery',cursive" font-size="${fontSize}" font-style="italic" font-weight="500" fill="#1e293b" text-anchor="middle" dominant-baseline="middle">${escaped}</text></svg>`;
+  const base64 =
+    typeof btoa !== "undefined"
+      ? btoa(unescape(encodeURIComponent(svg)))
+      : "";
+  return `data:image/svg+xml;base64,${base64}`;
 }
 
 function StepBadge({ num, label, active, current }: { num: number; label: string; active: boolean; current: boolean }) {

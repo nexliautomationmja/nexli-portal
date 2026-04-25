@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface EsignData {
   signerName: string;
@@ -25,10 +25,8 @@ export function EsignClient({ token }: { token: string }) {
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
 
-  // Canvas state
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [hasDrawn, setHasDrawn] = useState(false);
+  // Hidden canvas used to render typed signature into PNG for the API
+  const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     async function load() {
@@ -50,83 +48,51 @@ export function EsignClient({ token }: { token: string }) {
     load();
   }, [token]);
 
-  // Canvas drawing handlers
-  const getCanvasCoords = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
+  // Render the typed name into the hidden canvas using the cursive font.
+  // Returns a PNG data URL we can ship to the existing API.
+  async function renderTypedSignatureToPng(name: string): Promise<string | null> {
+    const canvas = hiddenCanvasRef.current;
+    if (!canvas) return null;
 
-      if ("touches" in e) {
-        const touch = e.touches[0];
-        return {
-          x: (touch.clientX - rect.left) * scaleX,
-          y: (touch.clientY - rect.top) * scaleY,
-        };
+    if (typeof document !== "undefined" && document.fonts) {
+      try {
+        await document.fonts.load('48px "Dancing Script"');
+        await document.fonts.ready;
+      } catch {
+        /* ignore — fall back to whatever the system has */
       }
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY,
-      };
-    },
-    []
-  );
+    }
 
-  function startDrawing(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return null;
 
-    const { x, y } = getCanvasCoords(e);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    setIsDrawing(true);
-    setHasDrawn(true);
-  }
-
-  function draw(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const { x, y } = getCanvasCoords(e);
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = "#1e293b";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke();
-  }
-
-  function stopDrawing() {
-    setIsDrawing(false);
-  }
-
-  function clearSignature() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasDrawn(false);
+    ctx.fillStyle = "#1e293b";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+
+    let fontSize = 72;
+    const maxWidth = canvas.width - 40;
+    do {
+      ctx.font = `${fontSize}px "Dancing Script", "Snell Roundhand", "Brush Script MT", cursive`;
+      if (ctx.measureText(name).width <= maxWidth) break;
+      fontSize -= 4;
+    } while (fontSize > 24);
+
+    ctx.fillText(name, canvas.width / 2, canvas.height / 2);
+    return canvas.toDataURL("image/png");
   }
 
   async function handleSign() {
-    if (!data || !agreed || !hasDrawn || !typedName.trim()) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!data || !agreed || !typedName.trim()) return;
 
     setSigning(true);
     try {
-      const signatureData = canvas.toDataURL("image/png");
+      const signatureData = await renderTypedSignatureToPng(typedName.trim());
+      if (!signatureData) {
+        setError("Signing failed. Please try again.");
+        return;
+      }
 
       const res = await fetch(`/api/esign/${token}`, {
         method: "POST",
@@ -162,7 +128,7 @@ export function EsignClient({ token }: { token: string }) {
     }
   }
 
-  const canSign = agreed && hasDrawn && typedName.trim().length > 0;
+  const canSign = agreed && typedName.trim().length > 0;
 
   // Loading state
   if (loading) {
@@ -265,7 +231,7 @@ export function EsignClient({ token }: { token: string }) {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto p-6 space-y-6">
+      <main className="max-w-3xl mx-auto px-6 pt-6 pb-32 space-y-6">
         {/* Document info */}
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
           <h1 className="text-xl font-black text-white mb-2">
@@ -335,40 +301,32 @@ export function EsignClient({ token }: { token: string }) {
           </label>
         </div>
 
-        {/* Signature pad */}
+        {/* Signature pad — type-only with cursive preview */}
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white">Draw Your Signature</h2>
-            {hasDrawn && (
-              <button
-                onClick={clearSignature}
-                className="text-xs text-red-400 hover:text-red-300 font-bold transition-colors"
+          <h2 className="text-sm font-bold text-white">Your Signature</h2>
+
+          {/* Cursive signature preview */}
+          <div className="rounded-xl border-2 border-dashed border-white/20 bg-white px-6 py-8 min-h-[160px] flex items-center justify-center overflow-hidden">
+            {typedName.trim() ? (
+              <span
+                className="text-slate-800 text-center break-words leading-none"
+                style={{
+                  fontFamily:
+                    'var(--font-signature), "Snell Roundhand", "Brush Script MT", cursive',
+                  fontSize: "clamp(2rem, 6vw, 3.5rem)",
+                }}
               >
-                Clear
-              </button>
+                {typedName.trim()}
+              </span>
+            ) : (
+              <span className="text-gray-300 italic text-sm">
+                Type your full name below to sign
+              </span>
             )}
           </div>
-
-          <div className="rounded-xl border-2 border-dashed border-white/20 bg-white overflow-hidden">
-            <canvas
-              ref={canvasRef}
-              width={600}
-              height={200}
-              className="w-full cursor-crosshair touch-none"
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-              onTouchStart={startDrawing}
-              onTouchMove={draw}
-              onTouchEnd={stopDrawing}
-            />
-          </div>
-          {!hasDrawn && (
-            <p className="text-[10px] text-white/30 text-center">
-              Use your mouse or finger to draw your signature above
-            </p>
-          )}
+          <p className="text-[10px] text-white/30 text-center">
+            Your typed name will be your legal electronic signature
+          </p>
 
           {/* Typed name verification */}
           <div>
@@ -430,6 +388,46 @@ export function EsignClient({ token }: { token: string }) {
           </a>
         </div>
       </main>
+
+      {/* Hidden canvas used to render typed signature into PNG for the API */}
+      <canvas
+        ref={hiddenCanvasRef}
+        width={600}
+        height={180}
+        style={{ position: "absolute", left: "-10000px", top: "-10000px" }}
+        aria-hidden="true"
+      />
+
+      {/* ═══ Sticky Floating Sign Button ═══ */}
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
+        {!canSign && (
+          <div className="bg-[#1a1a24] border border-white/10 shadow-2xl rounded-lg px-3 py-2 text-[11px] text-white/70 font-medium max-w-[240px]">
+            {!typedName.trim()
+              ? "Type your full name to sign"
+              : "Check the disclosure box to sign"}
+          </div>
+        )}
+        <button
+          onClick={handleSign}
+          disabled={!canSign || signing}
+          className="px-6 py-3.5 rounded-full text-sm font-bold text-white shadow-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:scale-[1.02] enabled:active:scale-[0.98] flex items-center gap-2"
+          style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+        >
+          {signing ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              Signing...
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              Sign Document
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Decline modal */}
       {showDeclineModal && (

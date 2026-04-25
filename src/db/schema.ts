@@ -582,7 +582,7 @@ export const invoices = pgTable(
     terms: text("terms"),
 
     // Stripe references
-    stripeSessionId: text("stripe_session_id"),
+    stripeCheckoutSessionId: text("stripe_checkout_session_id"),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     paymentUrl: text("payment_url"),
     paymentMethod: text("payment_method"), // "card" | "ach"
@@ -607,6 +607,11 @@ export const invoices = pgTable(
     // Reminder config (JSONB)
     // { schedule: [{ dayOffset: -7 }, { dayOffset: 0 }, { dayOffset: 3 }] }
     reminderConfig: jsonb("reminder_config"),
+
+    // Generic metadata bag — used for things like the Digital Rainmaker
+    // System auto-invoicing flow:
+    //   { engagementId, drsRole: "initial_setup" | "final_setup" | "monthly_subscription" }
+    metadata: jsonb("metadata"),
 
     // Lifecycle timestamps
     sentAt: timestamp("sent_at"),

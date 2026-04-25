@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FileIcon, PenLineIcon, UploadIcon, DownloadIcon } from "@/components/ui/icons";
+import { FileIcon, PenLineIcon, UploadIcon, DownloadIcon, EyeIcon, XIcon } from "@/components/ui/icons";
+import { SignatureCertificate } from "@/components/signature-certificate";
 
 interface Document {
   id: string;
@@ -39,10 +40,19 @@ interface EsignRequest {
   id: string;
   token: string;
   signerName: string;
+  signerEmail: string;
   status: string;
   signedAt: string | null;
+  viewedAt: string | null;
+  sentAt: string | null;
   expiresAt: string | null;
   createdAt: string;
+  signatureData: string | null;
+  signatureIp: string | null;
+  documentName: string;
+  senderName: string;
+  senderCompany: string;
+  senderEmail: string;
 }
 
 interface DocumentsData {
@@ -80,6 +90,7 @@ export function PortalDocumentsClient() {
   const [data, setData] = useState<DocumentsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [viewingCertificate, setViewingCertificate] = useState<EsignRequest | null>(null);
 
   async function handleDownload(doc: SharedDocument) {
     setDownloading(doc.id);
@@ -315,7 +326,7 @@ export function PortalDocumentsClient() {
                         <div className="flex items-center gap-2">
                           <PenLineIcon className="w-4 h-4 shrink-0 text-purple-400" />
                           <span style={{ color: "var(--text-main)" }}>
-                            E-Signature Request
+                            {es.documentName || "E-Signature Request"}
                           </span>
                         </div>
                       </td>
@@ -338,6 +349,15 @@ export function PortalDocumentsClient() {
                           >
                             Review & Sign
                           </a>
+                        ) : es.status === "signed" || es.status === "declined" ? (
+                          <button
+                            onClick={() => setViewingCertificate(es)}
+                            className="flex items-center gap-1.5 text-sm font-medium hover:underline"
+                            style={{ color: "var(--accent-blue)" }}
+                          >
+                            <EyeIcon className="w-3.5 h-3.5" />
+                            View Certificate
+                          </button>
                         ) : (
                           <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
                         )}
@@ -349,6 +369,63 @@ export function PortalDocumentsClient() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Certificate Modal */}
+      {viewingCertificate && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/60 z-40"
+            onClick={() => setViewingCertificate(null)}
+          />
+          <div
+            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            style={{
+              background: "var(--card-bg)",
+              borderColor: "var(--card-border)",
+            }}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[var(--card-border)]">
+              <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
+                Signature Certificate
+              </h2>
+              <button
+                onClick={() => setViewingCertificate(null)}
+                className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+              >
+                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <SignatureCertificate
+                documentName={viewingCertificate.documentName}
+                status={viewingCertificate.status}
+                signerName={viewingCertificate.signerName}
+                signerEmail={viewingCertificate.signerEmail}
+                signatureData={viewingCertificate.signatureData}
+                signatureIp={viewingCertificate.signatureIp}
+                sentAt={viewingCertificate.sentAt}
+                viewedAt={viewingCertificate.viewedAt}
+                signedAt={viewingCertificate.signedAt}
+                senderName={viewingCertificate.senderName}
+                senderCompany={viewingCertificate.senderCompany}
+                senderEmail={viewingCertificate.senderEmail}
+              />
+            </div>
+            <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-end">
+              <button
+                onClick={() => setViewingCertificate(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)]"
+                style={{
+                  borderColor: "var(--card-border)",
+                  color: "var(--text-main)",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Your Documents */}

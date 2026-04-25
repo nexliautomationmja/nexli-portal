@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import {
   InvoiceIcon,
@@ -154,6 +155,25 @@ export function InvoicesClient() {
   const [showBatch, setShowBatch] = useState(false);
   const [showHistory, setShowHistory] = useState<ClientHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Auto-open invoice detail when navigated with ?id= parameter
+  const invoiceIdParam = searchParams.get("id");
+  useEffect(() => {
+    if (invoiceIdParam && invoices.length > 0 && !showDetail) {
+      const match = invoices.find((inv) => inv.id === invoiceIdParam);
+      if (match) setShowDetail(match);
+    }
+  }, [invoiceIdParam, invoices, showDetail]);
+
+  function closeDetail() {
+    setShowDetail(null);
+    if (invoiceIdParam) {
+      router.replace(pathname, { scroll: false });
+    }
+  }
 
   // Compose form
   const [clientName, setClientName] = useState("");
@@ -308,7 +328,7 @@ export function InvoicesClient() {
     const refreshRes = await fetch("/api/dashboard/invoices");
     const refreshData = await refreshRes.json();
     setInvoices(refreshData.invoices || []);
-    setShowDetail(null);
+    closeDetail();
   }
 
   async function handleVoid(id: string) {
@@ -322,13 +342,13 @@ export function InvoicesClient() {
         inv.id === id ? { ...inv, status: "void" } : inv
       )
     );
-    setShowDetail(null);
+    closeDetail();
   }
 
   async function handleDelete(id: string) {
     await fetch(`/api/dashboard/invoices/${id}`, { method: "DELETE" });
     setInvoices((prev) => prev.filter((inv) => inv.id !== id));
-    setShowDetail(null);
+    closeDetail();
   }
 
   async function handleDownloadPDF(inv: Invoice) {
@@ -1230,7 +1250,7 @@ export function InvoicesClient() {
         <>
           <div
             className="fixed inset-0 bg-black/40 z-40"
-            onClick={() => setShowDetail(null)}
+            onClick={() => closeDetail()}
           />
           <div
             className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
@@ -1261,7 +1281,7 @@ export function InvoicesClient() {
                 )}
               </div>
               <button
-                onClick={() => setShowDetail(null)}
+                onClick={() => closeDetail()}
                 className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
               >
                 <XIcon className="w-4 h-4 text-[var(--text-muted)]" />

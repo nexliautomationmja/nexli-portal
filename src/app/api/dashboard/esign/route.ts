@@ -5,6 +5,7 @@ import {
   eSignatures,
   documents,
   documentAuditLog,
+  users,
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
@@ -37,10 +38,24 @@ export async function GET(req: NextRequest) {
     ? results.filter((r) => r.esign.status === status)
     : results;
 
+  // Owner info — used for the "Sent By" block on the signature certificate
+  const [owner] = await db
+    .select({
+      name: users.name,
+      companyName: users.companyName,
+      email: users.email,
+    })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
   return NextResponse.json({
     esignatures: filtered.map((r) => ({
       ...r.esign,
       documentName: r.documentName,
+      senderName: owner?.name || "",
+      senderCompany: owner?.companyName || "",
+      senderEmail: owner?.email || "",
     })),
   });
 }

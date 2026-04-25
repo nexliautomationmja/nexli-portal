@@ -1,7 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PenLineIcon } from "@/components/ui/icons";
+import { PenLineIcon, EyeIcon, XIcon } from "@/components/ui/icons";
+import { DocumentPreview } from "@/components/engagement-document";
+
+interface EngagementSignerLite {
+  id: string;
+  name: string;
+  email: string;
+  order: number;
+  role: string | null;
+  status: string;
+  signedAt: string | null;
+  signatureData: string | null;
+}
 
 interface EngagementItem {
   signerId: string;
@@ -10,12 +22,18 @@ interface EngagementItem {
   signedAt: string | null;
   declinedAt: string | null;
   role: string | null;
+  signatureData: string | null;
   engagementId: string;
   subject: string;
+  content: string;
   engagementStatus: string;
   sentAt: string | null;
   expiresAt: string | null;
   createdAt: string | null;
+  clientName: string;
+  fromName: string;
+  fromCompany: string;
+  signers: EngagementSignerLite[];
 }
 
 const statusBadge: Record<string, string> = {
@@ -46,6 +64,7 @@ function formatDate(dateStr: string | null): string {
 export function PortalEngagementsClient() {
   const [engagements, setEngagements] = useState<EngagementItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewing, setViewing] = useState<EngagementItem | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -148,23 +167,122 @@ export function PortalEngagementsClient() {
                     )}
                   </div>
                 </div>
-                {["sent", "viewed"].includes(eng.signerStatus) && (
-                  <a
-                    href={`/engage/${eng.signerToken}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 px-4 py-2 rounded-full text-sm font-bold text-white no-underline"
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  {["sent", "viewed"].includes(eng.signerStatus) && (
+                    <a
+                      href={`/engage/${eng.signerToken}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-full text-sm font-bold text-white no-underline"
+                      style={{
+                        background: "linear-gradient(135deg, #2563EB, #06B6D4)",
+                      }}
+                    >
+                      Review & Sign
+                    </a>
+                  )}
+                  <button
+                    onClick={() => setViewing(eng)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors hover:bg-[var(--input-bg)]"
                     style={{
-                      background: "linear-gradient(135deg, #2563EB, #06B6D4)",
+                      borderColor: "var(--card-border)",
+                      color: "var(--text-main)",
                     }}
                   >
-                    Review & Sign
-                  </a>
-                )}
+                    <EyeIcon className="w-3.5 h-3.5" />
+                    View Document
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {/* View Document Modal */}
+      {viewing && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/60 z-40"
+            onClick={() => setViewing(null)}
+          />
+          <div
+            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-3xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
+            style={{
+              background: "var(--card-bg)",
+              borderColor: "var(--card-border)",
+            }}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[var(--card-border)]">
+              <div>
+                <h2
+                  className="text-lg font-bold"
+                  style={{ color: "var(--text-main)" }}
+                >
+                  {viewing.subject}
+                </h2>
+                <p
+                  className="text-xs mt-0.5"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {viewing.signerStatus === "signed"
+                    ? "Fully executed engagement letter"
+                    : "Engagement letter preview"}
+                </p>
+              </div>
+              <button
+                onClick={() => setViewing(null)}
+                className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
+              >
+                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {(() => {
+                const sender = viewing.signers.find((s) => s.order === 0);
+                const me = viewing.signers.find(
+                  (s) => s.id === viewing.signerId
+                );
+                return (
+                  <DocumentPreview
+                    content={viewing.content}
+                    subject={viewing.subject}
+                    clientName={viewing.clientName}
+                    fromName={viewing.fromName}
+                    fromCompany={viewing.fromCompany}
+                    date={
+                      viewing.sentAt
+                        ? new Date(viewing.sentAt).toLocaleDateString("en-US", {
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric",
+                          })
+                        : undefined
+                    }
+                    senderSignatureData={sender?.signatureData}
+                    senderSignedAt={sender?.signedAt}
+                    senderRole={sender?.role}
+                    clientSignatureData={me?.signatureData}
+                    clientSignedAt={me?.signedAt}
+                    clientSignedName={me?.name}
+                  />
+                );
+              })()}
+            </div>
+            <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-end">
+              <button
+                onClick={() => setViewing(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)]"
+                style={{
+                  borderColor: "var(--card-border)",
+                  color: "var(--text-main)",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

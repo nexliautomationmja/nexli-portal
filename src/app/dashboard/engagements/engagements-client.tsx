@@ -9,11 +9,14 @@ interface Signer {
   id: string;
   name: string;
   email: string;
+  order: number;
+  role: string | null;
   status: "draft" | "sent" | "viewed" | "signed" | "declined" | "expired";
   sentAt: string | null;
   viewedAt: string | null;
   signedAt: string | null;
   declinedAt: string | null;
+  signatureData: string | null;
 }
 
 interface Engagement {
@@ -191,30 +194,38 @@ export function EngagementsClient() {
     });
   }
 
+  // Helper: client signers exclude the sender (order=0), which is auto-signed.
+  function clientSigners(signers: Signer[]): Signer[] {
+    return signers.filter((s) => s.order > 0);
+  }
+
   function getSignerSummary(signers: Signer[]): string {
-    if (signers.length === 0) return "—";
-    if (signers.length === 1) return signers[0].name;
-    return `${signers[0].name} +${signers.length - 1} more`;
+    const clients = clientSigners(signers);
+    if (clients.length === 0) return "—";
+    if (clients.length === 1) return clients[0].name;
+    return `${clients[0].name} +${clients.length - 1} more`;
   }
 
   function getSignerEmails(signers: Signer[]): string {
-    if (signers.length === 0) return "";
-    if (signers.length === 1) return signers[0].email;
-    return `${signers.length} recipients`;
+    const clients = clientSigners(signers);
+    if (clients.length === 0) return "";
+    if (clients.length === 1) return clients[0].email;
+    return `${clients.length} recipients`;
   }
 
   function getOverallStatus(eng: Engagement): string {
-    const signers = eng.signers;
-    if (signers.length === 0) return eng.status;
-    if (signers.every((s) => s.status === "signed")) return "signed";
-    if (signers.some((s) => s.status === "declined")) return "declined";
-    if (signers.some((s) => s.status === "viewed")) return "viewed";
+    const clients = clientSigners(eng.signers);
+    if (clients.length === 0) return eng.status;
+    if (clients.every((s) => s.status === "signed")) return "signed";
+    if (clients.some((s) => s.status === "declined")) return "declined";
+    if (clients.some((s) => s.status === "viewed")) return "viewed";
     return eng.status;
   }
 
   function getSignedCount(signers: Signer[]): string {
-    const signed = signers.filter((s) => s.status === "signed").length;
-    return `${signed}/${signers.length} signed`;
+    const clients = clientSigners(signers);
+    const signed = clients.filter((s) => s.status === "signed").length;
+    return `${signed}/${clients.length} signed`;
   }
 
   const stats = {
@@ -637,7 +648,7 @@ export function EngagementsClient() {
                   {showDetail.subject}
                 </h2>
                 <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {showDetail.signers.length} recipient{showDetail.signers.length !== 1 ? "s" : ""}
+                  {clientSigners(showDetail.signers).length} recipient{clientSigners(showDetail.signers).length !== 1 ? "s" : ""}
                 </p>
               </div>
               <button
@@ -650,13 +661,13 @@ export function EngagementsClient() {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Signers status */}
+              {/* Signers status — clients only (sender is auto-signed) */}
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-muted)" }}>
                   Signers
                 </p>
                 <div className="space-y-2">
-                  {showDetail.signers.map((signer) => {
+                  {clientSigners(showDetail.signers).map((signer) => {
                     const sc = statusConfig[signer.status] || statusConfig.draft;
                     return (
                       <div
@@ -693,15 +704,27 @@ export function EngagementsClient() {
                 </div>
               </div>
 
-              {/* Letter content — document view */}
-              <DocumentPreview
-                content={showDetail.content}
-                subject={showDetail.subject}
-                clientName={showDetail.signers[0]?.name || ""}
-                fromName={firmInfo.name}
-                fromCompany={firmInfo.company}
-                date={showDetail.sentAt ? new Date(showDetail.sentAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : undefined}
-              />
+              {/* Letter content — document view (renders both signature blocks) */}
+              {(() => {
+                const sender = showDetail.signers.find((s) => s.order === 0);
+                const firstClient = clientSigners(showDetail.signers)[0];
+                return (
+                  <DocumentPreview
+                    content={showDetail.content}
+                    subject={showDetail.subject}
+                    clientName={firstClient?.name || ""}
+                    fromName={firmInfo.name}
+                    fromCompany={firmInfo.company}
+                    date={showDetail.sentAt ? new Date(showDetail.sentAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : undefined}
+                    senderSignatureData={sender?.signatureData}
+                    senderSignedAt={sender?.signedAt}
+                    senderRole={sender?.role}
+                    clientSignatureData={firstClient?.signatureData}
+                    clientSignedAt={firstClient?.signedAt}
+                    clientSignedName={firstClient?.name}
+                  />
+                );
+              })()}
 
               {/* Timeline */}
               <div className="space-y-2">
@@ -711,7 +734,7 @@ export function EngagementsClient() {
                 <div className="space-y-1.5">
                   <TimelineItem label="Created" date={showDetail.createdAt} />
                   {showDetail.sentAt && <TimelineItem label="Sent" date={showDetail.sentAt} />}
-                  {showDetail.signers.map((signer) => (
+                  {clientSigners(showDetail.signers).map((signer) => (
                     <div key={signer.id}>
                       {signer.viewedAt && (
                         <TimelineItem label={`Viewed by ${signer.name}`} date={signer.viewedAt} />

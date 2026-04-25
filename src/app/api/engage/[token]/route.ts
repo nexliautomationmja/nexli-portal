@@ -4,6 +4,10 @@ import { engagements, engagementSigners, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { sendEmailWithLog, buildEngagementSignedEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
+import {
+  triggerDrsPostSign,
+  getPrimaryClientSigner,
+} from "@/lib/digital-rainmaker";
 
 // GET — validate token, return engagement info, mark signer as viewed
 export async function GET(
@@ -70,6 +74,20 @@ export async function GET(
     .where(eq(users.id, engagement.ownerId))
     .limit(1);
 
+  // Fetch the sender signer (order=0) so the recipient can see the pre-attached
+  // signature on the document during signing.
+  const [senderSigner] = await db
+    .select({
+      name: engagementSigners.name,
+      role: engagementSigners.role,
+      signedAt: engagementSigners.signedAt,
+      signatureData: engagementSigners.signatureData,
+    })
+    .from(engagementSigners)
+    .where(eq(engagementSigners.engagementId, engagement.id))
+    .orderBy(engagementSigners.order)
+    .limit(1);
+
   return NextResponse.json({
     clientName: signer.name,
     subject: engagement.subject,
@@ -81,6 +99,14 @@ export async function GET(
       name: owner?.name || "",
       company: owner?.companyName || "",
     },
+    sender: senderSigner
+      ? {
+          name: senderSigner.name,
+          role: senderSigner.role,
+          signedAt: senderSigner.signedAt,
+          signatureData: senderSigner.signatureData,
+        }
+      : null,
   });
 }
 
@@ -175,6 +201,19 @@ export async function POST(
       .update(engagements)
       .set({ status: "signed", updatedAt: new Date() })
       .where(eq(engagements.id, engagement.id));
+
+    // Digital Rainmaker System auto-invoicing: if this engagement was built
+    // from the DRS template, generate and send the Initial Setup Fee invoice.
+    // The Final Setup Fee + Monthly Subscription invoices are issued later
+    // by the Stripe payments webhook once the Initial is paid in full.
+    try {
+      const primary = await getPrimaryClientSigner(engagement.id);
+      if (primary) {
+        await triggerDrsPostSign({ engagement, primarySigner: primary });
+      }
+    } catch (err) {
+      console.error("DRS post-sign trigger failed:", err);
+    }
   }
 
   // Notify CPA via email
