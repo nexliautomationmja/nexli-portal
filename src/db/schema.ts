@@ -470,6 +470,7 @@ export const engagements = pgTable(
     status: engagementStatusEnum("status").default("draft").notNull(),
     sentAt: timestamp("sent_at"),
     expiresAt: timestamp("expires_at").notNull(),
+    metadata: jsonb("metadata"), // { adsTier?, adsManagementCents? }
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -967,5 +968,45 @@ export const vslTracking = pgTable(
     index("vsl_tracking_session_idx").on(table.sessionId),
     index("vsl_tracking_email_idx").on(table.email),
     index("vsl_tracking_created_idx").on(table.createdAt),
+  ]
+);
+
+// ══════════════════════════════════════════════════════════
+// ══  LEADS (marketing site — shared DB)  ═════════════════
+// ══════════════════════════════════════════════════════════
+
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email"),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    firmName: text("firm_name"),
+
+    // Lead classification
+    leadScore: text("lead_score"), // 'raw' | 'qualified' | 'disqualified'
+    formSource: text("form_source"),
+
+    // Attribution
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    utmContent: text("utm_content"),
+    utmTerm: text("utm_term"),
+    landingPage: text("landing_page"),
+
+    // Lifecycle
+    bookedCallAt: timestamp("booked_call_at"),
+    showedCallAt: timestamp("showed_call_at"),
+    opportunityAt: timestamp("opportunity_at"),
+    purchasedAt: timestamp("purchased_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("leads_email_idx").on(table.email),
+    index("leads_lead_score_idx").on(table.leadScore),
+    index("leads_created_idx").on(table.createdAt),
   ]
 );

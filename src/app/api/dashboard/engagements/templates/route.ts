@@ -2,12 +2,46 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { engagementTemplates } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
+import {
+  ORIGINAL_DRS_TEMPLATE_NAME,
+  ORIGINAL_DRS_TEMPLATE_CONTENT,
+  STARTER_DRS_TEMPLATE_NAME,
+  STARTER_DRS_TEMPLATE_CONTENT,
+} from "@/lib/engagement-defaults";
+
+// Default templates to auto-seed for every user (checked by exact name)
+const DEFAULT_TEMPLATES = [
+  { name: ORIGINAL_DRS_TEMPLATE_NAME, content: ORIGINAL_DRS_TEMPLATE_CONTENT },
+  { name: STARTER_DRS_TEMPLATE_NAME, content: STARTER_DRS_TEMPLATE_CONTENT },
+];
 
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Auto-seed default templates if they don't exist
+  for (const tmpl of DEFAULT_TEMPLATES) {
+    const [existing] = await db
+      .select({ id: engagementTemplates.id })
+      .from(engagementTemplates)
+      .where(
+        and(
+          eq(engagementTemplates.ownerId, session.user.id),
+          eq(engagementTemplates.name, tmpl.name)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      await db.insert(engagementTemplates).values({
+        ownerId: session.user.id,
+        name: tmpl.name,
+        content: tmpl.content,
+      });
+    }
   }
 
   const templates = await db

@@ -4,6 +4,10 @@ import { useState, useEffect } from "react";
 import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
+import {
+  STARTER_DRS_TEMPLATE_CONTENT,
+  generateStarterContent,
+} from "@/lib/engagement-defaults";
 
 interface Signer {
   id: string;
@@ -64,6 +68,10 @@ export function EngagementsClient() {
   const [showPreview, setShowPreview] = useState(false);
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
+  // Ad management
+  const [includeAds, setIncludeAds] = useState(false);
+  const [adsTier, setAdsTier] = useState<"foundation" | "growth" | "scale">("foundation");
+
   useEffect(() => {
     Promise.all([
       fetch("/api/dashboard/engagements").then((r) => r.json()),
@@ -83,11 +91,35 @@ export function EngagementsClient() {
       .finally(() => setLoading(false));
   }, []);
 
+  function isStarterTemplate(tmpl: Template | undefined): boolean {
+    return !!tmpl && tmpl.name.toLowerCase().includes("starter") && tmpl.name.toLowerCase().includes("digital rainmaker");
+  }
+
   function handleTemplateSelect(templateId: string) {
     setSelectedTemplate(templateId);
     const tmpl = templates.find((t) => t.id === templateId);
     if (tmpl) {
-      setContent(tmpl.content);
+      if (isStarterTemplate(tmpl) && includeAds) {
+        setContent(generateStarterContent(adsTier));
+      } else {
+        setContent(tmpl.content);
+      }
+    }
+  }
+
+  function handleAdsToggle(checked: boolean) {
+    setIncludeAds(checked);
+    const tmpl = templates.find((t) => t.id === selectedTemplate);
+    if (isStarterTemplate(tmpl)) {
+      setContent(checked ? generateStarterContent(adsTier) : STARTER_DRS_TEMPLATE_CONTENT);
+    }
+  }
+
+  function handleAdsTierChange(tier: "foundation" | "growth" | "scale") {
+    setAdsTier(tier);
+    const tmpl = templates.find((t) => t.id === selectedTemplate);
+    if (isStarterTemplate(tmpl) && includeAds) {
+      setContent(generateStarterContent(tier));
     }
   }
 
@@ -124,6 +156,8 @@ export function EngagementsClient() {
           expiresInDays,
           saveAsTemplate,
           templateName: saveAsTemplate ? templateName : undefined,
+          includeAds,
+          adsTier: includeAds ? adsTier : undefined,
         }),
       });
       const data = await res.json();
@@ -183,6 +217,8 @@ export function EngagementsClient() {
     setExpiresInDays(30);
     setSaveAsTemplate(false);
     setTemplateName("");
+    setIncludeAds(false);
+    setAdsTier("foundation");
   }
 
   function formatDate(dateStr: string | null) {
@@ -548,6 +584,59 @@ export function EngagementsClient() {
                   </select>
                 </div>
               )}
+
+              {/* Ad Management */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeAds}
+                    onChange={(e) => handleAdsToggle(e.target.checked)}
+                    className="w-4 h-4 rounded accent-blue-500"
+                  />
+                  <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                    Include Ad Management
+                  </span>
+                </label>
+                {includeAds && (
+                  <div className="space-y-2 pl-6">
+                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                      Which tier did they agree to?
+                    </p>
+                    {([
+                      { value: "foundation" as const, label: "Foundation Ads", fee: "$1,500/mo", spend: "$1k–$3k/mo ad spend" },
+                      { value: "growth" as const, label: "Growth Ads", fee: "$2,500/mo", spend: "$3k–$8k/mo ad spend" },
+                      { value: "scale" as const, label: "Scale Ads", fee: "$4,500/mo", spend: "$8k–$20k+/mo ad spend" },
+                    ]).map((tier) => (
+                      <label
+                        key={tier.value}
+                        className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                        style={{
+                          borderColor: adsTier === tier.value ? "#2563EB" : "var(--card-border)",
+                          background: adsTier === tier.value ? "rgba(37, 99, 235, 0.05)" : "var(--input-bg)",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="adsTier"
+                          value={tier.value}
+                          checked={adsTier === tier.value}
+                          onChange={() => handleAdsTierChange(tier.value)}
+                          className="accent-blue-500"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                            {tier.label} — {tier.fee}
+                          </p>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {tier.spend}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Letter content */}
               <div>

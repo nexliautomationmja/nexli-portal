@@ -51,6 +51,25 @@ export const DRS_PRICING = {
   MONTHLY_SUBSCRIPTION_CENTS: 997_00, // $997.00
 } as const;
 
+/** Starter DRS pricing — $15k total setup ($7.5k + $7.5k) + $997/mo. */
+export const STARTER_DRS_PRICING = {
+  INITIAL_SETUP_CENTS: 750_000,   // $7,500.00
+  FINAL_SETUP_CENTS: 750_000,     // $7,500.00
+  MONTHLY_RETAINER_CENTS: 99_700, // $997.00
+} as const;
+
+/** Ad management tier pricing — monthly management fees. */
+export const ADS_TIERS = {
+  foundation: { label: "Foundation Ads", cents: 150_000, spendRange: "$1,000–$3,000/mo" },
+  growth:     { label: "Growth Ads",     cents: 250_000, spendRange: "$3,000–$8,000/mo" },
+  scale:      { label: "Scale Ads",      cents: 450_000, spendRange: "$8,000–$20,000+/mo" },
+} as const;
+
+export type AdsTier = keyof typeof ADS_TIERS;
+
+/** DRS variant detected from template name. */
+export type DrsVariant = "original" | "starter";
+
 /** Days between Initial Setup payment and the Final/Monthly due dates. */
 export const DRS_CLOCK_DAYS = 30;
 
@@ -62,28 +81,43 @@ export type DrsRole =
 interface DrsMetadata {
   engagementId: string;
   drsRole: DrsRole;
+  drsVariant?: DrsVariant;
+}
+
+interface EngagementMeta {
+  adsTier?: AdsTier;
+  adsManagementCents?: number;
 }
 
 // ── Template Detection ────────────────────────────────────
 
 /**
- * Returns true if the engagement's template is a Digital Rainmaker System
- * template. Match is case-insensitive contains "digital rainmaker", so
- * variants like "DRS - Digital Rainmaker System Agreement" still trigger.
- *
- * Returns false if the engagement has no templateId (custom letter).
+ * Returns the DRS variant for a given template, or null if the template
+ * is not a Digital Rainmaker template. Detection is by name:
+ *   - "starter" + "digital rainmaker" → "starter"
+ *   - "digital rainmaker" (without "starter") → "original"
  */
-export async function isDigitalRainmakerEngagement(
+export async function getDrsVariant(
   templateId: string | null
-): Promise<boolean> {
-  if (!templateId) return false;
+): Promise<DrsVariant | null> {
+  if (!templateId) return null;
   const [template] = await db
     .select({ name: engagementTemplates.name })
     .from(engagementTemplates)
     .where(eq(engagementTemplates.id, templateId))
     .limit(1);
-  if (!template) return false;
-  return template.name.toLowerCase().includes("digital rainmaker");
+  if (!template) return null;
+  const name = template.name.toLowerCase();
+  if (name.includes("starter") && name.includes("digital rainmaker")) return "starter";
+  if (name.includes("digital rainmaker")) return "original";
+  return null;
+}
+
+/** Backward-compatible wrapper. */
+export async function isDigitalRainmakerEngagement(
+  templateId: string | null
+): Promise<boolean> {
+  return (await getDrsVariant(templateId)) !== null;
 }
 
 // ── Idempotency Helper ────────────────────────────────────
@@ -437,6 +471,275 @@ export async function triggerDrsPostInitialPaid(
       });
     } catch (err) {
       console.error("DRS follow-up notification failed:", err);
+    }
+  }
+
+  return created;
+}
+
+// ══════════════════════════════════════════════════════════
+// ══  STARTER DRS — Auto-Invoicing  ══════════════════════
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Called from the engage route after all signers have signed a Starter DRS
+ * engagement. Generates Invoice 1:
+ *   - Initial Setup Fee ($7,500)
+ *   - Monthly Retainer ($997)
+ *   - Ad Management fee (if ads tier selected)
+ *
+ * All line items are on a single invoice, due immediately.
+ */
+export async function triggerStarterDrsPostSign(args: PostSignTriggerArgs) {
+  const { engagement, primarySigner } = args;
+
+  if (await drsInvoiceExists(engagement.id, "initial_setup")) {
+    return null;
+  }
+
+  const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
+  const adsTier = engMeta.adsTier;
+  const adsCents = adsTier ? ADS_TIERS[adsTier].cents : 0;
+
+  const setupCents = STARTER_DRS_PRICING.INITIAL_SETUP_CENTS;
+  const retainerCents = STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS;
+  const totalCents = setupCents + retainerCents + adsCents;
+
+  const invoiceNumber = await generateInvoiceNumber();
+  const token = generateInvoiceToken();
+  const dueDate = new Date(); // due immediately
+
+  const metadata: DrsMetadata = {
+    engagementId: engagement.id,
+    drsRole: "initial_setup",
+    drsVariant: "starter",
+  };
+
+  const [invoice] = await db
+    .insert(invoices)
+    .values({
+      ownerId: engagement.ownerId,
+      clientName: primarySigner.name,
+      clientEmail: primarySigner.email,
+      invoiceNumber,
+      token,
+      currency: "usd",
+      subtotal: totalCents,
+      taxRate: 0,
+      taxAmount: 0,
+      total: totalCents,
+      amountPaid: 0,
+      balanceDue: totalCents,
+      isRecurring: false,
+      dueDate,
+      notes: "Initial payment for the Starter Digital Rainmaker System. The Final Setup Fee will be issued 30 days after this invoice is paid in full.",
+      status: "sent",
+      sentAt: new Date(),
+      metadata,
+    })
+    .returning();
+
+  // Line items
+  const lineItems: { invoiceId: string; description: string; quantity: number; unitPrice: number; amount: number; billingType: "one_time" | "monthly"; order: number }[] = [
+    {
+      invoiceId: invoice.id,
+      description: "Starter Digital Rainmaker — Initial Setup Fee",
+      quantity: 100,
+      unitPrice: setupCents,
+      amount: setupCents,
+      billingType: "one_time",
+      order: 0,
+    },
+    {
+      invoiceId: invoice.id,
+      description: "Digital Rainmaker — Monthly Retainer",
+      quantity: 100,
+      unitPrice: retainerCents,
+      amount: retainerCents,
+      billingType: "monthly",
+      order: 1,
+    },
+  ];
+
+  if (adsTier) {
+    lineItems.push({
+      invoiceId: invoice.id,
+      description: `Ad Management — ${ADS_TIERS[adsTier].label} (Month 1)`,
+      quantity: 100,
+      unitPrice: adsCents,
+      amount: adsCents,
+      billingType: "monthly",
+      order: 2,
+    });
+  }
+
+  for (const item of lineItems) {
+    await db.insert(invoiceLineItems).values(item);
+  }
+
+  await emailInvoiceToClient(invoice, engagement.ownerId);
+
+  try {
+    await createNotification({
+      userId: engagement.ownerId,
+      type: "invoice_paid",
+      title: "Starter DRS Initial Invoice Sent",
+      message: `Initial invoice ${invoice.invoiceNumber} ($${(totalCents / 100).toLocaleString()}) sent to ${primarySigner.name}`,
+      metadata: {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        engagementId: engagement.id,
+        drsRole: "initial_setup",
+        drsVariant: "starter",
+      },
+    });
+  } catch (err) {
+    console.error("Starter DRS: notification failed:", err);
+  }
+
+  return invoice;
+}
+
+/**
+ * Called from the Stripe payments webhook after a Starter DRS initial setup
+ * invoice is paid. Generates:
+ *   - Invoice 2: Final Setup Fee ($7,500) — due in 30 days
+ *   - Invoice 3: Monthly recurring ($997 retainer + ad management) — due in 30 days
+ */
+export async function triggerStarterDrsPostInitialPaid(
+  paidInvoice: typeof invoices.$inferSelect
+) {
+  const meta = paidInvoice.metadata as (DrsMetadata & EngagementMeta) | null;
+  if (!meta || meta.drsRole !== "initial_setup" || !meta.engagementId) {
+    return null;
+  }
+
+  const engagementId = meta.engagementId;
+
+  const [engagement] = await db
+    .select()
+    .from(engagements)
+    .where(eq(engagements.id, engagementId))
+    .limit(1);
+
+  if (!engagement) {
+    console.warn(`Starter DRS: paid invoice ${paidInvoice.id} references missing engagement ${engagementId}`);
+    return null;
+  }
+
+  const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
+  const adsTier = engMeta.adsTier;
+  const adsCents = adsTier ? ADS_TIERS[adsTier].cents : 0;
+
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + DRS_CLOCK_DAYS);
+
+  const created: { final?: typeof invoices.$inferSelect; monthly?: typeof invoices.$inferSelect } = {};
+
+  // Invoice 2: Final Setup Fee only
+  if (!(await drsInvoiceExists(engagementId, "final_setup"))) {
+    const finalInvoice = await createOneTimeDrsInvoice({
+      ownerId: paidInvoice.ownerId,
+      engagementId,
+      clientName: paidInvoice.clientName,
+      clientEmail: paidInvoice.clientEmail,
+      description: "Starter Digital Rainmaker — Final Setup Fee",
+      amountCents: STARTER_DRS_PRICING.FINAL_SETUP_CENTS,
+      dueDate,
+      role: "final_setup",
+      notes: "Final Setup Fee for the Starter Digital Rainmaker System. Due 30 days after the Initial invoice was paid.",
+    });
+    await emailInvoiceToClient(finalInvoice, paidInvoice.ownerId);
+    created.final = finalInvoice;
+  }
+
+  // Invoice 3: Monthly recurring ($997 retainer + ad management)
+  if (!(await drsInvoiceExists(engagementId, "monthly_subscription"))) {
+    const retainerCents = STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS;
+    const totalMonthlyCents = retainerCents + adsCents;
+
+    const nextRecurrence = new Date(dueDate);
+    nextRecurrence.setDate(nextRecurrence.getDate() + 30);
+
+    const invoiceNumber = await generateInvoiceNumber();
+    const token = generateInvoiceToken();
+
+    const monthlyMeta: DrsMetadata = {
+      engagementId,
+      drsRole: "monthly_subscription",
+      drsVariant: "starter",
+    };
+
+    const [monthlyInvoice] = await db
+      .insert(invoices)
+      .values({
+        ownerId: paidInvoice.ownerId,
+        clientName: paidInvoice.clientName,
+        clientEmail: paidInvoice.clientEmail,
+        invoiceNumber,
+        token,
+        currency: "usd",
+        subtotal: totalMonthlyCents,
+        taxRate: 0,
+        taxAmount: 0,
+        total: totalMonthlyCents,
+        amountPaid: 0,
+        balanceDue: totalMonthlyCents,
+        isRecurring: true,
+        recurringInterval: "monthly",
+        nextRecurrenceDate: nextRecurrence,
+        dueDate,
+        notes: "Recurring monthly retainer for the Digital Rainmaker System. Billed automatically each month.",
+        status: "sent",
+        sentAt: new Date(),
+        metadata: monthlyMeta,
+      })
+      .returning();
+
+    // Retainer line item
+    await db.insert(invoiceLineItems).values({
+      invoiceId: monthlyInvoice.id,
+      description: "Digital Rainmaker — Monthly Retainer",
+      quantity: 100,
+      unitPrice: retainerCents,
+      amount: retainerCents,
+      billingType: "monthly",
+      order: 0,
+    });
+
+    // Ad management line item (if ads)
+    if (adsTier) {
+      await db.insert(invoiceLineItems).values({
+        invoiceId: monthlyInvoice.id,
+        description: `Ad Management — ${ADS_TIERS[adsTier].label}`,
+        quantity: 100,
+        unitPrice: adsCents,
+        amount: adsCents,
+        billingType: "monthly",
+        order: 1,
+      });
+    }
+
+    await emailInvoiceToClient(monthlyInvoice, paidInvoice.ownerId);
+    created.monthly = monthlyInvoice;
+  }
+
+  if (created.final || created.monthly) {
+    try {
+      await createNotification({
+        userId: paidInvoice.ownerId,
+        type: "invoice_paid",
+        title: "Starter DRS Follow-Up Invoices Sent",
+        message: `Final Setup Fee and Monthly Retainer invoices issued to ${paidInvoice.clientName} (due in ${DRS_CLOCK_DAYS} days).`,
+        metadata: {
+          engagementId,
+          finalInvoiceId: created.final?.id,
+          monthlyInvoiceId: created.monthly?.id,
+          drsVariant: "starter",
+        },
+      });
+    } catch (err) {
+      console.error("Starter DRS follow-up notification failed:", err);
     }
   }
 

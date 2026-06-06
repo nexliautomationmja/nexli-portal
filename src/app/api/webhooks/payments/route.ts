@@ -11,7 +11,7 @@ import {
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 import { createNotification } from "@/lib/notifications";
-import { triggerDrsPostInitialPaid } from "@/lib/digital-rainmaker";
+import { triggerDrsPostInitialPaid, triggerStarterDrsPostInitialPaid } from "@/lib/digital-rainmaker";
 import type Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
@@ -121,7 +121,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           .where(eq(invoices.id, invoice.id))
           .limit(1);
         if (refreshed) {
-          await triggerDrsPostInitialPaid(refreshed);
+          const meta = refreshed.metadata as { drsVariant?: string } | null;
+          if (meta?.drsVariant === "starter") {
+            await triggerStarterDrsPostInitialPaid(refreshed);
+          } else {
+            await triggerDrsPostInitialPaid(refreshed);
+          }
         }
       } catch (err) {
         console.error("DRS post-paid trigger failed:", err);

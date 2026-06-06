@@ -11,6 +11,7 @@ import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { sendEmailWithLog, buildEngagementRequestEmail } from "@/lib/email";
 import { generateSenderSignatureSvgDataUrl } from "@/lib/signature";
+import { ADS_TIERS, type AdsTier } from "@/lib/digital-rainmaker";
 
 export async function GET() {
   const session = await auth();
@@ -91,6 +92,8 @@ export async function POST(req: NextRequest) {
     expiresInDays = 30,
     saveAsTemplate,
     templateName,
+    includeAds,
+    adsTier,
   } = body;
 
   if (
@@ -133,6 +136,11 @@ export async function POST(req: NextRequest) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
+  // Build engagement metadata (ads tier info for auto-invoicing)
+  const engagementMetadata = includeAds && adsTier && ADS_TIERS[adsTier as AdsTier]
+    ? { adsTier, adsManagementCents: ADS_TIERS[adsTier as AdsTier].cents }
+    : null;
+
   const [engagement] = await db
     .insert(engagements)
     .values({
@@ -143,6 +151,7 @@ export async function POST(req: NextRequest) {
       status: "sent",
       sentAt: new Date(),
       expiresAt,
+      metadata: engagementMetadata,
     })
     .returning();
 
