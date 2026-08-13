@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { cardPriceCents } from "@/lib/drs-pricing";
 
 interface LineItem {
   id: string;
@@ -886,15 +887,23 @@ function PayButton({
   invoice: InvoiceData;
   hasPartialPayment: boolean;
 }) {
-  const [paying, setPaying] = useState(false);
+  const [paying, setPaying] = useState<"ach" | "card" | null>(null);
   const [payError, setPayError] = useState("");
 
-  async function handlePay() {
-    setPaying(true);
+  // Dual pricing: the invoice balance is the discounted bank transfer (ACH)
+  // price; card payments are charged at the card price.
+  const achPrice = hasPartialPayment ? invoice.balanceDue : invoice.total;
+  const cardPrice = cardPriceCents(achPrice);
+  const achSavings = cardPrice - achPrice;
+
+  async function handlePay(method: "ach" | "card") {
+    setPaying(method);
     setPayError("");
     try {
       const res = await fetch(`/api/invoice/${token}/checkout`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method }),
       });
       const data = await res.json();
       if (!res.ok || !data.checkoutUrl) {
@@ -905,7 +914,7 @@ function PayButton({
     } catch {
       setPayError("Something went wrong. Please try again.");
     } finally {
-      setPaying(false);
+      setPaying(null);
     }
   }
 
@@ -940,28 +949,61 @@ function PayButton({
           Partial payment received — {formatCurrency(invoice.amountPaid, invoice.currency)} of {formatCurrency(invoice.total, invoice.currency)} paid
         </div>
       )}
-      <div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
         <button
-          onClick={handlePay}
-          disabled={paying}
+          onClick={() => handlePay("ach")}
+          disabled={paying !== null}
           style={{
             display: "inline-block",
-            background: paying
-              ? "#94a3b8"
-              : "linear-gradient(135deg, #2563EB, #06B6D4)",
+            background:
+              paying !== null
+                ? "#94a3b8"
+                : "linear-gradient(135deg, #2563EB, #06B6D4)",
             color: "#fff",
             border: "none",
-            cursor: paying ? "not-allowed" : "pointer",
+            cursor: paying !== null ? "not-allowed" : "pointer",
             padding: "14px 48px",
             borderRadius: 12,
             fontSize: 16,
             fontWeight: 700,
           }}
         >
-          {paying
+          {paying === "ach"
             ? "Redirecting to payment..."
-            : `Pay ${formatCurrency(hasPartialPayment ? invoice.balanceDue : invoice.total, invoice.currency)}`}
+            : `Pay ${formatCurrency(achPrice, invoice.currency)} via bank transfer (ACH)`}
         </button>
+        <p style={{ margin: 0, color: "#059669", fontSize: 12, fontWeight: 600 }}>
+          Bank transfer price — save {formatCurrency(achSavings, invoice.currency)}
+        </p>
+        <button
+          onClick={() => handlePay("card")}
+          disabled={paying !== null}
+          style={{
+            display: "inline-block",
+            background: "transparent",
+            color: paying !== null ? "#94a3b8" : "#2563EB",
+            border: `2px solid ${paying !== null ? "#94a3b8" : "#2563EB"}`,
+            cursor: paying !== null ? "not-allowed" : "pointer",
+            padding: "12px 48px",
+            borderRadius: 12,
+            fontSize: 15,
+            fontWeight: 700,
+          }}
+        >
+          {paying === "card"
+            ? "Redirecting to payment..."
+            : `Pay ${formatCurrency(cardPrice, invoice.currency)} by credit/debit card`}
+        </button>
+        <p style={{ margin: 0, color: "#999", fontSize: 12 }}>
+          Card price
+        </p>
       </div>
       {payError && (
         <p style={{ margin: "8px 0 0", color: "#DC2626", fontSize: 13 }}>

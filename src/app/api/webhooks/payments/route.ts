@@ -14,6 +14,18 @@ import { createNotification } from "@/lib/notifications";
 import { triggerDrsPostInitialPaid, triggerStarterDrsPostInitialPaid } from "@/lib/digital-rainmaker";
 import type Stripe from "stripe";
 
+/**
+ * Amount to credit against the invoice. Card sessions charge the card price
+ * (dual pricing), so `amount_total` exceeds the invoice balance at its listed
+ * ACH price — `baseAmountCents` in the session metadata is the true invoice
+ * portion. Falls back to `amount_total` for sessions created before dual
+ * pricing existed.
+ */
+function invoicePortionCents(session: Stripe.Checkout.Session): number {
+  const base = Number(session.metadata?.baseAmountCents);
+  return Number.isFinite(base) && base > 0 ? base : session.amount_total ?? 0;
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get("stripe-signature");
@@ -87,7 +99,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  const amountCents = session.amount_total ?? 0;
+  const amountCents = invoicePortionCents(session);
   const newAmountPaid = invoice.amountPaid + amountCents;
   const newBalanceDue = Math.max(0, invoice.total - newAmountPaid);
   const newStatus = newBalanceDue <= 0 ? "paid" : "partial";
@@ -178,7 +190,12 @@ async function handleAsyncPaymentSucceeded(
       .where(eq(invoices.id, invoiceId))
       .limit(1);
     if (refreshed && refreshed.status === "paid") {
-      await triggerDrsPostInitialPaid(refreshed);
+      const meta = refreshed.metadata as { drsVariant?: string } | null;
+      if (meta?.drsVariant === "starter") {
+        await triggerStarterDrsPostInitialPaid(refreshed);
+      } else {
+        await triggerDrsPostInitialPaid(refreshed);
+      }
     }
   } catch (err) {
     console.error("DRS post-paid (ACH) trigger failed:", err);
@@ -199,7 +216,7 @@ async function handleAsyncPaymentFailed(session: Stripe.Checkout.Session) {
 
   if (!invoice) return;
 
-  const failedAmountCents = session.amount_total ?? 0;
+  const failedAmountCents = invoicePortionCents(session);
   const revertedAmountPaid = Math.max(
     0,
     invoice.amountPaid - failedAmountCents

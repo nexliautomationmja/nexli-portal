@@ -11,7 +11,13 @@ import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { sendEmailWithLog, buildEngagementRequestEmail } from "@/lib/email";
 import { generateSenderSignatureSvgDataUrl } from "@/lib/signature";
-import { ADS_TIERS, type AdsTier } from "@/lib/digital-rainmaker";
+import { getDrsVariant } from "@/lib/digital-rainmaker";
+import {
+  ADS_TIERS,
+  DRS_PRICING,
+  STARTER_DRS_PRICING,
+  type AdsTier,
+} from "@/lib/drs-pricing";
 
 export async function GET() {
   const session = await auth();
@@ -136,10 +142,23 @@ export async function POST(req: NextRequest) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
-  // Build engagement metadata (ads tier info for auto-invoicing)
-  const engagementMetadata = includeAds && adsTier && ADS_TIERS[adsTier as AdsTier]
-    ? { adsTier, adsManagementCents: ADS_TIERS[adsTier as AdsTier].cents }
-    : null;
+  // Build engagement metadata — snapshot the pricing in effect at compose
+  // time so auto-invoicing always bills what the signed contract says, even
+  // if the pricing constants change later.
+  const drsVariant = await getDrsVariant(templateId || null);
+  const adsMetadata =
+    includeAds && adsTier && ADS_TIERS[adsTier as AdsTier]
+      ? { adsTier, adsManagementCents: ADS_TIERS[adsTier as AdsTier].cents }
+      : {};
+  const retainerMetadata =
+    drsVariant === "starter"
+      ? { retainerCents: STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS }
+      : drsVariant === "original"
+        ? { monthlyCents: DRS_PRICING.MONTHLY_SUBSCRIPTION_CENTS }
+        : {};
+  const combinedMetadata = { ...adsMetadata, ...retainerMetadata };
+  const engagementMetadata =
+    Object.keys(combinedMetadata).length > 0 ? combinedMetadata : null;
 
   const [engagement] = await db
     .insert(engagements)

@@ -8,6 +8,17 @@ import {
   STARTER_DRS_TEMPLATE_CONTENT,
   generateStarterContent,
 } from "@/lib/engagement-defaults";
+import { ADS_TIERS, type AdsTier } from "@/lib/drs-pricing";
+
+const ADS_TIER_OPTIONS = (Object.keys(ADS_TIERS) as AdsTier[]).map((value) => {
+  const tier = ADS_TIERS[value];
+  return {
+    value,
+    label: tier.label,
+    fee: `$${(tier.cents / 100).toLocaleString("en-US")}/mo`,
+    spend: `${tier.spendRange} ad spend`,
+  };
+});
 
 interface Signer {
   id: string;
@@ -603,11 +614,7 @@ export function EngagementsClient() {
                     <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
                       Which tier did they agree to?
                     </p>
-                    {([
-                      { value: "foundation" as const, label: "Foundation Ads", fee: "$1,500/mo", spend: "$1k–$3k/mo ad spend" },
-                      { value: "growth" as const, label: "Growth Ads", fee: "$2,500/mo", spend: "$3k–$8k/mo ad spend" },
-                      { value: "scale" as const, label: "Scale Ads", fee: "$4,500/mo", spend: "$8k–$20k+/mo ad spend" },
-                    ]).map((tier) => (
+                    {ADS_TIER_OPTIONS.map((tier) => (
                       <label
                         key={tier.value}
                         className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"

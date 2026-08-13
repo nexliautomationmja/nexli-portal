@@ -11,19 +11,30 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-// ── $1,010 threshold (in cents) ──
-const ACH_ONLY_THRESHOLD_CENTS = 101_000;
-
 /**
  * Creates a Stripe Checkout Session for an invoice.
- * - At or below $1,010: card + ACH
- * - Above $1,010: ACH only
+ *
+ * Dual pricing: the client chooses the payment method up front (two buttons
+ * on the invoice page, each showing its all-in price) because a single
+ * Checkout Session can't vary its total by which method the customer picks:
+ * - "ach"  → us_bank_account, charged the discounted bank transfer price
+ * - "card" → card, charged the card price
+ *
+ * Each session has ONE line item at that method's price — never a base price
+ * plus a fee line — which is the surcharge-law-safe presentation.
+ *
+ * The webhook credits the invoice by `baseAmountCents` from metadata (the
+ * ACH-listed invoice balance) so the card price never inflates `amountPaid`.
  */
 export async function createCheckoutSession(params: {
   invoiceId: string;
   invoiceNumber: string;
   clientEmail: string;
+  /** Invoice balance at the listed (ACH) price — credited on payment. */
   amountCents: number;
+  /** Amount actually charged: card price for card, equal to amountCents for ACH. */
+  chargeCents: number;
+  method: "ach" | "card";
   currency: string;
   successUrl: string;
   cancelUrl: string;
@@ -31,9 +42,13 @@ export async function createCheckoutSession(params: {
   const stripe = getStripe();
 
   const paymentMethodTypes: Stripe.Checkout.SessionCreateParams.PaymentMethodType[] =
-    params.amountCents <= ACH_ONLY_THRESHOLD_CENTS
-      ? ["card", "us_bank_account"]
-      : ["us_bank_account"];
+    params.method === "card" ? ["card"] : ["us_bank_account"];
+
+  const metadata = {
+    invoiceId: params.invoiceId,
+    invoiceNumber: params.invoiceNumber,
+    baseAmountCents: String(params.amountCents),
+  };
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -43,7 +58,7 @@ export async function createCheckoutSession(params: {
       {
         price_data: {
           currency: params.currency,
-          unit_amount: params.amountCents,
+          unit_amount: params.chargeCents,
           product_data: {
             name: `Invoice ${params.invoiceNumber}`,
           },
@@ -51,15 +66,9 @@ export async function createCheckoutSession(params: {
         quantity: 1,
       },
     ],
-    metadata: {
-      invoiceId: params.invoiceId,
-      invoiceNumber: params.invoiceNumber,
-    },
+    metadata,
     payment_intent_data: {
-      metadata: {
-        invoiceId: params.invoiceId,
-        invoiceNumber: params.invoiceNumber,
-      },
+      metadata,
     },
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,

@@ -7,8 +7,12 @@
  *
  *   1. Initial Setup Fee — $10,000 USD, due immediately on signing
  *   2. Final Setup Fee   — $10,000 USD, due 30 days after the Initial is paid
- *   3. Monthly Subscription — $997 USD/month, recurring, first invoice due
+ *   3. Monthly Subscription — $2,497 USD/month, recurring, first invoice due
  *      30 days after the Initial is paid
+ *
+ * Amounts come from drs-pricing.ts. Engagements snapshot their pricing into
+ * engagement.metadata at compose time; the triggers below prefer those
+ * snapshots so already-signed clients are grandfathered when prices change.
  *
  * The 30-day clock for invoices #2 and #3 starts when invoice #1 is paid in
  * full — NOT when the engagement is signed. This is enforced by triggering
@@ -44,28 +48,17 @@ import { createNotification } from "@/lib/notifications";
 
 // ── Constants ─────────────────────────────────────────────
 
-/** Pricing in cents — single source of truth for the DRS contract. */
-export const DRS_PRICING = {
-  INITIAL_SETUP_CENTS: 10_000_00, // $10,000.00
-  FINAL_SETUP_CENTS: 10_000_00,   // $10,000.00
-  MONTHLY_SUBSCRIPTION_CENTS: 997_00, // $997.00
-} as const;
+// Pricing lives in drs-pricing.ts (client-safe module); re-exported here so
+// existing server-side imports keep working.
+import {
+  ADS_TIERS,
+  DRS_PRICING,
+  STARTER_DRS_PRICING,
+  type AdsTier,
+} from "./drs-pricing";
 
-/** Starter DRS pricing — $15k total setup ($7.5k + $7.5k) + $997/mo. */
-export const STARTER_DRS_PRICING = {
-  INITIAL_SETUP_CENTS: 750_000,   // $7,500.00
-  FINAL_SETUP_CENTS: 750_000,     // $7,500.00
-  MONTHLY_RETAINER_CENTS: 99_700, // $997.00
-} as const;
-
-/** Ad management tier pricing — monthly management fees. */
-export const ADS_TIERS = {
-  foundation: { label: "Foundation Ads", cents: 150_000, spendRange: "$1,000–$3,000/mo" },
-  growth:     { label: "Growth Ads",     cents: 250_000, spendRange: "$3,000–$8,000/mo" },
-  scale:      { label: "Scale Ads",      cents: 450_000, spendRange: "$8,000–$20,000+/mo" },
-} as const;
-
-export type AdsTier = keyof typeof ADS_TIERS;
+export { ADS_TIERS, DRS_PRICING, STARTER_DRS_PRICING } from "./drs-pricing";
+export type { AdsTier } from "./drs-pricing";
 
 /** DRS variant detected from template name. */
 export type DrsVariant = "original" | "starter";
@@ -87,6 +80,10 @@ interface DrsMetadata {
 interface EngagementMeta {
   adsTier?: AdsTier;
   adsManagementCents?: number;
+  /** Starter DRS monthly retainer snapshotted at compose time. */
+  retainerCents?: number;
+  /** Original DRS monthly subscription snapshotted at compose time. */
+  monthlyCents?: number;
 }
 
 // ── Template Detection ────────────────────────────────────
@@ -264,7 +261,9 @@ async function createOneTimeDrsInvoice(args: {
  * (api/cron/invoice-reminders) handles generating subsequent monthly
  * invoices from the parent template via `nextRecurrenceDate`.
  */
-async function createRecurringDrsMonthlyInvoice(args: CreateInvoiceArgs) {
+async function createRecurringDrsMonthlyInvoice(
+  args: CreateInvoiceArgs & { monthlyCents?: number }
+) {
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + DRS_CLOCK_DAYS);
 
@@ -275,7 +274,7 @@ async function createRecurringDrsMonthlyInvoice(args: CreateInvoiceArgs) {
 
   const invoiceNumber = await generateInvoiceNumber();
   const token = generateInvoiceToken();
-  const amountCents = DRS_PRICING.MONTHLY_SUBSCRIPTION_CENTS;
+  const amountCents = args.monthlyCents ?? DRS_PRICING.MONTHLY_SUBSCRIPTION_CENTS;
 
   const metadata: DrsMetadata = {
     engagementId: args.engagementId,
@@ -443,13 +442,16 @@ export async function triggerDrsPostInitialPaid(
     created.final = finalInvoice;
   }
 
-  // Monthly Subscription invoice (recurring)
+  // Monthly Subscription invoice (recurring) — prefer the amount snapshotted
+  // on the engagement at compose time so signed clients keep their price.
   if (!(await drsInvoiceExists(engagementId, "monthly_subscription"))) {
+    const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
     const monthlyInvoice = await createRecurringDrsMonthlyInvoice({
       ownerId: paidInvoice.ownerId,
       engagementId,
       clientName: paidInvoice.clientName,
       clientEmail: paidInvoice.clientEmail,
+      monthlyCents: engMeta.monthlyCents,
     });
     await emailInvoiceToClient(monthlyInvoice, paidInvoice.ownerId);
     created.monthly = monthlyInvoice;
@@ -485,7 +487,7 @@ export async function triggerDrsPostInitialPaid(
  * Called from the engage route after all signers have signed a Starter DRS
  * engagement. Generates Invoice 1:
  *   - Initial Setup Fee ($7,500)
- *   - Monthly Retainer ($997)
+ *   - Monthly Retainer ($1,497, or the amount snapshotted at compose time)
  *   - Ad Management fee (if ads tier selected)
  *
  * All line items are on a single invoice, due immediately.
@@ -499,10 +501,12 @@ export async function triggerStarterDrsPostSign(args: PostSignTriggerArgs) {
 
   const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
   const adsTier = engMeta.adsTier;
-  const adsCents = adsTier ? ADS_TIERS[adsTier].cents : 0;
+  // Prefer amounts snapshotted at compose time so the invoice always matches
+  // the signed contract even if the pricing constants change later.
+  const adsCents = adsTier ? engMeta.adsManagementCents ?? ADS_TIERS[adsTier].cents : 0;
 
   const setupCents = STARTER_DRS_PRICING.INITIAL_SETUP_CENTS;
-  const retainerCents = STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS;
+  const retainerCents = engMeta.retainerCents ?? STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS;
   const totalCents = setupCents + retainerCents + adsCents;
 
   const invoiceNumber = await generateInvoiceNumber();
@@ -604,7 +608,8 @@ export async function triggerStarterDrsPostSign(args: PostSignTriggerArgs) {
  * Called from the Stripe payments webhook after a Starter DRS initial setup
  * invoice is paid. Generates:
  *   - Invoice 2: Final Setup Fee ($7,500) — due in 30 days
- *   - Invoice 3: Monthly recurring ($997 retainer + ad management) — due in 30 days
+ *   - Invoice 3: Monthly recurring (retainer + ad management, preferring
+ *     amounts snapshotted at compose time) — due in 30 days
  */
 export async function triggerStarterDrsPostInitialPaid(
   paidInvoice: typeof invoices.$inferSelect
@@ -629,7 +634,8 @@ export async function triggerStarterDrsPostInitialPaid(
 
   const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
   const adsTier = engMeta.adsTier;
-  const adsCents = adsTier ? ADS_TIERS[adsTier].cents : 0;
+  // Prefer amounts snapshotted at compose time — grandfathers signed clients.
+  const adsCents = adsTier ? engMeta.adsManagementCents ?? ADS_TIERS[adsTier].cents : 0;
 
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + DRS_CLOCK_DAYS);
@@ -653,9 +659,9 @@ export async function triggerStarterDrsPostInitialPaid(
     created.final = finalInvoice;
   }
 
-  // Invoice 3: Monthly recurring ($997 retainer + ad management)
+  // Invoice 3: Monthly recurring (retainer + ad management)
   if (!(await drsInvoiceExists(engagementId, "monthly_subscription"))) {
-    const retainerCents = STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS;
+    const retainerCents = engMeta.retainerCents ?? STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS;
     const totalMonthlyCents = retainerCents + adsCents;
 
     const nextRecurrence = new Date(dueDate);

@@ -3,12 +3,18 @@ import { db } from "@/db";
 import { invoices } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createCheckoutSession } from "@/lib/stripe";
+import { cardPriceCents } from "@/lib/drs-pricing";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
+
+  // Payment method chosen on the invoice page. Default to ACH (fee-free) so
+  // requests without a body — e.g. stale clients — stay safe.
+  const body = await req.json().catch(() => ({}));
+  const method: "ach" | "card" = body?.method === "card" ? "card" : "ach";
 
   const [invoice] = await db
     .select()
@@ -46,12 +52,19 @@ export async function POST(
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
   const invoicePageUrl = `${portalUrl}/invoice/${token}`;
 
+  // Dual pricing: the invoice balance is the discounted ACH price; card
+  // payments are charged at the card price. Computed server-side — the
+  // client only displays it.
+  const chargeCents = method === "card" ? cardPriceCents(balanceDue) : balanceDue;
+
   try {
     const { sessionId, checkoutUrl } = await createCheckoutSession({
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       clientEmail: invoice.clientEmail,
       amountCents: balanceDue,
+      chargeCents,
+      method,
       currency: invoice.currency,
       successUrl: `${invoicePageUrl}?payment=success`,
       cancelUrl: `${invoicePageUrl}?payment=canceled`,
