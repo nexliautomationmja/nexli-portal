@@ -7,8 +7,11 @@ import { DocumentPreview } from "@/components/engagement-document";
 import {
   STARTER_DRS_TEMPLATE_CONTENT,
   generateStarterContent,
+  generateOriginalContent,
 } from "@/lib/engagement-defaults";
-import { ADS_TIERS, type AdsTier } from "@/lib/drs-pricing";
+import { ADS_TIERS, DRS_PREPAY, type AdsTier } from "@/lib/drs-pricing";
+
+const fmtWhole = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
 
 const ADS_TIER_OPTIONS = (Object.keys(ADS_TIERS) as AdsTier[]).map((value) => {
   const tier = ADS_TIERS[value];
@@ -83,6 +86,9 @@ export function EngagementsClient() {
   const [includeAds, setIncludeAds] = useState(false);
   const [adsTier, setAdsTier] = useState<"foundation" | "growth" | "scale">("foundation");
 
+  // Pay-in-full discount (full DRS only)
+  const [payInFull, setPayInFull] = useState(false);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/dashboard/engagements").then((r) => r.json()),
@@ -106,15 +112,29 @@ export function EngagementsClient() {
     return !!tmpl && tmpl.name.toLowerCase().includes("starter") && tmpl.name.toLowerCase().includes("digital rainmaker");
   }
 
+  function isOriginalTemplate(tmpl: Template | undefined): boolean {
+    return !!tmpl && tmpl.name.toLowerCase().includes("digital rainmaker") && !tmpl.name.toLowerCase().includes("starter");
+  }
+
   function handleTemplateSelect(templateId: string) {
     setSelectedTemplate(templateId);
     const tmpl = templates.find((t) => t.id === templateId);
     if (tmpl) {
       if (isStarterTemplate(tmpl) && includeAds) {
         setContent(generateStarterContent(adsTier));
+      } else if (isOriginalTemplate(tmpl) && payInFull) {
+        setContent(generateOriginalContent(true));
       } else {
         setContent(tmpl.content);
       }
+    }
+  }
+
+  function handlePayInFullToggle(checked: boolean) {
+    setPayInFull(checked);
+    const tmpl = templates.find((t) => t.id === selectedTemplate);
+    if (isOriginalTemplate(tmpl)) {
+      setContent(generateOriginalContent(checked));
     }
   }
 
@@ -169,6 +189,7 @@ export function EngagementsClient() {
           templateName: saveAsTemplate ? templateName : undefined,
           includeAds,
           adsTier: includeAds ? adsTier : undefined,
+          payInFull,
         }),
       });
       const data = await res.json();
@@ -230,6 +251,7 @@ export function EngagementsClient() {
     setTemplateName("");
     setIncludeAds(false);
     setAdsTier("foundation");
+    setPayInFull(false);
   }
 
   function formatDate(dateStr: string | null) {
@@ -593,6 +615,26 @@ export function EngagementsClient() {
                       </option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {/* Pay-in-Full discount (full DRS only) */}
+              {isOriginalTemplate(templates.find((t) => t.id === selectedTemplate)) && (
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={payInFull}
+                      onChange={(e) => handlePayInFullToggle(e.target.checked)}
+                      className="w-4 h-4 rounded accent-blue-500"
+                    />
+                    <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                      Pay-in-Full Discount — {fmtWhole(DRS_PREPAY.SETUP_CENTS)} setup upfront (saves {fmtWhole(DRS_PREPAY.DISCOUNT_CENTS)})
+                    </span>
+                  </label>
+                  <p className="text-xs pl-6" style={{ color: "var(--text-muted)" }}>
+                    Single {fmtWhole(DRS_PREPAY.SETUP_CENTS)} invoice at signing instead of two setup invoices. Monthly retainer unchanged.
+                  </p>
                 </div>
               )}
 

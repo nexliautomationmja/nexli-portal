@@ -10,6 +10,7 @@
 import {
   ADS_TIERS,
   DRS_PRICING,
+  DRS_PREPAY,
   STARTER_DRS_PRICING,
   type AdsTier,
 } from "./drs-pricing";
@@ -29,11 +30,43 @@ const BILLED_MONTHLY_CLAUSE = "Billed monthly via ACH bank transfer or card thro
 
 export const ORIGINAL_DRS_TEMPLATE_NAME = "Digital Rainmaker System";
 
-export function buildOriginalTemplate(): string {
+/**
+ * Builds the full DRS engagement letter. When `payInFull` is true, the fee
+ * structure becomes a single discounted Setup Investment due at signing
+ * (no Final Setup Fee), with the first monthly invoice due 30 days after
+ * that payment. Section numbering is identical in both variants.
+ */
+export function buildOriginalTemplate(payInFull?: boolean): string {
   const initial = fmt(DRS_PRICING.INITIAL_SETUP_CENTS);
   const final = fmt(DRS_PRICING.FINAL_SETUP_CENTS);
   const monthly = fmt(DRS_PRICING.MONTHLY_SUBSCRIPTION_CENTS);
-  const totalSetup = fmt(DRS_PRICING.INITIAL_SETUP_CENTS + DRS_PRICING.FINAL_SETUP_CENTS);
+  const standardSetup = fmt(DRS_PRICING.INITIAL_SETUP_CENTS + DRS_PRICING.FINAL_SETUP_CENTS);
+  const prepaySetup = fmt(DRS_PREPAY.SETUP_CENTS);
+  const prepayDiscount = fmt(DRS_PREPAY.DISCOUNT_CENTS);
+
+  const feeStructure = payInFull
+    ? `a) Setup Investment (Paid in Full): ${prepaySetup} USD — Due upon execution of this Agreement; reflects a ${prepayDiscount} discount off the standard ${standardSetup} setup investment. This payment activates the Agreement and authorizes Provider to begin work.
+
+b) Monthly Subscription: ${monthly} USD/month — Recurring charge for continued access to the Digital Rainmaker System, including AI automations, dashboard access, and technical support. The first monthly invoice is due thirty (30) calendar days after the Setup Investment is paid. ${BILLED_MONTHLY_CLAUSE}
+
+c) Total Setup Investment: ${prepaySetup} USD
+d) Ongoing Monthly: ${monthly} USD/month`
+    : `a) Initial Setup Fee: ${initial} USD — Due upon execution of this Agreement. This payment activates the Agreement and authorizes Provider to begin work.
+
+b) Final Setup Fee: ${final} USD — Due thirty (30) calendar days after execution of this Agreement, along with the first month of the recurring subscription.
+
+c) Monthly Subscription: ${monthly} USD/month — Recurring charge for continued access to the Digital Rainmaker System, including AI automations, dashboard access, and technical support. ${BILLED_MONTHLY_CLAUSE}
+
+d) Total Setup Investment: ${standardSetup} USD
+e) Ongoing Monthly: ${monthly} USD/month`;
+
+  const effectiveClause = payInFull
+    ? `until the Setup Investment (${prepaySetup}) is received`
+    : `until the Initial Setup Fee (${initial}) is received`;
+
+  const timelineDueClause = payInFull
+    ? "The Monthly Subscription shall become due as scheduled."
+    : "The Final Setup Fee and Monthly Subscription shall become due as scheduled.";
 
   return `DIGITAL RAINMAKER SYSTEM
 SERVICE ENGAGEMENT AGREEMENT
@@ -62,14 +95,7 @@ e) Payment Processing Integration — Create a Stripe account for Client or conn
 
 2. FEE STRUCTURE
 
-a) Initial Setup Fee: ${initial} USD — Due upon execution of this Agreement. This payment activates the Agreement and authorizes Provider to begin work.
-
-b) Final Setup Fee: ${final} USD — Due thirty (30) calendar days after execution of this Agreement, along with the first month of the recurring subscription.
-
-c) Monthly Subscription: ${monthly} USD/month — Recurring charge for continued access to the Digital Rainmaker System, including AI automations, dashboard access, and technical support. ${BILLED_MONTHLY_CLAUSE}
-
-d) Total Setup Investment: ${totalSetup} USD
-e) Ongoing Monthly: ${monthly} USD/month
+${feeStructure}
 
 3. PAYMENT TERMS
 
@@ -77,7 +103,7 @@ a) ${PAYMENT_METHODS_CLAUSE}
 
 b) All fees are non-refundable. No refunds will be issued under any circumstances once payment is received.
 
-c) This Agreement does not become effective and Provider has no obligation to begin work until the Initial Setup Fee (${initial}) is received.
+c) This Agreement does not become effective and Provider has no obligation to begin work ${effectiveClause}.
 
 d) The Monthly Subscription is month-to-month with no minimum commitment. Client may cancel at any time; however, no refunds or pro-rated credits will be issued for the current billing period. Client retains access through the end of the paid billing cycle.
 
@@ -87,7 +113,7 @@ a) The setup phase (Phase 1) shall be completed within thirty (30) calendar days
 
 b) Client agrees to provide timely cooperation, including but not limited to: DNS editor access, business information, brand assets, content materials, and responsiveness to Provider communications.
 
-c) If Client fails to provide required access, materials, or cooperation within the 30-day setup period, the project shall be deemed complete regardless of outstanding deliverables. The Final Setup Fee and Monthly Subscription shall become due as scheduled. Provider is not responsible for delays caused by Client's non-cooperation.
+c) If Client fails to provide required access, materials, or cooperation within the 30-day setup period, the project shall be deemed complete regardless of outstanding deliverables. ${timelineDueClause} Provider is not responsible for delays caused by Client's non-cooperation.
 
 5. INTELLECTUAL PROPERTY
 
@@ -366,4 +392,12 @@ Client is responsible for ad spend paid directly to the advertising platform (Me
  */
 export function generateStarterContent(adsTier?: AdsTier): string {
   return buildStarterTemplate(adsTier);
+}
+
+/**
+ * Generates the full (Original) DRS engagement letter content, optionally
+ * with the pay-in-full discounted fee structure.
+ */
+export function generateOriginalContent(payInFull?: boolean): string {
+  return buildOriginalTemplate(payInFull);
 }

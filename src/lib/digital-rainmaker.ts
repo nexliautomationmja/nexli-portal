@@ -53,11 +53,12 @@ import { createNotification } from "@/lib/notifications";
 import {
   ADS_TIERS,
   DRS_PRICING,
+  DRS_PREPAY,
   STARTER_DRS_PRICING,
   type AdsTier,
 } from "./drs-pricing";
 
-export { ADS_TIERS, DRS_PRICING, STARTER_DRS_PRICING } from "./drs-pricing";
+export { ADS_TIERS, DRS_PRICING, DRS_PREPAY, STARTER_DRS_PRICING } from "./drs-pricing";
 export type { AdsTier } from "./drs-pricing";
 
 /** DRS variant detected from template name. */
@@ -84,6 +85,10 @@ interface EngagementMeta {
   retainerCents?: number;
   /** Original DRS monthly subscription snapshotted at compose time. */
   monthlyCents?: number;
+  /** Original DRS pay-in-full option: entire setup upfront at a discount. */
+  payInFull?: boolean;
+  /** Pay-in-full setup amount snapshotted at compose time. */
+  prepaySetupCents?: number;
 }
 
 // ── Template Detection ────────────────────────────────────
@@ -352,17 +357,27 @@ export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
 
   const dueDate = new Date(); // due immediately
 
+  // Pay-in-full option: the entire (discounted) setup is billed upfront and
+  // the Final Setup Fee invoice is skipped after payment.
+  const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
+  const payInFull = engMeta.payInFull === true;
+
   const invoice = await createOneTimeDrsInvoice({
     ownerId: engagement.ownerId,
     engagementId: engagement.id,
     clientName: primarySigner.name,
     clientEmail: primarySigner.email,
-    description: "Digital Rainmaker System — Initial Setup Fee",
-    amountCents: DRS_PRICING.INITIAL_SETUP_CENTS,
+    description: payInFull
+      ? "Digital Rainmaker System — Setup Investment (Paid in Full)"
+      : "Digital Rainmaker System — Initial Setup Fee",
+    amountCents: payInFull
+      ? engMeta.prepaySetupCents ?? DRS_PREPAY.SETUP_CENTS
+      : DRS_PRICING.INITIAL_SETUP_CENTS,
     dueDate,
     role: "initial_setup",
-    notes:
-      "Initial Setup Fee for the Digital Rainmaker System. The Final Setup Fee and first Monthly Subscription invoice will be issued 30 days after this invoice is paid in full.",
+    notes: payInFull
+      ? `Full Setup Investment for the Digital Rainmaker System, paid in full at a ${formatCurrency(DRS_PREPAY.DISCOUNT_CENTS, "usd")} discount off the standard setup investment. The first Monthly Subscription invoice will be issued 30 days after this invoice is paid.`
+      : "Initial Setup Fee for the Digital Rainmaker System. The Final Setup Fee and first Monthly Subscription invoice will be issued 30 days after this invoice is paid in full.",
   });
 
   await emailInvoiceToClient(invoice, engagement.ownerId);
@@ -422,10 +437,14 @@ export async function triggerDrsPostInitialPaid(
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + DRS_CLOCK_DAYS);
 
+  const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
+  const payInFull = engMeta.payInFull === true;
+
   const created: { final?: typeof invoices.$inferSelect; monthly?: typeof invoices.$inferSelect } = {};
 
-  // Final Setup Fee invoice
-  if (!(await drsInvoiceExists(engagementId, "final_setup"))) {
+  // Final Setup Fee invoice — skipped for pay-in-full engagements (the
+  // entire setup was already collected on the signing invoice).
+  if (!payInFull && !(await drsInvoiceExists(engagementId, "final_setup"))) {
     const finalInvoice = await createOneTimeDrsInvoice({
       ownerId: paidInvoice.ownerId,
       engagementId,
@@ -445,7 +464,6 @@ export async function triggerDrsPostInitialPaid(
   // Monthly Subscription invoice (recurring) — prefer the amount snapshotted
   // on the engagement at compose time so signed clients keep their price.
   if (!(await drsInvoiceExists(engagementId, "monthly_subscription"))) {
-    const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
     const monthlyInvoice = await createRecurringDrsMonthlyInvoice({
       ownerId: paidInvoice.ownerId,
       engagementId,
@@ -464,7 +482,9 @@ export async function triggerDrsPostInitialPaid(
         userId: paidInvoice.ownerId,
         type: "invoice_paid",
         title: "DRS Follow-Up Invoices Sent",
-        message: `Final Setup Fee and Monthly Subscription invoices issued to ${paidInvoice.clientName} (due in ${DRS_CLOCK_DAYS} days).`,
+        message: payInFull
+          ? `Monthly Subscription invoice issued to ${paidInvoice.clientName} (due in ${DRS_CLOCK_DAYS} days). Setup was paid in full — no Final Setup Fee invoice.`
+          : `Final Setup Fee and Monthly Subscription invoices issued to ${paidInvoice.clientName} (due in ${DRS_CLOCK_DAYS} days).`,
         metadata: {
           engagementId,
           finalInvoiceId: created.final?.id,

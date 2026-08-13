@@ -29,6 +29,16 @@ export const ADS_TIERS = {
 export type AdsTier = keyof typeof ADS_TIERS;
 
 /**
+ * Pay-in-full option for the full (Original) DRS: the entire setup paid
+ * upfront at signing in exchange for a discount. SETUP_CENTS must equal
+ * DRS_PRICING.INITIAL_SETUP_CENTS + FINAL_SETUP_CENTS − DISCOUNT_CENTS.
+ */
+export const DRS_PREPAY = {
+  SETUP_CENTS: 15_000_00,  // $15,000.00 due at signing
+  DISCOUNT_CENTS: 500_000, // $5,000.00 off the standard $20,000 setup
+} as const;
+
+/**
  * Dual pricing: amounts listed on invoices and in contracts are the
  * discounted bank transfer (ACH) price; credit/debit card payments are
  * charged at the card price. This is deliberately framed as two prices —

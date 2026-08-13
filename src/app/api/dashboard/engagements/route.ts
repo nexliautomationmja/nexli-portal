@@ -15,6 +15,7 @@ import { getDrsVariant } from "@/lib/digital-rainmaker";
 import {
   ADS_TIERS,
   DRS_PRICING,
+  DRS_PREPAY,
   STARTER_DRS_PRICING,
   type AdsTier,
 } from "@/lib/drs-pricing";
@@ -100,6 +101,7 @@ export async function POST(req: NextRequest) {
     templateName,
     includeAds,
     adsTier,
+    payInFull,
   } = body;
 
   if (
@@ -156,7 +158,11 @@ export async function POST(req: NextRequest) {
       : drsVariant === "original"
         ? { monthlyCents: DRS_PRICING.MONTHLY_SUBSCRIPTION_CENTS }
         : {};
-  const combinedMetadata = { ...adsMetadata, ...retainerMetadata };
+  const prepayMetadata =
+    drsVariant === "original" && payInFull === true
+      ? { payInFull: true, prepaySetupCents: DRS_PREPAY.SETUP_CENTS }
+      : {};
+  const combinedMetadata = { ...adsMetadata, ...retainerMetadata, ...prepayMetadata };
   const engagementMetadata =
     Object.keys(combinedMetadata).length > 0 ? combinedMetadata : null;
 
