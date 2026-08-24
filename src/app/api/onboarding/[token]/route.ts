@@ -4,6 +4,7 @@ import {
   serializePublicOnboarding,
   setOnboardingValues,
   appendActivity,
+  defaultTaskState,
   TASK_INFO,
   type TaskId,
 } from "@/lib/onboarding";
@@ -74,7 +75,11 @@ export async function POST(
 
   const taskId = body.taskId as TaskId;
   // drivers_license goes through the /upload route, not JSON submissions
-  if (taskId !== "dns_access" && taskId !== "fb_ads_invite") {
+  if (
+    taskId !== "dns_access" &&
+    taskId !== "fb_ads_invite" &&
+    taskId !== "stripe_setup"
+  ) {
     return NextResponse.json({ error: "Invalid task" }, { status: 400 });
   }
 
@@ -111,6 +116,10 @@ export async function POST(
     }
     submissionValue = encryptSubmission(submission);
     activityMessage = `${ctx.signer.name} sent over their domain & DNS access 🌐`;
+  } else if (taskId === "stripe_setup") {
+    // Required — no notApplicable option
+    submissionValue = { confirmed: true };
+    activityMessage = `${ctx.signer.name} set up their Stripe account 💳`;
   } else {
     const raw = (body.submission || {}) as Record<string, unknown>;
     const submission = raw.notApplicable
@@ -122,12 +131,29 @@ export async function POST(
       : `${ctx.signer.name} sent the Facebook Ads partner invite 📣`;
   }
 
-  // One atomic UPDATE for submission + status + timestamp
-  await setOnboardingValues(ctx.engagement.id, [
-    { segments: ["tasks", taskId, "submission"], value: submissionValue },
-    { segments: ["tasks", taskId, "status"], value: "submitted" },
-    { segments: ["tasks", taskId, "submittedAt"], value: now },
-  ]);
+  if (!ctx.onboarding.tasks[taskId]) {
+    // Onboardings created before this task existed lack the tasks.<id> key,
+    // and jsonb_set can't create intermediate path elements — so write the
+    // whole task object in one shot (parent "tasks" always exists).
+    await setOnboardingValues(ctx.engagement.id, [
+      {
+        segments: ["tasks", taskId],
+        value: {
+          ...defaultTaskState(taskId),
+          status: "submitted",
+          submittedAt: now,
+          submission: submissionValue,
+        },
+      },
+    ]);
+  } else {
+    // One atomic UPDATE for submission + status + timestamp
+    await setOnboardingValues(ctx.engagement.id, [
+      { segments: ["tasks", taskId, "submission"], value: submissionValue },
+      { segments: ["tasks", taskId, "status"], value: "submitted" },
+      { segments: ["tasks", taskId, "submittedAt"], value: now },
+    ]);
+  }
   await appendActivity(ctx.engagement.id, {
     actor: "client",
     type: "task_submitted",

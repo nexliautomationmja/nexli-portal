@@ -7,6 +7,7 @@ import {
   initOnboarding,
   setOnboardingValues,
   appendActivity,
+  defaultTaskState,
   serializeAdminOnboarding,
   PHASE_ORDER,
   PHASE_INFO,
@@ -248,11 +249,27 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       }
       const adminNote = str(body.adminNote, 500);
-      await setOnboardingValues(engagementId, [
-        { segments: ["tasks", taskId, "status"], value: status },
-        { segments: ["tasks", taskId, "reviewedAt"], value: now },
-        { segments: ["tasks", taskId, "adminNote"], value: adminNote || null },
-      ]);
+      if (!state.tasks[taskId]) {
+        // Legacy onboardings may lack this task key; jsonb_set can't create
+        // intermediate paths, so write the whole task object instead.
+        await setOnboardingValues(engagementId, [
+          {
+            segments: ["tasks", taskId],
+            value: {
+              ...defaultTaskState(taskId),
+              status,
+              reviewedAt: now,
+              adminNote: adminNote || null,
+            },
+          },
+        ]);
+      } else {
+        await setOnboardingValues(engagementId, [
+          { segments: ["tasks", taskId, "status"], value: status },
+          { segments: ["tasks", taskId, "reviewedAt"], value: now },
+          { segments: ["tasks", taskId, "adminNote"], value: adminNote || null },
+        ]);
+      }
       if (status === "approved") {
         await appendActivity(engagementId, {
           actor: "agency",

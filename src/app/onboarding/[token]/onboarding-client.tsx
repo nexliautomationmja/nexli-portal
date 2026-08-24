@@ -106,7 +106,7 @@ const SYNE = { fontFamily: "var(--font-syne), sans-serif" };
 
 // ─── Color system (literal Tailwind classes per accent) ────
 
-type Accent = "blue" | "violet" | "cyan" | "amber" | "emerald";
+type Accent = "blue" | "violet" | "cyan" | "amber" | "emerald" | "stripe";
 
 const ACCENT = {
   blue: {
@@ -145,6 +145,19 @@ const ACCENT = {
     successStrip: "bg-cyan-500/10 border border-cyan-500/30",
     dotBg: "#06B6D4",
   },
+  stripe: {
+    // White-outlined tile (per Marcel) with Stripe-blurple accents elsewhere
+    chip: "bg-white/10 border border-white/30",
+    chipGlow: "drop-shadow(0 4px 8px rgba(255, 255, 255, 0.18))",
+    icon: "text-white",
+    headerTile: "bg-white/10 border border-white/20",
+    headerIcon: "text-white",
+    check: "text-[#8f88ff]",
+    badgeDone: "bg-[#635BFF]/20 text-[#b5b0ff] border border-[#635BFF]/40",
+    noteStrip: "bg-[#635BFF]/10 border border-[#635BFF]/30",
+    successStrip: "bg-[#635BFF]/10 border border-[#635BFF]/40",
+    dotBg: "#635BFF",
+  },
   emerald: {
     chip: "bg-emerald-500/20 border border-emerald-500/30",
     chipGlow: "drop-shadow(0 4px 8px rgba(16, 185, 129, 0.3))",
@@ -178,6 +191,7 @@ const PHASE_ACCENT: Record<string, Accent> = {
 };
 
 const TASK_ACCENT: Record<string, Accent> = {
+  stripe_setup: "stripe",
   dns_access: "blue",
   fb_ads_invite: "emerald",
   drivers_license: "amber",
@@ -311,6 +325,17 @@ function FacebookLogo({ size = 24 }: { size?: number }) {
       <path
         fill="#FFFFFF"
         d="M16.671 15.542l.532-3.469h-3.328v-2.25c0-.949.465-1.874 1.955-1.874h1.514V4.996s-1.373-.235-2.686-.235c-2.741 0-4.533 1.662-4.533 4.669v2.644H7.078v3.469h3.047v8.385a12.13 12.13 0 0 0 3.75 0v-8.385h2.796z"
+      />
+    </svg>
+  );
+}
+
+function StripeLogo({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#635BFF"
+        d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305z"
       />
     </svg>
   );
@@ -730,6 +755,7 @@ export function OnboardingClient({ token }: { token: string }) {
                     ["cyan", <Icon key="c" d={PATHS.layoutDashboard} size={28} className={ACCENT.cyan.icon} />],
                     ["amber", <GoogleGLogo key="g" size={26} />],
                     ["emerald", <FacebookLogo key="f" size={26} />],
+                    ["stripe", <StripeLogo key="s" size={26} />],
                   ] as [Accent, React.ReactNode][]
                 ).map(([accent, icon], i) => (
                   <div
@@ -1090,6 +1116,8 @@ function TaskCard({
         >
           {task.id === "fb_ads_invite" ? (
             <FacebookLogo size={24} />
+          ) : task.id === "stripe_setup" ? (
+            <StripeLogo size={24} />
           ) : (
             <Icon d={TASK_ICON[task.id] || PATHS.globe} size={24} className={a.icon} />
           )}
@@ -1115,9 +1143,12 @@ function TaskCard({
         {task.type === "credentials" && (
           <DnsForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
-        {task.type === "confirm" && (
-          <FbConfirm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
-        )}
+        {task.type === "confirm" &&
+          (task.id === "stripe_setup" ? (
+            <StripeSetup task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
+          ) : (
+            <FbConfirm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
+          ))}
         {task.type === "upload" && (
           <LicenseUpload task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
@@ -1303,6 +1334,139 @@ function DnsForm({
             Sent over an encrypted connection — visible only to your Nexli team
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Stripe account setup (guided + confirm) ──
+
+const STRIPE_GROUND_RULES = [
+  "Legal business name & address",
+  "EIN (or SSN for sole proprietors)",
+  "Business bank account & routing number for payouts",
+  "Government-issued ID for identity verification",
+];
+
+function StripeSetup({
+  task,
+  token,
+  onSubmitted,
+  accent,
+}: {
+  task: TaskData;
+  token: string;
+  onSubmitted: () => void;
+  accent: Accent;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [justConfirmed, setJustConfirmed] = useState(false);
+
+  const done =
+    justConfirmed || task.status === "submitted" || task.status === "approved";
+
+  if (done) {
+    return (
+      <SubmittedNote accent={accent}>
+        Stripe is live — your payment rails are connected. 🎉
+      </SubmittedNote>
+    );
+  }
+
+  async function confirm() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/onboarding/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskId: "stripe_setup",
+          submission: { confirmed: true },
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Something went wrong. Please try again.");
+        return;
+      }
+      setJustConfirmed(true);
+      onSubmitted();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const a = ACCENT[accent];
+
+  return (
+    <div className="space-y-4">
+      {/* Ground rules — have these ready */}
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 mb-2">
+          Have these ready
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {STRIPE_GROUND_RULES.map((rule) => (
+            <div key={rule} className="flex items-start gap-2 text-sm">
+              <Icon
+                d={PATHS.circleCheck}
+                size={16}
+                className={`${a.check} shrink-0 mt-0.5`}
+              />
+              <span className="text-neutral-300 text-[13px]">{rule}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-neutral-500 mt-2">
+          Stripe verifies your identity (KYC) — answer their prompts exactly as
+          your business is registered.
+        </p>
+      </div>
+
+      {/* Steps */}
+      <ol className="text-xs sm:text-[13px] space-y-1.5 pl-4 list-decimal leading-relaxed text-neutral-400">
+        <li>
+          <span className="font-semibold text-white">Create your account</span>{" "}
+          at stripe.com — or sign in if your business already has one
+        </li>
+        <li>
+          Complete the <span className="font-semibold text-white">business profile</span>{" "}
+          with the info above
+        </li>
+        <li>
+          Finish Stripe&apos;s{" "}
+          <span className="font-semibold text-white">identity (KYC) verification</span>
+        </li>
+        <li>Come back here and confirm below</li>
+      </ol>
+
+      {/* The frame: why this matters */}
+      <div className="rounded-xl px-4 py-3 bg-white/5 border border-white/15">
+        <p className="text-xs text-neutral-300">
+          <span className="font-bold text-white">Heads up: </span>
+          no Stripe account = no way for us to collect payments for you. This
+          one unlocks everything else.
+        </p>
+      </div>
+
+      {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
+
+      <div className="flex flex-wrap gap-3">
+        <a
+          href="https://dashboard.stripe.com/register"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-center gap-2 bg-[#635BFF] text-white px-6 py-3 rounded-full text-sm font-bold no-underline hover:bg-[#7a73ff] hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#635BFF]/25"
+        >
+          Open Stripe →
+        </a>
+        <button onClick={confirm} disabled={submitting} className={CTA_CLASSES}>
+          {submitting ? "Confirming…" : "My Stripe account is ready ✓"}
+        </button>
       </div>
     </div>
   );

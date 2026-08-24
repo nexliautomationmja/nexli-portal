@@ -766,7 +766,12 @@ function AdminTaskCard({
           )}
 
           {confirmSub &&
-            (confirmSub.notApplicable ? (
+            (task.id === "stripe_setup" ? (
+              <p style={{ color: "var(--text-muted)" }}>
+                Client confirmed their Stripe account is set up — verify before
+                running invoices.
+              </p>
+            ) : confirmSub.notApplicable ? (
               <p style={{ color: "var(--text-muted)" }}>
                 Client doesn&apos;t run Facebook Ads — marked not applicable.
               </p>

@@ -14,7 +14,11 @@ import { decryptSubmission } from "./onboarding-crypto";
 // ══════════════════════════════════════════════════════════
 
 export type PhaseId = "website" | "automations" | "portal";
-export type TaskId = "dns_access" | "fb_ads_invite" | "drivers_license";
+export type TaskId =
+  | "stripe_setup"
+  | "dns_access"
+  | "fb_ads_invite"
+  | "drivers_license";
 export type PhaseStatus = "pending" | "in_progress" | "done";
 export type TaskStatus = "todo" | "submitted" | "approved" | "needs_attention";
 export type LicenseSide = "front" | "back";
@@ -116,6 +120,7 @@ export const PHASE_INFO: Record<
 };
 
 export const TASK_ORDER: TaskId[] = [
+  "stripe_setup",
   "dns_access",
   "fb_ads_invite",
   "drivers_license",
@@ -131,6 +136,14 @@ export const TASK_INFO: Record<
     emoji: string;
   }
 > = {
+  stripe_setup: {
+    title: "Stripe Account Setup",
+    emoji: "💳",
+    type: "confirm",
+    optional: false,
+    description:
+      "Want to collect payments seamlessly? Set up (or connect) the Stripe account for your business — it's how our platform invoices, collects, and routes payments for you. Without it, there's no efficient way to collect.",
+  },
   dns_access: {
     title: "Domain & DNS Access",
     emoji: "🌐",
@@ -157,6 +170,22 @@ export const TASK_INFO: Record<
   },
 };
 
+/**
+ * Fresh task state. Also used to backfill task keys onto onboardings created
+ * before a task existed (jsonb_set can't create intermediate path elements,
+ * so writers must set the whole object when the key is missing).
+ */
+export function defaultTaskState(taskId: TaskId): OnboardingTaskState {
+  return {
+    status: "todo",
+    submittedAt: null,
+    reviewedAt: null,
+    adminNote: null,
+    submission:
+      taskId === "drivers_license" ? { files: { front: null, back: null } } : null,
+  };
+}
+
 export function defaultOnboardingState(
   startedBy: "auto_sign" | "admin"
 ): OnboardingState {
@@ -167,13 +196,6 @@ export function defaultOnboardingState(
     startedAt: null,
     completedAt: null,
     note: null,
-  });
-  const task = (submission: unknown = null): OnboardingTaskState => ({
-    status: "todo",
-    submittedAt: null,
-    reviewedAt: null,
-    adminNote: null,
-    submission,
   });
   return {
     version: 1,
@@ -186,9 +208,10 @@ export function defaultOnboardingState(
       portal: phase(),
     },
     tasks: {
-      dns_access: task(),
-      fb_ads_invite: task(),
-      drivers_license: task({ files: { front: null, back: null } }),
+      stripe_setup: defaultTaskState("stripe_setup"),
+      dns_access: defaultTaskState("dns_access"),
+      fb_ads_invite: defaultTaskState("fb_ads_invite"),
+      drivers_license: defaultTaskState("drivers_license"),
     },
     activity: [
       {
