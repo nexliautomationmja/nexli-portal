@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
@@ -64,6 +65,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 };
 
 export function EngagementsClient() {
+  const router = useRouter();
   const [engagements, setEngagements] = useState<Engagement[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -891,6 +893,21 @@ export function EngagementsClient() {
 
             {/* Footer actions */}
             <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-end gap-3">
+              {getOverallStatus(showDetail) === "signed" && (
+                <button
+                  onClick={async () => {
+                    await fetch(
+                      `/api/dashboard/engagements/${showDetail.id}/onboarding`,
+                      { method: "POST" }
+                    );
+                    router.push("/dashboard/onboarding");
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-bold text-white transition-all active:scale-[0.98]"
+                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                >
+                  Start Onboarding 🚀
+                </button>
+              )}
               {(getOverallStatus(showDetail) === "sent" || getOverallStatus(showDetail) === "viewed") && (
                 <button
                   onClick={() => handleVoid(showDetail.id)}

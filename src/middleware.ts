@@ -26,11 +26,13 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/engage/") ||
     pathname.startsWith("/invoice/") ||
     pathname.startsWith("/tax-organizer/") ||
+    pathname.startsWith("/onboarding/") ||
     pathname.startsWith("/api/upload/") ||
     pathname.startsWith("/api/esign/") ||
     pathname.startsWith("/api/engage/") ||
     pathname.startsWith("/api/invoice/") ||
     pathname.startsWith("/api/tax-organizer/") ||
+    pathname.startsWith("/api/onboarding/") ||
     pathname.startsWith("/api/preview/")
   ) {
     return addSecurityHeaders(NextResponse.next());
@@ -114,11 +116,13 @@ export const config = {
     "/engage/:path*",
     "/invoice/:path*",
     "/tax-organizer/:path*",
+    "/onboarding/:path*",
     "/api/upload/:path*",
     "/api/esign/:path*",
     "/api/engage/:path*",
     "/api/invoice/:path*",
     "/api/tax-organizer/:path*",
+    "/api/onboarding/:path*",
     "/api/preview/:path*",
   ],
 };

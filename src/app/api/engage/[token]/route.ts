@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { engagements, engagementSigners, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { sendEmailWithLog, buildEngagementSignedEmail } from "@/lib/email";
+import {
+  sendEmailWithLog,
+  buildEngagementSignedEmail,
+  buildOnboardingWelcomeEmail,
+} from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import {
   triggerDrsPostSign,
@@ -10,6 +14,7 @@ import {
   getDrsVariant,
   getPrimaryClientSigner,
 } from "@/lib/digital-rainmaker";
+import { initOnboarding } from "@/lib/onboarding";
 
 // GET — validate token, return engagement info, mark signer as viewed
 export async function GET(
@@ -221,6 +226,40 @@ export async function POST(
     } catch (err) {
       console.error("DRS post-sign trigger failed:", err);
     }
+
+    // Kick off the client onboarding Launch Pad. Never blocks signing —
+    // idempotent, so a concurrent second signer finishing is a no-op.
+    try {
+      await initOnboarding(engagement.id, "auto_sign");
+    } catch (err) {
+      console.error("Onboarding init failed:", err);
+    }
+
+    // Send every client signer their Launch Pad link (each uses their own
+    // token) — the engage link goes dead after signing, so this email is the
+    // durable way back in.
+    const portalUrl =
+      process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+    for (const s of allSigners) {
+      if (s.order === 0) continue; // sender's own token isn't a client link
+      try {
+        const { subject: welcomeSubject, html } = buildOnboardingWelcomeEmail({
+          clientName: s.name,
+          senderName: "The Nexli team",
+          onboardingUrl: `${portalUrl}/onboarding/${s.token}`,
+        });
+        await sendEmailWithLog({
+          to: s.email,
+          subject: welcomeSubject,
+          html,
+          recipientName: s.name,
+          emailType: "onboarding_welcome",
+          relatedId: engagement.id,
+        });
+      } catch (err) {
+        console.error("Onboarding welcome email failed:", err);
+      }
+    }
   }
 
   // Notify CPA via email
@@ -261,6 +300,7 @@ export async function POST(
     ok: true,
     signedAt: new Date().toISOString(),
     allSigned,
+    onboardingUrl: allSigned ? `/onboarding/${signer.token}` : null,
   });
 }
 

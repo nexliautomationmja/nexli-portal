@@ -35,6 +35,7 @@ export function EngageClient({ token }: { token: string }) {
   const [typedName, setTypedName] = useState("");
   const [signing, setSigning] = useState(false);
   const [signed, setSigned] = useState(false);
+  const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null);
   const [declined, setDeclined] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
@@ -122,11 +123,16 @@ export function EngageClient({ token }: { token: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signatureData, typedName: typedName.trim() }),
       });
+      // Parse defensively: the signature is already recorded server-side on a
+      // 2xx, so a malformed body must not surface as a signing failure.
+      const body: { error?: string; onboardingUrl?: string } = await res
+        .json()
+        .catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json();
         setError(body.error || "Signing failed");
         return;
       }
+      if (body.onboardingUrl) setOnboardingUrl(body.onboardingUrl);
       setSigned(true);
       setStep(3);
     } catch {
@@ -229,6 +235,21 @@ export function EngageClient({ token }: { token: string }) {
               <span>&bull;</span>
               <span>Timestamped</span>
             </div>
+            {onboardingUrl && (
+              <div className="pt-2 space-y-2">
+                <a
+                  href={onboardingUrl}
+                  className="inline-block px-8 py-3.5 rounded-full text-sm font-bold text-white no-underline shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                >
+                  See what happens next &rarr;
+                </a>
+                <p style={{ color: "#6b7280", fontSize: "12px", margin: 0 }}>
+                  We&apos;ve already started your build — watch it live on your
+                  Launch Pad. A link is also in your inbox.
+                </p>
+              </div>
+            )}
           </div>
         </div>
         <Footer />
