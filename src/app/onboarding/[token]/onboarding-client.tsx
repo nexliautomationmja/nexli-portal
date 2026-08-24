@@ -106,7 +106,7 @@ const SYNE = { fontFamily: "var(--font-syne), sans-serif" };
 
 // ─── Color system (literal Tailwind classes per accent) ────
 
-type Accent = "blue" | "violet" | "cyan" | "amber";
+type Accent = "blue" | "violet" | "cyan" | "amber" | "emerald";
 
 const ACCENT = {
   blue: {
@@ -145,6 +145,18 @@ const ACCENT = {
     successStrip: "bg-cyan-500/10 border border-cyan-500/30",
     dotBg: "#06B6D4",
   },
+  emerald: {
+    chip: "bg-emerald-500/20 border border-emerald-500/30",
+    chipGlow: "drop-shadow(0 4px 8px rgba(16, 185, 129, 0.3))",
+    icon: "text-emerald-400",
+    headerTile: "bg-emerald-500/10 border border-emerald-500/20",
+    headerIcon: "text-emerald-500",
+    check: "text-emerald-500",
+    badgeDone: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
+    noteStrip: "bg-emerald-500/10 border border-emerald-500/20",
+    successStrip: "bg-emerald-500/10 border border-emerald-500/30",
+    dotBg: "#10B981",
+  },
   amber: {
     chip: "bg-amber-500/20 border border-amber-500/30",
     chipGlow: "drop-shadow(0 4px 8px rgba(245, 158, 11, 0.3))",
@@ -167,7 +179,7 @@ const PHASE_ACCENT: Record<string, Accent> = {
 
 const TASK_ACCENT: Record<string, Accent> = {
   dns_access: "blue",
-  fb_ads_invite: "violet",
+  fb_ads_invite: "emerald",
   drivers_license: "amber",
 };
 
@@ -709,15 +721,17 @@ export function OnboardingClient({ token }: { token: string }) {
                 no waiting on hold.
               </p>
 
-              {/* Floating icon chips — website / automations / portal */}
-              <div className="flex gap-3 mt-5 justify-center sm:justify-start">
+              {/* Floating icon chips — website / automations / portal / reviews / ads */}
+              <div className="flex flex-wrap gap-3 mt-5 justify-center sm:justify-start">
                 {(
                   [
-                    ["blue", PATHS.monitor],
-                    ["violet", PATHS.bot],
-                    ["cyan", PATHS.layoutDashboard],
+                    ["blue", <Icon key="b" d={PATHS.monitor} size={28} className={ACCENT.blue.icon} />],
+                    ["violet", <Icon key="v" d={PATHS.bot} size={28} className={ACCENT.violet.icon} />],
+                    ["cyan", <Icon key="c" d={PATHS.layoutDashboard} size={28} className={ACCENT.cyan.icon} />],
+                    ["amber", <GoogleGLogo key="g" size={26} />],
+                    ["emerald", <FacebookLogo key="f" size={26} />],
                   ] as [Accent, React.ReactNode][]
-                ).map(([accent, path], i) => (
+                ).map(([accent, icon], i) => (
                   <div
                     key={accent}
                     className={`w-14 h-14 rounded-2xl flex items-center justify-center ${ACCENT[accent].chip}`}
@@ -726,7 +740,7 @@ export function OnboardingClient({ token }: { token: string }) {
                       animation: `lp-float 3s ease-in-out ${i * 0.35}s infinite`,
                     }}
                   >
-                    <Icon d={path} size={28} className={ACCENT[accent].icon} />
+                    {icon}
                   </div>
                 ))}
               </div>
