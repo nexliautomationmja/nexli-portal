@@ -745,6 +745,13 @@ export function OnboardingClient({ token }: { token: string }) {
                 you always know exactly where everything stands — no guessing,
                 no waiting on hold.
               </p>
+              <p className="text-sm mt-2 leading-relaxed">
+                <span className="text-white font-semibold">
+                  The faster we get what we need from you, the faster we can
+                  build this out for you.
+                </span>{" "}
+                ⚡
+              </p>
 
               {/* Floating icon chips — website / automations / portal / reviews / ads */}
               <div className="flex flex-wrap gap-3 mt-5 justify-center sm:justify-start">
