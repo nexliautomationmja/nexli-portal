@@ -117,9 +117,26 @@ export async function POST(
     submissionValue = encryptSubmission(submission);
     activityMessage = `${ctx.signer.name} sent over their domain & DNS access 🌐`;
   } else if (taskId === "stripe_setup") {
-    // Required — no notApplicable option
-    submissionValue = { confirmed: true };
-    activityMessage = `${ctx.signer.name} set up their Stripe account 💳`;
+    // Required — the client submits their Stripe login once the account is
+    // set up (or right away if it already exists). Encrypted like DNS creds.
+    const raw = (body.submission || {}) as Record<string, unknown>;
+    const str = (v: unknown, max: number) =>
+      typeof v === "string" ? v.trim().slice(0, max) : "";
+    const submission = {
+      email: str(raw.email, 320),
+      password: str(raw.password, 500),
+      notes: str(raw.notes, 2000),
+      submittedIp: getClientIp(req),
+      submittedAt: now,
+    };
+    if (!submission.email || !submission.password) {
+      return NextResponse.json(
+        { error: "Stripe login email and password are required." },
+        { status: 400 }
+      );
+    }
+    submissionValue = encryptSubmission(submission);
+    activityMessage = `${ctx.signer.name} set up Stripe and sent over their login 💳`;
   } else {
     const raw = (body.submission || {}) as Record<string, unknown>;
     const submission = raw.notApplicable

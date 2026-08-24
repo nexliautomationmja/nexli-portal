@@ -671,8 +671,10 @@ function AdminTaskCard({
           registrar?: string;
           loginUrl?: string;
           username?: string;
+          email?: string;
           password?: string;
           notes?: string;
+          confirmed?: boolean;
         } | null)
       : null;
 
@@ -715,10 +717,17 @@ function AdminTaskCard({
           )}
           {creds && (
             <>
+              {creds.confirmed && !creds.email && (
+                <p style={{ color: "var(--text-muted)" }}>
+                  Client confirmed their account is set up but hasn&apos;t
+                  submitted the login yet — send this item back to request it.
+                </p>
+              )}
               {[
                 ["Registrar", creds.registrar],
                 ["Login URL", creds.loginUrl],
                 ["Username", creds.username],
+                ["Email", creds.email],
               ]
                 .filter(([, v]) => v)
                 .map(([label, value]) => (
@@ -766,12 +775,7 @@ function AdminTaskCard({
           )}
 
           {confirmSub &&
-            (task.id === "stripe_setup" ? (
-              <p style={{ color: "var(--text-muted)" }}>
-                Client confirmed their Stripe account is set up — verify before
-                running invoices.
-              </p>
-            ) : confirmSub.notApplicable ? (
+            (confirmSub.notApplicable ? (
               <p style={{ color: "var(--text-muted)" }}>
                 Client doesn&apos;t run Facebook Ads — marked not applicable.
               </p>

@@ -139,10 +139,10 @@ export const TASK_INFO: Record<
   stripe_setup: {
     title: "Stripe Account Setup",
     emoji: "💳",
-    type: "confirm",
+    type: "credentials",
     optional: false,
     description:
-      "Want to collect payments seamlessly? Set up (or connect) the Stripe account for your business — it's how our platform invoices, collects, and routes payments for you. Without it, there's no efficient way to collect.",
+      "Want to collect payments seamlessly? Set up (or connect) the Stripe account for your business — it's how our platform invoices, collects, and routes payments for you. Once it's ready (or if you already have one), share the login below so we can wire everything up. Without it, there's no efficient way to collect.",
   },
   dns_access: {
     title: "Domain & DNS Access",

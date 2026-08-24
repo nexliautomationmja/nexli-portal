@@ -1147,15 +1147,15 @@ function TaskCard({
       </div>
 
       <div className="mt-4">
-        {task.type === "credentials" && (
-          <DnsForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
-        )}
-        {task.type === "confirm" &&
+        {task.type === "credentials" &&
           (task.id === "stripe_setup" ? (
             <StripeSetup task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
           ) : (
-            <FbConfirm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
+            <DnsForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
           ))}
+        {task.type === "confirm" && (
+          <FbConfirm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
+        )}
         {task.type === "upload" && (
           <LicenseUpload task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
@@ -1366,22 +1366,32 @@ function StripeSetup({
   onSubmitted: () => void;
   accent: Accent;
 }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [notes, setNotes] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [justConfirmed, setJustConfirmed] = useState(false);
+  // Local flag so the just-typed login vanishes immediately on success
+  const [justSent, setJustSent] = useState(false);
 
   const done =
-    justConfirmed || task.status === "submitted" || task.status === "approved";
+    justSent || task.status === "submitted" || task.status === "approved";
 
   if (done) {
     return (
       <SubmittedNote accent={accent}>
-        Stripe is live — your payment rails are connected. 🎉
+        Stripe is live — your payment rails are connected. Your login is locked
+        away and only visible to your Nexli team. 🎉
       </SubmittedNote>
     );
   }
 
-  async function confirm() {
+  async function handleSubmit() {
+    if (!email.trim() || !password) {
+      setError("Your Stripe login email and password are required.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -1390,7 +1400,7 @@ function StripeSetup({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId: "stripe_setup",
-          submission: { confirmed: true },
+          submission: { email, password, notes },
         }),
       });
       if (!res.ok) {
@@ -1398,7 +1408,8 @@ function StripeSetup({
         setError(body.error || "Something went wrong. Please try again.");
         return;
       }
-      setJustConfirmed(true);
+      setJustSent(true);
+      setPassword("");
       onSubmitted();
     } catch {
       setError("Network error. Please try again.");
@@ -1408,6 +1419,8 @@ function StripeSetup({
   }
 
   const a = ACCENT[accent];
+  const labelCls =
+    "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-neutral-500";
 
   return (
     <div className="space-y-4">
@@ -1448,7 +1461,11 @@ function StripeSetup({
           Finish Stripe&apos;s{" "}
           <span className="font-semibold text-white">identity (KYC) verification</span>
         </li>
-        <li>Come back here and confirm below</li>
+        <li>
+          Come back and{" "}
+          <span className="font-semibold text-white">share your login below</span>{" "}
+          — already have a Stripe account? Just drop the login now
+        </li>
       </ol>
 
       {/* The frame: why this matters */}
@@ -1460,20 +1477,73 @@ function StripeSetup({
         </p>
       </div>
 
+      {/* Stripe login handoff */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Stripe login email *</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@business.com"
+            className="lp-input"
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Stripe password *</label>
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="lp-input pr-16"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300"
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Anything else we should know?</label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="2FA codes go to my cell, account is under my partner's email, etc."
+          className="lp-input resize-none"
+        />
+      </div>
+
       {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
 
-      <div className="flex flex-wrap gap-3">
-        <a
-          href="https://dashboard.stripe.com/register"
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-2 bg-[#635BFF] text-white px-6 py-3 rounded-full text-sm font-bold no-underline hover:bg-[#7a73ff] hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#635BFF]/25"
-        >
-          Open Stripe →
-        </a>
-        <button onClick={confirm} disabled={submitting} className={CTA_CLASSES}>
-          {submitting ? "Confirming…" : "My Stripe account is ready ✓"}
-        </button>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex flex-wrap gap-3">
+          <a
+            href="https://dashboard.stripe.com/register"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-center gap-2 bg-[#635BFF] text-white px-6 py-3 rounded-full text-sm font-bold no-underline hover:bg-[#7a73ff] hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#635BFF]/25"
+          >
+            Open Stripe →
+          </a>
+          <button onClick={handleSubmit} disabled={submitting} className={CTA_CLASSES}>
+            {submitting ? "Sending securely…" : "Send my Stripe login securely →"}
+          </button>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Icon d={PATHS.lock} size={14} className="text-emerald-400 shrink-0" />
+          <span className="text-[11px] text-neutral-500">
+            Encrypted — visible only to your Nexli team
+          </span>
+        </div>
       </div>
     </div>
   );
