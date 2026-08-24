@@ -69,25 +69,49 @@ export const PHASE_ORDER: PhaseId[] = ["website", "automations", "portal"];
 
 export const PHASE_INFO: Record<
   PhaseId,
-  { title: string; description: string; emoji: string }
+  { title: string; description: string; emoji: string; features: string[] }
 > = {
   website: {
     title: "Website Build-Out",
     emoji: "🎨",
     description:
       "Your new high-converting website — designed, written, and built by our team.",
+    features: [
+      "Custom design tailored to your business",
+      "SEO-optimized structure",
+      "Conversion-focused layouts",
+      "Mobile-responsive & lightning fast",
+      "Integrated booking systems",
+      "Trust signals & social proof",
+    ],
   },
   automations: {
     title: "Automations & Reputation Management",
     emoji: "⚡",
     description:
       "Instant lead follow-up, missed-call textback, and automatic review requests that build your reputation on autopilot.",
+    features: [
+      "24/7 inbound inquiry processing",
+      "Instant follow-up sequences",
+      "Missed-call textback",
+      "Automated appointment booking",
+      "Review requests on autopilot",
+      "Zero-touch prospect qualification",
+    ],
   },
   portal: {
     title: "Client Portal Build-Out",
     emoji: "🛠️",
     description:
       "Your command center — leads, conversations, and results in one place.",
+    features: [
+      "Invoicing & payments",
+      "Engagement letters & e-sign",
+      "Secure document collection",
+      "Client messaging",
+      "Lead & conversation tracking",
+      "Your branded experience",
+    ],
   },
 };
 

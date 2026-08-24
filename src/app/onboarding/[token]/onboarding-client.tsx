@@ -3,6 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NexliLogo } from "@/components/ui/nexli-logo";
 
+// ══════════════════════════════════════════════════════════
+// Launch Pad — client-facing onboarding page, styled to match
+// the Digital Rainmaker page (nexli.net/rainmaker): #020617 bg,
+// Syne gradient headlines, color-coded sections (website=blue,
+// automations=violet, portal=cyan, reputation=amber), floating
+// tinted icon chips, Step timeline, shimmer conic borders.
+// ══════════════════════════════════════════════════════════
+
 // ─── Types (mirror serializePublicOnboarding) ──────────────
 
 interface PhaseData {
@@ -10,6 +18,7 @@ interface PhaseData {
   title: string;
   description: string;
   emoji: string;
+  features?: string[];
   status: "pending" | "in_progress" | "done";
   targetDate: string | null;
   startedAt: string | null;
@@ -93,9 +102,228 @@ const REGISTRARS = [
   "Other",
 ];
 
+const SYNE = { fontFamily: "var(--font-syne), sans-serif" };
+
+// ─── Color system (literal Tailwind classes per accent) ────
+
+type Accent = "blue" | "violet" | "cyan" | "amber";
+
+const ACCENT = {
+  blue: {
+    chip: "bg-blue-500/20 border border-blue-500/30",
+    chipGlow: "drop-shadow(0 4px 8px rgba(37, 99, 235, 0.3))",
+    icon: "text-blue-400",
+    headerTile: "bg-blue-500/10 border border-blue-500/20",
+    headerIcon: "text-blue-500",
+    check: "text-blue-500",
+    badgeDone: "bg-blue-500/20 text-blue-300 border border-blue-500/30",
+    noteStrip: "bg-blue-500/10 border border-blue-500/20",
+    successStrip: "bg-blue-500/10 border border-blue-500/30",
+    dotBg: "#3B82F6",
+  },
+  violet: {
+    chip: "bg-violet-500/20 border border-violet-500/30",
+    chipGlow: "drop-shadow(0 4px 8px rgba(139, 92, 246, 0.3))",
+    icon: "text-violet-400",
+    headerTile: "bg-violet-500/10 border border-violet-500/20",
+    headerIcon: "text-violet-500",
+    check: "text-violet-500",
+    badgeDone: "bg-violet-500/20 text-violet-300 border border-violet-500/30",
+    noteStrip: "bg-violet-500/10 border border-violet-500/20",
+    successStrip: "bg-violet-500/10 border border-violet-500/30",
+    dotBg: "#8B5CF6",
+  },
+  cyan: {
+    chip: "bg-cyan-500/20 border border-cyan-500/30",
+    chipGlow: "drop-shadow(0 4px 8px rgba(6, 182, 212, 0.3))",
+    icon: "text-cyan-400",
+    headerTile: "bg-cyan-500/10 border border-cyan-500/20",
+    headerIcon: "text-cyan-500",
+    check: "text-cyan-500",
+    badgeDone: "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30",
+    noteStrip: "bg-cyan-500/10 border border-cyan-500/20",
+    successStrip: "bg-cyan-500/10 border border-cyan-500/30",
+    dotBg: "#06B6D4",
+  },
+  amber: {
+    chip: "bg-amber-500/20 border border-amber-500/30",
+    chipGlow: "drop-shadow(0 4px 8px rgba(245, 158, 11, 0.3))",
+    icon: "text-amber-400",
+    headerTile: "bg-yellow-500/10 border border-yellow-500/20",
+    headerIcon: "text-yellow-500",
+    check: "text-yellow-500",
+    badgeDone: "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30",
+    noteStrip: "bg-yellow-500/10 border border-yellow-500/20",
+    successStrip: "bg-yellow-500/10 border border-yellow-500/30",
+    dotBg: "#F59E0B",
+  },
+} satisfies Record<Accent, Record<string, string>>;
+
+const PHASE_ACCENT: Record<string, Accent> = {
+  website: "blue",
+  automations: "violet",
+  portal: "cyan",
+};
+
+const TASK_ACCENT: Record<string, Accent> = {
+  dns_access: "blue",
+  fb_ads_invite: "violet",
+  drivers_license: "amber",
+};
+
+const SHIMMER_CONIC =
+  "conic-gradient(from 0deg at 50% 50%, #06B6D4, #3B82F6, #8B5CF6, #06B6D4, #3B82F6, #06B6D4)";
+const SHIMMER_CONIC_WARM =
+  "conic-gradient(from 0deg at 50% 50%, #3B82F6, #8B5CF6, #06B6D4, #F59E0B, #3B82F6)";
+
+// ─── Inline icons (lucide paths, matching the Rainmaker page) ──
+
+function Icon({
+  d,
+  className,
+  size = 24,
+  style,
+}: {
+  d: React.ReactNode;
+  className?: string;
+  size?: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={style}
+      aria-hidden="true"
+    >
+      {d}
+    </svg>
+  );
+}
+
+const PATHS = {
+  monitor: (
+    <>
+      <rect width="20" height="14" x="2" y="3" rx="2" />
+      <line x1="8" x2="16" y1="21" y2="21" />
+      <line x1="12" x2="12" y1="17" y2="21" />
+    </>
+  ),
+  bot: (
+    <>
+      <path d="M12 8V4H8" />
+      <rect width="16" height="12" x="4" y="8" rx="2" />
+      <path d="M2 14h2" />
+      <path d="M20 14h2" />
+      <path d="M15 13v2" />
+      <path d="M9 13v2" />
+    </>
+  ),
+  layoutDashboard: (
+    <>
+      <rect width="7" height="9" x="3" y="3" rx="1" />
+      <rect width="7" height="5" x="14" y="3" rx="1" />
+      <rect width="7" height="9" x="14" y="12" rx="1" />
+      <rect width="7" height="5" x="3" y="16" rx="1" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </>
+  ),
+  circleCheck: (
+    <>
+      <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+      <path d="m9 11 3 3L22 4" />
+    </>
+  ),
+  zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
+  star: (
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  ),
+  megaphone: (
+    <>
+      <path d="m3 11 18-5v12L3 14v-3z" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+    </>
+  ),
+  idCard: (
+    <>
+      <rect width="20" height="14" x="2" y="5" rx="2" />
+      <path d="M16 10h2" />
+      <path d="M16 14h2" />
+      <path d="M6.17 15a3 3 0 0 1 5.66 0" />
+      <circle cx="9" cy="11" r="2" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </>
+  ),
+  rocket: (
+    <>
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+    </>
+  ),
+  check: <path d="M20 6 9 17l-5-5" />,
+};
+
+const PHASE_ICON: Record<string, React.ReactNode> = {
+  website: PATHS.globe,
+  automations: PATHS.bot,
+  portal: PATHS.layoutDashboard,
+};
+
+const TASK_ICON: Record<string, React.ReactNode> = {
+  dns_access: PATHS.globe,
+  fb_ads_invite: PATHS.megaphone,
+  drivers_license: PATHS.idCard,
+};
+
+// ─── Shimmer-border pill (Rainmaker badge) ─────────────────
+
+function ShimmerPill({
+  children,
+  conic = SHIMMER_CONIC_WARM,
+}: {
+  children: React.ReactNode;
+  conic?: string;
+}) {
+  return (
+    <div className="relative inline-flex items-center rounded-full overflow-hidden p-[1.5px]">
+      <span
+        className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-80"
+        style={{ background: conic }}
+      />
+      <span
+        className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] blur-md opacity-40"
+        style={{ background: conic }}
+      />
+      <span className="relative z-10 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#020617]">
+        {children}
+      </span>
+    </div>
+  );
+}
+
 // ─── Confetti ──────────────────────────────────────────────
 
-const CONFETTI_COLORS = ["#2563EB", "#06B6D4", "#10B981", "#8B5CF6", "#F59E0B"];
+const CONFETTI_COLORS = ["#2563EB", "#06B6D4", "#8B5CF6", "#F59E0B", "#10B981"];
 
 function ConfettiBurst({ burst }: { burst: number }) {
   if (!burst) return null;
@@ -138,7 +366,7 @@ function ConfettiBurst({ burst }: { burst: number }) {
   );
 }
 
-// ─── Progress Ring ─────────────────────────────────────────
+// ─── Progress Ring (kept — with gradient stroke) ───────────
 
 function ProgressRing({ percent }: { percent: number }) {
   const R = 52;
@@ -149,7 +377,8 @@ function ProgressRing({ percent }: { percent: number }) {
       <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
         <defs>
           <linearGradient id="lp-ring" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#2563EB" />
+            <stop offset="0%" stopColor="#3B82F6" />
+            <stop offset="50%" stopColor="#8B5CF6" />
             <stop offset="100%" stopColor="#06B6D4" />
           </linearGradient>
         </defs>
@@ -158,7 +387,7 @@ function ProgressRing({ percent }: { percent: number }) {
           cy="60"
           r={R}
           fill="none"
-          stroke="var(--card-border)"
+          stroke="rgba(255,255,255,0.08)"
           strokeWidth="10"
         />
         <circle
@@ -175,16 +404,10 @@ function ProgressRing({ percent }: { percent: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="text-3xl font-black"
-          style={{ color: "var(--text-main)", letterSpacing: "-0.03em" }}
-        >
+        <span className="text-3xl font-black text-white" style={{ letterSpacing: "-0.03em" }}>
           {percent}%
         </span>
-        <span
-          className="text-[9px] font-black uppercase tracking-[0.2em]"
-          style={{ color: "var(--text-muted)" }}
-        >
+        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500">
           Complete
         </span>
       </div>
@@ -194,25 +417,65 @@ function ProgressRing({ percent }: { percent: number }) {
 
 // ─── Status pills ──────────────────────────────────────────
 
-function PhasePill({ status }: { status: PhaseData["status"] }) {
-  if (status === "done") return <span className="badge badge-emerald">Done ✓</span>;
-  if (status === "in_progress")
-    return <span className="badge badge-blue">In the works</span>;
-  return <span className="badge badge-gray">Queued up</span>;
+function PhasePill({ status, accent }: { status: PhaseData["status"]; accent: Accent }) {
+  const a = ACCENT[accent];
+  if (status === "done") {
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${a.badgeDone}`}>
+        Done ✓
+      </span>
+    );
+  }
+  if (status === "in_progress") {
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${a.badgeDone}`}>
+        <span
+          className="w-1.5 h-1.5 rounded-full animate-pulse"
+          style={{ background: a.dotBg }}
+        />
+        In the works
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-neutral-400 border border-white/10">
+      Queued up
+    </span>
+  );
 }
 
-function TaskPill({ task }: { task: TaskData }) {
-  if (task.status === "approved")
-    return <span className="badge badge-emerald">Approved ✓</span>;
-  if (task.status === "submitted") {
-    if (task.submission?.notApplicable)
-      return <span className="badge badge-gray">Skipped</span>;
-    return <span className="badge badge-blue">Submitted ✓</span>;
+function TaskPill({ task, accent }: { task: TaskData; accent: Accent }) {
+  const a = ACCENT[accent];
+  if (task.status === "approved") {
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${a.badgeDone}`}>
+        Approved ✓
+      </span>
+    );
   }
-  if (task.status === "needs_attention")
-    return <span className="badge badge-amber">Needs attention</span>;
+  if (task.status === "submitted") {
+    if (task.submission?.notApplicable) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-neutral-400 border border-white/10">
+          Skipped
+        </span>
+      );
+    }
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${a.badgeDone}`}>
+        Submitted ✓
+      </span>
+    );
+  }
+  if (task.status === "needs_attention") {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+        Needs attention
+      </span>
+    );
+  }
   return (
-    <span className="badge badge-amber">
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-white/70 border border-white/10">
       {task.optional ? "If applicable" : "Action needed"}
     </span>
   );
@@ -275,10 +538,7 @@ export function OnboardingClient({ token }: { token: string }) {
   // ─── Loading / error states ───
   if (loading) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: "var(--bg-main)" }}
-      >
+      <div className="min-h-screen flex items-center justify-center bg-[#020617]">
         <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -287,19 +547,16 @@ export function OnboardingClient({ token }: { token: string }) {
   if (errorKind || !data) {
     const notStarted = errorKind === "not_started";
     return (
-      <div
-        className="min-h-screen flex flex-col items-center justify-center p-6 text-center"
-        style={{ background: "var(--bg-main)" }}
-      >
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-[#020617]">
         <NexliLogo size="md" />
-        <div className="glass-card max-w-md w-full p-8 mt-8 space-y-3">
+        <div className="max-w-md w-full p-8 mt-8 space-y-3 rounded-2xl bg-white/5 border border-white/10">
           <div className="text-4xl">{notStarted ? "🚧" : "🔍"}</div>
-          <h1 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
+          <h1 className="text-lg font-bold text-white">
             {notStarted
               ? "Your Launch Pad isn't live yet"
               : "This link isn't active"}
           </h1>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          <p className="text-sm text-neutral-400">
             {notStarted
               ? "We're getting things ready behind the scenes. Check back soon, or reach out to your Nexli team."
               : "Double-check the link from your email, or contact your Nexli team for a fresh one."}
@@ -317,10 +574,7 @@ export function OnboardingClient({ token }: { token: string }) {
   const allDone = ob.progressPercent === 100;
 
   return (
-    <div
-      className="min-h-screen relative overflow-x-hidden"
-      style={{ background: "var(--bg-main)" }}
-    >
+    <div className="min-h-screen relative overflow-x-hidden bg-[#020617] text-white">
       <style>{`
         @keyframes lp-confetti-fall {
           0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
@@ -336,100 +590,120 @@ export function OnboardingClient({ token }: { token: string }) {
           70% { transform: scale(0.9); }
           100% { transform: scale(1); opacity: 1; }
         }
-        @keyframes lp-glow-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
-          50% { box-shadow: 0 0 0 7px rgba(37, 99, 235, 0); }
-        }
         @keyframes lp-float {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-6px); }
         }
         .lp-card { animation: lp-fade-up 0.5s ease-out both; }
-        .lp-dot-active { animation: lp-glow-pulse 2s ease-in-out infinite; }
+        .lp-input {
+          width: 100%;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 0.5rem;
+          padding: 0.75rem 1rem;
+          color: #fff;
+          font-size: 0.875rem;
+          outline: none;
+          transition: border-color 0.15s ease;
+        }
+        .lp-input::placeholder { color: rgba(255, 255, 255, 0.3); }
+        .lp-input:focus { border-color: #3B82F6; }
+        .lp-input option { background: #020617; color: #fff; }
       `}</style>
 
       {/* Ambient brand glows */}
       <div
-        className="pointer-events-none fixed -top-40 -right-32 w-[560px] h-[560px] rounded-full opacity-100"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(37, 99, 235, 0.10) 0%, transparent 70%)",
-        }}
+        className="pointer-events-none fixed -top-40 -right-32 w-[560px] h-[560px] rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(59, 130, 246, 0.10) 0%, transparent 70%)" }}
       />
       <div
-        className="pointer-events-none fixed -bottom-32 -left-24 w-[480px] h-[480px] rounded-full"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 70%)",
-        }}
+        className="pointer-events-none fixed top-1/3 -left-40 w-[480px] h-[480px] rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%)" }}
+      />
+      <div
+        className="pointer-events-none fixed -bottom-32 -right-24 w-[480px] h-[480px] rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 70%)" }}
       />
 
       <ConfettiBurst burst={burst} />
 
-      <div className="relative max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-6">
+      <div className="relative max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-10">
         {/* ─── Header ─── */}
         <header className="flex items-center justify-between lp-card">
           <NexliLogo size="md" />
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-            <span
-              className="text-blue-400 text-[9px] md:text-xs font-black tracking-[0.2em] uppercase"
-              style={{ animation: "lp-float 3s ease-in-out infinite" }}
-            >
-              🚀 Launch Pad
+          <ShimmerPill>
+            <Icon d={PATHS.rocket} size={14} className="text-blue-400" />
+            <span className="text-white text-[10px] md:text-xs font-black tracking-[0.2em] uppercase">
+              Launch Pad
             </span>
-          </div>
+          </ShimmerPill>
         </header>
 
         {/* ─── Celebration banner ─── */}
         {allDone && (
-          <div
-            className="lp-card rounded-lg p-5 text-center"
-            style={{
-              background: "linear-gradient(135deg, rgba(37,99,235,0.18), rgba(6,182,212,0.18))",
-              border: "1px solid rgba(6,182,212,0.35)",
-            }}
-          >
-            <div className="text-3xl mb-1">🎉</div>
-            <h2 className="text-lg font-black" style={{ color: "var(--text-main)" }}>
-              Everything&apos;s done — you&apos;re cleared for launch!
-            </h2>
-            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-              Your Nexli team will be in touch with go-live details.
-            </p>
+          <div className="lp-card relative rounded-2xl overflow-hidden p-[1.5px]">
+            <span
+              className="absolute inset-[-200%] animate-[shimmer_6s_linear_infinite] opacity-90"
+              style={{ background: SHIMMER_CONIC }}
+            />
+            <div className="relative z-10 rounded-[14px] p-6 text-center bg-gradient-to-br from-slate-950 via-cyan-950/40 to-slate-950">
+              <div className="text-3xl mb-1">🎉</div>
+              <h2 className="text-xl font-black text-white" style={SYNE}>
+                Everything&apos;s done — you&apos;re cleared for launch!
+              </h2>
+              <p className="text-sm mt-1 text-neutral-300">
+                Your Nexli team will be in touch with go-live details.
+              </p>
+            </div>
           </div>
         )}
 
         {/* ─── Hero ─── */}
-        <section className="glass-card p-6 sm:p-8 lp-card" style={{ animationDelay: "0.05s" }}>
-          <div className="flex flex-col sm:flex-row items-center gap-6">
+        <section className="lp-card" style={{ animationDelay: "0.05s" }}>
+          <div className="flex flex-col sm:flex-row items-center gap-8">
             <div className="flex-1 text-center sm:text-left">
               <h1
-                className="text-2xl sm:text-3xl font-black leading-tight"
-                style={{ color: "var(--text-main)" }}
+                className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white"
+                style={SYNE}
               >
-                Welcome aboard, {firstName}! 🚀
+                Welcome aboard,{" "}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
+                  {firstName}.
+                </span>
               </h1>
-              <p className="text-sm mt-2 leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                We&apos;re already building. This page updates in real time, so you
-                always know exactly where everything stands — no guessing, no
-                waiting on hold.
+              <p className="text-sm mt-3 leading-relaxed text-neutral-300">
+                We&apos;re already building. This page updates in real time, so
+                you always know exactly where everything stands — no guessing,
+                no waiting on hold.
               </p>
-              <div className="mt-4 inline-flex flex-col items-center sm:items-start">
-                <span
-                  className="text-[10px] font-black uppercase tracking-[0.2em]"
-                  style={{ color: "var(--text-muted)" }}
-                >
+
+              {/* Floating icon chips — website / automations / portal */}
+              <div className="flex gap-3 mt-5 justify-center sm:justify-start">
+                {(
+                  [
+                    ["blue", PATHS.monitor],
+                    ["violet", PATHS.bot],
+                    ["cyan", PATHS.layoutDashboard],
+                  ] as [Accent, React.ReactNode][]
+                ).map(([accent, path], i) => (
+                  <div
+                    key={accent}
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center ${ACCENT[accent].chip}`}
+                    style={{
+                      filter: ACCENT[accent].chipGlow,
+                      animation: `lp-float 3s ease-in-out ${i * 0.35}s infinite`,
+                    }}
+                  >
+                    <Icon d={path} size={28} className={ACCENT[accent].icon} />
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 inline-flex flex-col items-center sm:items-start">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
                   Estimated Launch
                 </span>
-                <span
-                  className="text-lg font-bold"
-                  style={{
-                    background: "linear-gradient(135deg, #2563EB, #06B6D4)",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
+                <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
                   {ob.targetLaunchDate
                     ? formatDate(ob.targetLaunchDate)
                     : "Being scheduled"}
@@ -440,132 +714,83 @@ export function OnboardingClient({ token }: { token: string }) {
           </div>
         </section>
 
-        {/* ─── Build phases ─── */}
-        <section className="glass-card p-6 sm:p-8 lp-card" style={{ animationDelay: "0.1s" }}>
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-base font-bold" style={{ color: "var(--text-main)" }}>
+        {/* ─── Build phases — Step timeline ─── */}
+        <section className="lp-card" style={{ animationDelay: "0.1s" }}>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-white" style={SYNE}>
               What we&apos;re building for you
             </h2>
-            <span className="badge badge-blue">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
               {ob.phases.filter((p) => p.status === "done").length} of{" "}
               {ob.phases.length} done
             </span>
           </div>
 
-          <div className="space-y-0">
-            {ob.phases.map((phase, i) => {
-              const isLast = i === ob.phases.length - 1;
-              return (
-                <div key={phase.id} className="flex gap-4">
-                  {/* Timeline dot + connector */}
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${
-                        phase.status === "in_progress" ? "lp-dot-active" : ""
-                      }`}
-                      style={{
-                        background:
-                          phase.status === "done"
-                            ? "linear-gradient(135deg, #10B981, #06B6D4)"
-                            : phase.status === "in_progress"
-                            ? "linear-gradient(135deg, #2563EB, #06B6D4)"
-                            : "var(--input-bg)",
-                        border:
-                          phase.status === "pending"
-                            ? "1px solid var(--card-border)"
-                            : "none",
-                      }}
-                    >
-                      {phase.status === "done" ? (
-                        <svg
-                          className="w-4 h-4 text-white"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          style={{ animation: "lp-check-bounce 0.5s ease-out" }}
-                        >
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
-                      ) : (
-                        <span>{phase.emoji}</span>
-                      )}
-                    </div>
-                    {!isLast && (
-                      <div
-                        className="w-px flex-1 my-1"
-                        style={{
-                          background:
-                            phase.status === "done"
-                              ? "linear-gradient(#10B981, var(--card-border))"
-                              : "var(--card-border)",
-                        }}
-                      />
-                    )}
-                  </div>
+          <div className="relative">
+            {/* Vertical timeline line */}
+            <div
+              className="absolute left-[19px] top-3 bottom-3 w-[2px]"
+              style={{
+                background:
+                  "linear-gradient(to bottom, transparent 0%, #334155 12%, #334155 88%, transparent 100%)",
+              }}
+            />
 
-                  {/* Phase body */}
-                  <div className={`flex-1 min-w-0 ${isLast ? "" : "pb-6"}`}>
-                    <div className="flex flex-wrap items-center gap-2">
+            <div className="space-y-10">
+              {ob.phases.map((phase, i) => {
+                const accent = PHASE_ACCENT[phase.id] || "blue";
+                const isCenterpiece = phase.id === "portal";
+                return (
+                  <div key={phase.id} className="relative flex gap-4 sm:gap-6">
+                    {/* Timeline dot */}
+                    <div className="relative z-10 shrink-0">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black border border-white/10">
+                        {phase.status === "done" ? (
+                          <div
+                            className="h-5 w-5 rounded-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-cyan-500"
+                            style={{ animation: "lp-check-bounce 0.5s ease-out" }}
+                          >
+                            <Icon d={PATHS.check} size={12} className="text-white" />
+                          </div>
+                        ) : (
+                          <div
+                            className={`h-4 w-4 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 border border-blue-600 ${
+                              phase.status === "in_progress" ? "animate-pulse" : "opacity-60"
+                            }`}
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step content */}
+                    <div className="flex-1 min-w-0">
                       <h3
-                        className="text-sm font-bold"
-                        style={{ color: "var(--text-main)" }}
+                        className="text-xl font-bold text-neutral-500 mb-3"
+                        style={SYNE}
                       >
-                        {phase.title}
+                        Step {i + 1}
                       </h3>
-                      <PhasePill status={phase.status} />
-                      {phase.targetDate && phase.status !== "done" && (
-                        <span
-                          className="text-[11px] font-semibold"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          ETA {formatDate(phase.targetDate)}
-                        </span>
-                      )}
-                      {phase.completedAt && phase.status === "done" && (
-                        <span
-                          className="text-[11px] font-semibold"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Finished {formatDate(phase.completedAt)}
-                        </span>
+
+                      {isCenterpiece ? (
+                        <CenterpiecePhaseCard phase={phase} />
+                      ) : (
+                        <PhaseCard phase={phase} accent={accent} />
                       )}
                     </div>
-                    <p
-                      className="text-xs mt-1 leading-relaxed"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {phase.description}
-                    </p>
-                    {phase.note && (
-                      <div
-                        className="mt-2 px-3 py-2 rounded-md text-xs"
-                        style={{
-                          background: "var(--accent-blue-bg)",
-                          border: "1px solid var(--accent-blue-border)",
-                          color: "var(--text-main)",
-                        }}
-                      >
-                        <span className="font-bold">Latest: </span>
-                        {phase.note}
-                      </div>
-                    )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </section>
 
         {/* ─── Client tasks ─── */}
         <section className="lp-card" style={{ animationDelay: "0.15s" }}>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-base font-bold" style={{ color: "var(--text-main)" }}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-white" style={SYNE}>
               What we need from you
             </h2>
-            <span className="badge badge-blue">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
               {tasksDone} of {ob.tasks.length} done
             </span>
           </div>
@@ -585,12 +810,15 @@ export function OnboardingClient({ token }: { token: string }) {
         </section>
 
         {/* ─── Mission log ─── */}
-        <section className="glass-card p-6 sm:p-8 lp-card" style={{ animationDelay: "0.2s" }}>
-          <h2 className="text-base font-bold mb-4" style={{ color: "var(--text-main)" }}>
+        <section
+          className="lp-card rounded-2xl p-6 sm:p-8 bg-white/5 border border-white/10"
+          style={{ animationDelay: "0.2s" }}
+        >
+          <h2 className="text-lg font-bold text-white mb-4" style={SYNE}>
             Mission log 📡
           </h2>
           {ob.activity.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            <p className="text-sm text-neutral-400">
               Updates from your build will appear here.
             </p>
           ) : (
@@ -604,15 +832,15 @@ export function OnboardingClient({ token }: { token: string }) {
                         entry.actor === "client"
                           ? "#06B6D4"
                           : entry.actor === "agency"
-                          ? "#2563EB"
-                          : "#10B981",
+                          ? "#3B82F6"
+                          : "#8B5CF6",
                     }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-snug" style={{ color: "var(--text-main)" }}>
+                    <p className="text-sm leading-snug text-neutral-300">
                       {entry.message}
                     </p>
-                    <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    <span className="text-[11px] text-neutral-500">
                       {timeAgo(entry.at)}
                     </span>
                   </div>
@@ -624,14 +852,171 @@ export function OnboardingClient({ token }: { token: string }) {
 
         {/* ─── Footer ─── */}
         <footer className="text-center pb-6 space-y-2">
-          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+          <p className="text-[11px] text-neutral-500">
             Questions? Your Nexli team is one message away.
           </p>
-          <p className="text-[10px] opacity-60" style={{ color: "var(--text-muted)" }}>
+          <p className="text-[10px] text-neutral-600">
             {data.from.company || data.from.name} • Powered by the Digital
             Rainmaker System
           </p>
         </footer>
+      </div>
+    </div>
+  );
+}
+
+// ─── Phase cards ───────────────────────────────────────────
+
+function PhaseMeta({ phase, accent }: { phase: PhaseData; accent: Accent }) {
+  const a = ACCENT[accent];
+  return (
+    <>
+      {phase.targetDate && phase.status !== "done" && (
+        <span className="text-[11px] font-semibold text-neutral-500">
+          ETA {formatDate(phase.targetDate)}
+        </span>
+      )}
+      {phase.completedAt && phase.status === "done" && (
+        <span className="text-[11px] font-semibold text-neutral-500">
+          Finished {formatDate(phase.completedAt)}
+        </span>
+      )}
+      {phase.note && (
+        <div className={`w-full mt-3 px-3 py-2 rounded-lg text-xs text-neutral-200 ${a.noteStrip}`}>
+          <span className="font-bold text-white">Latest: </span>
+          {phase.note}
+        </div>
+      )}
+    </>
+  );
+}
+
+function FeatureGrid({ features, accent }: { features: string[]; accent: Accent }) {
+  const a = ACCENT[accent];
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-4">
+      {features.map((f) => (
+        <div key={f} className="flex items-start gap-2 text-sm">
+          <Icon d={PATHS.circleCheck} size={16} className={`${a.check} shrink-0 mt-0.5`} />
+          <span className="text-neutral-300 text-[13px]">{f}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PhaseCard({ phase, accent }: { phase: PhaseData; accent: Accent }) {
+  const a = ACCENT[accent];
+  return (
+    <div className="rounded-2xl p-5 sm:p-6 bg-white/5 border border-white/10">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className={`p-2 rounded-xl ${a.headerTile}`}>
+          <Icon d={PHASE_ICON[phase.id] || PATHS.globe} size={24} className={a.headerIcon} />
+        </div>
+        <h4 className="text-lg sm:text-xl font-bold text-white flex-1 min-w-0">
+          {phase.title}
+        </h4>
+        <PhasePill status={phase.status} accent={accent} />
+      </div>
+      <p className="text-sm leading-relaxed text-neutral-300 mt-3">
+        {phase.description}
+      </p>
+      <div className="flex flex-wrap items-center gap-2 mt-2">
+        <PhaseMeta phase={phase} accent={accent} />
+      </div>
+      {phase.features && <FeatureGrid features={phase.features} accent={accent} />}
+
+      {/* Reputation management — the amber "secret weapon" callout */}
+      {phase.id === "automations" && (
+        <div className="mt-5 rounded-2xl p-4 sm:p-5 border-2 border-dashed border-yellow-500/30 bg-yellow-500/5">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-yellow-500/20 shrink-0">
+              <Icon d={PATHS.zap} size={20} className="text-yellow-500" />
+            </div>
+            <div>
+              <p className="font-bold mb-1 text-yellow-400">
+                Reputation Management — Your Secret Weapon
+              </p>
+              <p className="text-sm text-neutral-300">
+                Automatic review requests route your happiest customers straight
+                to Google. Most local businesses have 4 to 12 reviews sitting
+                there — the ones dominating search have 80 or more. We build
+                that engine for you.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The portal build-out gets the Rainmaker "Centerpiece" treatment:
+// shimmer conic border, cyan-tinted gradient interior, glowing icon.
+function CenterpiecePhaseCard({ phase }: { phase: PhaseData }) {
+  return (
+    <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden p-[1.5px]">
+      <span
+        className="absolute inset-[-200%] animate-[shimmer_6s_linear_infinite] opacity-90"
+        style={{ background: SHIMMER_CONIC }}
+      />
+      <span
+        className="absolute inset-[-200%] animate-[shimmer_6s_linear_infinite] blur-xl opacity-30"
+        style={{ background: SHIMMER_CONIC }}
+      />
+      <div className="relative z-10 rounded-[14px] sm:rounded-[22px] p-5 sm:p-7 bg-gradient-to-br from-slate-950 via-cyan-950/40 to-slate-950">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 blur-[100px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none" />
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative shrink-0">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center bg-cyan-500/20 border border-cyan-500/30"
+                style={{ filter: "drop-shadow(0 0 20px rgba(6, 182, 212, 0.3))" }}
+              >
+                <Icon d={PATHS.layoutDashboard} size={26} className="text-cyan-500" />
+              </div>
+              <span
+                className="absolute inset-0 rounded-xl animate-ping opacity-20 bg-cyan-500"
+                style={{ animationDuration: "3s" }}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-[0.15em] uppercase text-cyan-300">
+                <Icon d={PATHS.star} size={11} className="text-cyan-400" style={{ fill: "currentColor" }} />
+                The Centerpiece
+              </span>
+              <h4 className="text-lg sm:text-xl font-black tracking-tight text-white">
+                {phase.title}
+              </h4>
+            </div>
+            <PhasePill status={phase.status} accent="cyan" />
+          </div>
+
+          <p className="text-sm leading-relaxed text-neutral-300 mt-3">
+            {phase.description}
+          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <PhaseMeta phase={phase} accent="cyan" />
+          </div>
+
+          {phase.features && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mt-4">
+              {phase.features.map((f) => (
+                <div
+                  key={f}
+                  className="rounded-xl p-3 border bg-white/5 border-white/10 hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-all duration-300"
+                >
+                  <Icon d={PATHS.circleCheck} size={16} className="text-cyan-500 mb-1.5" />
+                  <p className="text-[11px] sm:text-xs font-semibold text-white/80 leading-snug">
+                    {f}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -648,38 +1033,28 @@ function TaskCard({
   token: string;
   onSubmitted: () => void;
 }) {
+  const accent = TASK_ACCENT[task.id] || "blue";
+  const a = ACCENT[accent];
   return (
-    <div className="glass-card p-5 sm:p-6">
+    <div className="rounded-2xl p-5 sm:p-6 bg-white/5 border border-white/10">
       <div className="flex items-start gap-3">
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0"
-          style={{
-            background: "var(--accent-blue-bg)",
-            border: "1px solid var(--accent-blue-border)",
-          }}
+          className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${a.chip}`}
+          style={{ filter: a.chipGlow, animation: "lp-float 3.5s ease-in-out infinite" }}
         >
-          {task.emoji}
+          <Icon d={TASK_ICON[task.id] || PATHS.globe} size={24} className={a.icon} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
-              {task.title}
-            </h3>
-            <TaskPill task={task} />
+            <h3 className="text-sm sm:text-base font-bold text-white">{task.title}</h3>
+            <TaskPill task={task} accent={accent} />
           </div>
-          <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-muted)" }}>
+          <p className="text-xs sm:text-[13px] mt-1 leading-relaxed text-neutral-400">
             {task.description}
           </p>
           {task.adminNote && task.status === "needs_attention" && (
-            <div
-              className="mt-2 px-3 py-2 rounded-md text-xs"
-              style={{
-                background: "rgba(245, 158, 11, 0.1)",
-                border: "1px solid rgba(245, 158, 11, 0.25)",
-                color: "var(--text-main)",
-              }}
-            >
-              <span className="font-bold">From your Nexli team: </span>
+            <div className="mt-2 px-3 py-2 rounded-lg text-xs text-neutral-200 bg-yellow-500/10 border border-yellow-500/25">
+              <span className="font-bold text-yellow-400">From your Nexli team: </span>
               {task.adminNote}
             </div>
           )}
@@ -688,53 +1063,42 @@ function TaskCard({
 
       <div className="mt-4">
         {task.type === "credentials" && (
-          <DnsForm task={task} token={token} onSubmitted={onSubmitted} />
+          <DnsForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
         {task.type === "confirm" && (
-          <FbConfirm task={task} token={token} onSubmitted={onSubmitted} />
+          <FbConfirm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
         {task.type === "upload" && (
-          <LicenseUpload task={task} token={token} onSubmitted={onSubmitted} />
+          <LicenseUpload task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
       </div>
     </div>
   );
 }
 
-function SubmittedNote({ children }: { children: React.ReactNode }) {
+function SubmittedNote({
+  children,
+  accent,
+}: {
+  children: React.ReactNode;
+  accent: Accent;
+}) {
+  const a = ACCENT[accent];
   return (
-    <div
-      className="flex items-center gap-2 px-4 py-3 rounded-lg"
-      style={{
-        background: "var(--accent-emerald-bg)",
-        border: "1px solid var(--accent-emerald-border)",
-      }}
-    >
+    <div className={`flex items-center gap-2 px-4 py-3 rounded-xl ${a.successStrip}`}>
       <div
-        className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-        style={{
-          background: "linear-gradient(135deg, #10B981, #06B6D4)",
-          animation: "lp-check-bounce 0.5s ease-out",
-        }}
+        className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-gradient-to-br from-blue-500 to-cyan-500"
+        style={{ animation: "lp-check-bounce 0.5s ease-out" }}
       >
-        <svg
-          className="w-3.5 h-3.5 text-white"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
+        <Icon d={PATHS.check} size={14} className="text-white" />
       </div>
-      <span className="text-xs font-semibold" style={{ color: "var(--text-main)" }}>
-        {children}
-      </span>
+      <span className="text-xs font-semibold text-white">{children}</span>
     </div>
   );
 }
+
+const CTA_CLASSES =
+  "flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:hover:scale-100";
 
 // ── DNS / registrar credentials form ──
 
@@ -742,10 +1106,12 @@ function DnsForm({
   task,
   token,
   onSubmitted,
+  accent,
 }: {
   task: TaskData;
   token: string;
   onSubmitted: () => void;
+  accent: Accent;
 }) {
   const [registrar, setRegistrar] = useState("");
   const [loginUrl, setLoginUrl] = useState("");
@@ -763,7 +1129,7 @@ function DnsForm({
 
   if (done) {
     return (
-      <SubmittedNote>
+      <SubmittedNote accent={accent}>
         Got it — we&apos;ll take it from here. Your login details are locked away
         and only visible to your Nexli team.
       </SubmittedNote>
@@ -801,19 +1167,18 @@ function DnsForm({
     }
   }
 
-  const labelCls = "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5";
+  const labelCls =
+    "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-neutral-500";
 
   return (
     <div className="space-y-3">
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Where&apos;s your domain? *
-          </label>
+          <label className={labelCls}>Where&apos;s your domain? *</label>
           <select
             value={registrar}
             onChange={(e) => setRegistrar(e.target.value)}
-            className="glass-input"
+            className="lp-input"
           >
             <option value="">Select registrar…</option>
             {REGISTRARS.map((r) => (
@@ -824,48 +1189,41 @@ function DnsForm({
           </select>
         </div>
         <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Login URL (optional)
-          </label>
+          <label className={labelCls}>Login URL (optional)</label>
           <input
             type="url"
             value={loginUrl}
             onChange={(e) => setLoginUrl(e.target.value)}
             placeholder="https://…"
-            className="glass-input"
+            className="lp-input"
           />
         </div>
         <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Username / Email *
-          </label>
+          <label className={labelCls}>Username / Email *</label>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="you@business.com"
-            className="glass-input"
+            className="lp-input"
             autoComplete="off"
           />
         </div>
         <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Password *
-          </label>
+          <label className={labelCls}>Password *</label>
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="glass-input pr-16"
+              className="lp-input pr-16"
               autoComplete="off"
             />
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wider"
-              style={{ color: "var(--text-muted)" }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300"
             >
               {showPassword ? "Hide" : "Show"}
             </button>
@@ -873,45 +1231,25 @@ function DnsForm({
         </div>
       </div>
       <div>
-        <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-          Anything else we should know?
-        </label>
+        <label className={labelCls}>Anything else we should know?</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder="2FA codes go to my cell, the account is under my partner's name, etc."
-          className="glass-input resize-none"
+          className="lp-input resize-none"
         />
       </div>
 
-      {error && (
-        <p className="text-xs font-semibold" style={{ color: "#fb7185" }}>
-          {error}
-        </p>
-      )}
+      {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <button
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="px-6 py-3 rounded-full text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] disabled:opacity-50"
-          style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-        >
+        <button onClick={handleSubmit} disabled={submitting} className={CTA_CLASSES}>
           {submitting ? "Sending securely…" : "Send access securely →"}
         </button>
         <div className="flex items-center gap-1.5">
-          <svg
-            className="w-3.5 h-3.5 text-emerald-400 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+          <Icon d={PATHS.lock} size={14} className="text-emerald-400 shrink-0" />
+          <span className="text-[11px] text-neutral-500">
             Sent over an encrypted connection — visible only to your Nexli team
           </span>
         </div>
@@ -926,10 +1264,12 @@ function FbConfirm({
   task,
   token,
   onSubmitted,
+  accent,
 }: {
   task: TaskData;
   token: string;
   onSubmitted: () => void;
+  accent: Accent;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -944,9 +1284,11 @@ function FbConfirm({
 
   if (done) {
     return skipped ? (
-      <SubmittedNote>No problem — we&apos;ve marked this one as not applicable.</SubmittedNote>
+      <SubmittedNote accent={accent}>
+        No problem — we&apos;ve marked this one as not applicable.
+      </SubmittedNote>
     ) : (
-      <SubmittedNote>
+      <SubmittedNote accent={accent}>
         Invite received on our end soon — we&apos;ll confirm once we&apos;re connected!
       </SubmittedNote>
     );
@@ -980,19 +1322,16 @@ function FbConfirm({
 
   return (
     <div className="space-y-3">
-      <ol
-        className="text-xs space-y-1.5 pl-4 list-decimal leading-relaxed"
-        style={{ color: "var(--text-muted)" }}
-      >
+      <ol className="text-xs sm:text-[13px] space-y-1.5 pl-4 list-decimal leading-relaxed text-neutral-400">
         <li>
           Open{" "}
-          <span className="font-semibold" style={{ color: "var(--text-main)" }}>
+          <span className="font-semibold text-white">
             Meta Business Settings → Partners
           </span>
         </li>
         <li>
           Click{" "}
-          <span className="font-semibold" style={{ color: "var(--text-main)" }}>
+          <span className="font-semibold text-white">
             Add → Give a partner access to your assets
           </span>
         </li>
@@ -1002,30 +1341,20 @@ function FbConfirm({
         </li>
       </ol>
 
-      {error && (
-        <p className="text-xs font-semibold" style={{ color: "#fb7185" }}>
-          {error}
-        </p>
-      )}
+      {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
 
       <div className="flex flex-wrap gap-3">
         <button
           onClick={() => submit(false)}
           disabled={submitting}
-          className="px-5 py-2.5 rounded-full text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] disabled:opacity-50"
-          style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+          className={CTA_CLASSES}
         >
           I sent the invite ✓
         </button>
         <button
           onClick={() => submit(true)}
           disabled={submitting}
-          className="px-5 py-2.5 rounded-full text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50"
-          style={{
-            color: "var(--text-muted)",
-            border: "1px solid var(--card-border)",
-            background: "var(--input-bg)",
-          }}
+          className="px-5 py-3 rounded-full text-sm font-semibold text-neutral-400 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-all active:scale-[0.98] disabled:opacity-50"
         >
           I don&apos;t run Facebook Ads
         </button>
@@ -1040,16 +1369,18 @@ function LicenseUpload({
   task,
   token,
   onSubmitted,
+  accent,
 }: {
   task: TaskData;
   token: string;
   onSubmitted: () => void;
+  accent: Accent;
 }) {
   const done = task.status === "submitted" || task.status === "approved";
 
   if (done) {
     return (
-      <SubmittedNote>
+      <SubmittedNote accent={accent}>
         Both sides received — we&apos;re getting your business number verified. 🎉
       </SubmittedNote>
     );
@@ -1123,50 +1454,37 @@ function LicenseSideDropzone({
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="w-full rounded-lg p-4 text-center transition-all active:scale-[0.99] disabled:opacity-60"
-        style={{
-          border: uploadedName
-            ? "1px solid var(--accent-emerald-border)"
-            : "2px dashed var(--card-border)",
-          background: uploadedName ? "var(--accent-emerald-bg)" : "var(--input-bg)",
-        }}
+        className={`w-full rounded-xl p-4 text-center transition-all active:scale-[0.99] disabled:opacity-60 ${
+          uploadedName
+            ? "bg-amber-500/10 border border-amber-500/30"
+            : "bg-white/5 border-2 border-dashed border-white/15 hover:border-amber-500/40"
+        }`}
       >
         {uploading ? (
           <div className="flex flex-col items-center gap-2 py-1">
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-              Uploading…
-            </span>
+            <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-semibold text-neutral-400">Uploading…</span>
           </div>
         ) : uploadedName ? (
           <div className="flex flex-col items-center gap-1 py-1">
-            <span className="text-lg">✅</span>
-            <span
-              className="text-[10px] font-black uppercase tracking-[0.2em]"
-              style={{ color: "var(--text-muted)" }}
-            >
+            <Icon d={PATHS.circleCheck} size={20} className="text-amber-400" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
               {side} uploaded
             </span>
-            <span
-              className="text-xs font-semibold truncate max-w-full"
-              style={{ color: "var(--text-main)" }}
-            >
+            <span className="text-xs font-semibold text-white truncate max-w-full">
               {uploadedName}
             </span>
-            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-              Tap to replace
-            </span>
+            <span className="text-[10px] text-neutral-500">Tap to replace</span>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-1 py-2">
-            <span className="text-xl">📸</span>
-            <span
-              className="text-[10px] font-black uppercase tracking-[0.2em]"
-              style={{ color: "var(--text-main)" }}
-            >
+          <div className="flex flex-col items-center gap-1.5 py-2">
+            <div className="p-2 rounded-lg bg-amber-500/20">
+              <Icon d={PATHS.idCard} size={20} className="text-amber-400" />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">
               License {side}
             </span>
-            <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            <span className="text-[11px] text-neutral-500">
               Tap to snap a photo or choose a file
             </span>
           </div>
@@ -1183,9 +1501,7 @@ function LicenseSideDropzone({
         }}
       />
       {error && (
-        <p className="text-xs font-semibold mt-1.5" style={{ color: "#fb7185" }}>
-          {error}
-        </p>
+        <p className="text-xs font-semibold mt-1.5 text-rose-400">{error}</p>
       )}
     </div>
   );
