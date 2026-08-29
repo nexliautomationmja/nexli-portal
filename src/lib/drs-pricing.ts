@@ -23,7 +23,7 @@ export type BillingPlan = "monthly" | "annual";
  * system. Billed as results come in, outside the flat platform price.
  */
 export const AD_PERFORMANCE = {
-  PERCENT_OF_CLOSED_DEAL: 10, // 10% of the closed deal value
+  PERCENT_OF_CLOSED_DEAL: 20, // 20% of the closed deal value (leaves margin for ad contractors)
   ADVERTISED_SERVICE: "tax planning",
 } as const;
 

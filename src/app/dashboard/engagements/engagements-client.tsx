@@ -6,7 +6,7 @@ import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/co
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
 import { generateDrsContent } from "@/lib/engagement-defaults";
-import { DRS_PRICING, type BillingPlan } from "@/lib/drs-pricing";
+import { DRS_PRICING, AD_PERFORMANCE, type BillingPlan } from "@/lib/drs-pricing";
 
 const fmtWhole = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
 
@@ -619,7 +619,7 @@ export function EngagementsClient() {
                     </label>
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ad management is separate and performance-based (10% of each closed tax-planning deal) — no ad line item on the invoice.
+                    Ad management is separate and performance-based ({AD_PERFORMANCE.PERCENT_OF_CLOSED_DEAL}% of each closed tax-planning deal) — no ad line item on the invoice.
                   </p>
                 </div>
               )}
