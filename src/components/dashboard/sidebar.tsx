@@ -67,7 +67,7 @@ const clientNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
   { href: "/dashboard/tax-returns", label: "Tax Returns", icon: KanbanIcon },
   { href: "/dashboard/tax-organizers", label: "Tax Organizers", icon: FormIcon },
   { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon },
-  { href: "/dashboard/ad-analytics", label: "Ad Analytics", icon: ChartIcon },
+  { href: "/dashboard/client-tracker", label: "Client Tracker", icon: ChartIcon },
   { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
 ];
 

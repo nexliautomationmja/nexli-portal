@@ -57,7 +57,7 @@ const dateRanges = [
   { label: "All", value: "all" },
 ];
 
-export function AdAnalyticsClient() {
+export function AdAnalyticsSection() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState("30");
   const [summary, setSummary] = useState<Summary>({
@@ -90,6 +90,7 @@ export function AdAnalyticsClient() {
         setRecentLeads([]);
       })
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
 
   function qualRate(qualified: number, total: number): string {
@@ -106,25 +107,19 @@ export function AdAnalyticsClient() {
   }
 
   function formatSource(source: string | null): string {
-    if (!source) return "\u2014";
-    return source
-      .replace(/-/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+    if (!source) return "—";
+    return source.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1
-            className="text-2xl font-bold tracking-tight"
-            style={{ color: "var(--text-main)" }}
-          >
+          <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
             Ad Analytics
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Track which campaigns and creatives drive qualified leads.
+          </h2>
+          <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+            Which campaigns and creatives drive qualified leads (from your UTM tracking).
           </p>
         </div>
         <div className="flex items-center rounded-lg border border-[var(--card-border)] overflow-hidden">
@@ -169,9 +164,7 @@ export function AdAnalyticsClient() {
           <p className="section-header mb-0">By Campaign (Angle)</p>
         </div>
         {loading ? (
-          <div className="p-12 text-center">
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          </div>
+          <Spinner />
         ) : campaigns.length === 0 ? (
           <EmptyState message="No campaign data yet. UTM-tagged ad traffic will appear here." />
         ) : (
@@ -179,43 +172,22 @@ export function AdAnalyticsClient() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--card-border)]">
-                  {["Campaign", "Total", "Qualified", "Booked", "Purchased", "Qual Rate"].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {h}
-                      </th>
-                    )
-                  )}
+                  {["Campaign", "Total", "Qualified", "Booked", "Purchased", "Qual Rate"].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {campaigns.map((row) => (
-                  <tr
-                    key={row.campaign}
-                    className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
-                  >
-                    <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                      {row.campaign || "\u2014"}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                      {row.total}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-emerald-500 font-semibold">
-                      {row.qualified}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                      {row.booked}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                      {row.purchased}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>
-                      {qualRate(row.qualified, row.total)}
-                    </td>
+                  <tr key={row.campaign} className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>{row.campaign || "—"}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.total}</td>
+                    <td className="px-4 py-3 text-sm text-emerald-500 font-semibold">{row.qualified}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.booked}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.purchased}</td>
+                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>{qualRate(row.qualified, row.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -230,9 +202,7 @@ export function AdAnalyticsClient() {
           <p className="section-header mb-0">By Creative (Ad)</p>
         </div>
         {loading ? (
-          <div className="p-12 text-center">
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          </div>
+          <Spinner />
         ) : creatives.length === 0 ? (
           <EmptyState message="No creative data yet. Use utm_content in your ad URLs to track individual ads." />
         ) : (
@@ -240,43 +210,22 @@ export function AdAnalyticsClient() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--card-border)]">
-                  {["Creative", "Total", "Qualified", "Booked", "Purchased", "Qual Rate"].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {h}
-                      </th>
-                    )
-                  )}
+                  {["Creative", "Total", "Qualified", "Booked", "Purchased", "Qual Rate"].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {creatives.map((row) => (
-                  <tr
-                    key={row.creative}
-                    className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
-                  >
-                    <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                      {row.creative || "\u2014"}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                      {row.total}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-emerald-500 font-semibold">
-                      {row.qualified}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                      {row.booked}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                      {row.purchased}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>
-                      {qualRate(row.qualified, row.total)}
-                    </td>
+                  <tr key={row.creative} className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>{row.creative || "—"}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.total}</td>
+                    <td className="px-4 py-3 text-sm text-emerald-500 font-semibold">{row.qualified}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.booked}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.purchased}</td>
+                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>{qualRate(row.qualified, row.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -291,9 +240,7 @@ export function AdAnalyticsClient() {
           <p className="section-header mb-0">Recent Leads</p>
         </div>
         {loading ? (
-          <div className="p-12 text-center">
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          </div>
+          <Spinner />
         ) : recentLeads.length === 0 ? (
           <EmptyState message="No leads from ads yet. Leads will appear here once UTM-tagged traffic converts." />
         ) : (
@@ -301,55 +248,28 @@ export function AdAnalyticsClient() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--card-border)]">
-                  {["Name", "Email", "Score", "Campaign", "Creative", "Form", "Date"].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {h}
-                      </th>
-                    )
-                  )}
+                  {["Name", "Email", "Score", "Campaign", "Creative", "Form", "Date"].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {recentLeads.map((lead) => {
                   const sc = scoreConfig[lead.leadScore || "raw"] || scoreConfig.raw;
-                  const name = [lead.firstName, lead.lastName]
-                    .filter(Boolean)
-                    .join(" ") || "\u2014";
+                  const name = [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "—";
                   return (
-                    <tr
-                      key={lead.id}
-                      className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
-                    >
-                      <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                        {name}
-                      </td>
-                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-muted)" }}>
-                        {lead.email || "\u2014"}
-                      </td>
+                    <tr key={lead.id} className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors">
+                      <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>{name}</td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-muted)" }}>{lead.email || "—"}</td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${sc.color} ${sc.bg}`}
-                        >
-                          {sc.label}
-                        </span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${sc.color} ${sc.bg}`}>{sc.label}</span>
                       </td>
-                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                        {lead.utmCampaign || "\u2014"}
-                      </td>
-                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                        {lead.utmContent || "\u2014"}
-                      </td>
-                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-muted)" }}>
-                        {formatSource(lead.formSource)}
-                      </td>
-                      <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                        {formatDate(lead.createdAt)}
-                      </td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{lead.utmCampaign || "—"}</td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{lead.utmContent || "—"}</td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-muted)" }}>{formatSource(lead.formSource)}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>{formatDate(lead.createdAt)}</td>
                     </tr>
                   );
                 })}
@@ -358,6 +278,14 @@ export function AdAnalyticsClient() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <div className="p-12 text-center">
+      <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
     </div>
   );
 }
