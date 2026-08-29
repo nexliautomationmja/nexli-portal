@@ -209,7 +209,7 @@ export async function POST(
 
     // Digital Rainmaker System auto-invoicing: if this engagement was built
     // from a DRS template, create the flat recurring platform invoice
-    // (monthly $4,997 or annual $44,997) due at signing.
+    // (monthly $4,997 or annual $39,997) due at signing.
     try {
       const primary = await getPrimaryClientSigner(engagement.id);
       if (primary) {

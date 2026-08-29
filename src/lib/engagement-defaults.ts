@@ -1,7 +1,7 @@
 /**
  * Default engagement letter template content for the Digital Rainmaker System.
  *
- * One flat all-in-one price ($4,997/mo or $44,997/yr prepaid) plus a separate,
+ * One flat all-in-one price ($4,997/mo or $39,997/yr prepaid) plus a separate,
  * performance-based ad management arrangement. All dollar amounts are
  * interpolated from the pricing constants in drs-pricing.ts so the contract
  * can never drift from what the billing engine actually charges.

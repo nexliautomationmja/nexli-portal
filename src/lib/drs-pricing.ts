@@ -11,7 +11,7 @@
 
 export const DRS_PRICING = {
   MONTHLY_CENTS: 499_700, // $4,997.00 / month — all-in-one
-  ANNUAL_CENTS: 4_499_700, // $44,997.00 / year prepaid (~25% off vs monthly)
+  ANNUAL_CENTS: 3_999_700, // $39,997.00 / year prepaid (~33% off vs monthly)
 } as const;
 
 export type BillingPlan = "monthly" | "annual";

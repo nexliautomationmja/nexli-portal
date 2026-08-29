@@ -6,7 +6,7 @@
  * platform invoice that mirrors the flat all-in-one fee structure:
  *
  *   - Monthly plan → $4,997/month, recurring monthly, due at signing
- *   - Annual plan  → $44,997/year prepaid, recurring yearly, due at signing
+ *   - Annual plan  → $39,997/year prepaid, recurring yearly, due at signing
  *
  * There are no setup fees and no separate ad-management invoices — ad
  * management is performance-based and billed manually as results come in

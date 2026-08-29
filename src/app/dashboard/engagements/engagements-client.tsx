@@ -70,7 +70,7 @@ export function EngagementsClient() {
   const [showPreview, setShowPreview] = useState(false);
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
-  // Billing plan (flat all-in-one): monthly $4,997 or annual $44,997 prepaid
+  // Billing plan (flat all-in-one): monthly $4,997 or annual $39,997 prepaid
   const [billingPlan, setBillingPlan] = useState<BillingPlan>("monthly");
 
   useEffect(() => {
@@ -589,7 +589,7 @@ export function EngagementsClient() {
                     {
                       value: "annual" as BillingPlan,
                       label: `Annual — ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)}/yr`,
-                      sub: `Paid in full, ~25% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly.`,
+                      sub: `Paid in full, ~${Math.round((1 - DRS_PRICING.ANNUAL_CENTS / (DRS_PRICING.MONTHLY_CENTS * 12)) * 100)}% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly.`,
                     },
                   ]).map((opt) => (
                     <label
