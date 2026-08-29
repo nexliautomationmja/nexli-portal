@@ -3,39 +3,28 @@
  *
  * Client-safe: no server-only imports, so these constants can be used from
  * both API routes and client components (compose UI, invoice pay page).
+ *
+ * One flat all-in-one price: the whole Digital Rainmaker System for a single
+ * monthly (or discounted annual) investment — no setup fees, no ad-management
+ * tiers. Ad management is separate and performance-based (see AD_PERFORMANCE).
  */
 
-/** Original DRS pricing in cents — $20k total setup ($10k + $10k) + $2,497/mo. */
 export const DRS_PRICING = {
-  INITIAL_SETUP_CENTS: 10_000_00, // $10,000.00
-  FINAL_SETUP_CENTS: 10_000_00,   // $10,000.00
-  MONTHLY_SUBSCRIPTION_CENTS: 249_700, // $2,497.00
+  MONTHLY_CENTS: 499_700, // $4,997.00 / month — all-in-one
+  ANNUAL_CENTS: 4_499_700, // $44,997.00 / year prepaid (~25% off vs monthly)
 } as const;
 
-/** Starter DRS pricing — $15k total setup ($7.5k + $7.5k) + $1,497/mo. */
-export const STARTER_DRS_PRICING = {
-  INITIAL_SETUP_CENTS: 750_000,    // $7,500.00
-  FINAL_SETUP_CENTS: 750_000,      // $7,500.00
-  MONTHLY_RETAINER_CENTS: 149_700, // $1,497.00
-} as const;
-
-/** Ad management tier pricing — monthly management fees. */
-export const ADS_TIERS = {
-  foundation: { label: "Foundation Ads", cents: 250_000, spendRange: "$2,000–$5,000/mo" },
-  growth:     { label: "Growth Ads",     cents: 450_000, spendRange: "$5,000–$10,000/mo" },
-  scale:      { label: "Scale Ads",      cents: 750_000, spendRange: "$10,000–$25,000+/mo" },
-} as const;
-
-export type AdsTier = keyof typeof ADS_TIERS;
+export type BillingPlan = "monthly" | "annual";
 
 /**
- * Pay-in-full option for the full (Original) DRS: the entire setup paid
- * upfront at signing in exchange for a discount. SETUP_CENTS must equal
- * DRS_PRICING.INITIAL_SETUP_CENTS + FINAL_SETUP_CENTS − DISCOUNT_CENTS.
+ * Performance-based ad management. There is no monthly ad retainer — the
+ * Provider earns a percentage of the value of each closed deal in the
+ * advertised service line (tax planning), attributed via the tracking
+ * system. Billed as results come in, outside the flat platform price.
  */
-export const DRS_PREPAY = {
-  SETUP_CENTS: 15_000_00,  // $15,000.00 due at signing
-  DISCOUNT_CENTS: 500_000, // $5,000.00 off the standard $20,000 setup
+export const AD_PERFORMANCE = {
+  PERCENT_OF_CLOSED_DEAL: 10, // 10% of the closed deal value
+  ADVERTISED_SERVICE: "tax planning",
 } as const;
 
 /**

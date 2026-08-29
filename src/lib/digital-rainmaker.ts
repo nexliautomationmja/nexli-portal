@@ -2,30 +2,24 @@
  * Digital Rainmaker System — Auto-Invoicing Flow
  *
  * When an engagement letter built from the "Digital Rainmaker System" template
- * is fully signed by all parties, this module orchestrates a three-invoice
- * billing cadence that mirrors the contract's fee structure:
+ * is fully signed by all parties, this module creates a single recurring
+ * platform invoice that mirrors the flat all-in-one fee structure:
  *
- *   1. Initial Setup Fee — $10,000 USD, due immediately on signing
- *   2. Final Setup Fee   — $10,000 USD, due 30 days after the Initial is paid
- *   3. Monthly Subscription — $2,497 USD/month, recurring, first invoice due
- *      30 days after the Initial is paid
+ *   - Monthly plan → $4,997/month, recurring monthly, due at signing
+ *   - Annual plan  → $44,997/year prepaid, recurring yearly, due at signing
  *
- * Amounts come from drs-pricing.ts. Engagements snapshot their pricing into
- * engagement.metadata at compose time; the triggers below prefer those
- * snapshots so already-signed clients are grandfathered when prices change.
+ * There are no setup fees and no separate ad-management invoices — ad
+ * management is performance-based and billed manually as results come in
+ * (see AD_PERFORMANCE in drs-pricing.ts). The billing plan is snapshotted
+ * onto engagement.metadata at compose time so a signed client keeps their
+ * plan even if pricing changes.
  *
- * The 30-day clock for invoices #2 and #3 starts when invoice #1 is paid in
- * full — NOT when the engagement is signed. This is enforced by triggering
- * createDrsFinalAndMonthlyInvoices() from the Stripe payments webhook after
- * the initial invoice flips to "paid".
- *
- * Each generated invoice carries metadata so we can identify it later:
- *   { engagementId, drsRole: "initial_setup" | "final_setup" | "monthly_subscription" }
+ * Each generated invoice carries metadata { engagementId, drsRole } where
+ * drsRole is "platform_monthly" or "platform_annual". The existing recurring
+ * cron (api/cron/invoice-reminders) rolls the parent invoice forward by its
+ * interval, so subsequent monthly/annual invoices are generated automatically.
  *
  * Template detection is by name (case-insensitive contains "digital rainmaker").
- * To opt an engagement letter into this flow, the user just creates an
- * engagement template named something like "Digital Rainmaker System" and
- * picks it when sending the letter — no other configuration required.
  */
 
 import { db } from "@/db";
@@ -46,100 +40,52 @@ import {
 import { sendEmailWithLog, buildInvoiceEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 
-// ── Constants ─────────────────────────────────────────────
-
 // Pricing lives in drs-pricing.ts (client-safe module); re-exported here so
 // existing server-side imports keep working.
-import {
-  ADS_TIERS,
-  DRS_PRICING,
-  DRS_PREPAY,
-  STARTER_DRS_PRICING,
-  type AdsTier,
-} from "./drs-pricing";
+import { DRS_PRICING, AD_PERFORMANCE, type BillingPlan } from "./drs-pricing";
 
-export { ADS_TIERS, DRS_PRICING, DRS_PREPAY, STARTER_DRS_PRICING } from "./drs-pricing";
-export type { AdsTier } from "./drs-pricing";
+export { DRS_PRICING, AD_PERFORMANCE } from "./drs-pricing";
+export type { BillingPlan } from "./drs-pricing";
 
-/** DRS variant detected from template name. */
-export type DrsVariant = "original" | "starter";
-
-/** Days between Initial Setup payment and the Final/Monthly due dates. */
-export const DRS_CLOCK_DAYS = 30;
-
-export type DrsRole =
-  | "initial_setup"
-  | "final_setup"
-  | "monthly_subscription";
+export type DrsRole = "platform_monthly" | "platform_annual";
 
 interface DrsMetadata {
   engagementId: string;
   drsRole: DrsRole;
-  drsVariant?: DrsVariant;
 }
 
 interface EngagementMeta {
-  adsTier?: AdsTier;
-  adsManagementCents?: number;
-  /** Starter DRS monthly retainer snapshotted at compose time. */
-  retainerCents?: number;
-  /** Original DRS monthly subscription snapshotted at compose time. */
-  monthlyCents?: number;
-  /** Original DRS pay-in-full option: entire setup upfront at a discount. */
-  payInFull?: boolean;
-  /** Pay-in-full setup amount snapshotted at compose time. */
-  prepaySetupCents?: number;
+  billingPlan?: BillingPlan;
 }
 
 // ── Template Detection ────────────────────────────────────
 
 /**
- * Returns the DRS variant for a given template, or null if the template
- * is not a Digital Rainmaker template. Detection is by name:
- *   - "starter" + "digital rainmaker" → "starter"
- *   - "digital rainmaker" (without "starter") → "original"
+ * Returns true if the given template is a Digital Rainmaker template
+ * (detected by name, case-insensitive).
  */
-export async function getDrsVariant(
+export async function isDigitalRainmakerEngagement(
   templateId: string | null
-): Promise<DrsVariant | null> {
-  if (!templateId) return null;
+): Promise<boolean> {
+  if (!templateId) return false;
   const [template] = await db
     .select({ name: engagementTemplates.name })
     .from(engagementTemplates)
     .where(eq(engagementTemplates.id, templateId))
     .limit(1);
-  if (!template) return null;
-  const name = template.name.toLowerCase();
-  if (name.includes("starter") && name.includes("digital rainmaker")) return "starter";
-  if (name.includes("digital rainmaker")) return "original";
-  return null;
-}
-
-/** Backward-compatible wrapper. */
-export async function isDigitalRainmakerEngagement(
-  templateId: string | null
-): Promise<boolean> {
-  return (await getDrsVariant(templateId)) !== null;
+  if (!template) return false;
+  return template.name.toLowerCase().includes("digital rainmaker");
 }
 
 // ── Idempotency Helper ────────────────────────────────────
 
-/**
- * Returns true if an invoice already exists for this engagement with the
- * given DRS role. Used to prevent duplicate invoices on re-runs.
- */
-async function drsInvoiceExists(
-  engagementId: string,
-  role: DrsRole
-): Promise<boolean> {
+/** True if a platform invoice already exists for this engagement. */
+async function drsInvoiceExists(engagementId: string): Promise<boolean> {
   const rows = await db
     .select({ id: invoices.id })
     .from(invoices)
     .where(
-      sql`${invoices.metadata} @> ${JSON.stringify({
-        engagementId,
-        drsRole: role,
-      })}::jsonb`
+      sql`${invoices.metadata} @> ${JSON.stringify({ engagementId })}::jsonb`
     )
     .limit(1);
   return rows.length > 0;
@@ -147,11 +93,6 @@ async function drsInvoiceExists(
 
 // ── Invoice Send Helper ───────────────────────────────────
 
-/**
- * Sends the invoice notification email to the client. Mirrors the logic in
- * /api/dashboard/invoices/[invoiceId]/send but lives here so we can call it
- * directly from the auto-invoicing flow without going through the dashboard.
- */
 async function emailInvoiceToClient(
   invoice: typeof invoices.$inferSelect,
   ownerId: string
@@ -191,142 +132,7 @@ async function emailInvoiceToClient(
   }
 }
 
-// ── Invoice Creation Helpers ──────────────────────────────
-
-interface CreateInvoiceArgs {
-  ownerId: string;
-  engagementId: string;
-  clientName: string;
-  clientEmail: string;
-}
-
-/**
- * Creates a single DRS invoice (one-time line item).
- * Used for both Initial Setup Fee and Final Setup Fee.
- */
-async function createOneTimeDrsInvoice(args: {
-  ownerId: string;
-  engagementId: string;
-  clientName: string;
-  clientEmail: string;
-  description: string;
-  amountCents: number;
-  dueDate: Date;
-  role: "initial_setup" | "final_setup";
-  notes?: string;
-}) {
-  const invoiceNumber = await generateInvoiceNumber();
-  const token = generateInvoiceToken();
-
-  const metadata: DrsMetadata = {
-    engagementId: args.engagementId,
-    drsRole: args.role,
-  };
-
-  const [invoice] = await db
-    .insert(invoices)
-    .values({
-      ownerId: args.ownerId,
-      clientName: args.clientName,
-      clientEmail: args.clientEmail,
-      invoiceNumber,
-      token,
-      currency: "usd",
-      subtotal: args.amountCents,
-      taxRate: 0,
-      taxAmount: 0,
-      total: args.amountCents,
-      amountPaid: 0,
-      balanceDue: args.amountCents,
-      isRecurring: false,
-      dueDate: args.dueDate,
-      notes: args.notes || null,
-      status: "sent",
-      sentAt: new Date(),
-      metadata,
-    })
-    .returning();
-
-  await db.insert(invoiceLineItems).values({
-    invoiceId: invoice.id,
-    description: args.description,
-    quantity: 100, // qty 1 (stored × 100)
-    unitPrice: args.amountCents,
-    amount: args.amountCents,
-    billingType: "one_time",
-    order: 0,
-  });
-
-  return invoice;
-}
-
-/**
- * Creates the recurring monthly subscription invoice. The first invoice is
- * due in `DRS_CLOCK_DAYS` days. The existing invoice-recurring cron job
- * (api/cron/invoice-reminders) handles generating subsequent monthly
- * invoices from the parent template via `nextRecurrenceDate`.
- */
-async function createRecurringDrsMonthlyInvoice(
-  args: CreateInvoiceArgs & { monthlyCents?: number }
-) {
-  const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + DRS_CLOCK_DAYS);
-
-  // Next recurrence is 30 days after this first one (so the cron generates
-  // the second monthly invoice ~60 days after Initial Setup is paid).
-  const nextRecurrence = new Date(dueDate);
-  nextRecurrence.setDate(nextRecurrence.getDate() + 30);
-
-  const invoiceNumber = await generateInvoiceNumber();
-  const token = generateInvoiceToken();
-  const amountCents = args.monthlyCents ?? DRS_PRICING.MONTHLY_SUBSCRIPTION_CENTS;
-
-  const metadata: DrsMetadata = {
-    engagementId: args.engagementId,
-    drsRole: "monthly_subscription",
-  };
-
-  const [invoice] = await db
-    .insert(invoices)
-    .values({
-      ownerId: args.ownerId,
-      clientName: args.clientName,
-      clientEmail: args.clientEmail,
-      invoiceNumber,
-      token,
-      currency: "usd",
-      subtotal: amountCents,
-      taxRate: 0,
-      taxAmount: 0,
-      total: amountCents,
-      amountPaid: 0,
-      balanceDue: amountCents,
-      isRecurring: true,
-      recurringInterval: "monthly",
-      nextRecurrenceDate: nextRecurrence,
-      dueDate,
-      notes:
-        "Recurring monthly subscription for the Digital Rainmaker System. Billed automatically each month.",
-      status: "sent",
-      sentAt: new Date(),
-      metadata,
-    })
-    .returning();
-
-  await db.insert(invoiceLineItems).values({
-    invoiceId: invoice.id,
-    description: "Digital Rainmaker System — Monthly Subscription",
-    quantity: 100,
-    unitPrice: amountCents,
-    amount: amountCents,
-    billingType: "monthly",
-    order: 0,
-  });
-
-  return invoice;
-}
-
-// ── Public Triggers ───────────────────────────────────────
+// ── Public Trigger ────────────────────────────────────────
 
 interface PostSignTriggerArgs {
   engagement: typeof engagements.$inferSelect;
@@ -337,12 +143,11 @@ interface PostSignTriggerArgs {
 }
 
 /**
- * Called from the engage route after all signers have signed. If the
- * engagement is for a Digital Rainmaker System template, generates and
- * sends the Initial Setup Fee invoice.
+ * Called from the engage route after all signers have signed. For a Digital
+ * Rainmaker engagement, creates the single recurring platform invoice
+ * (monthly or annual) due at signing.
  *
- * Idempotent — safe to call repeatedly; will only create the invoice once
- * per engagement.
+ * Idempotent — will only create the invoice once per engagement.
  */
 export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
   const { engagement, primarySigner } = args;
@@ -350,194 +155,36 @@ export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
   if (!(await isDigitalRainmakerEngagement(engagement.templateId))) {
     return null;
   }
-
-  if (await drsInvoiceExists(engagement.id, "initial_setup")) {
-    return null;
-  }
-
-  const dueDate = new Date(); // due immediately
-
-  // Pay-in-full option: the entire (discounted) setup is billed upfront and
-  // the Final Setup Fee invoice is skipped after payment.
-  const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
-  const payInFull = engMeta.payInFull === true;
-
-  const invoice = await createOneTimeDrsInvoice({
-    ownerId: engagement.ownerId,
-    engagementId: engagement.id,
-    clientName: primarySigner.name,
-    clientEmail: primarySigner.email,
-    description: payInFull
-      ? "Digital Rainmaker System — Setup Investment (Paid in Full)"
-      : "Digital Rainmaker System — Initial Setup Fee",
-    amountCents: payInFull
-      ? engMeta.prepaySetupCents ?? DRS_PREPAY.SETUP_CENTS
-      : DRS_PRICING.INITIAL_SETUP_CENTS,
-    dueDate,
-    role: "initial_setup",
-    notes: payInFull
-      ? `Full Setup Investment for the Digital Rainmaker System, paid in full at a ${formatCurrency(DRS_PREPAY.DISCOUNT_CENTS, "usd")} discount off the standard setup investment. The first Monthly Subscription invoice will be issued 30 days after this invoice is paid.`
-      : "Initial Setup Fee for the Digital Rainmaker System. The Final Setup Fee and first Monthly Subscription invoice will be issued 30 days after this invoice is paid in full.",
-  });
-
-  await emailInvoiceToClient(invoice, engagement.ownerId);
-
-  try {
-    await createNotification({
-      userId: engagement.ownerId,
-      type: "invoice_paid", // closest existing type — TODO: add invoice_created
-      title: "DRS Initial Setup Invoice Sent",
-      message: `Initial Setup Fee invoice ${invoice.invoiceNumber} sent to ${primarySigner.name}`,
-      metadata: {
-        invoiceId: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
-        engagementId: engagement.id,
-        drsRole: "initial_setup",
-      },
-    });
-  } catch (err) {
-    console.error("DRS: notification failed:", err);
-  }
-
-  return invoice;
-}
-
-/**
- * Called from the Stripe payments webhook after an invoice flips to "paid".
- * If the paid invoice is the Initial Setup Fee for a DRS engagement, this
- * generates the Final Setup Fee invoice and the first Monthly Subscription
- * invoice — both with a due date 30 days from now.
- *
- * Idempotent — checks for existing Final/Monthly invoices before creating.
- */
-export async function triggerDrsPostInitialPaid(
-  paidInvoice: typeof invoices.$inferSelect
-) {
-  const meta = paidInvoice.metadata as DrsMetadata | null;
-  if (!meta || meta.drsRole !== "initial_setup" || !meta.engagementId) {
-    return null;
-  }
-
-  const engagementId = meta.engagementId;
-
-  // Look up the engagement to make sure it still exists
-  const [engagement] = await db
-    .select()
-    .from(engagements)
-    .where(eq(engagements.id, engagementId))
-    .limit(1);
-
-  if (!engagement) {
-    console.warn(
-      `DRS: paid invoice ${paidInvoice.id} references missing engagement ${engagementId}`
-    );
-    return null;
-  }
-
-  const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + DRS_CLOCK_DAYS);
-
-  const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
-  const payInFull = engMeta.payInFull === true;
-
-  const created: { final?: typeof invoices.$inferSelect; monthly?: typeof invoices.$inferSelect } = {};
-
-  // Final Setup Fee invoice — skipped for pay-in-full engagements (the
-  // entire setup was already collected on the signing invoice).
-  if (!payInFull && !(await drsInvoiceExists(engagementId, "final_setup"))) {
-    const finalInvoice = await createOneTimeDrsInvoice({
-      ownerId: paidInvoice.ownerId,
-      engagementId,
-      clientName: paidInvoice.clientName,
-      clientEmail: paidInvoice.clientEmail,
-      description: "Digital Rainmaker System — Final Setup Fee",
-      amountCents: DRS_PRICING.FINAL_SETUP_CENTS,
-      dueDate,
-      role: "final_setup",
-      notes:
-        "Final Setup Fee for the Digital Rainmaker System. Due 30 days after the Initial Setup Fee was paid.",
-    });
-    await emailInvoiceToClient(finalInvoice, paidInvoice.ownerId);
-    created.final = finalInvoice;
-  }
-
-  // Monthly Subscription invoice (recurring) — prefer the amount snapshotted
-  // on the engagement at compose time so signed clients keep their price.
-  if (!(await drsInvoiceExists(engagementId, "monthly_subscription"))) {
-    const monthlyInvoice = await createRecurringDrsMonthlyInvoice({
-      ownerId: paidInvoice.ownerId,
-      engagementId,
-      clientName: paidInvoice.clientName,
-      clientEmail: paidInvoice.clientEmail,
-      monthlyCents: engMeta.monthlyCents,
-    });
-    await emailInvoiceToClient(monthlyInvoice, paidInvoice.ownerId);
-    created.monthly = monthlyInvoice;
-  }
-
-  // Notify CPA in-app
-  if (created.final || created.monthly) {
-    try {
-      await createNotification({
-        userId: paidInvoice.ownerId,
-        type: "invoice_paid",
-        title: "DRS Follow-Up Invoices Sent",
-        message: payInFull
-          ? `Monthly Subscription invoice issued to ${paidInvoice.clientName} (due in ${DRS_CLOCK_DAYS} days). Setup was paid in full — no Final Setup Fee invoice.`
-          : `Final Setup Fee and Monthly Subscription invoices issued to ${paidInvoice.clientName} (due in ${DRS_CLOCK_DAYS} days).`,
-        metadata: {
-          engagementId,
-          finalInvoiceId: created.final?.id,
-          monthlyInvoiceId: created.monthly?.id,
-        },
-      });
-    } catch (err) {
-      console.error("DRS follow-up notification failed:", err);
-    }
-  }
-
-  return created;
-}
-
-// ══════════════════════════════════════════════════════════
-// ══  STARTER DRS — Auto-Invoicing  ══════════════════════
-// ══════════════════════════════════════════════════════════
-
-/**
- * Called from the engage route after all signers have signed a Starter DRS
- * engagement. Generates Invoice 1:
- *   - Initial Setup Fee ($7,500)
- *   - Monthly Retainer ($1,497, or the amount snapshotted at compose time)
- *   - Ad Management fee (if ads tier selected)
- *
- * All line items are on a single invoice, due immediately.
- */
-export async function triggerStarterDrsPostSign(args: PostSignTriggerArgs) {
-  const { engagement, primarySigner } = args;
-
-  if (await drsInvoiceExists(engagement.id, "initial_setup")) {
+  if (await drsInvoiceExists(engagement.id)) {
     return null;
   }
 
   const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
-  const adsTier = engMeta.adsTier;
-  // Prefer amounts snapshotted at compose time so the invoice always matches
-  // the signed contract even if the pricing constants change later.
-  const adsCents = adsTier ? engMeta.adsManagementCents ?? ADS_TIERS[adsTier].cents : 0;
+  const plan: BillingPlan = engMeta.billingPlan === "annual" ? "annual" : "monthly";
 
-  const setupCents = STARTER_DRS_PRICING.INITIAL_SETUP_CENTS;
-  const retainerCents = engMeta.retainerCents ?? STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS;
-  const totalCents = setupCents + retainerCents + adsCents;
+  const isAnnual = plan === "annual";
+  const amountCents = isAnnual
+    ? DRS_PRICING.ANNUAL_CENTS
+    : DRS_PRICING.MONTHLY_CENTS;
+  const role: DrsRole = isAnnual ? "platform_annual" : "platform_monthly";
+  const description = isAnnual
+    ? "Digital Rainmaker System — Annual (Paid in Full)"
+    : "Digital Rainmaker System — Monthly";
+
+  const dueDate = new Date(); // due immediately at signing
+
+  // Next recurrence: one interval out, so the cron generates the next invoice
+  // when this billing cycle ends.
+  const nextRecurrence = new Date(dueDate);
+  if (isAnnual) {
+    nextRecurrence.setFullYear(nextRecurrence.getFullYear() + 1);
+  } else {
+    nextRecurrence.setMonth(nextRecurrence.getMonth() + 1);
+  }
 
   const invoiceNumber = await generateInvoiceNumber();
   const token = generateInvoiceToken();
-  const dueDate = new Date(); // due immediately
-
-  const metadata: DrsMetadata = {
-    engagementId: engagement.id,
-    drsRole: "initial_setup",
-    drsVariant: "starter",
-  };
+  const metadata: DrsMetadata = { engagementId: engagement.id, drsRole: role };
 
   const [invoice] = await db
     .insert(invoices)
@@ -548,228 +195,55 @@ export async function triggerStarterDrsPostSign(args: PostSignTriggerArgs) {
       invoiceNumber,
       token,
       currency: "usd",
-      subtotal: totalCents,
+      subtotal: amountCents,
       taxRate: 0,
       taxAmount: 0,
-      total: totalCents,
+      total: amountCents,
       amountPaid: 0,
-      balanceDue: totalCents,
-      isRecurring: false,
+      balanceDue: amountCents,
+      isRecurring: true,
+      recurringInterval: isAnnual ? "yearly" : "monthly",
+      nextRecurrenceDate: nextRecurrence,
       dueDate,
-      notes: "Initial payment for the Starter Digital Rainmaker System. The Final Setup Fee will be issued 30 days after this invoice is paid in full.",
+      notes: isAnnual
+        ? "Annual all-in-one investment for the Digital Rainmaker System, paid in full. Renews yearly."
+        : "Monthly all-in-one investment for the Digital Rainmaker System. Billed automatically each month.",
       status: "sent",
       sentAt: new Date(),
       metadata,
     })
     .returning();
 
-  // Line items
-  const lineItems: { invoiceId: string; description: string; quantity: number; unitPrice: number; amount: number; billingType: "one_time" | "monthly"; order: number }[] = [
-    {
-      invoiceId: invoice.id,
-      description: "Starter Digital Rainmaker — Initial Setup Fee",
-      quantity: 100,
-      unitPrice: setupCents,
-      amount: setupCents,
-      billingType: "one_time",
-      order: 0,
-    },
-    {
-      invoiceId: invoice.id,
-      description: "Digital Rainmaker — Monthly Retainer",
-      quantity: 100,
-      unitPrice: retainerCents,
-      amount: retainerCents,
-      billingType: "monthly",
-      order: 1,
-    },
-  ];
-
-  if (adsTier) {
-    lineItems.push({
-      invoiceId: invoice.id,
-      description: `Ad Management — ${ADS_TIERS[adsTier].label} (Month 1)`,
-      quantity: 100,
-      unitPrice: adsCents,
-      amount: adsCents,
-      billingType: "monthly",
-      order: 2,
-    });
-  }
-
-  for (const item of lineItems) {
-    await db.insert(invoiceLineItems).values(item);
-  }
+  await db.insert(invoiceLineItems).values({
+    invoiceId: invoice.id,
+    description,
+    quantity: 100, // qty 1 (stored × 100)
+    unitPrice: amountCents,
+    amount: amountCents,
+    billingType: isAnnual ? "yearly" : "monthly",
+    order: 0,
+  });
 
   await emailInvoiceToClient(invoice, engagement.ownerId);
 
   try {
     await createNotification({
       userId: engagement.ownerId,
-      type: "invoice_paid",
-      title: "Starter DRS Initial Invoice Sent",
-      message: `Initial invoice ${invoice.invoiceNumber} ($${(totalCents / 100).toLocaleString()}) sent to ${primarySigner.name}`,
+      type: "invoice_paid", // closest existing type
+      title: "DRS Invoice Sent",
+      message: `${isAnnual ? "Annual" : "Monthly"} invoice ${invoice.invoiceNumber} (${formatCurrency(amountCents, "usd")}) sent to ${primarySigner.name}`,
       metadata: {
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         engagementId: engagement.id,
-        drsRole: "initial_setup",
-        drsVariant: "starter",
+        drsRole: role,
       },
     });
   } catch (err) {
-    console.error("Starter DRS: notification failed:", err);
+    console.error("DRS: notification failed:", err);
   }
 
   return invoice;
-}
-
-/**
- * Called from the Stripe payments webhook after a Starter DRS initial setup
- * invoice is paid. Generates:
- *   - Invoice 2: Final Setup Fee ($7,500) — due in 30 days
- *   - Invoice 3: Monthly recurring (retainer + ad management, preferring
- *     amounts snapshotted at compose time) — due in 30 days
- */
-export async function triggerStarterDrsPostInitialPaid(
-  paidInvoice: typeof invoices.$inferSelect
-) {
-  const meta = paidInvoice.metadata as (DrsMetadata & EngagementMeta) | null;
-  if (!meta || meta.drsRole !== "initial_setup" || !meta.engagementId) {
-    return null;
-  }
-
-  const engagementId = meta.engagementId;
-
-  const [engagement] = await db
-    .select()
-    .from(engagements)
-    .where(eq(engagements.id, engagementId))
-    .limit(1);
-
-  if (!engagement) {
-    console.warn(`Starter DRS: paid invoice ${paidInvoice.id} references missing engagement ${engagementId}`);
-    return null;
-  }
-
-  const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
-  const adsTier = engMeta.adsTier;
-  // Prefer amounts snapshotted at compose time — grandfathers signed clients.
-  const adsCents = adsTier ? engMeta.adsManagementCents ?? ADS_TIERS[adsTier].cents : 0;
-
-  const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + DRS_CLOCK_DAYS);
-
-  const created: { final?: typeof invoices.$inferSelect; monthly?: typeof invoices.$inferSelect } = {};
-
-  // Invoice 2: Final Setup Fee only
-  if (!(await drsInvoiceExists(engagementId, "final_setup"))) {
-    const finalInvoice = await createOneTimeDrsInvoice({
-      ownerId: paidInvoice.ownerId,
-      engagementId,
-      clientName: paidInvoice.clientName,
-      clientEmail: paidInvoice.clientEmail,
-      description: "Starter Digital Rainmaker — Final Setup Fee",
-      amountCents: STARTER_DRS_PRICING.FINAL_SETUP_CENTS,
-      dueDate,
-      role: "final_setup",
-      notes: "Final Setup Fee for the Starter Digital Rainmaker System. Due 30 days after the Initial invoice was paid.",
-    });
-    await emailInvoiceToClient(finalInvoice, paidInvoice.ownerId);
-    created.final = finalInvoice;
-  }
-
-  // Invoice 3: Monthly recurring (retainer + ad management)
-  if (!(await drsInvoiceExists(engagementId, "monthly_subscription"))) {
-    const retainerCents = engMeta.retainerCents ?? STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS;
-    const totalMonthlyCents = retainerCents + adsCents;
-
-    const nextRecurrence = new Date(dueDate);
-    nextRecurrence.setDate(nextRecurrence.getDate() + 30);
-
-    const invoiceNumber = await generateInvoiceNumber();
-    const token = generateInvoiceToken();
-
-    const monthlyMeta: DrsMetadata = {
-      engagementId,
-      drsRole: "monthly_subscription",
-      drsVariant: "starter",
-    };
-
-    const [monthlyInvoice] = await db
-      .insert(invoices)
-      .values({
-        ownerId: paidInvoice.ownerId,
-        clientName: paidInvoice.clientName,
-        clientEmail: paidInvoice.clientEmail,
-        invoiceNumber,
-        token,
-        currency: "usd",
-        subtotal: totalMonthlyCents,
-        taxRate: 0,
-        taxAmount: 0,
-        total: totalMonthlyCents,
-        amountPaid: 0,
-        balanceDue: totalMonthlyCents,
-        isRecurring: true,
-        recurringInterval: "monthly",
-        nextRecurrenceDate: nextRecurrence,
-        dueDate,
-        notes: "Recurring monthly retainer for the Digital Rainmaker System. Billed automatically each month.",
-        status: "sent",
-        sentAt: new Date(),
-        metadata: monthlyMeta,
-      })
-      .returning();
-
-    // Retainer line item
-    await db.insert(invoiceLineItems).values({
-      invoiceId: monthlyInvoice.id,
-      description: "Digital Rainmaker — Monthly Retainer",
-      quantity: 100,
-      unitPrice: retainerCents,
-      amount: retainerCents,
-      billingType: "monthly",
-      order: 0,
-    });
-
-    // Ad management line item (if ads)
-    if (adsTier) {
-      await db.insert(invoiceLineItems).values({
-        invoiceId: monthlyInvoice.id,
-        description: `Ad Management — ${ADS_TIERS[adsTier].label}`,
-        quantity: 100,
-        unitPrice: adsCents,
-        amount: adsCents,
-        billingType: "monthly",
-        order: 1,
-      });
-    }
-
-    await emailInvoiceToClient(monthlyInvoice, paidInvoice.ownerId);
-    created.monthly = monthlyInvoice;
-  }
-
-  if (created.final || created.monthly) {
-    try {
-      await createNotification({
-        userId: paidInvoice.ownerId,
-        type: "invoice_paid",
-        title: "Starter DRS Follow-Up Invoices Sent",
-        message: `Final Setup Fee and Monthly Retainer invoices issued to ${paidInvoice.clientName} (due in ${DRS_CLOCK_DAYS} days).`,
-        metadata: {
-          engagementId,
-          finalInvoiceId: created.final?.id,
-          monthlyInvoiceId: created.monthly?.id,
-          drsVariant: "starter",
-        },
-      });
-    } catch (err) {
-      console.error("Starter DRS follow-up notification failed:", err);
-    }
-  }
-
-  return created;
 }
 
 // ── Helper for engage route ───────────────────────────────

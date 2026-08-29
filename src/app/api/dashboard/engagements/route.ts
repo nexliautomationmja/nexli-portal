@@ -11,14 +11,7 @@ import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { sendEmailWithLog, buildEngagementRequestEmail } from "@/lib/email";
 import { generateSenderSignatureSvgDataUrl } from "@/lib/signature";
-import { getDrsVariant } from "@/lib/digital-rainmaker";
-import {
-  ADS_TIERS,
-  DRS_PRICING,
-  DRS_PREPAY,
-  STARTER_DRS_PRICING,
-  type AdsTier,
-} from "@/lib/drs-pricing";
+import { type BillingPlan } from "@/lib/drs-pricing";
 
 export async function GET() {
   const session = await auth();
@@ -99,9 +92,7 @@ export async function POST(req: NextRequest) {
     expiresInDays = 30,
     saveAsTemplate,
     templateName,
-    includeAds,
-    adsTier,
-    payInFull,
+    billingPlan,
   } = body;
 
   if (
@@ -144,27 +135,10 @@ export async function POST(req: NextRequest) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
-  // Build engagement metadata — snapshot the pricing in effect at compose
-  // time so auto-invoicing always bills what the signed contract says, even
-  // if the pricing constants change later.
-  const drsVariant = await getDrsVariant(templateId || null);
-  const adsMetadata =
-    includeAds && adsTier && ADS_TIERS[adsTier as AdsTier]
-      ? { adsTier, adsManagementCents: ADS_TIERS[adsTier as AdsTier].cents }
-      : {};
-  const retainerMetadata =
-    drsVariant === "starter"
-      ? { retainerCents: STARTER_DRS_PRICING.MONTHLY_RETAINER_CENTS }
-      : drsVariant === "original"
-        ? { monthlyCents: DRS_PRICING.MONTHLY_SUBSCRIPTION_CENTS }
-        : {};
-  const prepayMetadata =
-    drsVariant === "original" && payInFull === true
-      ? { payInFull: true, prepaySetupCents: DRS_PREPAY.SETUP_CENTS }
-      : {};
-  const combinedMetadata = { ...adsMetadata, ...retainerMetadata, ...prepayMetadata };
-  const engagementMetadata =
-    Object.keys(combinedMetadata).length > 0 ? combinedMetadata : null;
+  // Snapshot the chosen billing plan onto the engagement so auto-invoicing
+  // bills the flat platform price that matches the signed contract.
+  const plan: BillingPlan = billingPlan === "annual" ? "annual" : "monthly";
+  const engagementMetadata = { billingPlan: plan };
 
   const [engagement] = await db
     .insert(engagements)

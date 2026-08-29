@@ -10,8 +10,6 @@ import {
 import { createNotification } from "@/lib/notifications";
 import {
   triggerDrsPostSign,
-  triggerStarterDrsPostSign,
-  getDrsVariant,
   getPrimaryClientSigner,
 } from "@/lib/digital-rainmaker";
 import { initOnboarding } from "@/lib/onboarding";
@@ -210,18 +208,12 @@ export async function POST(
       .where(eq(engagements.id, engagement.id));
 
     // Digital Rainmaker System auto-invoicing: if this engagement was built
-    // from a DRS template, generate and send the Initial Setup Fee invoice.
-    // The Final Setup Fee + Monthly invoices are issued later by the Stripe
-    // payments webhook once the Initial is paid in full.
+    // from a DRS template, create the flat recurring platform invoice
+    // (monthly $4,997 or annual $44,997) due at signing.
     try {
       const primary = await getPrimaryClientSigner(engagement.id);
       if (primary) {
-        const variant = await getDrsVariant(engagement.templateId);
-        if (variant === "starter") {
-          await triggerStarterDrsPostSign({ engagement, primarySigner: primary });
-        } else if (variant === "original") {
-          await triggerDrsPostSign({ engagement, primarySigner: primary });
-        }
+        await triggerDrsPostSign({ engagement, primarySigner: primary });
       }
     } catch (err) {
       console.error("DRS post-sign trigger failed:", err);

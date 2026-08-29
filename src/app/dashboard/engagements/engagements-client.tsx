@@ -5,24 +5,10 @@ import { useRouter } from "next/navigation";
 import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
-import {
-  STARTER_DRS_TEMPLATE_CONTENT,
-  generateStarterContent,
-  generateOriginalContent,
-} from "@/lib/engagement-defaults";
-import { ADS_TIERS, DRS_PREPAY, type AdsTier } from "@/lib/drs-pricing";
+import { generateDrsContent } from "@/lib/engagement-defaults";
+import { DRS_PRICING, type BillingPlan } from "@/lib/drs-pricing";
 
 const fmtWhole = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
-
-const ADS_TIER_OPTIONS = (Object.keys(ADS_TIERS) as AdsTier[]).map((value) => {
-  const tier = ADS_TIERS[value];
-  return {
-    value,
-    label: tier.label,
-    fee: `$${(tier.cents / 100).toLocaleString("en-US")}/mo`,
-    spend: `${tier.spendRange} ad spend`,
-  };
-});
 
 interface Signer {
   id: string;
@@ -84,12 +70,8 @@ export function EngagementsClient() {
   const [showPreview, setShowPreview] = useState(false);
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
-  // Ad management
-  const [includeAds, setIncludeAds] = useState(false);
-  const [adsTier, setAdsTier] = useState<"foundation" | "growth" | "scale">("foundation");
-
-  // Pay-in-full discount (full DRS only)
-  const [payInFull, setPayInFull] = useState(false);
+  // Billing plan (flat all-in-one): monthly $4,997 or annual $44,997 prepaid
+  const [billingPlan, setBillingPlan] = useState<BillingPlan>("monthly");
 
   useEffect(() => {
     Promise.all([
@@ -110,49 +92,25 @@ export function EngagementsClient() {
       .finally(() => setLoading(false));
   }, []);
 
-  function isStarterTemplate(tmpl: Template | undefined): boolean {
-    return !!tmpl && tmpl.name.toLowerCase().includes("starter") && tmpl.name.toLowerCase().includes("digital rainmaker");
-  }
-
-  function isOriginalTemplate(tmpl: Template | undefined): boolean {
-    return !!tmpl && tmpl.name.toLowerCase().includes("digital rainmaker") && !tmpl.name.toLowerCase().includes("starter");
+  function isDrsTemplate(tmpl: Template | undefined): boolean {
+    return !!tmpl && tmpl.name.toLowerCase().includes("digital rainmaker");
   }
 
   function handleTemplateSelect(templateId: string) {
     setSelectedTemplate(templateId);
     const tmpl = templates.find((t) => t.id === templateId);
     if (tmpl) {
-      if (isStarterTemplate(tmpl) && includeAds) {
-        setContent(generateStarterContent(adsTier));
-      } else if (isOriginalTemplate(tmpl) && payInFull) {
-        setContent(generateOriginalContent(true));
-      } else {
-        setContent(tmpl.content);
-      }
+      // For the DRS template, generate the letter for the current plan so the
+      // fee section always matches the Monthly/Annual toggle.
+      setContent(isDrsTemplate(tmpl) ? generateDrsContent(billingPlan) : tmpl.content);
     }
   }
 
-  function handlePayInFullToggle(checked: boolean) {
-    setPayInFull(checked);
+  function handleBillingPlanChange(plan: BillingPlan) {
+    setBillingPlan(plan);
     const tmpl = templates.find((t) => t.id === selectedTemplate);
-    if (isOriginalTemplate(tmpl)) {
-      setContent(generateOriginalContent(checked));
-    }
-  }
-
-  function handleAdsToggle(checked: boolean) {
-    setIncludeAds(checked);
-    const tmpl = templates.find((t) => t.id === selectedTemplate);
-    if (isStarterTemplate(tmpl)) {
-      setContent(checked ? generateStarterContent(adsTier) : STARTER_DRS_TEMPLATE_CONTENT);
-    }
-  }
-
-  function handleAdsTierChange(tier: "foundation" | "growth" | "scale") {
-    setAdsTier(tier);
-    const tmpl = templates.find((t) => t.id === selectedTemplate);
-    if (isStarterTemplate(tmpl) && includeAds) {
-      setContent(generateStarterContent(tier));
+    if (isDrsTemplate(tmpl)) {
+      setContent(generateDrsContent(plan));
     }
   }
 
@@ -189,9 +147,7 @@ export function EngagementsClient() {
           expiresInDays,
           saveAsTemplate,
           templateName: saveAsTemplate ? templateName : undefined,
-          includeAds,
-          adsTier: includeAds ? adsTier : undefined,
-          payInFull,
+          billingPlan,
         }),
       });
       const data = await res.json();
@@ -251,9 +207,7 @@ export function EngagementsClient() {
     setExpiresInDays(30);
     setSaveAsTemplate(false);
     setTemplateName("");
-    setIncludeAds(false);
-    setAdsTier("foundation");
-    setPayInFull(false);
+    setBillingPlan("monthly");
   }
 
   function formatDate(dateStr: string | null) {
@@ -620,74 +574,55 @@ export function EngagementsClient() {
                 </div>
               )}
 
-              {/* Pay-in-Full discount (full DRS only) */}
-              {isOriginalTemplate(templates.find((t) => t.id === selectedTemplate)) && (
-                <div className="space-y-1">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={payInFull}
-                      onChange={(e) => handlePayInFullToggle(e.target.checked)}
-                      className="w-4 h-4 rounded accent-blue-500"
-                    />
-                    <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                      Pay-in-Full Discount — {fmtWhole(DRS_PREPAY.SETUP_CENTS)} setup upfront (saves {fmtWhole(DRS_PREPAY.DISCOUNT_CENTS)})
-                    </span>
-                  </label>
-                  <p className="text-xs pl-6" style={{ color: "var(--text-muted)" }}>
-                    Single {fmtWhole(DRS_PREPAY.SETUP_CENTS)} invoice at signing instead of two setup invoices. Monthly retainer unchanged.
+              {/* Billing plan (flat all-in-one) — only for DRS templates */}
+              {isDrsTemplate(templates.find((t) => t.id === selectedTemplate)) && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                    Billing Plan
+                  </p>
+                  {([
+                    {
+                      value: "monthly" as BillingPlan,
+                      label: `Monthly — ${fmtWhole(DRS_PRICING.MONTHLY_CENTS)}/mo`,
+                      sub: "All-in-one, billed monthly.",
+                    },
+                    {
+                      value: "annual" as BillingPlan,
+                      label: `Annual — ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)}/yr`,
+                      sub: `Paid in full, ~25% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly.`,
+                    },
+                  ]).map((opt) => (
+                    <label
+                      key={opt.value}
+                      className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                      style={{
+                        borderColor: billingPlan === opt.value ? "#2563EB" : "var(--card-border)",
+                        background: billingPlan === opt.value ? "rgba(37, 99, 235, 0.05)" : "var(--input-bg)",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="billingPlan"
+                        value={opt.value}
+                        checked={billingPlan === opt.value}
+                        onChange={() => handleBillingPlanChange(opt.value)}
+                        className="accent-blue-500"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                          {opt.label}
+                        </p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {opt.sub}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Ad management is separate and performance-based (10% of each closed tax-planning deal) — no ad line item on the invoice.
                   </p>
                 </div>
               )}
-
-              {/* Ad Management */}
-              <div className="space-y-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={includeAds}
-                    onChange={(e) => handleAdsToggle(e.target.checked)}
-                    className="w-4 h-4 rounded accent-blue-500"
-                  />
-                  <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                    Include Ad Management
-                  </span>
-                </label>
-                {includeAds && (
-                  <div className="space-y-2 pl-6">
-                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                      Which tier did they agree to?
-                    </p>
-                    {ADS_TIER_OPTIONS.map((tier) => (
-                      <label
-                        key={tier.value}
-                        className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
-                        style={{
-                          borderColor: adsTier === tier.value ? "#2563EB" : "var(--card-border)",
-                          background: adsTier === tier.value ? "rgba(37, 99, 235, 0.05)" : "var(--input-bg)",
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="adsTier"
-                          value={tier.value}
-                          checked={adsTier === tier.value}
-                          onChange={() => handleAdsTierChange(tier.value)}
-                          className="accent-blue-500"
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                            {tier.label} — {tier.fee}
-                          </p>
-                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                            {tier.spend}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               {/* Letter content */}
               <div>
