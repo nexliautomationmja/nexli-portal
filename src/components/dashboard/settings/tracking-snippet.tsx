@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { buildTrackingSnippet } from "@/lib/tracking-snippet";
 
 interface TrackingSnippetProps {
   clientId: string;
@@ -9,7 +10,7 @@ interface TrackingSnippetProps {
 export function TrackingSnippet({ clientId }: TrackingSnippetProps) {
   const [copied, setCopied] = useState(false);
 
-  const snippet = `<script defer src="https://portal.nexli.net/t.js" data-client-id="${clientId}"></script>`;
+  const snippet = buildTrackingSnippet(clientId);
 
   function handleCopy() {
     navigator.clipboard.writeText(snippet);

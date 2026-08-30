@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
+import { buildTrackingSnippet } from "@/lib/tracking-snippet";
 import Image from "next/image";
 
 function MapPinIcon({ size, className }: { size: number; className?: string }) {
@@ -106,9 +107,7 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId, ghlLo
     const [ghlStatus, setGhlStatus] = useState<"idle" | "saving" | "success" | "error" | "disconnecting">("idle");
     const [ghlError, setGhlError] = useState("");
 
-    const trackingSnippet = clientId
-        ? `<script defer src="https://portal.nexli.net/t.js" data-client-id="${clientId}"></script>`
-        : null;
+    const trackingSnippet = clientId ? buildTrackingSnippet(clientId) : null;
 
     async function saveGhl(e: React.FormEvent) {
         e.preventDefault();

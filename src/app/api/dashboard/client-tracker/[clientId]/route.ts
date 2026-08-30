@@ -8,9 +8,11 @@ import {
   engagementSigners,
   leadNotifications,
   dailyStats,
+  pageViews,
   portalSessions,
 } from "@/db/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { getBookOfBusiness } from "@/lib/book-of-business";
 
 /**
@@ -188,6 +190,48 @@ export async function GET(
   }
   activity.sort((a, b) => b.at.localeCompare(a.at));
 
+  // dailyStats is rolled up by the nightly cron, so today's row is stale (or
+  // missing) all day. Count today's raw page views live and use them when
+  // they beat the aggregated row, so a freshly installed snippet shows up
+  // immediately instead of after midnight.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const [liveToday] = await db
+    .select({
+      views: sql<number>`COUNT(*)::int`,
+      uniques: sql<number>`COUNT(DISTINCT ${pageViews.sessionId})::int`,
+    })
+    .from(pageViews)
+    .where(
+      and(eq(pageViews.clientId, client.id), gte(pageViews.createdAt, startOfToday))
+    );
+
+  const daily = trafficRows.map((r) => ({
+    date: new Date(r.date).toISOString(),
+    pageViews: r.pageViews,
+    uniqueVisitors: r.uniqueVisitors,
+  }));
+  if (liveToday && liveToday.views > 0) {
+    const todayIdx = daily.findIndex(
+      (d) => new Date(d.date).getTime() >= startOfToday.getTime()
+    );
+    if (todayIdx === -1) {
+      daily.push({
+        date: startOfToday.toISOString(),
+        pageViews: liveToday.views,
+        uniqueVisitors: liveToday.uniques,
+      });
+    } else {
+      // Take the larger of live vs aggregated per metric — the cron row for
+      // today is stale, but never report fewer than it already shows.
+      daily[todayIdx] = {
+        date: daily[todayIdx].date,
+        pageViews: Math.max(liveToday.views, daily[todayIdx].pageViews),
+        uniqueVisitors: Math.max(liveToday.uniques, daily[todayIdx].uniqueVisitors),
+      };
+    }
+  }
+
   const clientEmailLc = client.email.toLowerCase();
   const myRow =
     myBook.clients.find((c) => c.email.toLowerCase() === clientEmailLc) || null;
@@ -207,17 +251,78 @@ export async function GET(
     },
     leads30d: leadCountRow[0]?.count || 0,
     traffic: {
-      pageViews30d: trafficRows.reduce((s, r) => s + r.pageViews, 0),
-      uniqueVisitors30d: trafficRows.reduce((s, r) => s + r.uniqueVisitors, 0),
-      daily: trafficRows.map((r) => ({
-        date: new Date(r.date).toISOString(),
-        pageViews: r.pageViews,
-        uniqueVisitors: r.uniqueVisitors,
-      })),
+      pageViews30d: daily.reduce((s, r) => s + r.pageViews, 0),
+      uniqueVisitors30d: daily.reduce((s, r) => s + r.uniqueVisitors, 0),
+      daily,
     },
     youCollect: myRow
       ? { revenue: myRow.revenue, mrr: myRow.mrr, outstanding: myRow.outstanding }
       : null,
     activity: activity.slice(0, 20),
   });
+}
+
+// PATCH — client setup: website URL and/or a new portal password. Admin only.
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ clientId: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { clientId } = await params;
+
+  const [target] = await db
+    .select({ id: users.id, role: users.role })
+    .from(users)
+    .where(eq(users.id, clientId))
+    .limit(1);
+  if (!target || target.role !== "client") {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const updates: { websiteUrl?: string | null; hashedPassword?: string } = {};
+
+  if ("websiteUrl" in body) {
+    if (body.websiteUrl === null || body.websiteUrl === "") {
+      updates.websiteUrl = null;
+    } else if (typeof body.websiteUrl === "string") {
+      let url = body.websiteUrl.trim().slice(0, 500);
+      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+      updates.websiteUrl = url;
+    } else {
+      return NextResponse.json({ error: "Invalid website URL." }, { status: 400 });
+    }
+  }
+
+  if ("newPassword" in body) {
+    const pw = body.newPassword;
+    if (typeof pw !== "string" || pw.length < 8 || pw.length > 200) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters." },
+        { status: 400 }
+      );
+    }
+    updates.hashedPassword = await bcrypt.hash(pw, 12);
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
+  }
+
+  const [updated] = await db
+    .update(users)
+    .set({ ...updates, updatedAt: new Date() })
+    .where(eq(users.id, clientId))
+    .returning({ websiteUrl: users.websiteUrl });
+
+  return NextResponse.json({ ok: true, websiteUrl: updated.websiteUrl });
 }
