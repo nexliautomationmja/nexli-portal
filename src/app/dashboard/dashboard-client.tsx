@@ -61,7 +61,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Link href="/dashboard/documents" className="group glass-card glass-card-interactive p-4 no-underline">
           <div className="flex items-center justify-between mb-2">
-            <span className="icon-chip icon-chip-blue w-9 h-9">
+            <span className="icon-chip icon-chip-float icon-chip-blue w-9 h-9">
               <FileIcon className="w-4 h-4" />
             </span>
             {docStats.new > 0 && (
@@ -74,7 +74,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
 
         <Link href="/dashboard/contacts" className="group glass-card glass-card-interactive p-4 no-underline">
           <div className="mb-2">
-            <span className="icon-chip icon-chip-cyan w-9 h-9">
+            <span className="icon-chip icon-chip-float icon-chip-cyan w-9 h-9" style={{ animationDelay: "0.35s" }}>
               <UsersIcon className="w-4 h-4" />
             </span>
           </div>
@@ -84,7 +84,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
 
         <Link href="/dashboard/pipeline" className="group glass-card glass-card-interactive p-4 no-underline">
           <div className="mb-2">
-            <span className="icon-chip icon-chip-violet w-9 h-9">
+            <span className="icon-chip icon-chip-float icon-chip-violet w-9 h-9" style={{ animationDelay: "0.7s" }}>
               <KanbanIcon className="w-4 h-4" />
             </span>
           </div>
@@ -96,7 +96,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
 
         <Link href="/dashboard/contacts" className="group glass-card glass-card-interactive p-4 no-underline">
           <div className="mb-2">
-            <span className="icon-chip icon-chip-amber w-9 h-9">
+            <span className="icon-chip icon-chip-float icon-chip-amber w-9 h-9" style={{ animationDelay: "1.05s" }}>
               <CalendarIcon className="w-4 h-4" />
             </span>
           </div>

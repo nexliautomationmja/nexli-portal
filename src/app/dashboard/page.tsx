@@ -45,7 +45,7 @@ export default async function DashboardPage() {
           className="text-2xl md:text-3xl font-bold tracking-tight"
           style={{ color: "var(--text-main)" }}
         >
-          Welcome back, {firstName}
+          Welcome back, <span className="text-gradient">{firstName}</span>
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
           Your document portal and CRM overview.

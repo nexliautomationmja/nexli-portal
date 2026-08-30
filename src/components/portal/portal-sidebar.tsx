@@ -12,12 +12,14 @@ import {
   PenLineIcon,
   KanbanIcon,
   MessageIcon,
+  RocketIcon,
   SunIcon,
   MoonIcon,
   LogOutIcon,
   HamburgerIcon,
   XIcon,
 } from "@/components/ui/icons";
+import { ShimmerPill } from "@/components/ui/shimmer-pill";
 
 function ChevronLeftIcon({ className }: { className?: string }) {
   return (
@@ -124,12 +126,15 @@ export function PortalSidebar({ clientName, clientEmail }: PortalSidebarProps) {
       {/* Portal label */}
       {!collapsed && (
         <div className="px-4 mb-2">
-          <span
-            className="text-[9px] font-bold uppercase tracking-[0.2em]"
-            style={{ color: "var(--accent-blue)" }}
-          >
-            Client Portal
-          </span>
+          <ShimmerPill>
+            <RocketIcon className="w-3 h-3 text-blue-400" />
+            <span
+              className="text-[9px] font-black tracking-[0.2em] uppercase"
+              style={{ color: "var(--text-main)" }}
+            >
+              Client Portal
+            </span>
+          </ShimmerPill>
         </div>
       )}
 
@@ -151,7 +156,7 @@ export function PortalSidebar({ clientName, clientEmail }: PortalSidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 space-y-0.5 no-scrollbar">
-        {portalNav.map((item) => {
+        {portalNav.map((item, index) => {
           const isActive =
             item.href === "/portal/dashboard"
               ? pathname === "/portal/dashboard"
@@ -173,7 +178,10 @@ export function PortalSidebar({ clientName, clientEmail }: PortalSidebarProps) {
               }}
               title={collapsed ? item.label : undefined}
             >
-              <span className={cn("icon-chip w-8 h-8", `icon-chip-${item.accent}`)}>
+              <span
+                className={cn("icon-chip icon-chip-float w-8 h-8", `icon-chip-${item.accent}`)}
+                style={{ animationDelay: `${(index % 8) * 0.4}s` }}
+              >
                 <item.icon className="w-4 h-4" />
               </span>
               {!collapsed && <span>{item.label}</span>}

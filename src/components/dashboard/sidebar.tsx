@@ -29,6 +29,7 @@ import {
   XIcon,
 } from "@/components/ui/icons";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
+import { ShimmerPill } from "@/components/ui/shimmer-pill";
 
 interface SidebarProps {
   isAdmin: boolean;
@@ -155,6 +156,23 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
         </Link>
       </div>
 
+      {/* Rainmaker shimmer badge */}
+      {!collapsed && (
+        <div className="px-4 mb-2">
+          <Link href="/dashboard/onboarding" className="no-underline">
+            <ShimmerPill>
+              <RocketIcon className="w-3 h-3 text-blue-400" />
+              <span
+                className="text-[9px] font-black tracking-[0.2em] uppercase"
+                style={{ color: "var(--text-main)" }}
+              >
+                Digital Rainmaker
+              </span>
+            </ShimmerPill>
+          </Link>
+        </div>
+      )}
+
       {/* Collapse toggle — desktop only */}
       <div className="hidden md:flex px-3 mb-2">
         <button
@@ -173,7 +191,7 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
 
       {/* Navigation — clean like Nextdoor */}
       <nav className="flex-1 overflow-y-auto px-3 space-y-0.5 no-scrollbar">
-        {navItems.map((item) => {
+        {navItems.map((item, index) => {
           const isActive =
             item.href === "/dashboard"
               ? pathname === "/dashboard"
@@ -195,7 +213,10 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
               }}
               title={collapsed ? item.label : undefined}
             >
-              <span className={cn("icon-chip w-8 h-8", `icon-chip-${item.accent}`)}>
+              <span
+                className={cn("icon-chip icon-chip-float w-8 h-8", `icon-chip-${item.accent}`)}
+                style={{ animationDelay: `${(index % 8) * 0.4}s` }}
+              >
                 <item.icon className="w-4 h-4" />
               </span>
               {!collapsed && (

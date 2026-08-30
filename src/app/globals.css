@@ -443,13 +443,38 @@ html {
   color: var(--text-muted);
 }
 
-/* Soft glow in dark mode — the Launch Pad chip look */
-.dark .icon-chip-blue { filter: drop-shadow(0 2px 6px rgba(37, 99, 235, 0.25)); }
-.dark .icon-chip-cyan { filter: drop-shadow(0 2px 6px rgba(6, 182, 212, 0.25)); }
-.dark .icon-chip-teal { filter: drop-shadow(0 2px 6px rgba(20, 184, 166, 0.25)); }
-.dark .icon-chip-violet { filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.25)); }
-.dark .icon-chip-emerald { filter: drop-shadow(0 2px 6px rgba(16, 185, 129, 0.25)); }
-.dark .icon-chip-amber { filter: drop-shadow(0 2px 6px rgba(245, 158, 11, 0.25)); }
+/* Colored glow in dark mode — the Launch Pad chip look */
+.dark .icon-chip-blue { filter: drop-shadow(0 4px 10px rgba(37, 99, 235, 0.35)); }
+.dark .icon-chip-cyan { filter: drop-shadow(0 4px 10px rgba(6, 182, 212, 0.35)); }
+.dark .icon-chip-teal { filter: drop-shadow(0 4px 10px rgba(20, 184, 166, 0.35)); }
+.dark .icon-chip-violet { filter: drop-shadow(0 4px 10px rgba(139, 92, 246, 0.35)); }
+.dark .icon-chip-emerald { filter: drop-shadow(0 4px 10px rgba(16, 185, 129, 0.35)); }
+.dark .icon-chip-amber { filter: drop-shadow(0 4px 10px rgba(245, 158, 11, 0.35)); }
+
+/* Floating chips — the Launch Pad hero bob, toned down for nav rails.
+   Stagger per item via inline animation-delay. */
+@keyframes chip-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.icon-chip-float {
+  animation: chip-float 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-chip-float {
+    animation: none;
+  }
+}
+
+/* Gradient text — the Rainmaker headline accent */
+.text-gradient {
+  background: linear-gradient(135deg, #2563EB, #8B5CF6, #06B6D4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
 /* Playful lift when the parent link/card is hovered */
 a:hover > .icon-chip,
