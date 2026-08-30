@@ -160,7 +160,7 @@ export const TASK_INFO: Record<
     type: "form",
     optional: false,
     description:
-      "Tell us about your three best clients — the ones you'd clone if you could — and what they have in common. We build your tax-planning offer and ad targeting around exactly that profile.",
+      "Tell us about your three best clients — the ones you'd clone if you could — and what they have in common. Then bring it together: name your avatar, the one person you're 100% confident you can save six to seven figures in taxes. Your whole tax-planning offer and ad targeting get built around that avatar.",
   },
   fb_ads_invite: {
     title: "Facebook Ads Account Invite",

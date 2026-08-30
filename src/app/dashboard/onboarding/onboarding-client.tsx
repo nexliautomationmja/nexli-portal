@@ -690,6 +690,7 @@ function AdminTaskCard({
           client2?: string;
           client3?: string;
           commonality?: string;
+          avatar?: string;
           notes?: string;
         } | null)
       : null;
@@ -805,6 +806,12 @@ function AdminTaskCard({
               >
                 Dream-client profile (build the tax-planning offer around this)
               </p>
+              {formSub.avatar && (
+                <p className="text-xs" style={{ color: "var(--text-main)" }}>
+                  <span className="font-bold">⭐ The avatar: </span>
+                  {formSub.avatar}
+                </p>
+              )}
               <ol className="list-decimal pl-4 space-y-1">
                 {[formSub.client1, formSub.client2, formSub.client3]
                   .filter(Boolean)

@@ -146,6 +146,7 @@ export async function POST(
       client2: str(raw.client2, 500),
       client3: str(raw.client3, 500),
       commonality: str(raw.commonality, 2000),
+      avatar: str(raw.avatar, 500),
       notes: str(raw.notes, 2000),
       submittedAt: now,
     };
@@ -153,10 +154,14 @@ export async function POST(
       !submission.client1 ||
       !submission.client2 ||
       !submission.client3 ||
-      !submission.commonality
+      !submission.commonality ||
+      !submission.avatar
     ) {
       return NextResponse.json(
-        { error: "Please fill in all three clients and what they have in common." },
+        {
+          error:
+            "Please fill in all three clients, what they have in common, and your avatar.",
+        },
         { status: 400 }
       );
     }

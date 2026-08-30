@@ -186,6 +186,8 @@ async function seedOnboardingProgress(
           client3: "SaaS founder who just exited, sitting on a large cap gain",
           commonality:
             "All high-income owners with multiple entities who came in for compliance and stayed for proactive tax planning.",
+          avatar:
+            "High-income dental practice owners with 3+ locations and multiple entities",
           notes: "Wants more clients in the $2M–$10M revenue range.",
         },
       },
@@ -237,6 +239,8 @@ async function seedOnboardingProgress(
         client3: "Medical practice partner group (4 physicians)",
         commonality:
           "Multi-entity operators with big payrolls who need entity structuring and quarterly planning, not just year-end filing.",
+        avatar:
+          "Franchise operators clearing $1M+ profit across multiple entities",
         notes: "",
       },
     },

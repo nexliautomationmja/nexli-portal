@@ -47,6 +47,7 @@ interface TaskData {
     client2?: string;
     client3?: string;
     commonality?: string;
+    avatar?: string;
     notes?: string;
   } | null;
 }
@@ -1582,6 +1583,7 @@ function DreamClientsForm({
   const [client2, setClient2] = useState(prev?.client2 ?? "");
   const [client3, setClient3] = useState(prev?.client3 ?? "");
   const [commonality, setCommonality] = useState(prev?.commonality ?? "");
+  const [avatar, setAvatar] = useState(prev?.avatar ?? "");
   const [notes, setNotes] = useState(prev?.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1603,6 +1605,12 @@ function DreamClientsForm({
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
               Your dream-client profile
             </p>
+            {sub?.avatar && (
+              <p className="text-sm text-neutral-300">
+                <span className="font-bold text-white">Your avatar: </span>
+                {sub.avatar}
+              </p>
+            )}
             <ol className="list-decimal pl-4 space-y-1">
               {saved.map((c, i) => (
                 <li key={i} className="text-sm text-neutral-300">
@@ -1623,8 +1631,16 @@ function DreamClientsForm({
   }
 
   async function handleSubmit() {
-    if (!client1.trim() || !client2.trim() || !client3.trim() || !commonality.trim()) {
-      setError("Please fill in all three clients and what they have in common.");
+    if (
+      !client1.trim() ||
+      !client2.trim() ||
+      !client3.trim() ||
+      !commonality.trim() ||
+      !avatar.trim()
+    ) {
+      setError(
+        "Please fill in all three clients, what they have in common, and your avatar."
+      );
       return;
     }
     setSubmitting(true);
@@ -1635,7 +1651,7 @@ function DreamClientsForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId: "dream_clients",
-          submission: { client1, client2, client3, commonality, notes },
+          submission: { client1, client2, client3, commonality, avatar, notes },
         }),
       });
       if (!res.ok) {
@@ -1687,6 +1703,26 @@ function DreamClientsForm({
           rows={3}
           placeholder="Industry, size, mindset, how they found you, what they buy from you…"
           className="lp-input resize-none"
+        />
+      </div>
+
+      <div className="rounded-xl p-4 border border-amber-400/25 bg-amber-400/[0.06] space-y-1.5">
+        <p className="text-xs font-black text-amber-300">
+          ⭐ Now bring it all together — who&apos;s your avatar? *
+        </p>
+        <p className="text-xs text-neutral-400">
+          Who specifically are you{" "}
+          <span className="font-bold text-white">100% confident</span> you can
+          save 6 to 7 figures from paying taxes to the IRS? Not just someone you
+          can market to — someone whose problems you can actually solve. A
+          surgeon? A doctor? A dental-practice owner?
+        </p>
+        <input
+          type="text"
+          value={avatar}
+          onChange={(e) => setAvatar(e.target.value)}
+          placeholder="e.g. Surgeons who own their practice · multi-location dental group owners"
+          className="lp-input"
         />
       </div>
 
