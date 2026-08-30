@@ -45,7 +45,6 @@ export async function GET() {
       name: sql<string>`MAX(${engagementSigners.name})`,
       dealsCount: sql<number>`COUNT(DISTINCT ${engagementSigners.engagementId})::int`,
       firstSignedAt: sql<string | null>`MIN(${engagementSigners.signedAt})`,
-      latestSignedAt: sql<string | null>`MAX(${engagementSigners.signedAt})`,
       latestPlan: sql<
         string | null
       >`(ARRAY_AGG(${engagements.metadata}->>'billingPlan' ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
@@ -89,7 +88,6 @@ export async function GET() {
     .where(and(eq(invoices.ownerId, ownerId), eq(invoices.isRecurring, true)));
 
   const invoiceMap = new Map(invoiceAgg.map((r) => [r.email, r]));
-  const signedMap = new Map(signedRows.map((r) => [r.email, r]));
 
   const now = Date.now();
   const mrrMap = new Map<string, number>();

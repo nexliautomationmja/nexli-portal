@@ -12,23 +12,30 @@ export default async function DashboardPage() {
   const firstName = session.user.name?.split(" ")[0] || "there";
   const userId = session.user.id!;
 
-  // Get document stats server-side
-  const statusCounts = await db
-    .select({
-      status: documents.status,
-      count: sql<number>`count(*)`,
-    })
-    .from(documents)
-    .where(eq(documents.ownerId, userId))
-    .groupBy(documents.status);
-
+  // Get document stats server-side. Defensive: if the DB is briefly
+  // unreachable, fall back to zeroed stats so the landing page still renders
+  // (the client widgets below fetch via API and handle their own errors)
+  // instead of taking down the whole dashboard.
   const docStats = { total: 0, new: 0, reviewed: 0, archived: 0 };
-  for (const row of statusCounts) {
-    const count = Number(row.count);
-    docStats.total += count;
-    if (row.status === "new") docStats.new = count;
-    if (row.status === "reviewed") docStats.reviewed = count;
-    if (row.status === "archived") docStats.archived = count;
+  try {
+    const statusCounts = await db
+      .select({
+        status: documents.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(documents)
+      .where(eq(documents.ownerId, userId))
+      .groupBy(documents.status);
+
+    for (const row of statusCounts) {
+      const count = Number(row.count);
+      docStats.total += count;
+      if (row.status === "new") docStats.new = count;
+      if (row.status === "reviewed") docStats.reviewed = count;
+      if (row.status === "archived") docStats.archived = count;
+    }
+  } catch (err) {
+    console.error("Dashboard overview: document stats query failed:", err);
   }
 
   return (
