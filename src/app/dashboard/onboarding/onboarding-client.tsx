@@ -50,7 +50,7 @@ interface AdminTask {
   id: string;
   title: string;
   emoji: string;
-  type: "credentials" | "confirm" | "upload";
+  type: "credentials" | "confirm" | "upload" | "form";
   optional: boolean;
   status: "todo" | "submitted" | "approved" | "needs_attention";
   submittedAt: string | null;
@@ -683,6 +683,17 @@ function AdminTaskCard({
       ? (task.submission as { confirmed?: boolean; notApplicable?: boolean } | null)
       : null;
 
+  const formSub =
+    task.type === "form"
+      ? (task.submission as {
+          client1?: string;
+          client2?: string;
+          client3?: string;
+          commonality?: string;
+          notes?: string;
+        } | null)
+      : null;
+
   const files =
     task.type === "upload"
       ? (task.submission as {
@@ -785,6 +796,38 @@ function AdminTaskCard({
                 Manager to accept it.
               </p>
             ))}
+
+          {formSub && (
+            <div className="space-y-2">
+              <p
+                className="text-[10px] font-black uppercase tracking-[0.15em]"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Dream-client profile (build the tax-planning offer around this)
+              </p>
+              <ol className="list-decimal pl-4 space-y-1">
+                {[formSub.client1, formSub.client2, formSub.client3]
+                  .filter(Boolean)
+                  .map((c, i) => (
+                    <li key={i} className="text-xs" style={{ color: "var(--text-main)" }}>
+                      {c}
+                    </li>
+                  ))}
+              </ol>
+              {formSub.commonality && (
+                <p className="text-xs" style={{ color: "var(--text-main)" }}>
+                  <span className="font-bold">In common: </span>
+                  {formSub.commonality}
+                </p>
+              )}
+              {formSub.notes && (
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span className="font-bold">Notes: </span>
+                  {formSub.notes}
+                </p>
+              )}
+            </div>
+          )}
 
           {files && (
             <div className="grid grid-cols-2 gap-2">

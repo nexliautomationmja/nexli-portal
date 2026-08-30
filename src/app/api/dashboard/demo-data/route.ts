@@ -176,6 +176,19 @@ async function seedOnboardingProgress(
       { segments: ["tasks", "stripe_setup", "reviewedAt"], value: iso(daysAgo(15)) },
       { segments: ["tasks", "dns_access", "status"], value: "submitted" },
       { segments: ["tasks", "dns_access", "submittedAt"], value: iso(daysAgo(12)) },
+      { segments: ["tasks", "dream_clients", "status"], value: "submitted" },
+      { segments: ["tasks", "dream_clients", "submittedAt"], value: iso(daysAgo(11)) },
+      {
+        segments: ["tasks", "dream_clients", "submission"],
+        value: {
+          client1: "Owner of a 14-location dental group, ~$6M revenue",
+          client2: "Real estate developer with 3 LLCs and a family office",
+          client3: "SaaS founder who just exited, sitting on a large cap gain",
+          commonality:
+            "All high-income owners with multiple entities who came in for compliance and stayed for proactive tax planning.",
+          notes: "Wants more clients in the $2M–$10M revenue range.",
+        },
+      },
       { segments: ["tasks", "fb_ads_invite", "status"], value: "submitted" },
       { segments: ["tasks", "fb_ads_invite", "submittedAt"], value: iso(daysAgo(11)) },
       { segments: ["tasks", "fb_ads_invite", "submission"], value: { confirmed: true } },
@@ -214,6 +227,19 @@ async function seedOnboardingProgress(
     { segments: ["tasks", "stripe_setup", "submittedAt"], value: iso(daysAgo(42)) },
     { segments: ["tasks", "dns_access", "status"], value: "approved" },
     { segments: ["tasks", "dns_access", "submittedAt"], value: iso(daysAgo(41)) },
+    { segments: ["tasks", "dream_clients", "status"], value: "approved" },
+    { segments: ["tasks", "dream_clients", "submittedAt"], value: iso(daysAgo(41)) },
+    {
+      segments: ["tasks", "dream_clients", "submission"],
+      value: {
+        client1: "Franchise restaurant operator, 9 locations",
+        client2: "Construction company owner, ~$8M revenue, S-corp",
+        client3: "Medical practice partner group (4 physicians)",
+        commonality:
+          "Multi-entity operators with big payrolls who need entity structuring and quarterly planning, not just year-end filing.",
+        notes: "",
+      },
+    },
     { segments: ["tasks", "fb_ads_invite", "status"], value: "approved" },
     { segments: ["tasks", "fb_ads_invite", "submission"], value: { confirmed: true } },
     { segments: ["tasks", "fb_ads_invite", "submittedAt"], value: iso(daysAgo(40)) },

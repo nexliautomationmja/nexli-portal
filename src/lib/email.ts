@@ -637,6 +637,7 @@ export function buildOnboardingWelcomeEmail(params: {
       <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">What we need from you</p>
       <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x1F4B3; Stripe account setup — so you can collect payments seamlessly</p>
       <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x1F310; Domain &amp; DNS login (GoDaddy, Namecheap, etc.)</p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x1F3AF; Your top 3 best clients — we build your ad offer around them</p>
       <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x1F4E3; Facebook Ads partner invite (if you run ads)</p>
       <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x1FAAA; Driver's license front &amp; back (phone number verification)</p>
     </div>

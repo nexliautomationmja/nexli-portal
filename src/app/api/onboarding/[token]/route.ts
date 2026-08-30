@@ -16,6 +16,9 @@ import { createNotification } from "@/lib/notifications";
 // serializePublicOnboarding is the security boundary: credential
 // submissions and file storage paths are never echoed back.
 
+const str = (v: unknown, max: number) =>
+  typeof v === "string" ? v.trim().slice(0, max) : "";
+
 // GET — load onboarding state for this signer's engagement
 export async function GET(
   _req: NextRequest,
@@ -78,7 +81,8 @@ export async function POST(
   if (
     taskId !== "dns_access" &&
     taskId !== "fb_ads_invite" &&
-    taskId !== "stripe_setup"
+    taskId !== "stripe_setup" &&
+    taskId !== "dream_clients"
   ) {
     return NextResponse.json({ error: "Invalid task" }, { status: 400 });
   }
@@ -97,8 +101,6 @@ export async function POST(
 
   if (taskId === "dns_access") {
     const raw = (body.submission || {}) as Record<string, unknown>;
-    const str = (v: unknown, max: number) =>
-      typeof v === "string" ? v.trim().slice(0, max) : "";
     const submission = {
       registrar: str(raw.registrar, 200),
       loginUrl: str(raw.loginUrl, 500),
@@ -120,8 +122,6 @@ export async function POST(
     // Required — the client submits their Stripe login once the account is
     // set up (or right away if it already exists). Encrypted like DNS creds.
     const raw = (body.submission || {}) as Record<string, unknown>;
-    const str = (v: unknown, max: number) =>
-      typeof v === "string" ? v.trim().slice(0, max) : "";
     const submission = {
       email: str(raw.email, 320),
       password: str(raw.password, 500),
@@ -137,6 +137,31 @@ export async function POST(
     }
     submissionValue = encryptSubmission(submission);
     activityMessage = `${ctx.signer.name} set up Stripe and sent over their login 💳`;
+  } else if (taskId === "dream_clients") {
+    // Ad-targeting questionnaire — plaintext (not sensitive), shown back to
+    // both the client and the admin review panel.
+    const raw = (body.submission || {}) as Record<string, unknown>;
+    const submission = {
+      client1: str(raw.client1, 500),
+      client2: str(raw.client2, 500),
+      client3: str(raw.client3, 500),
+      commonality: str(raw.commonality, 2000),
+      notes: str(raw.notes, 2000),
+      submittedAt: now,
+    };
+    if (
+      !submission.client1 ||
+      !submission.client2 ||
+      !submission.client3 ||
+      !submission.commonality
+    ) {
+      return NextResponse.json(
+        { error: "Please fill in all three clients and what they have in common." },
+        { status: 400 }
+      );
+    }
+    submissionValue = submission;
+    activityMessage = `${ctx.signer.name} shared their top 3 best clients 🎯`;
   } else {
     const raw = (body.submission || {}) as Record<string, unknown>;
     const submission = raw.notApplicable

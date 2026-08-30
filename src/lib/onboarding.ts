@@ -17,6 +17,7 @@ export type PhaseId = "website" | "automations" | "portal";
 export type TaskId =
   | "stripe_setup"
   | "dns_access"
+  | "dream_clients"
   | "fb_ads_invite"
   | "drivers_license";
 export type PhaseStatus = "pending" | "in_progress" | "done";
@@ -122,6 +123,7 @@ export const PHASE_INFO: Record<
 export const TASK_ORDER: TaskId[] = [
   "stripe_setup",
   "dns_access",
+  "dream_clients",
   "fb_ads_invite",
   "drivers_license",
 ];
@@ -131,7 +133,7 @@ export const TASK_INFO: Record<
   {
     title: string;
     description: string;
-    type: "credentials" | "confirm" | "upload";
+    type: "credentials" | "confirm" | "upload" | "form";
     optional: boolean;
     emoji: string;
   }
@@ -151,6 +153,14 @@ export const TASK_INFO: Record<
     optional: false,
     description:
       "Tell us where your domain lives (GoDaddy, Namecheap, etc.) and share the login so we can connect your new website. Your info is sent securely and only visible to your Nexli team.",
+  },
+  dream_clients: {
+    title: "Your Top 3 Best Clients",
+    emoji: "🎯",
+    type: "form",
+    optional: false,
+    description:
+      "Tell us about your three best clients — the ones you'd clone if you could — and what they have in common. We build your tax-planning offer and ad targeting around exactly that profile.",
   },
   fb_ads_invite: {
     title: "Facebook Ads Account Invite",
@@ -210,6 +220,7 @@ export function defaultOnboardingState(
     tasks: {
       stripe_setup: defaultTaskState("stripe_setup"),
       dns_access: defaultTaskState("dns_access"),
+      dream_clients: defaultTaskState("dream_clients"),
       fb_ads_invite: defaultTaskState("fb_ads_invite"),
       drivers_license: defaultTaskState("drivers_license"),
     },
@@ -432,7 +443,8 @@ export function serializePublicOnboarding(state: OnboardingState) {
           },
         };
       }
-      if (info.type === "confirm") {
+      if (info.type === "confirm" || info.type === "form") {
+        // Not sensitive — pass through so the client sees their saved answers.
         return { ...base, submission: t?.submission ?? null };
       }
       return base; // credentials: status only, never the submission
