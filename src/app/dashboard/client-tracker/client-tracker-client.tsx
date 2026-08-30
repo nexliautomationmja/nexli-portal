@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { UsersIcon } from "@/components/ui/icons";
 import { UtmBuilder } from "@/components/dashboard/utm-builder";
 import { AdAnalyticsSection } from "./ad-analytics-section";
@@ -11,6 +12,7 @@ interface Kpis {
   totalRevenue: number;
   totalMrr: number;
   totalOutstanding: number;
+  totalClientRevenue?: number;
 }
 
 interface ClientRow {
@@ -25,6 +27,9 @@ interface ClientRow {
   outstanding: number;
   lastPaymentAt: string | null;
   status: "active" | "signed";
+  clientUserId?: string | null;
+  websiteUrl?: string | null;
+  theirRevenue?: number | null;
 }
 
 function money(cents: number): string {
@@ -41,6 +46,7 @@ function formatDate(dateStr: string | null): string {
 }
 
 export function ClientTrackerClient() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<Kpis>({
     totalClients: 0,
@@ -48,10 +54,13 @@ export function ClientTrackerClient() {
     totalRevenue: 0,
     totalMrr: 0,
     totalOutstanding: 0,
+    totalClientRevenue: 0,
   });
   const [clients, setClients] = useState<ClientRow[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [hasDemo, setHasDemo] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
+  const [connecting, setConnecting] = useState<string | null>(null);
 
   function loadAll() {
     return Promise.all([
@@ -60,6 +69,7 @@ export function ClientTrackerClient() {
         .then((data) => {
           if (data.kpis) setKpis(data.kpis);
           setClients(data.clients || []);
+          setIsAdmin(Boolean(data.isAdmin));
         })
         .catch(() => setClients([])),
       fetch("/api/dashboard/demo-data")
@@ -98,12 +108,46 @@ export function ClientTrackerClient() {
     }
   }
 
+  async function connectDashboard(c: ClientRow) {
+    setConnecting(c.email);
+    try {
+      const res = await fetch("/api/dashboard/client-tracker/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: c.email, name: c.name, company: c.company }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || "Couldn't connect the dashboard. Please try again.");
+        return;
+      }
+      await loadAll();
+    } finally {
+      setConnecting(null);
+    }
+  }
+
   const statCards = [
     { label: "Clients", value: String(kpis.totalClients) },
     { label: "Deals Closed", value: String(kpis.totalDeals) },
-    { label: "Revenue", value: money(kpis.totalRevenue) },
+    ...(isAdmin
+      ? [{ label: "Clients' Revenue", value: money(kpis.totalClientRevenue || 0) }]
+      : []),
+    { label: "You Collected", value: money(kpis.totalRevenue) },
     { label: "Active MRR", value: money(kpis.totalMrr) },
     { label: "Outstanding", value: money(kpis.totalOutstanding) },
+  ];
+
+  const headers = [
+    "Client",
+    "Plan",
+    "Signed",
+    "Deals",
+    ...(isAdmin ? ["Their Revenue"] : []),
+    "You Collect",
+    "Your MRR",
+    "Outstanding",
+    "Status",
   ];
 
   return (
@@ -118,7 +162,7 @@ export function ClientTrackerClient() {
             {hasDemo && <span className="badge badge-amber">Demo data</span>}
           </div>
           <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Your book of business — signed engagements and paid invoices. See what deals are closing and how much.
+            Your book of business — and what each client&apos;s own dashboard is producing. Click a connected client to see inside.
           </p>
         </div>
         {!loading &&
@@ -145,7 +189,7 @@ export function ClientTrackerClient() {
       </div>
 
       {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className={`grid grid-cols-2 gap-4 ${statCards.length === 6 ? "md:grid-cols-3 lg:grid-cols-6" : "md:grid-cols-5"}`}>
         {statCards.map((s) => (
           <div key={s.label} className="glass-card p-4">
             <p className="text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
@@ -184,7 +228,7 @@ export function ClientTrackerClient() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--card-border)]">
-                  {["Client", "Plan", "Signed", "Deals", "Revenue", "MRR", "Outstanding", "Status"].map((h) => (
+                  {headers.map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
                       {h}
                     </th>
@@ -192,47 +236,81 @@ export function ClientTrackerClient() {
                 </tr>
               </thead>
               <tbody>
-                {clients.map((c) => (
-                  <tr key={c.email} className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                        {c.name}
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {c.company || c.email}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      {c.billingPlan ? (
-                        <span className={`badge ${c.billingPlan === "annual" ? "badge-violet" : "badge-blue"}`}>
-                          {c.billingPlan === "annual" ? "Annual" : "Monthly"}
-                        </span>
-                      ) : (
-                        <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
+                {clients.map((c) => {
+                  const linked = Boolean(c.clientUserId);
+                  return (
+                    <tr
+                      key={c.email}
+                      onClick={() => {
+                        if (linked) router.push(`/dashboard/client-tracker/${c.clientUserId}`);
+                      }}
+                      className={`border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors ${linked ? "cursor-pointer" : ""}`}
+                    >
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-medium flex items-center gap-1.5" style={{ color: "var(--text-main)" }}>
+                          {c.name}
+                          {linked && (
+                            <span className="text-[10px] font-bold text-cyan-400" title="Dashboard connected — click to view">
+                              ↗
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {c.company || c.email}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        {c.billingPlan ? (
+                          <span className={`badge ${c.billingPlan === "annual" ? "badge-violet" : "badge-blue"}`}>
+                            {c.billingPlan === "annual" ? "Annual" : "Monthly"}
+                          </span>
+                        ) : (
+                          <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                        {formatDate(c.signedAt)}
+                      </td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
+                        {c.dealsCount}
+                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          {linked ? (
+                            <span className="text-sm font-semibold text-cyan-400">
+                              {money(c.theirRevenue || 0)}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                connectDashboard(c);
+                              }}
+                              disabled={connecting === c.email}
+                              className="px-2.5 py-1 rounded-md text-[11px] font-semibold border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 transition-colors disabled:opacity-50"
+                            >
+                              {connecting === c.email ? "Connecting…" : "Connect"}
+                            </button>
+                          )}
+                        </td>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                      {formatDate(c.signedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                      {c.dealsCount}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>
-                      {money(c.revenue)}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
-                      {c.mrr > 0 ? `${money(c.mrr)}/mo` : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: c.outstanding > 0 ? "#f43f5e" : "var(--text-muted)" }}>
-                      {c.outstanding > 0 ? money(c.outstanding) : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`badge ${c.status === "active" ? "badge-emerald" : "badge-gray"}`}>
-                        {c.status === "active" ? "Active" : "Signed"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>
+                        {money(c.revenue)}
+                      </td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
+                        {c.mrr > 0 ? `${money(c.mrr)}/mo` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm" style={{ color: c.outstanding > 0 ? "#f43f5e" : "var(--text-muted)" }}>
+                        {c.outstanding > 0 ? money(c.outstanding) : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`badge ${c.status === "active" ? "badge-emerald" : "badge-gray"}`}>
+                          {c.status === "active" ? "Active" : "Signed"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

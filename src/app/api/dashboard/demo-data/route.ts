@@ -7,8 +7,12 @@ import {
   engagementSigners,
   invoices,
   invoiceLineItems,
+  users,
+  leadNotifications,
+  dailyStats,
 } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { generateInvoiceNumber, generateInvoiceToken } from "@/lib/invoice-utils";
 import { generateSenderSignatureSvgDataUrl } from "@/lib/signature";
 import { generateDrsContent } from "@/lib/engagement-defaults";
@@ -92,7 +96,258 @@ const DEMO_CLIENTS: DemoClient[] = [
   },
 ];
 
+/**
+ * Demo client DASHBOARDS — Donald and Andy also get a connected dashboard
+ * account (users row, role "client") seeded with their own tenant: signed
+ * engagements + paid invoices from THEIR tax-planning clients, leads, and
+ * website traffic. This is what the Client Tracker drill-down shows.
+ * Deleting demo data removes the users rows; every tenant table cascades.
+ */
+interface DemoDashboardCustomer {
+  name: string;
+  email: string;
+  company: string;
+  /** [daysAgo, amountCents] paid invoice */
+  paid: [number, number];
+  /** Monthly recurring subscription? (drives their MRR) */
+  recurring?: boolean;
+}
+
+interface DemoDashboard {
+  websiteUrl: string;
+  /** Base daily page views (varied deterministically per day). */
+  trafficBase: number;
+  customers: DemoDashboardCustomer[];
+  leads: { name: string; email: string; source: string; daysAgo: number }[];
+}
+
+const DEMO_DASHBOARDS: Record<string, DemoDashboard> = {
+  "donald@demo-sinatra.com": {
+    websiteUrl: "https://sinatrawealth-demo.com",
+    trafficBase: 55,
+    customers: [
+      {
+        name: "Kim Brooks",
+        email: "kim@demo-brightsmile.com",
+        company: "BrightSmile Dental Group",
+        paid: [9, 950_000],
+      },
+      {
+        name: "Raj Patel",
+        email: "raj@demo-pateldev.com",
+        company: "Patel Development LLC",
+        paid: [4, 600_000],
+      },
+      {
+        name: "Elena Ortiz",
+        email: "elena@demo-ortizortho.com",
+        company: "Ortiz Orthodontics",
+        paid: [2, 300_000],
+        recurring: true,
+      },
+    ],
+    leads: [
+      { name: "Marcus Hill", email: "marcus@demo-hillgroup.com", source: "facebook_ads", daysAgo: 1 },
+      { name: "Priya Shah", email: "priya@demo-shahmed.com", source: "facebook_ads", daysAgo: 2 },
+      { name: "Tom Reyes", email: "tom@demo-reyeslogistics.com", source: "website_form", daysAgo: 4 },
+      { name: "Alice Chen", email: "alice@demo-chendental.com", source: "facebook_ads", daysAgo: 6 },
+      { name: "Bill Okada", email: "bill@demo-okadare.com", source: "website_form", daysAgo: 9 },
+    ],
+  },
+  "andy@demo-reidtax.com": {
+    websiteUrl: "https://reidtax-demo.com",
+    trafficBase: 35,
+    customers: [
+      {
+        name: "Paul Nguyen",
+        email: "paul@demo-nguyenbuild.com",
+        company: "Nguyen Construction",
+        paid: [12, 680_000],
+      },
+      {
+        name: "Dana White",
+        email: "dana@demo-whitept.com",
+        company: "White Physical Therapy",
+        paid: [5, 300_000],
+        recurring: true,
+      },
+    ],
+    leads: [
+      { name: "Grace Lee", email: "grace@demo-leefranchise.com", source: "facebook_ads", daysAgo: 2 },
+      { name: "Omar Diaz", email: "omar@demo-diazrestaurants.com", source: "facebook_ads", daysAgo: 5 },
+      { name: "Nina Brandt", email: "nina@demo-brandtlaw.com", source: "website_form", daysAgo: 8 },
+      { name: "Chris Foley", email: "chris@demo-foleyhomes.com", source: "facebook_ads", daysAgo: 12 },
+    ],
+  },
+};
+
+async function seedDemoDashboard(client: DemoClient): Promise<void> {
+  const config = DEMO_DASHBOARDS[client.email];
+  if (!config) return;
+
+  // If the demo account already exists, its tenant is already seeded — don't
+  // re-insert dailyStats/leads (the (clientId, date) unique index would throw).
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, client.email))
+    .limit(1);
+  if (existing) return;
+
+  const [account] = await db
+    .insert(users)
+    .values({
+      email: client.email,
+      name: client.name,
+      companyName: client.company,
+      role: "client",
+      hashedPassword: await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 12),
+      websiteUrl: config.websiteUrl,
+    })
+    .returning({ id: users.id });
+  const tenantId = account.id;
+
+  // Their book of business: each customer gets a signed engagement + paid invoice.
+  for (const cust of config.customers) {
+    const [ago, amountCents] = cust.paid;
+    const signedAt = daysAgo(ago + 1);
+
+    const [engagement] = await db
+      .insert(engagements)
+      .values({
+        ownerId: tenantId,
+        templateId: null,
+        subject: `Tax Planning Engagement — ${cust.company}`,
+        content: `This engagement letter covers a comprehensive tax planning strategy and implementation for ${cust.company}, including entity structuring review, quarterly planning sessions, and year-round advisory.`,
+        status: "signed",
+        sentAt: signedAt,
+        expiresAt: daysAhead(365),
+        metadata: { demo: true },
+      })
+      .returning();
+
+    await db.insert(engagementSigners).values({
+      engagementId: engagement.id,
+      name: client.name,
+      email: client.email,
+      token: crypto.randomBytes(32).toString("base64url"),
+      order: 0,
+      status: "signed",
+      sentAt: signedAt,
+      signedAt,
+      signatureData: generateSenderSignatureSvgDataUrl(client.name),
+      signatureIp: "demo",
+      signatureUserAgent: "Demo data",
+      role: "Authorized Representative",
+    });
+    await db.insert(engagementSigners).values({
+      engagementId: engagement.id,
+      name: cust.name,
+      email: cust.email,
+      token: crypto.randomBytes(32).toString("base64url"),
+      order: 1,
+      status: "signed",
+      sentAt: signedAt,
+      signedAt,
+      signatureData: generateSenderSignatureSvgDataUrl(cust.name),
+      signatureIp: "demo",
+      signatureUserAgent: "Demo data",
+    });
+
+    const paidDate = daysAgo(ago);
+    const [invoice] = await db
+      .insert(invoices)
+      .values({
+        ownerId: tenantId,
+        clientName: cust.name,
+        clientEmail: cust.email,
+        clientCompany: cust.company,
+        invoiceNumber: await generateInvoiceNumber(),
+        token: generateInvoiceToken(),
+        currency: "usd",
+        subtotal: amountCents,
+        taxRate: 0,
+        taxAmount: 0,
+        total: amountCents,
+        amountPaid: amountCents,
+        balanceDue: 0,
+        isRecurring: Boolean(cust.recurring),
+        recurringInterval: cust.recurring ? "monthly" : null,
+        nextRecurrenceDate: cust.recurring ? daysAhead(30 - ago) : null,
+        dueDate: paidDate,
+        paidAt: paidDate,
+        paymentMethod: "ach",
+        status: "paid",
+        sentAt: paidDate,
+        notes: "Tax planning strategy and implementation.",
+        metadata: { engagementId: engagement.id, demo: true },
+      })
+      .returning();
+    await db.insert(invoiceLineItems).values({
+      invoiceId: invoice.id,
+      description: cust.recurring
+        ? "Tax Planning Advisory — Monthly"
+        : "Tax Planning Strategy & Implementation",
+      quantity: 100,
+      unitPrice: amountCents,
+      amount: amountCents,
+      billingType: cust.recurring ? "monthly" : "one_time",
+      order: 0,
+    });
+  }
+
+  // Their inbound leads.
+  for (const lead of config.leads) {
+    await db.insert(leadNotifications).values({
+      userId: tenantId,
+      leadName: lead.name,
+      leadEmail: lead.email,
+      source: lead.source,
+      notifiedAt: daysAgo(lead.daysAgo),
+      createdAt: daysAgo(lead.daysAgo),
+    });
+  }
+
+  // 30 days of website traffic — deterministic variation by day index.
+  const statRows = [];
+  for (let i = 0; i < 30; i++) {
+    const day = daysAgo(i);
+    day.setHours(0, 0, 0, 0);
+    const pageViewsCount = config.trafficBase + ((i * 17) % 29) + (i % 3 === 0 ? 12 : 0);
+    statRows.push({
+      clientId: tenantId,
+      date: day,
+      pageViewsCount,
+      uniqueVisitorsCount: Math.round(pageViewsCount * 0.62),
+      topPages: [
+        { url: "/", count: Math.round(pageViewsCount * 0.5) },
+        { url: "/tax-planning", count: Math.round(pageViewsCount * 0.3) },
+        { url: "/contact", count: Math.round(pageViewsCount * 0.2) },
+      ],
+      topReferrers: [
+        { referrer: "facebook.com", count: Math.round(pageViewsCount * 0.45) },
+        { referrer: "google.com", count: Math.round(pageViewsCount * 0.25) },
+      ],
+    });
+  }
+  await db.insert(dailyStats).values(statRows);
+}
+
+async function deleteDemoDashboards(): Promise<void> {
+  // Only the exact demo dashboard emails — deleting the users row cascades
+  // to their whole tenant (engagements, invoices, leads, daily stats).
+  await db
+    .delete(users)
+    .where(
+      and(
+        eq(users.role, "client"),
+        inArray(users.email, Object.keys(DEMO_DASHBOARDS))
+      )
+    );
+}
+
 async function deleteDemoRows(ownerId: string): Promise<void> {
+  await deleteDemoDashboards();
   await db
     .delete(invoices)
     .where(
@@ -322,6 +577,10 @@ export async function POST() {
 
     // 3. Onboarding Launch Pad at the right stage.
     await seedOnboardingProgress(engagement.id, c.onboarding, c.name);
+
+    // 3b. Connected demo dashboard (Donald & Andy) — their own tenant with
+    // signed clients, paid invoices, leads and website traffic.
+    await seedDemoDashboard(c);
 
     // 4. Invoices — paid platform invoices (first is the recurring parent).
     const isAnnual = c.plan === "annual";
