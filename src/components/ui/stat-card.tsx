@@ -2,21 +2,34 @@
 
 import { cn } from "@/lib/utils";
 
+type StatAccent = "blue" | "cyan" | "teal" | "violet" | "emerald" | "amber" | "neutral";
+
 interface StatCardProps {
   label: string;
   value: string;
   delta?: string;
   deltaType?: "positive" | "negative" | "neutral";
   icon?: React.ReactNode;
+  /** Rainmaker accent color for the icon chip. */
+  accent?: StatAccent;
 }
 
-export function StatCard({ label, value, delta, deltaType = "neutral", icon }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  delta,
+  deltaType = "neutral",
+  icon,
+  accent = "blue",
+}: StatCardProps) {
   return (
     <div className="glass-card p-4">
       <div className="flex items-start justify-between mb-1">
         <span className="stat-label">{label}</span>
         {icon && (
-          <div className="text-[var(--text-muted)]">{icon}</div>
+          <span className={cn("icon-chip w-8 h-8", `icon-chip-${accent}`)}>
+            {icon}
+          </span>
         )}
       </div>
       <p className="stat-value">{value}</p>

@@ -31,7 +31,7 @@ export function TrackingSnippet({ clientId }: TrackingSnippetProps) {
         </pre>
         <button
           onClick={handleCopy}
-          className="absolute top-2 right-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-600 hover:bg-blue-500 text-white transition-all"
+          className="btn-primary absolute top-2 right-2 px-3 py-1.5 text-[10px] uppercase tracking-wider"
         >
           {copied ? "Copied!" : "Copy"}
         </button>

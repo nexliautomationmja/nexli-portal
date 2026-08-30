@@ -51,27 +51,46 @@ function ChevronRightIcon({ className }: { className?: string }) {
   );
 }
 
-const clientNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
-  { href: "/dashboard", label: "Overview", icon: LayoutIcon },
-  { href: "/dashboard/clients", label: "Clients", icon: UsersIcon },
-  { href: "/dashboard/contacts", label: "Contacts", icon: UsersIcon },
-  { href: "/dashboard/pipeline", label: "Pipeline", icon: KanbanIcon },
-  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon },
-  { href: "/dashboard/messages", label: "Messages", icon: MessageIcon },
-  { href: "/dashboard/portal-messages", label: "Client Messages", icon: SendIcon },
-  { href: "/dashboard/documents", label: "Documents", icon: FileIcon },
-  { href: "/dashboard/engagements", label: "Engagements", icon: PenLineIcon },
-  { href: "/dashboard/onboarding", label: "Onboarding", icon: RocketIcon },
-  { href: "/dashboard/contract-analyzer", label: "Contract Analyzer", icon: ScanIcon },
-  { href: "/dashboard/invoices", label: "Invoices", icon: InvoiceIcon },
-  { href: "/dashboard/tax-returns", label: "Tax Returns", icon: KanbanIcon },
-  { href: "/dashboard/tax-organizers", label: "Tax Organizers", icon: FormIcon },
-  { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon },
-  { href: "/dashboard/client-tracker", label: "Client Tracker", icon: ChartIcon },
-  { href: "/dashboard/settings", label: "Settings", icon: GearIcon },
+type NavAccent =
+  | "blue"
+  | "cyan"
+  | "teal"
+  | "violet"
+  | "emerald"
+  | "amber"
+  | "neutral";
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof LayoutIcon;
+  accent: NavAccent;
+}
+
+// Icon chips follow the Digital Rainmaker color language:
+// blue = website/core, violet = AI/automation, cyan = portal/centerpiece,
+// amber = reviews/analysis, emerald = money, teal = misc.
+const clientNav: NavItem[] = [
+  { href: "/dashboard", label: "Overview", icon: LayoutIcon, accent: "blue" },
+  { href: "/dashboard/clients", label: "Clients", icon: UsersIcon, accent: "cyan" },
+  { href: "/dashboard/contacts", label: "Contacts", icon: UsersIcon, accent: "teal" },
+  { href: "/dashboard/pipeline", label: "Pipeline", icon: KanbanIcon, accent: "violet" },
+  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon, accent: "amber" },
+  { href: "/dashboard/messages", label: "Messages", icon: MessageIcon, accent: "blue" },
+  { href: "/dashboard/portal-messages", label: "Client Messages", icon: SendIcon, accent: "cyan" },
+  { href: "/dashboard/documents", label: "Documents", icon: FileIcon, accent: "emerald" },
+  { href: "/dashboard/engagements", label: "Engagements", icon: PenLineIcon, accent: "violet" },
+  { href: "/dashboard/onboarding", label: "Onboarding", icon: RocketIcon, accent: "cyan" },
+  { href: "/dashboard/contract-analyzer", label: "Contract Analyzer", icon: ScanIcon, accent: "amber" },
+  { href: "/dashboard/invoices", label: "Invoices", icon: InvoiceIcon, accent: "emerald" },
+  { href: "/dashboard/tax-returns", label: "Tax Returns", icon: KanbanIcon, accent: "blue" },
+  { href: "/dashboard/tax-organizers", label: "Tax Organizers", icon: FormIcon, accent: "violet" },
+  { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon, accent: "amber" },
+  { href: "/dashboard/client-tracker", label: "Client Tracker", icon: ChartIcon, accent: "cyan" },
+  { href: "/dashboard/settings", label: "Settings", icon: GearIcon, accent: "neutral" },
 ];
 
-const adminNav: { href: string; label: string; icon: typeof ShieldIcon }[] = [];
+const adminNav: NavItem[] = [];
 
 export function Sidebar({ isAdmin, userName }: SidebarProps) {
   const pathname = usePathname();
@@ -166,7 +185,7 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
               href={item.href}
               className={cn(
                 "group flex items-center gap-3 rounded-lg text-sm font-medium transition-colors no-underline",
-                collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5",
+                collapsed ? "justify-center px-2 py-1.5" : "px-2.5 py-1.5",
                 isActive
                   ? "sidebar-nav-active sidebar-active-text"
                   : "hover:bg-[var(--input-bg)]"
@@ -176,7 +195,9 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
               }}
               title={collapsed ? item.label : undefined}
             >
-              <item.icon className={cn("w-5 h-5 shrink-0", isActive ? "text-[var(--text-main)]" : "")} />
+              <span className={cn("icon-chip w-8 h-8", `icon-chip-${item.accent}`)}>
+                <item.icon className="w-4 h-4" />
+              </span>
               {!collapsed && (
                 <span>{item.label}</span>
               )}

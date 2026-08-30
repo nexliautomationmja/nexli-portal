@@ -129,7 +129,7 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
           <button
             type="submit"
             disabled={status === "saving" || status === "disconnecting" || !locationId.trim()}
-            className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-all"
+            className="btn-primary px-6 py-2.5 text-sm"
           >
             {status === "saving"
               ? "Testing & Saving..."

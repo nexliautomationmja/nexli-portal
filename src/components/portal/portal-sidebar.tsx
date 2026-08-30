@@ -40,13 +40,20 @@ interface PortalSidebarProps {
   clientEmail: string;
 }
 
-const portalNav: { href: string; label: string; icon: typeof LayoutIcon }[] = [
-  { href: "/portal/dashboard", label: "Overview", icon: LayoutIcon },
-  { href: "/portal/dashboard/invoices", label: "Invoices", icon: InvoiceIcon },
-  { href: "/portal/dashboard/documents", label: "Documents", icon: FileIcon },
-  { href: "/portal/dashboard/messages", label: "Messages", icon: MessageIcon },
-  { href: "/portal/dashboard/engagements", label: "Engagements", icon: PenLineIcon },
-  { href: "/portal/dashboard/tax-returns", label: "Tax Returns", icon: KanbanIcon },
+// Icon chips follow the Digital Rainmaker color language (matches the
+// dashboard sidebar and the client Launch Pad).
+const portalNav: {
+  href: string;
+  label: string;
+  icon: typeof LayoutIcon;
+  accent: "blue" | "cyan" | "teal" | "violet" | "emerald" | "amber";
+}[] = [
+  { href: "/portal/dashboard", label: "Overview", icon: LayoutIcon, accent: "blue" },
+  { href: "/portal/dashboard/invoices", label: "Invoices", icon: InvoiceIcon, accent: "emerald" },
+  { href: "/portal/dashboard/documents", label: "Documents", icon: FileIcon, accent: "cyan" },
+  { href: "/portal/dashboard/messages", label: "Messages", icon: MessageIcon, accent: "violet" },
+  { href: "/portal/dashboard/engagements", label: "Engagements", icon: PenLineIcon, accent: "amber" },
+  { href: "/portal/dashboard/tax-returns", label: "Tax Returns", icon: KanbanIcon, accent: "teal" },
 ];
 
 export function PortalSidebar({ clientName, clientEmail }: PortalSidebarProps) {
@@ -156,7 +163,7 @@ export function PortalSidebar({ clientName, clientEmail }: PortalSidebarProps) {
               href={item.href}
               className={cn(
                 "group flex items-center gap-3 rounded-lg text-sm font-medium transition-colors no-underline",
-                collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5",
+                collapsed ? "justify-center px-2 py-1.5" : "px-2.5 py-1.5",
                 isActive
                   ? "sidebar-nav-active sidebar-active-text"
                   : "hover:bg-[var(--input-bg)]"
@@ -166,7 +173,9 @@ export function PortalSidebar({ clientName, clientEmail }: PortalSidebarProps) {
               }}
               title={collapsed ? item.label : undefined}
             >
-              <item.icon className={cn("w-5 h-5 shrink-0", isActive ? "text-[var(--text-main)]" : "")} />
+              <span className={cn("icon-chip w-8 h-8", `icon-chip-${item.accent}`)}>
+                <item.icon className="w-4 h-4" />
+              </span>
               {!collapsed && <span>{item.label}</span>}
             </Link>
           );

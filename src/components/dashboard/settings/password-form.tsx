@@ -76,7 +76,7 @@ export function PasswordForm() {
       <button
         type="submit"
         disabled={status === "saving"}
-        className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-all"
+        className="btn-primary px-6 py-2.5 text-sm"
       >
         {status === "saving" ? "Saving..." : "Update Password"}
       </button>

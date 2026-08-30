@@ -59,9 +59,11 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
     <div className="space-y-6">
       {/* Core stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Link href="/dashboard/documents" className="glass-card p-4 no-underline hover:bg-[var(--input-bg)] transition-colors">
+        <Link href="/dashboard/documents" className="group glass-card glass-card-interactive p-4 no-underline">
           <div className="flex items-center justify-between mb-2">
-            <FileIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <span className="icon-chip icon-chip-blue w-9 h-9">
+              <FileIcon className="w-4 h-4" />
+            </span>
             {docStats.new > 0 && (
               <span className="badge badge-blue">{docStats.new} new</span>
             )}
@@ -70,17 +72,21 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
           <p className="stat-label mt-1">Documents</p>
         </Link>
 
-        <Link href="/dashboard/contacts" className="glass-card p-4 no-underline hover:bg-[var(--input-bg)] transition-colors">
+        <Link href="/dashboard/contacts" className="group glass-card glass-card-interactive p-4 no-underline">
           <div className="mb-2">
-            <UsersIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <span className="icon-chip icon-chip-cyan w-9 h-9">
+              <UsersIcon className="w-4 h-4" />
+            </span>
           </div>
           <p className="stat-value">{ghlLoading ? "—" : ghlData?.leadsCount || 0}</p>
           <p className="stat-label mt-1">Contacts</p>
         </Link>
 
-        <Link href="/dashboard/pipeline" className="glass-card p-4 no-underline hover:bg-[var(--input-bg)] transition-colors">
+        <Link href="/dashboard/pipeline" className="group glass-card glass-card-interactive p-4 no-underline">
           <div className="mb-2">
-            <KanbanIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <span className="icon-chip icon-chip-violet w-9 h-9">
+              <KanbanIcon className="w-4 h-4" />
+            </span>
           </div>
           <p className="stat-value">
             {ghlLoading ? "—" : `$${((ghlData?.pipelineValue || 0) / 1000).toFixed(1)}k`}
@@ -88,9 +94,11 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
           <p className="stat-label mt-1">Pipeline Value</p>
         </Link>
 
-        <Link href="/dashboard/contacts" className="glass-card p-4 no-underline hover:bg-[var(--input-bg)] transition-colors">
+        <Link href="/dashboard/contacts" className="group glass-card glass-card-interactive p-4 no-underline">
           <div className="mb-2">
-            <CalendarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <span className="icon-chip icon-chip-amber w-9 h-9">
+              <CalendarIcon className="w-4 h-4" />
+            </span>
           </div>
           <p className="stat-value">
             {metricsLoading ? "—" : `${ghlMetrics?.conversion?.conversionRate || 0}%`}

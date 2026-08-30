@@ -213,7 +213,7 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId, ghlLo
                         href={websiteUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+                        className="btn-primary w-full py-3 px-4 text-sm"
                     >
                         <GlobeIcon size={16} />
                         Open Website
@@ -286,7 +286,7 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId, ghlLo
                             <button
                                 type="submit"
                                 disabled={ghlStatus === "saving" || ghlStatus === "disconnecting" || !ghlId.trim()}
-                                className="flex-1 py-2 px-3 rounded-xl text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-all"
+                                className="btn-primary flex-1 py-2 px-3 text-[11px]"
                             >
                                 {ghlStatus === "saving" ? "Testing..." : ghlConnected ? "Update" : "Connect"}
                             </button>

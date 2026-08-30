@@ -53,6 +53,9 @@
   --accent-purple-border: rgba(139, 92, 246, 0.15);
   --accent-emerald-bg: rgba(16, 185, 129, 0.08);
   --accent-emerald-border: rgba(16, 185, 129, 0.15);
+  --accent-amber: #F59E0B;
+  --accent-amber-bg: rgba(245, 158, 11, 0.08);
+  --accent-amber-border: rgba(245, 158, 11, 0.15);
 }
 
 .dark {
@@ -78,6 +81,8 @@
   --accent-purple-border: rgba(139, 92, 246, 0.2);
   --accent-emerald-bg: rgba(16, 185, 129, 0.12);
   --accent-emerald-border: rgba(16, 185, 129, 0.2);
+  --accent-amber-bg: rgba(245, 158, 11, 0.12);
+  --accent-amber-border: rgba(245, 158, 11, 0.2);
 }
 
 /* ── Base Typography ── */
@@ -385,6 +390,113 @@ html {
 .dark .badge-gray {
   background: rgba(100, 116, 139, 0.15);
   color: #94a3b8;
+}
+
+/* ══════════════════════════════════════════════
+   ICON CHIPS — Rainmaker-style tinted icon tiles
+   (blue = website, violet = AI, cyan = portal,
+    amber = reviews, emerald = money, teal = misc)
+   ══════════════════════════════════════════════ */
+.icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 0.625rem;
+  border: 1px solid transparent;
+  transition: transform 0.15s ease, filter 0.15s ease, border-color 0.15s ease;
+}
+
+.icon-chip-blue {
+  background: var(--accent-blue-bg);
+  border-color: var(--accent-blue-border);
+  color: var(--accent-blue);
+}
+.icon-chip-cyan {
+  background: var(--accent-cyan-bg);
+  border-color: var(--accent-cyan-border);
+  color: var(--accent-cyan);
+}
+.icon-chip-teal {
+  background: var(--accent-teal-bg);
+  border-color: var(--accent-teal-border);
+  color: var(--accent-teal);
+}
+.icon-chip-violet {
+  background: var(--accent-purple-bg);
+  border-color: var(--accent-purple-border);
+  color: var(--accent-purple);
+}
+.icon-chip-emerald {
+  background: var(--accent-emerald-bg);
+  border-color: var(--accent-emerald-border);
+  color: var(--accent-emerald);
+}
+.icon-chip-amber {
+  background: var(--accent-amber-bg);
+  border-color: var(--accent-amber-border);
+  color: var(--accent-amber);
+}
+.icon-chip-neutral {
+  background: var(--input-bg);
+  border-color: var(--card-border);
+  color: var(--text-muted);
+}
+
+/* Soft glow in dark mode — the Launch Pad chip look */
+.dark .icon-chip-blue { filter: drop-shadow(0 2px 6px rgba(37, 99, 235, 0.25)); }
+.dark .icon-chip-cyan { filter: drop-shadow(0 2px 6px rgba(6, 182, 212, 0.25)); }
+.dark .icon-chip-teal { filter: drop-shadow(0 2px 6px rgba(20, 184, 166, 0.25)); }
+.dark .icon-chip-violet { filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.25)); }
+.dark .icon-chip-emerald { filter: drop-shadow(0 2px 6px rgba(16, 185, 129, 0.25)); }
+.dark .icon-chip-amber { filter: drop-shadow(0 2px 6px rgba(245, 158, 11, 0.25)); }
+
+/* Playful lift when the parent link/card is hovered */
+a:hover > .icon-chip,
+a:hover .icon-chip,
+.group:hover .icon-chip {
+  transform: translateY(-1px) scale(1.05);
+}
+
+/* ══════════════════════════════════════════════
+   PRIMARY BUTTON — the Launch Pad gradient pill
+   (padding/text-size set at call sites)
+   ══════════════════════════════════════════════ */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563EB, #06B6D4);
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2);
+  transition: transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: scale(1.02);
+}
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Clickable glass cards — hover raise + blue tint */
+.glass-card-interactive {
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.glass-card-interactive:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-blue-border);
+}
+.dark .glass-card-interactive:hover {
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
 }
 
 /* Section divider */

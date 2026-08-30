@@ -667,7 +667,7 @@ function MessagesTab({ messages, clientEmail }: { messages: ClientDetail["messag
       )}
       <Link
         href={`/dashboard/portal-messages?client=${encodeURIComponent(clientEmail)}`}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+        className="btn-primary px-4 py-2 text-sm"
       >
         Open Conversation
       </Link>
