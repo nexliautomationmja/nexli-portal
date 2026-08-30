@@ -5,12 +5,17 @@ import { engagementTemplates } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import {
   DRS_TEMPLATE_NAME,
-  DRS_TEMPLATE_CONTENT,
+  DRS_MONTHLY_TEMPLATE_NAME,
+  DRS_MONTHLY_TEMPLATE_CONTENT,
+  DRS_ANNUAL_TEMPLATE_NAME,
+  DRS_ANNUAL_TEMPLATE_CONTENT,
 } from "@/lib/engagement-defaults";
 
-// One flat all-in-one default template, auto-seeded for every user.
+// Two flat all-in-one default templates (Monthly + Annual), auto-seeded for
+// every user.
 const DEFAULT_TEMPLATES = [
-  { name: DRS_TEMPLATE_NAME, content: DRS_TEMPLATE_CONTENT },
+  { name: DRS_MONTHLY_TEMPLATE_NAME, content: DRS_MONTHLY_TEMPLATE_CONTENT },
+  { name: DRS_ANNUAL_TEMPLATE_NAME, content: DRS_ANNUAL_TEMPLATE_CONTENT },
 ];
 
 // Phrases that only appear in the OLD (pre-flat) pricing templates — setup
@@ -73,22 +78,46 @@ export async function GET() {
     }
   }
 
-  // Remove auto-seeded legacy "Starter Digital Rainmaker System" templates that
-  // still carry old-pricing content (the flat model has a single template).
-  const starterRows = await db
-    .select({ id: engagementTemplates.id, content: engagementTemplates.content })
-    .from(engagementTemplates)
-    .where(
-      and(
-        eq(engagementTemplates.ownerId, session.user.id),
-        eq(engagementTemplates.name, "Starter Digital Rainmaker System")
-      )
-    );
-  for (const row of starterRows) {
-    if (isStaleOldPricing(row.content)) {
-      await db
-        .delete(engagementTemplates)
-        .where(eq(engagementTemplates.id, row.id));
+  // Remove auto-seeded legacy templates that were superseded: the old
+  // Starter template (old pricing) and the transitional single
+  // "Digital Rainmaker System" template (replaced by the Monthly/Annual
+  // pair). Only unedited auto-seeded content is deleted — a template the
+  // user modified never matches these checks.
+  const legacyNames = ["Starter Digital Rainmaker System", DRS_TEMPLATE_NAME];
+  for (const legacyName of legacyNames) {
+    const rows = await db
+      .select({ id: engagementTemplates.id, content: engagementTemplates.content })
+      .from(engagementTemplates)
+      .where(
+        and(
+          eq(engagementTemplates.ownerId, session.user.id),
+          eq(engagementTemplates.name, legacyName)
+        )
+      );
+    for (const row of rows) {
+      const isExactSeed =
+        row.content === DRS_MONTHLY_TEMPLATE_CONTENT ||
+        row.content === DRS_ANNUAL_TEMPLATE_CONTENT;
+      // Heuristic match: an older seeded revision (old pricing markers, or
+      // the flat fee-section phrasing from an earlier constants revision).
+      const looksSeeded =
+        isStaleOldPricing(row.content) ||
+        row.content.includes("Monthly Investment:") ||
+        row.content.includes("Annual Investment (Paid in Full):");
+
+      if (isExactSeed) {
+        // Provably our unedited seed — safe to delete outright.
+        await db
+          .delete(engagementTemplates)
+          .where(eq(engagementTemplates.id, row.id));
+      } else if (looksSeeded) {
+        // Might carry user edits — never destroy content. Rename it out of
+        // the legacy name so it stops being reprocessed but stays available.
+        await db
+          .update(engagementTemplates)
+          .set({ name: `${legacyName} (legacy)`, updatedAt: new Date() })
+          .where(eq(engagementTemplates.id, row.id));
+      }
     }
   }
 

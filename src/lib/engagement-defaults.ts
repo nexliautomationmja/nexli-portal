@@ -162,6 +162,14 @@ The parties agree that electronic signatures are legally binding and this Agreem
 
 export const DRS_TEMPLATE_CONTENT = buildDrsTemplate("monthly");
 
+// Named per-plan templates seeded for every user. Both names contain
+// "Digital Rainmaker" so the auto-invoicing template detection matches.
+export const DRS_MONTHLY_TEMPLATE_NAME = "Digital Rainmaker System — Monthly";
+export const DRS_MONTHLY_TEMPLATE_CONTENT = buildDrsTemplate("monthly");
+
+export const DRS_ANNUAL_TEMPLATE_NAME = "Digital Rainmaker System — Annual";
+export const DRS_ANNUAL_TEMPLATE_CONTENT = buildDrsTemplate("annual");
+
 /**
  * Generates the full DRS engagement letter content for the chosen billing plan.
  */

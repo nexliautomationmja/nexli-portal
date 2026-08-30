@@ -50,17 +50,53 @@ export function ClientTrackerClient() {
     totalOutstanding: 0,
   });
   const [clients, setClients] = useState<ClientRow[]>([]);
+  const [hasDemo, setHasDemo] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
+
+  function loadAll() {
+    return Promise.all([
+      fetch("/api/dashboard/client-tracker")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.kpis) setKpis(data.kpis);
+          setClients(data.clients || []);
+        })
+        .catch(() => setClients([])),
+      fetch("/api/dashboard/demo-data")
+        .then((r) => r.json())
+        .then((data) => setHasDemo(Boolean(data.hasDemo)))
+        .catch(() => {}),
+    ]);
+  }
 
   useEffect(() => {
-    fetch("/api/dashboard/client-tracker")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.kpis) setKpis(data.kpis);
-        setClients(data.clients || []);
-      })
-      .catch(() => setClients([]))
-      .finally(() => setLoading(false));
+    loadAll().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function createDemo() {
+    setDemoBusy(true);
+    try {
+      const res = await fetch("/api/dashboard/demo-data", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || "Demo seeding failed. Please try again.");
+      }
+      await loadAll();
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
+  async function removeDemo() {
+    setDemoBusy(true);
+    try {
+      await fetch("/api/dashboard/demo-data", { method: "DELETE" });
+      await loadAll();
+    } finally {
+      setDemoBusy(false);
+    }
+  }
 
   const statCards = [
     { label: "Clients", value: String(kpis.totalClients) },
@@ -73,13 +109,39 @@ export function ClientTrackerClient() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
-          Client Tracker
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Your book of business — signed engagements and paid invoices. See what deals are closing and how much.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
+              Client Tracker
+            </h1>
+            {hasDemo && <span className="badge badge-amber">Demo data</span>}
+          </div>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+            Your book of business — signed engagements and paid invoices. See what deals are closing and how much.
+          </p>
+        </div>
+        {!loading &&
+          (hasDemo ? (
+            <button
+              onClick={removeDemo}
+              disabled={demoBusy}
+              className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)] disabled:opacity-50"
+              style={{ borderColor: "var(--card-border)", color: "var(--text-muted)" }}
+            >
+              {demoBusy ? "Removing…" : "Remove demo data"}
+            </button>
+          ) : (
+            clients.length === 0 && (
+              <button
+                onClick={createDemo}
+                disabled={demoBusy}
+                className="btn-primary px-5 py-2.5 text-sm"
+              >
+                {demoBusy ? "Creating…" : "Create demo clients ✨"}
+              </button>
+            )
+          ))}
       </div>
 
       {/* KPI row */}

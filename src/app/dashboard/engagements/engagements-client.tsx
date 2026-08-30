@@ -100,9 +100,18 @@ export function EngagementsClient() {
     setSelectedTemplate(templateId);
     const tmpl = templates.find((t) => t.id === templateId);
     if (tmpl) {
-      // For the DRS template, generate the letter for the current plan so the
-      // fee section always matches the Monthly/Annual toggle.
-      setContent(isDrsTemplate(tmpl) ? generateDrsContent(billingPlan) : tmpl.content);
+      if (isDrsTemplate(tmpl)) {
+        // DRS templates carry their plan in the name (— Monthly / — Annual);
+        // selecting one pre-sets the billing plan and regenerates the letter
+        // so the fee section always matches what gets sent.
+        const plan: BillingPlan = tmpl.name.toLowerCase().includes("annual")
+          ? "annual"
+          : "monthly";
+        setBillingPlan(plan);
+        setContent(generateDrsContent(plan));
+      } else {
+        setContent(tmpl.content);
+      }
     }
   }
 
