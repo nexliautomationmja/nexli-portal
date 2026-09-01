@@ -5,6 +5,7 @@ import { useGHL } from "@/lib/hooks/use-ghl";
 import { useGHLMetrics } from "@/lib/hooks/use-ghl-metrics";
 import { useInvoiceAnalytics } from "@/lib/hooks/use-invoice-analytics";
 import { usePortalActivity } from "@/lib/hooks/use-portal-activity";
+import { DRS_PRICING } from "@/lib/drs-pricing";
 import { RevenueChart } from "@/components/dashboard/charts/revenue-chart";
 import {
   FileIcon,
@@ -49,6 +50,16 @@ const activityTypeConfig = {
   login: { color: "bg-gray-400", label: "Login" },
 } as const;
 
+// TEMPORARY placeholder metrics (per Marcel, Sep 2026) until real GHL
+// pipeline/booking data is flowing. Conversion Rate is pinned at 2% and
+// Pipeline Value = contacts × 2% × the annual DRS price ("if 2% of my
+// contacts became annual clients"). Delete this block + its two usages in
+// the stat cards below to go back to live GHL numbers.
+const PLACEHOLDER_CONVERSION_RATE = 2; // %
+function placeholderPipelineCents(contacts: number): number {
+  return Math.round(contacts * (PLACEHOLDER_CONVERSION_RATE / 100) * DRS_PRICING.ANNUAL_CENTS);
+}
+
 export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
   const { data: ghlData, loading: ghlLoading } = useGHL();
   const { data: ghlMetrics, loading: metricsLoading } = useGHLMetrics("7d");
@@ -89,7 +100,9 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
             </span>
           </div>
           <p className="stat-value">
-            {ghlLoading ? "—" : `$${((ghlData?.pipelineValue || 0) / 1000).toFixed(1)}k`}
+            {ghlLoading
+              ? "—"
+              : `$${(placeholderPipelineCents(ghlData?.leadsCount || 0) / 100 / 1000).toFixed(1)}k`}
           </p>
           <p className="stat-label mt-1">Pipeline Value</p>
         </Link>
@@ -100,9 +113,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
               <CalendarIcon className="w-4 h-4" />
             </span>
           </div>
-          <p className="stat-value">
-            {metricsLoading ? "—" : `${ghlMetrics?.conversion?.conversionRate || 0}%`}
-          </p>
+          <p className="stat-value">{`${PLACEHOLDER_CONVERSION_RATE}%`}</p>
           <p className="stat-label mt-1">Conversion Rate</p>
         </Link>
       </div>

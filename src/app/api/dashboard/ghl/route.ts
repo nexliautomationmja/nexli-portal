@@ -93,7 +93,8 @@ export async function GET() {
     });
 
     return NextResponse.json(data);
-  } catch {
+  } catch (err) {
+    console.error("GHL fetch failed (check GHL_API_KEY / location id):", err);
     // Return cached data if available, even if stale
     if (cached) return NextResponse.json(cached.data);
     return NextResponse.json({
