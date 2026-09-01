@@ -27,7 +27,9 @@ async function ghlFetch<T>(
   });
 
   if (!res.ok) {
-    throw new Error(`GHL API error: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `GHL API error: ${res.status} ${res.statusText} — ${(await res.text().catch(() => "")).slice(0, 500)}`
+    );
   }
 
   return res.json() as Promise<T>;
@@ -268,7 +270,9 @@ export async function updateOpportunityStage(
   });
 
   if (!res.ok) {
-    throw new Error(`GHL API error: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `GHL API error: ${res.status} ${res.statusText} — ${(await res.text().catch(() => "")).slice(0, 500)}`
+    );
   }
 
   return res.json();
@@ -299,7 +303,9 @@ export async function sendMessage(
   });
 
   if (!res.ok) {
-    throw new Error(`GHL API error: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `GHL API error: ${res.status} ${res.statusText} — ${(await res.text().catch(() => "")).slice(0, 500)}`
+    );
   }
 
   return res.json();

@@ -13,6 +13,30 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
     "idle" | "saving" | "success" | "error" | "disconnecting"
   >("idle");
   const [error, setError] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    message: string;
+    detail?: string;
+  } | null>(null);
+
+  async function handleTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/dashboard/settings/ghl/test");
+      const data = await res.json();
+      setTestResult({
+        ok: Boolean(data.ok),
+        message: data.message || "Test failed — please try again.",
+        detail: data.detail,
+      });
+    } catch {
+      setTestResult({ ok: false, message: "Test request failed — please try again." });
+    } finally {
+      setTesting(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -138,6 +162,15 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
               : "Connect"}
           </button>
 
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={testing}
+            className="px-4 py-2.5 rounded-xl text-sm font-bold border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 disabled:opacity-50 transition-all"
+          >
+            {testing ? "Testing..." : "Test connection"}
+          </button>
+
           {connected && (
             <button
               type="button"
@@ -149,6 +182,23 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
             </button>
           )}
         </div>
+
+        {testResult && (
+          <div
+            className={`rounded-xl p-3 border text-sm ${
+              testResult.ok
+                ? "border-emerald-400/30 bg-emerald-400/[0.06] text-emerald-400"
+                : "border-rose-400/30 bg-rose-400/[0.06] text-rose-400"
+            }`}
+          >
+            <p className="font-semibold">{testResult.ok ? "✓ " : "✕ "}{testResult.message}</p>
+            {testResult.detail && (
+              <p className="mt-1 text-xs font-mono opacity-80 break-all">
+                {testResult.detail}
+              </p>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );
