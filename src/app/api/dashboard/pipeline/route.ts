@@ -195,7 +195,19 @@ export async function GET(req: NextRequest) {
   }
 
   if (summaryOnly) return NextResponse.json({ kpis });
-  return NextResponse.json({ leads, kpis });
+
+  // Location id lets the board build "view profile in GHL" links.
+  const [owner] = await db
+    .select({ ghlLocationId: users.ghlLocationId })
+    .from(users)
+    .where(eq(users.id, ownerId))
+    .limit(1);
+
+  return NextResponse.json({
+    leads,
+    kpis,
+    ghlLocationId: owner?.ghlLocationId ?? null,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -228,18 +240,60 @@ export async function POST(req: NextRequest) {
     valueCents = v;
   }
 
+  const fields = {
+    name,
+    email: str(body.email, 320) || null,
+    phone: str(body.phone, 50) || null,
+    company: str(body.company, 200) || null,
+    notes: str(body.notes, 2000) || null,
+    valueCents,
+  };
+
+  // Picked from existing GHL contacts — carries the contact id so the card
+  // can deep-link to their profile. One pipeline entry per contact: an
+  // active duplicate is rejected; a previously removed (soft-deleted) or
+  // closed entry for the same contact is revived instead.
+  const ghlContactId = str(body.ghlContactId, 100) || null;
+  if (ghlContactId) {
+    const [existing] = await db
+      .select()
+      .from(pipelineLeads)
+      .where(
+        and(
+          eq(pipelineLeads.ownerId, session.user.id),
+          eq(pipelineLeads.ghlContactId, ghlContactId)
+        )
+      )
+      .limit(1);
+    if (existing) {
+      if (!existing.deletedAt && existing.stage === "open") {
+        return NextResponse.json(
+          { error: `${existing.name} is already in your pipeline.` },
+          { status: 409 }
+        );
+      }
+      const [lead] = await db
+        .update(pipelineLeads)
+        .set({
+          ...fields,
+          stage: "open",
+          deletedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(pipelineLeads.id, existing.id))
+        .returning();
+      return NextResponse.json({ lead });
+    }
+  }
+
   const [lead] = await db
     .insert(pipelineLeads)
     .values({
       ownerId: session.user.id,
-      name,
-      email: str(body.email, 320) || null,
-      phone: str(body.phone, 50) || null,
-      company: str(body.company, 200) || null,
-      notes: str(body.notes, 2000) || null,
+      ...fields,
+      ghlContactId,
       source: "manual",
       stage: "open",
-      valueCents,
     })
     .returning();
 

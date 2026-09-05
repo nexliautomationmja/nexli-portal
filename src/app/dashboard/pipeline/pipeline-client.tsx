@@ -14,8 +14,21 @@ interface Lead {
   source: "manual" | "booked_call";
   stage: "open" | "won" | "lost";
   valueCents: number;
+  ghlContactId: string | null;
   bookedAt: string | null;
   createdAt: string;
+}
+
+interface ContactResult {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+}
+
+function contactName(c: ContactResult): string {
+  return [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "Unnamed contact";
 }
 
 interface Kpis {
@@ -58,6 +71,13 @@ export function PipelineClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingValueId, setEditingValueId] = useState<string | null>(null);
   const [valueDraft, setValueDraft] = useState("");
+  const [ghlLocationId, setGhlLocationId] = useState<string | null>(null);
+
+  // Contact picker
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactResults, setContactResults] = useState<ContactResult[]>([]);
+  const [searchingContacts, setSearchingContacts] = useState(false);
+  const [pickedContact, setPickedContact] = useState<ContactResult | null>(null);
 
   // Add form
   const [form, setForm] = useState({
@@ -77,6 +97,7 @@ export function PipelineClient() {
       .then((data) => {
         setLeads(data.leads || []);
         if (data.kpis) setKpis(data.kpis);
+        setGhlLocationId(data.ghlLocationId ?? null);
       })
       .catch(() => {});
   }, []);
@@ -84,6 +105,40 @@ export function PipelineClient() {
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, [load]);
+
+  // Contact picker: search existing GHL contacts (debounced) while the
+  // add-lead modal is open.
+  useEffect(() => {
+    if (!showAdd) return;
+    setSearchingContacts(true);
+    const t = setTimeout(() => {
+      const params = new URLSearchParams({ limit: "8" });
+      if (contactSearch.trim()) params.set("search", contactSearch.trim());
+      fetch(`/api/dashboard/ghl/contacts?${params}`)
+        .then((r) => r.json())
+        .then((data) => setContactResults(data.contacts || []))
+        .catch(() => setContactResults([]))
+        .finally(() => setSearchingContacts(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [showAdd, contactSearch]);
+
+  function pickContact(c: ContactResult) {
+    setPickedContact(c);
+    setForm((f) => ({
+      ...f,
+      name: contactName(c),
+      email: c.email || "",
+      phone: c.phone || "",
+    }));
+  }
+
+  function closeAddModal() {
+    setShowAdd(false);
+    setPickedContact(null);
+    setContactSearch("");
+    setAddError(null);
+  }
 
   async function addLead() {
     if (!form.name.trim()) {
@@ -108,6 +163,7 @@ export function PipelineClient() {
           company: form.company,
           notes: form.notes,
           valueCents: Math.round(dollars * 100),
+          ghlContactId: pickedContact?.id || undefined,
         }),
       });
       if (!res.ok) {
@@ -115,7 +171,7 @@ export function PipelineClient() {
         setAddError(data.error || "Couldn't add the lead. Please try again.");
         return;
       }
-      setShowAdd(false);
+      closeAddModal();
       setForm({
         name: "",
         email: "",
@@ -266,8 +322,19 @@ export function PipelineClient() {
                             {lead.name}
                           </p>
                           <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-                            {lead.company || lead.email || lead.phone || "—"}
+                            {[lead.company, lead.email, lead.phone].filter(Boolean).join(" · ") || "—"}
                           </p>
+                          {lead.ghlContactId && ghlLocationId && (
+                            <a
+                              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${lead.ghlContactId}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[11px] font-semibold text-cyan-400 hover:underline"
+                            >
+                              View profile ↗
+                            </a>
+                          )}
                         </div>
                         <span
                           className={`badge shrink-0 ${lead.source === "booked_call" ? "badge-violet" : "badge-gray"}`}
@@ -358,24 +425,88 @@ export function PipelineClient() {
       {/* Add Lead modal */}
       {showAdd && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowAdd(false)} />
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={closeAddModal} />
           <div
-            className="fixed inset-x-4 top-[10%] max-w-md mx-auto z-50 rounded-xl border overflow-hidden"
+            className="fixed inset-x-4 top-[6%] bottom-[6%] max-w-md mx-auto z-50 rounded-xl border overflow-y-auto"
             style={{ background: "var(--card-bg)", borderColor: "var(--card-border)" }}
           >
             <div className="p-4 border-b border-[var(--card-border)] flex items-center justify-between">
               <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
                 Add a lead to the pipeline
               </p>
-              <button
-                onClick={() => setShowAdd(false)}
-                className="text-sm"
-                style={{ color: "var(--text-muted)" }}
-              >
+              <button onClick={closeAddModal} className="text-sm" style={{ color: "var(--text-muted)" }}>
                 ✕
               </button>
             </div>
             <div className="p-4 space-y-3">
+              {/* Pick from existing contacts */}
+              <div className="space-y-2">
+                <label
+                  className="block text-[10px] font-black uppercase tracking-[0.2em]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Pick from your contacts
+                </label>
+                {pickedContact ? (
+                  <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 border border-cyan-400/30 bg-cyan-400/[0.06]">
+                    <p className="text-sm font-semibold text-cyan-400 truncate">
+                      ✓ {contactName(pickedContact)}
+                      <span className="font-normal" style={{ color: "var(--text-muted)" }}>
+                        {pickedContact.email ? ` · ${pickedContact.email}` : ""}
+                      </span>
+                    </p>
+                    <button
+                      onClick={() => setPickedContact(null)}
+                      className="text-xs shrink-0"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      placeholder="Search your GHL contacts…"
+                      value={contactSearch}
+                      onChange={(e) => setContactSearch(e.target.value)}
+                      className={inputCls}
+                      style={inputStyle}
+                    />
+                    <div className="rounded-lg border border-[var(--card-border)] divide-y divide-[var(--card-border)] max-h-44 overflow-y-auto">
+                      {searchingContacts ? (
+                        <p className="p-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                          Searching…
+                        </p>
+                      ) : contactResults.length === 0 ? (
+                        <p className="p-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                          No contacts found — connect GHL in Settings, or add the lead manually below.
+                        </p>
+                      ) : (
+                        contactResults.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => pickContact(c)}
+                            className="w-full text-left px-3 py-2 hover:bg-[var(--input-bg)] transition-colors"
+                          >
+                            <p className="text-sm font-medium truncate" style={{ color: "var(--text-main)" }}>
+                              {contactName(c)}
+                            </p>
+                            <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                              {[c.email, c.phone].filter(Boolean).join(" · ") || "no contact info"}
+                            </p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Picked leads keep a link to their contact profile — or fill in the details
+                  manually below.
+                </p>
+              </div>
+
+              <div className="section-divider" />
               <input
                 placeholder="Lead name *"
                 value={form.name}
