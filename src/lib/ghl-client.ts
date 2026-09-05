@@ -37,12 +37,15 @@ async function ghlFetch<T>(
   return res.json() as Promise<T>;
 }
 
-export async function getContacts(locationId: string, limit = 20) {
+export async function getContacts(
+  locationId: string,
+  limit = 20,
+  startAfterId?: string
+) {
   // v2 GET /contacts/ has no sort params; sorting lives on POST /contacts/search.
-  return ghlFetch<GHLContactsResponse>("/contacts/", {
-    locationId,
-    limit: String(limit),
-  });
+  const params: Record<string, string> = { locationId, limit: String(limit) };
+  if (startAfterId) params.startAfterId = startAfterId;
+  return ghlFetch<GHLContactsResponse>("/contacts/", params);
 }
 
 /**
@@ -80,6 +83,7 @@ export interface GHLContact {
   phone?: string;
   dateAdded: string;
   source?: string;
+  tags?: string[];
 }
 
 export interface GHLContactsResponse {

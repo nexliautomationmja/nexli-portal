@@ -7,6 +7,7 @@ import {
   getContacts,
   getContactById,
   getAllCalendarEvents,
+  type GHLContact,
 } from "@/lib/ghl-client";
 import { ensurePipelineTable, MAX_VALUE_CENTS } from "@/lib/pipeline-table";
 import { PIPELINE } from "@/lib/drs-pricing";
@@ -62,6 +63,19 @@ async function markSynced(ownerId: string): Promise<void> {
   });
 }
 
+/**
+ * A contact counts as "booked" when a tag shows they booked a call at some
+ * point (cal.com bookings, "booked call", "call booked", …) — evidence of
+ * real interest even if the event itself is outside the calendar window.
+ */
+function hasBookedTag(tags: string[] | undefined): boolean {
+  if (!tags) return false;
+  return tags.some((raw) => {
+    const t = raw.toLowerCase();
+    return t.includes("cal.com") || (t.includes("book") && t.includes("call"));
+  });
+}
+
 async function syncBookedCalls(ownerId: string): Promise<void> {
   const [user] = await db
     .select({ ghlLocationId: users.ghlLocationId })
@@ -74,29 +88,56 @@ async function syncBookedCalls(ownerId: string): Promise<void> {
   // Booked calls: last 90 days through 60 days out.
   const start = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const end = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
-  const [contactsRes, events] = await Promise.all([
-    getContacts(locationId, 100),
+
+  // Scan up to 3 pages of contacts (300) so booked-call tags are seen even
+  // on larger contact lists.
+  const fetchContacts = async (): Promise<GHLContact[]> => {
+    const all: GHLContact[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 3; page++) {
+      const res = await getContacts(locationId, 100, cursor);
+      const contacts = res.contacts ?? [];
+      if (contacts.length === 0) break;
+      all.push(...contacts);
+      const last = contacts[contacts.length - 1]?.id;
+      if (!last || last === cursor || contacts.length < 100) break;
+      cursor = last;
+    }
+    return all;
+  };
+
+  const [contacts, events] = await Promise.all([
+    fetchContacts(),
     getAllCalendarEvents(locationId, start.toISOString(), end.toISOString()),
   ]);
 
-  const booked = events.filter((e) => e.contactId && e.status !== "cancelled");
-  if (booked.length === 0) {
-    await markSynced(ownerId);
-    return;
-  }
+  // Candidates: contactId → earliest parseable event time (null when only a
+  // tag proves the booking, or GHL sends an unparseable date).
+  const candidates = new Map<string, Date | null>();
 
-  // Earliest parseable event time per contact (null when GHL sends a format
-  // we can't parse — better no date than a wrong one).
-  const earliestByContact = new Map<string, Date | null>();
-  for (const e of booked) {
+  for (const e of events) {
+    if (!e.contactId || e.status === "cancelled") continue;
     const t = new Date(e.startTime);
     const valid = !isNaN(t.getTime());
-    const prev = earliestByContact.get(e.contactId);
+    const prev = candidates.get(e.contactId);
     if (prev === undefined) {
-      earliestByContact.set(e.contactId, valid ? t : null);
+      candidates.set(e.contactId, valid ? t : null);
     } else if (valid && (prev === null || t.getTime() < prev.getTime())) {
-      earliestByContact.set(e.contactId, t);
+      candidates.set(e.contactId, t);
     }
+  }
+
+  // Tagged contacts (cal.com / booked call) show past interest — they enter
+  // the pipeline too, without a booked date.
+  for (const c of contacts) {
+    if (!candidates.has(c.id) && hasBookedTag(c.tags)) {
+      candidates.set(c.id, null);
+    }
+  }
+
+  if (candidates.size === 0) {
+    await markSynced(ownerId);
+    return;
   }
 
   // Never re-add a contact that's already in the pipeline — any stage,
@@ -109,11 +150,11 @@ async function syncBookedCalls(ownerId: string): Promise<void> {
     );
   const known = new Set(existing.map((r) => r.ghlContactId));
 
-  const contactById = new Map(contactsRes.contacts?.map((c) => [c.id, c]) ?? []);
+  const contactById = new Map(contacts.map((c) => [c.id, c]));
 
-  // Contacts outside the fetched page get an individual lookup (bounded).
+  // Contacts outside the fetched pages get an individual lookup (bounded).
   let individualLookups = 0;
-  for (const [contactId, bookedAt] of earliestByContact) {
+  for (const [contactId, bookedAt] of candidates) {
     if (known.has(contactId)) continue;
     let contact = contactById.get(contactId);
     if (!contact && individualLookups < 15) {

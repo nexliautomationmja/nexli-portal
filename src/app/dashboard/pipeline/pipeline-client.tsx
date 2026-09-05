@@ -247,8 +247,8 @@ export function PipelineClient() {
           <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
             Every open lead defaults to {PIPELINE.EXPECTED_LIFETIME_MONTHS} months ×{" "}
             {money(DRS_PRICING.MONTHLY_CENTS)} ≈ {money(PIPELINE.DEFAULT_DEAL_VALUE_CENTS)} expected
-            value — click a value to edit. Booked calls from your GHL calendar land here
-            automatically.
+            value — click a value to edit. Leads with a booked call on your GHL calendar, or a
+            cal.com / booked-call tag, land here automatically.
           </p>
         </div>
         <button onClick={() => setShowAdd(true)} className="btn-primary px-5 py-2.5 text-sm">
