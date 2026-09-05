@@ -927,6 +927,41 @@ export const portalMessages = pgTable(
   ]
 );
 
+// ── Pipeline Leads (internal sales pipeline) ──────────────
+// Created at runtime by ensurePipelineTable() in src/lib/pipeline-table.ts
+// (this repo has no migration pipeline). Keep the DDL there in sync.
+export const pipelineLeads = pgTable(
+  "pipeline_leads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    company: text("company"),
+    notes: text("notes"),
+    source: text("source").default("manual").notNull(), // 'manual' | 'booked_call'
+    stage: text("stage").default("open").notNull(), // 'open' | 'won' | 'lost'
+    valueCents: integer("value_cents").notNull(),
+    ghlContactId: text("ghl_contact_id"),
+    bookedAt: timestamp("booked_at"),
+    // Soft delete: booked-call leads keep a tombstone row so the GHL sync
+    // never re-imports a lead the owner removed.
+    deletedAt: timestamp("deleted_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("pipeline_leads_owner_idx").on(table.ownerId),
+    index("pipeline_leads_owner_stage_idx").on(table.ownerId, table.stage),
+    // NOTE: the live table (created by ensurePipelineTable) also has a
+    // PARTIAL unique index on (owner_id, ghl_contact_id) WHERE ghl_contact_id
+    // IS NOT NULL — not expressible here; see src/lib/pipeline-table.ts.
+  ]
+);
+
 // ── Notifications ─────────────────────────────────────────
 export const notifications = pgTable(
   "notifications",

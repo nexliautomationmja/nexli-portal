@@ -41,6 +41,21 @@ export const TRIPLE_GUARANTEE = {
 } as const;
 
 /**
+ * Pipeline economics: expected lifetime value of one DRS client, used as
+ * the default deal value for each open pipeline lead. Industry benchmarks
+ * (Focus Digital 2026 churn report; Agiled/Promethean): retainer agencies
+ * average ~18–20% annual churn (top shops 8–10%), typical client lifespan
+ * 2–5 years — but ~25% of agencies see tenures under a year, and a new
+ * agency should assume the conservative end. Marcel's own estimate is 6–8
+ * months; 8 × $4,997 = $39,976 ≈ the $39,997 annual plan, so every open
+ * lead ≈ $40K expected value regardless of plan. Editable per lead.
+ */
+export const PIPELINE = {
+  EXPECTED_LIFETIME_MONTHS: 8,
+  DEFAULT_DEAL_VALUE_CENTS: 8 * DRS_PRICING.MONTHLY_CENTS, // $39,976
+} as const;
+
+/**
  * Dual pricing: amounts listed on invoices and in contracts are the
  * discounted bank transfer (ACH) price; credit/debit card payments are
  * charged at the card price. This is deliberately framed as two prices —

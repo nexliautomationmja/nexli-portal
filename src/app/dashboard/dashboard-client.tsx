@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useGHL } from "@/lib/hooks/use-ghl";
 import { useGHLMetrics } from "@/lib/hooks/use-ghl-metrics";
 import { useInvoiceAnalytics } from "@/lib/hooks/use-invoice-analytics";
 import { usePortalActivity } from "@/lib/hooks/use-portal-activity";
-import { DRS_PRICING } from "@/lib/drs-pricing";
 import { RevenueChart } from "@/components/dashboard/charts/revenue-chart";
 import {
   FileIcon,
@@ -50,21 +50,25 @@ const activityTypeConfig = {
   login: { color: "bg-gray-400", label: "Login" },
 } as const;
 
-// TEMPORARY placeholder metrics (per Marcel, Sep 2026) until real GHL
-// pipeline/booking data is flowing. Conversion Rate is pinned at 2% and
-// Pipeline Value = contacts × 2% × the annual DRS price ("if 2% of my
-// contacts became annual clients"). Delete this block + its two usages in
-// the stat cards below to go back to live GHL numbers.
+// TEMPORARY placeholder (per Marcel, Sep 2026): Conversion Rate is pinned
+// at 2% until real GHL booking data is flowing. Delete this constant + its
+// usage in the stat card below to go back to the live GHL number.
+// (Pipeline Value is REAL now — sum of open leads in /dashboard/pipeline.)
 const PLACEHOLDER_CONVERSION_RATE = 2; // %
-function placeholderPipelineCents(contacts: number): number {
-  return Math.round(contacts * (PLACEHOLDER_CONVERSION_RATE / 100) * DRS_PRICING.ANNUAL_CENTS);
-}
 
 export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
   const { data: ghlData, loading: ghlLoading } = useGHL();
   const { data: ghlMetrics, loading: metricsLoading } = useGHLMetrics("7d");
   const { data: analytics, loading: analyticsLoading } = useInvoiceAnalytics();
   const { data: portalActivity, loading: activityLoading } = usePortalActivity();
+  const [pipelineValueCents, setPipelineValueCents] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/dashboard/pipeline?summary=1")
+      .then((r) => r.json())
+      .then((data) => setPipelineValueCents(data.kpis?.openValueCents ?? 0))
+      .catch(() => setPipelineValueCents(0));
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -100,9 +104,9 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
             </span>
           </div>
           <p className="stat-value">
-            {ghlLoading
+            {pipelineValueCents === null
               ? "—"
-              : `$${(placeholderPipelineCents(ghlData?.leadsCount || 0) / 100 / 1000).toFixed(1)}k`}
+              : `$${(pipelineValueCents / 100 / 1000).toFixed(1)}k`}
           </p>
           <p className="stat-label mt-1">Pipeline Value</p>
         </Link>

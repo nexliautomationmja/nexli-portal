@@ -3,13 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users, analyticsSnapshots } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import {
-  getContacts,
-  getPipelines,
-  getOpportunities,
-  contactsCount,
-  type GHLPipeline,
-} from "@/lib/ghl-client";
+import { getContacts, contactsCount } from "@/lib/ghl-client";
 
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
@@ -57,49 +51,35 @@ export async function GET() {
     return NextResponse.json(cached.data);
   }
 
-  // Fetch fresh data. Contacts are the backbone — if they fail we fall to
-  // the catch. Pipelines/opportunities failures must NOT zero out a good
-  // contacts result, so they degrade independently.
+  // Fetch fresh data. Contacts only — pipeline value now comes from the
+  // internal pipeline (/api/dashboard/pipeline), so the GHL opportunities
+  // calls were dropped; the response keeps the old shape for compatibility.
   try {
     const contactsRes = await getContacts(user.ghlLocationId);
-
-    let pipelines: GHLPipeline[] = [];
-    let pipelineValue = 0;
-    let pipelinesOk = false;
-    try {
-      const pipelinesRes = await getPipelines(user.ghlLocationId);
-      pipelines = pipelinesRes.pipelines || [];
-      if (pipelines.length > 0) {
-        const oppRes = await getOpportunities(user.ghlLocationId, pipelines[0].id);
-        pipelineValue = (oppRes.opportunities || []).reduce(
-          (sum, o) => sum + (o.monetaryValue || 0),
-          0
-        );
-      }
-      pipelinesOk = true;
-    } catch (pipelineErr) {
-      console.error("GHL pipelines/opportunities fetch failed (contacts OK):", pipelineErr);
-    }
 
     const data = {
       leadsCount: contactsCount(contactsRes),
       recentLeads: (contactsRes.contacts || []).slice(0, 5),
-      pipelines,
-      pipelineValue,
+      pipelines: [],
+      pipelineValue: 0,
     };
 
-    // Cache only fully-successful results — a degraded (pipelines-failed)
-    // response is returned fresh but never pinned for 4h, so recovery from a
-    // transient error or a fixed scope is immediate.
-    if (pipelinesOk) {
-      await db.insert(analyticsSnapshots).values({
-        userId,
-        source: "gohighlevel",
-        periodStart: new Date(),
-        periodEnd: new Date(),
-        data,
-      });
-    }
+    // Replace the previous snapshot so the table doesn't grow per request.
+    await db
+      .delete(analyticsSnapshots)
+      .where(
+        and(
+          eq(analyticsSnapshots.userId, userId),
+          eq(analyticsSnapshots.source, "gohighlevel")
+        )
+      );
+    await db.insert(analyticsSnapshots).values({
+      userId,
+      source: "gohighlevel",
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      data,
+    });
 
     return NextResponse.json(data);
   } catch (err) {
