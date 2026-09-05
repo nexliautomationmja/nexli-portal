@@ -628,7 +628,7 @@ export function EngagementsClient() {
                     </label>
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ad management is separate and performance-based ({AD_PERFORMANCE.PERCENT_OF_CLOSED_DEAL}% of each closed tax-planning deal) — no ad line item on the invoice.
+                    Ad management is separate and performance-based ({AD_PERFORMANCE.PERCENT_OF_COLLECTED_REVENUE}% of collected revenue from the advisory clients the ads bring in) — no ad line item on the invoice.
                   </p>
                 </div>
               )}

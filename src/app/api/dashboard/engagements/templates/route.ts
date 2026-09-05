@@ -36,6 +36,21 @@ function isStaleOldPricing(content: string): boolean {
   return OLD_PRICING_MARKERS.some((m) => content.includes(m));
 }
 
+// Revision marker: every shipped default since Sep 2026 contains the Nexli
+// Triple Guarantee section. A DRS-named row that has the flat-pricing ad
+// section but lacks the guarantee is an older revision — either an old
+// shipped seed or a user's edited copy of one. We can't tell those apart,
+// so the refresh must NEVER overwrite: the old row is renamed "(previous)"
+// (preserving any edits) and a fresh seed is inserted under the default
+// name. The compose UI regenerates DRS letters from code anyway; this keeps
+// the stored rows from drifting.
+function isStaleShippedRevision(content: string): boolean {
+  return (
+    content.includes("AD MANAGEMENT (PERFORMANCE-BASED)") &&
+    !content.includes("NEXLI TRIPLE GUARANTEE")
+  );
+}
+
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
@@ -70,11 +85,27 @@ export async function GET() {
       existing.content !== tmpl.content &&
       isStaleOldPricing(existing.content)
     ) {
-      // Auto-upgrade a stale old-pricing DRS template to the flat default.
+      // Auto-upgrade a stale old-pricing DRS template to the flat default —
+      // these markers only ever appear in pre-flat seeds, never user copy.
       await db
         .update(engagementTemplates)
         .set({ content: tmpl.content, updatedAt: new Date() })
         .where(eq(engagementTemplates.id, existing.id));
+    } else if (
+      existing.content !== tmpl.content &&
+      isStaleShippedRevision(existing.content)
+    ) {
+      // Pre-guarantee revision (possibly user-edited): preserve it under a
+      // "(previous)" name and seed the current default fresh.
+      await db
+        .update(engagementTemplates)
+        .set({ name: `${tmpl.name} (previous)`, updatedAt: new Date() })
+        .where(eq(engagementTemplates.id, existing.id));
+      await db.insert(engagementTemplates).values({
+        ownerId: session.user.id,
+        name: tmpl.name,
+        content: tmpl.content,
+      });
     }
   }
 

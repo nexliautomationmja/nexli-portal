@@ -8,7 +8,6 @@ import {
   getPipelines,
   getCalendars,
   searchConversations,
-  contactsCount,
 } from "@/lib/ghl-client";
 
 /**

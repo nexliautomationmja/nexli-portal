@@ -18,13 +18,26 @@ export type BillingPlan = "monthly" | "annual";
 
 /**
  * Performance-based ad management. There is no monthly ad retainer — the
- * Provider earns a percentage of the value of each closed deal in the
- * advertised service line (tax planning), attributed via the tracking
- * system. Billed as results come in, outside the flat platform price.
+ * Provider earns a percentage of the revenue the Client actually collects
+ * from tax advisory clients attributable to the Nexli acquisition system
+ * (i.e., strictly the clients the Provider-managed ads bring in), attributed
+ * via the tracking system. Billed as results come in, outside the flat
+ * platform price. The flat price covers the buildout AND ongoing maintenance.
  */
 export const AD_PERFORMANCE = {
-  PERCENT_OF_CLOSED_DEAL: 20, // 20% of the closed deal value (leaves margin for ad contractors)
+  PERCENT_OF_COLLECTED_REVENUE: 20, // 20% of revenue the client actually collects (leaves margin for ad contractors)
   ADVERTISED_SERVICE: "tax planning",
+} as const;
+
+/**
+ * The Nexli Triple Guarantee — written into the engagement letter
+ * (engagement-defaults.ts) so firm owners have less fear of starting.
+ */
+export const TRIPLE_GUARANTEE = {
+  QUALIFIED_OPPORTUNITIES: 10, // qualified advisory opportunities…
+  OPPORTUNITY_WINDOW_DAYS: 90, // …within 90 days of campaign launch, else work free
+  LAUNCH_DAYS: 21, // launch within 21 days of receiving all client materials
+  LAUNCH_CREDIT_CENTS: 100_000, // $1,000 credit toward next payment if Provider misses it
 } as const;
 
 /**
