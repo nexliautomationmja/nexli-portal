@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getContacts, searchContacts } from "@/lib/ghl-client";
+import { getContacts, searchContacts, contactsCount } from "@/lib/ghl-client";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -29,8 +29,13 @@ export async function GET(req: NextRequest) {
       ? await searchContacts(user.ghlLocationId, search, limit)
       : await getContacts(user.ghlLocationId, limit);
 
-    return NextResponse.json(data);
-  } catch {
+    // Normalize: the list endpoint returns `count`, search returns `total`.
+    return NextResponse.json({
+      contacts: data.contacts ?? [],
+      total: contactsCount(data),
+    });
+  } catch (err) {
+    console.error("GHL contacts fetch failed:", err);
     return NextResponse.json({ contacts: [], total: 0 });
   }
 }

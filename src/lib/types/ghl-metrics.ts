@@ -25,4 +25,6 @@ export interface SpeedToLeadData {
 export interface GHLMetricsData {
   conversion: ConversionFunnelData;
   speedToLead: SpeedToLeadData;
+  /** Which range this snapshot was computed for ("7d" | "30d" | "90d"). */
+  range?: string;
 }

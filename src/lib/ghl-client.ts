@@ -11,7 +11,8 @@ function getApiKey(): string {
 
 async function ghlFetch<T>(
   path: string,
-  params?: Record<string, string>
+  params?: Record<string, string>,
+  opts?: { version?: string }
 ): Promise<T> {
   const url = new URL(path, GHL_BASE_URL);
   if (params) {
@@ -22,7 +23,8 @@ async function ghlFetch<T>(
     headers: {
       Authorization: `Bearer ${getApiKey()}`,
       "Content-Type": "application/json",
-      Version: "2021-07-28",
+      // Some GHL APIs pin their own Version (conversations = 2021-04-15).
+      Version: opts?.version ?? "2021-07-28",
     },
   });
 
@@ -36,11 +38,20 @@ async function ghlFetch<T>(
 }
 
 export async function getContacts(locationId: string, limit = 20) {
+  // v2 GET /contacts/ has no sort params; sorting lives on POST /contacts/search.
   return ghlFetch<GHLContactsResponse>("/contacts/", {
     locationId,
     limit: String(limit),
-    sortBy: "date_added",
   });
+}
+
+/**
+ * The contact count across GHL's response variants: the list endpoint
+ * returns `count`, the search endpoint returns `total`. Fall back to the
+ * page length so a working call never reads as 0 contacts.
+ */
+export function contactsCount(res: GHLContactsResponse): number {
+  return res.count ?? res.total ?? res.contacts?.length ?? 0;
 }
 
 export async function getPipelines(locationId: string) {
@@ -53,8 +64,9 @@ export async function getOpportunities(
   locationId: string,
   pipelineId?: string
 ) {
-  const params: Record<string, string> = { locationId };
-  if (pipelineId) params.pipelineId = pipelineId;
+  // /opportunities/search (Version 2021-07-28) takes snake_case ids.
+  const params: Record<string, string> = { location_id: locationId };
+  if (pipelineId) params.pipeline_id = pipelineId;
   return ghlFetch<GHLOpportunitiesResponse>("/opportunities/search", params);
 }
 
@@ -72,7 +84,9 @@ export interface GHLContact {
 
 export interface GHLContactsResponse {
   contacts: GHLContact[];
-  total: number;
+  /** GET /contacts/ returns `count`; POST /contacts/search returns `total`. */
+  count?: number;
+  total?: number;
 }
 
 export interface GHLPipeline {
@@ -97,7 +111,9 @@ export interface GHLOpportunity {
 
 export interface GHLOpportunitiesResponse {
   opportunities: GHLOpportunity[];
-  total: number;
+  /** Search responses carry pagination info under `meta`. */
+  meta?: { total?: number };
+  total?: number;
 }
 
 // ── Calendar types ────────────────────────────────────
@@ -176,11 +192,12 @@ export async function getCalendarEvents(
   startDate: string,
   endDate: string
 ) {
+  // GHL wants epoch milliseconds for the event window.
   return ghlFetch<GHLCalendarEventsResponse>("/calendars/events", {
     locationId,
     calendarId,
-    startTime: startDate,
-    endTime: endDate,
+    startTime: String(new Date(startDate).getTime()),
+    endTime: String(new Date(endDate).getTime()),
   });
 }
 
@@ -208,10 +225,14 @@ export async function searchConversations(
   locationId: string,
   limit = 50
 ) {
-  return ghlFetch<GHLConversationsSearchResponse>("/conversations/search", {
-    locationId,
-    limit: String(limit),
-  });
+  return ghlFetch<GHLConversationsSearchResponse>(
+    "/conversations/search",
+    {
+      locationId,
+      limit: String(limit),
+    },
+    { version: "2021-04-15" }
+  );
 }
 
 export async function getConversationMessages(

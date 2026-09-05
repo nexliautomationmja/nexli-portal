@@ -18,6 +18,7 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
     ok: boolean;
     message: string;
     detail?: string;
+    checks?: { name: string; ok: boolean; info: string }[];
   } | null>(null);
 
   async function handleTest() {
@@ -30,6 +31,7 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
         ok: Boolean(data.ok),
         message: data.message || "Test failed — please try again.",
         detail: data.detail,
+        checks: Array.isArray(data.checks) ? data.checks : undefined,
       });
     } catch {
       setTestResult({ ok: false, message: "Test request failed — please try again." });
@@ -187,13 +189,32 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
           <div
             className={`rounded-xl p-3 border text-sm ${
               testResult.ok
-                ? "border-emerald-400/30 bg-emerald-400/[0.06] text-emerald-400"
-                : "border-rose-400/30 bg-rose-400/[0.06] text-rose-400"
+                ? "border-emerald-400/30 bg-emerald-400/[0.06]"
+                : "border-rose-400/30 bg-rose-400/[0.06]"
             }`}
           >
-            <p className="font-semibold">{testResult.ok ? "✓ " : "✕ "}{testResult.message}</p>
+            <p className={`font-semibold ${testResult.ok ? "text-emerald-400" : "text-rose-400"}`}>
+              {testResult.ok ? "✓ " : "✕ "}{testResult.message}
+            </p>
+            {testResult.checks && testResult.checks.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {testResult.checks.map((c) => (
+                  <li key={c.name} className="text-xs flex gap-2">
+                    <span className={c.ok ? "text-emerald-400" : "text-rose-400"}>
+                      {c.ok ? "✓" : "✕"}
+                    </span>
+                    <span style={{ color: "var(--text-main)" }}>
+                      <span className="font-semibold">{c.name}:</span>{" "}
+                      <span style={{ color: c.ok ? "var(--text-muted)" : undefined }} className={c.ok ? "" : "text-rose-400"}>
+                        {c.info}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {testResult.detail && (
-              <p className="mt-1 text-xs font-mono opacity-80 break-all">
+              <p className="mt-1 text-xs font-mono opacity-80 break-all" style={{ color: "var(--text-muted)" }}>
                 {testResult.detail}
               </p>
             )}

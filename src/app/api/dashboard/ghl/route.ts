@@ -7,6 +7,8 @@ import {
   getContacts,
   getPipelines,
   getOpportunities,
+  contactsCount,
+  type GHLPipeline,
 } from "@/lib/ghl-client";
 
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
@@ -55,42 +57,49 @@ export async function GET() {
     return NextResponse.json(cached.data);
   }
 
-  // Fetch fresh data
+  // Fetch fresh data. Contacts are the backbone — if they fail we fall to
+  // the catch. Pipelines/opportunities failures must NOT zero out a good
+  // contacts result, so they degrade independently.
   try {
-    const [contactsRes, pipelinesRes] = await Promise.all([
-      getContacts(user.ghlLocationId),
-      getPipelines(user.ghlLocationId),
-    ]);
+    const contactsRes = await getContacts(user.ghlLocationId);
 
+    let pipelines: GHLPipeline[] = [];
     let pipelineValue = 0;
-    let opportunities: { monetaryValue?: number }[] = [];
-    if (pipelinesRes.pipelines.length > 0) {
-      const oppRes = await getOpportunities(
-        user.ghlLocationId,
-        pipelinesRes.pipelines[0].id
-      );
-      opportunities = oppRes.opportunities || [];
-      pipelineValue = opportunities.reduce(
-        (sum, o) => sum + (o.monetaryValue || 0),
-        0
-      );
+    let pipelinesOk = false;
+    try {
+      const pipelinesRes = await getPipelines(user.ghlLocationId);
+      pipelines = pipelinesRes.pipelines || [];
+      if (pipelines.length > 0) {
+        const oppRes = await getOpportunities(user.ghlLocationId, pipelines[0].id);
+        pipelineValue = (oppRes.opportunities || []).reduce(
+          (sum, o) => sum + (o.monetaryValue || 0),
+          0
+        );
+      }
+      pipelinesOk = true;
+    } catch (pipelineErr) {
+      console.error("GHL pipelines/opportunities fetch failed (contacts OK):", pipelineErr);
     }
 
     const data = {
-      leadsCount: contactsRes.total,
-      recentLeads: contactsRes.contacts.slice(0, 5),
-      pipelines: pipelinesRes.pipelines,
+      leadsCount: contactsCount(contactsRes),
+      recentLeads: (contactsRes.contacts || []).slice(0, 5),
+      pipelines,
       pipelineValue,
     };
 
-    // Cache the result
-    await db.insert(analyticsSnapshots).values({
-      userId,
-      source: "gohighlevel",
-      periodStart: new Date(),
-      periodEnd: new Date(),
-      data,
-    });
+    // Cache only fully-successful results — a degraded (pipelines-failed)
+    // response is returned fresh but never pinned for 4h, so recovery from a
+    // transient error or a fixed scope is immediate.
+    if (pipelinesOk) {
+      await db.insert(analyticsSnapshots).values({
+        userId,
+        source: "gohighlevel",
+        periodStart: new Date(),
+        periodEnd: new Date(),
+        data,
+      });
+    }
 
     return NextResponse.json(data);
   } catch (err) {

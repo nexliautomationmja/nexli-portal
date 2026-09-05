@@ -171,10 +171,19 @@ export async function GET(req: NextRequest) {
 
     if (user.ghlLocationId) {
       try {
+        // Calendar/conversation failures degrade to empty so contacts-based
+        // insight blocks still compute.
         const [contactsRes, calendarEvents, conversationsRes] = await Promise.all([
           getContacts(user.ghlLocationId, 100),
-          getAllCalendarEvents(user.ghlLocationId, start.toISOString(), end.toISOString()),
-          searchConversations(user.ghlLocationId, 100),
+          getAllCalendarEvents(
+            user.ghlLocationId,
+            start.toISOString(),
+            end.toISOString()
+          ).catch(() => []),
+          searchConversations(user.ghlLocationId, 100).catch(() => ({
+            conversations: [],
+            total: 0,
+          })),
         ]);
 
         const periodContacts = (contactsRes.contacts ?? []).filter((c) => {
@@ -212,7 +221,7 @@ export async function GET(req: NextRequest) {
           for (const p of pipelines.pipelines ?? []) {
             pipelineCount++;
             try {
-              const opps = await getOpportunities(p.id);
+              const opps = await getOpportunities(user.ghlLocationId, p.id);
               for (const o of opps.opportunities ?? []) {
                 totalValue += o.monetaryValue ?? 0;
               }

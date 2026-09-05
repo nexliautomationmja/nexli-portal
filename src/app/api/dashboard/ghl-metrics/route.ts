@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { users, analyticsSnapshots } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import {
   getContacts,
   getAllCalendarEvents,
@@ -51,14 +51,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(emptyMetrics());
   }
 
-  // Check cache
+  const range = req.nextUrl.searchParams.get("range") || "7d";
+  const { start, end } = getDateRange(range);
+
+  // Check cache — filtered to a snapshot computed for the SAME range, so
+  // toggling 7d/30d/90d each keeps its own cache entry (and the error
+  // fallback below can never serve another range's numbers).
   const [cached] = await db
     .select()
     .from(analyticsSnapshots)
     .where(
       and(
         eq(analyticsSnapshots.userId, targetUserId),
-        eq(analyticsSnapshots.source, "ghl-metrics")
+        eq(analyticsSnapshots.source, "ghl-metrics"),
+        sql`${analyticsSnapshots.data}->>'range' = ${range}`
       )
     )
     .orderBy(desc(analyticsSnapshots.createdAt))
@@ -71,18 +77,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(cached.data);
   }
 
-  const range = req.nextUrl.searchParams.get("range") || "7d";
-  const { start, end } = getDateRange(range);
-
   try {
+    // Contacts are required; calendar + conversation failures degrade to
+    // empty (their metrics read 0) instead of zeroing everything.
+    let partialFailure = false;
     const [contactsRes, calendarEvents, conversationsRes] = await Promise.all([
       getContacts(user.ghlLocationId, 100),
       getAllCalendarEvents(
         user.ghlLocationId,
         start.toISOString(),
         end.toISOString()
-      ),
-      searchConversations(user.ghlLocationId, 100),
+      ).catch((err) => {
+        console.error("[GHL Metrics] calendar events failed (continuing):", err);
+        partialFailure = true;
+        return [];
+      }),
+      searchConversations(user.ghlLocationId, 100).catch((err) => {
+        console.error("[GHL Metrics] conversations failed (continuing):", err);
+        partialFailure = true;
+        return { conversations: [], total: 0 };
+      }),
     ]);
 
     // Filter contacts to the date range
@@ -102,16 +116,29 @@ export async function GET(req: NextRequest) {
       conversationsRes.conversations ?? []
     );
 
-    const data: GHLMetricsData = { conversion, speedToLead };
+    const data: GHLMetricsData = { conversion, speedToLead, range };
 
-    // Cache the result
-    await db.insert(analyticsSnapshots).values({
-      userId: targetUserId,
-      source: "ghl-metrics",
-      periodStart: start,
-      periodEnd: end,
-      data,
-    });
+    // Cache only fully-successful computes (degraded results are returned
+    // fresh, never pinned), and replace this range's old snapshots so the
+    // table doesn't grow one row per request.
+    if (!partialFailure) {
+      await db
+        .delete(analyticsSnapshots)
+        .where(
+          and(
+            eq(analyticsSnapshots.userId, targetUserId),
+            eq(analyticsSnapshots.source, "ghl-metrics"),
+            sql`${analyticsSnapshots.data}->>'range' = ${range}`
+          )
+        );
+      await db.insert(analyticsSnapshots).values({
+        userId: targetUserId,
+        source: "ghl-metrics",
+        periodStart: start,
+        periodEnd: end,
+        data,
+      });
+    }
 
     return NextResponse.json(data);
   } catch (err) {

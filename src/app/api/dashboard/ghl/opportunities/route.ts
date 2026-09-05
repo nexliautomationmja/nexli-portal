@@ -25,8 +25,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await getOpportunities(user.ghlLocationId, pipelineId);
-    return NextResponse.json(data);
-  } catch {
+    // Search responses carry the count under meta.total.
+    return NextResponse.json({
+      opportunities: data.opportunities ?? [],
+      total: data.meta?.total ?? data.total ?? data.opportunities?.length ?? 0,
+    });
+  } catch (err) {
+    console.error("GHL opportunities fetch failed:", err);
     return NextResponse.json({ opportunities: [], total: 0 });
   }
 }
