@@ -120,11 +120,27 @@ export async function GET(req: NextRequest) {
     console.error("[ad-analytics] Error:", err);
     const code =
       pgErrorCode(err) === PG_UNDEFINED_TABLE ? "missing_table" : "db_error";
+
+    // Diagnostic: when the table is missing, report which tables the connected
+    // database does have, so a wrong connection string is obvious from the UI.
+    let tables: string[] | undefined;
+    if (code === "missing_table") {
+      try {
+        const rows = await db.execute(
+          sql`select tablename from pg_tables where schemaname = 'public' order by tablename`
+        );
+        tables = (rows.rows as { tablename: string }[]).map((r) => r.tablename);
+      } catch (listErr) {
+        console.error("[ad-analytics] Could not list tables:", listErr);
+      }
+    }
+
     return NextResponse.json(
       {
         error: "Failed to fetch analytics",
         code,
         configured: isMarketingDbConfigured(),
+        tables,
       },
       { status: 500 }
     );

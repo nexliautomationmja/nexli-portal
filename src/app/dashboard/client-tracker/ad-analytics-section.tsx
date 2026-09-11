@@ -60,6 +60,8 @@ const dateRanges = [
 interface FetchError {
   code: "missing_table" | "db_error" | "network";
   configured: boolean;
+  /** Tables present in the connected database (only sent for missing_table). */
+  tables?: string[];
 }
 
 export function AdAnalyticsSection() {
@@ -91,6 +93,7 @@ export function AdAnalyticsSection() {
           setError({
             code: data.code === "missing_table" ? "missing_table" : "db_error",
             configured: Boolean(data.configured),
+            tables: Array.isArray(data.tables) ? data.tables : undefined,
           });
           setCampaigns([]);
           setCreatives([]);
@@ -318,8 +321,18 @@ function ConnectionWarning({ error }: { error: FetchError }) {
       "Add MARKETING_DATABASE_URL to the portal's Vercel project (same value as nexli.net's DATABASE_URL) and redeploy.";
   } else if (error.code === "missing_table") {
     title = "Connected, but the leads table wasn't found";
+    const list = error.tables;
+    const tableList =
+      list === undefined
+        ? ""
+        : list.length === 0
+          ? " That database has no tables at all."
+          : ` Tables it does have: ${list.join(", ")}.`;
     detail =
-      "MARKETING_DATABASE_URL is set but that database has no leads table. Double-check it matches nexli.net's DATABASE_URL.";
+      "MARKETING_DATABASE_URL is set but that database has no leads table." +
+      tableList +
+      " If those are portal tables (users, engagements, invoices), the value is the portal's own DATABASE_URL, not nexli.net's. " +
+      "If they are marketing tables (vsl_tracking) the leads table was never created there.";
   } else {
     title = "Connected, but the leads table couldn't be read";
     detail =
