@@ -1,14 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { db } from "@/db";
+import { getMarketingDb, isMarketingDbConfigured } from "@/db/marketing";
 import { leads } from "@/db/schema";
 import { sql, gte, isNotNull, and, desc } from "drizzle-orm";
+
+/** Postgres error code for "relation does not exist". */
+const PG_UNDEFINED_TABLE = "42P01";
+
+function pgErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as { code?: unknown; cause?: { code?: unknown } };
+  if (typeof e.code === "string") return e.code;
+  if (e.cause && typeof e.cause.code === "string") return e.cause.code;
+  return undefined;
+}
 
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Leads live in the marketing site's database, not the portal's.
+  const db = getMarketingDb();
 
   const days = req.nextUrl.searchParams.get("days");
   const daysNum = days === "all" ? null : Number(days) || 30;
@@ -104,8 +118,14 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("[ad-analytics] Error:", err);
+    const code =
+      pgErrorCode(err) === PG_UNDEFINED_TABLE ? "missing_table" : "db_error";
     return NextResponse.json(
-      { error: "Failed to fetch analytics" },
+      {
+        error: "Failed to fetch analytics",
+        code,
+        configured: isMarketingDbConfigured(),
+      },
       { status: 500 }
     );
   }

@@ -57,9 +57,15 @@ const dateRanges = [
   { label: "All", value: "all" },
 ];
 
+interface FetchError {
+  code: "missing_table" | "db_error" | "network";
+  configured: boolean;
+}
+
 export function AdAnalyticsSection() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState("30");
+  const [error, setError] = useState<FetchError | null>(null);
   const [summary, setSummary] = useState<Summary>({
     totalLeads: 0,
     qualified: 0,
@@ -76,15 +82,28 @@ export function AdAnalyticsSection() {
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     fetch(`/api/dashboard/ad-analytics?days=${days}`)
-      .then((r) => r.json())
-      .then((data) => {
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          // Surface misconfiguration instead of rendering it as "no data yet".
+          setError({
+            code: data.code === "missing_table" ? "missing_table" : "db_error",
+            configured: Boolean(data.configured),
+          });
+          setCampaigns([]);
+          setCreatives([]);
+          setRecentLeads([]);
+          return;
+        }
         setSummary(data.summary || summary);
         setCampaigns(data.campaigns || []);
         setCreatives(data.creatives || []);
         setRecentLeads(data.recentLeads || []);
       })
       .catch(() => {
+        setError({ code: "network", configured: false });
         setCampaigns([]);
         setCreatives([]);
         setRecentLeads([]);
@@ -139,6 +158,9 @@ export function AdAnalyticsSection() {
         </div>
       </div>
 
+      {/* Connection problem — shown instead of the tables' empty states */}
+      {!loading && error && <ConnectionWarning error={error} />}
+
       {/* Summary Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -165,7 +187,7 @@ export function AdAnalyticsSection() {
         </div>
         {loading ? (
           <Spinner />
-        ) : campaigns.length === 0 ? (
+        ) : error ? null : campaigns.length === 0 ? (
           <EmptyState message="No campaign data yet. UTM-tagged ad traffic will appear here." />
         ) : (
           <div className="overflow-x-auto">
@@ -203,7 +225,7 @@ export function AdAnalyticsSection() {
         </div>
         {loading ? (
           <Spinner />
-        ) : creatives.length === 0 ? (
+        ) : error ? null : creatives.length === 0 ? (
           <EmptyState message="No creative data yet. Use utm_content in your ad URLs to track individual ads." />
         ) : (
           <div className="overflow-x-auto">
@@ -241,7 +263,7 @@ export function AdAnalyticsSection() {
         </div>
         {loading ? (
           <Spinner />
-        ) : recentLeads.length === 0 ? (
+        ) : error ? null : recentLeads.length === 0 ? (
           <EmptyState message="No leads from ads yet. Leads will appear here once UTM-tagged traffic converts." />
         ) : (
           <div className="overflow-x-auto">
@@ -278,6 +300,46 @@ export function AdAnalyticsSection() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ConnectionWarning({ error }: { error: FetchError }) {
+  let title: string;
+  let detail: string;
+
+  if (error.code === "network") {
+    title = "Couldn't reach the analytics API";
+    detail = "Check your connection and reload the page.";
+  } else if (!error.configured) {
+    title = "Ad Analytics isn't connected to the nexli.net leads database";
+    detail =
+      "Leads from UTM-tagged links are stored by the marketing site, which uses a separate database from this portal. " +
+      "Add MARKETING_DATABASE_URL to the portal's Vercel project (same value as nexli.net's DATABASE_URL) and redeploy.";
+  } else if (error.code === "missing_table") {
+    title = "Connected, but the leads table wasn't found";
+    detail =
+      "MARKETING_DATABASE_URL is set but that database has no leads table. Double-check it matches nexli.net's DATABASE_URL.";
+  } else {
+    title = "Connected, but the leads table couldn't be read";
+    detail =
+      "The marketing database returned an error. Check the portal's Vercel function logs for \"[ad-analytics] Error\".";
+  }
+
+  return (
+    <div
+      className="rounded-xl border px-4 py-3"
+      style={{
+        borderColor: "rgba(245, 158, 11, 0.4)",
+        background: "rgba(245, 158, 11, 0.08)",
+      }}
+    >
+      <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
+        {title}
+      </p>
+      <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+        {detail}
+      </p>
     </div>
   );
 }
