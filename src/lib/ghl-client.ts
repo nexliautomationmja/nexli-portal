@@ -12,7 +12,7 @@ function getApiKey(): string {
 async function ghlFetch<T>(
   path: string,
   params?: Record<string, string>,
-  opts?: { version?: string }
+  opts?: { version?: string; method?: "GET" | "POST"; body?: unknown }
 ): Promise<T> {
   const url = new URL(path, GHL_BASE_URL);
   if (params) {
@@ -20,12 +20,14 @@ async function ghlFetch<T>(
   }
 
   const res = await fetch(url.toString(), {
+    method: opts?.method ?? "GET",
     headers: {
       Authorization: `Bearer ${getApiKey()}`,
       "Content-Type": "application/json",
       // Some GHL APIs pin their own Version (conversations = 2021-04-15).
       Version: opts?.version ?? "2021-07-28",
     },
+    body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
 
   if (!res.ok) {
@@ -57,6 +59,45 @@ export function contactsCount(res: GHLContactsResponse): number {
   return res.count ?? res.total ?? res.contacts?.length ?? 0;
 }
 
+/**
+ * Contacts added within a date window, newest first, via POST
+ * /contacts/search (the only contacts endpoint with server-side date
+ * filtering and full contact objects incl. attributions + customFields).
+ * `page` is 1-based.
+ */
+export async function searchContactsAddedBetween(
+  locationId: string,
+  since: Date,
+  until: Date,
+  page = 1,
+  pageLimit = 100
+) {
+  return ghlFetch<GHLContactsResponse>("/contacts/search", undefined, {
+    method: "POST",
+    body: {
+      locationId,
+      page,
+      pageLimit,
+      filters: [
+        {
+          field: "dateAdded",
+          operator: "range",
+          value: { gte: since.toISOString(), lte: until.toISOString() },
+        },
+      ],
+      sort: [{ field: "dateAdded", direction: "desc" }],
+    },
+  });
+}
+
+/** Custom field definitions for a location (id → name / fieldKey). */
+export async function getCustomFields(locationId: string) {
+  return ghlFetch<GHLCustomFieldsResponse>(
+    `/locations/${locationId}/customFields`,
+    {}
+  );
+}
+
 export async function getPipelines(locationId: string) {
   return ghlFetch<GHLPipelinesResponse>("/opportunities/pipelines", {
     locationId,
@@ -75,6 +116,37 @@ export async function getOpportunities(
 
 // ── Type definitions ──────────────────────────────────
 
+/**
+ * One attribution record. GHL's `attributions[]` history uses utm* keys plus
+ * `utmSessionSource`; the older `attributionSource` object uses `campaign`
+ * and `sessionSource`. Both shapes are covered here.
+ */
+export interface GHLAttribution {
+  isFirst?: boolean;
+  url?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  campaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+  utmKeyword?: string;
+  utmSessionSource?: string;
+  sessionSource?: string;
+  medium?: string;
+  referrer?: string;
+  fbclid?: string;
+  gclid?: string;
+}
+
+export interface GHLContactCustomField {
+  id: string;
+  value?: unknown;
+  /** Some responses inline the key instead of only the id. */
+  key?: string;
+  fieldKey?: string;
+}
+
 export interface GHLContact {
   id: string;
   firstName?: string;
@@ -84,6 +156,22 @@ export interface GHLContact {
   dateAdded: string;
   source?: string;
   tags?: string[];
+  attributions?: GHLAttribution[];
+  attributionSource?: GHLAttribution;
+  lastAttributionSource?: GHLAttribution;
+  customFields?: GHLContactCustomField[];
+  /** Older responses use the singular key. */
+  customField?: GHLContactCustomField[];
+}
+
+export interface GHLCustomFieldDefinition {
+  id: string;
+  name?: string;
+  fieldKey?: string;
+}
+
+export interface GHLCustomFieldsResponse {
+  customFields: GHLCustomFieldDefinition[];
 }
 
 export interface GHLContactsResponse {

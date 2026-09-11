@@ -1,54 +1,47 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { ChartIcon } from "@/components/ui/icons";
 
-interface Summary {
-  totalLeads: number;
-  qualified: number;
-  raw: number;
-  disqualified: number;
-  bookedCalls: number;
-  showedCalls: number;
-  opportunities: number;
-  purchases: number;
-}
-
-interface CampaignRow {
-  campaign: string | null;
+interface Bucket {
+  key: string;
+  label: string;
   total: number;
-  qualified: number;
   booked: number;
-  purchased: number;
+  won: number;
 }
 
-interface CreativeRow {
-  creative: string | null;
-  total: number;
-  qualified: number;
-  booked: number;
-  purchased: number;
-}
-
-interface LeadRow {
+interface RecentLead {
   id: string;
-  firstName: string | null;
-  lastName: string | null;
+  name: string;
   email: string | null;
-  firmName: string | null;
-  leadScore: string | null;
-  formSource: string | null;
-  utmCampaign: string | null;
-  utmContent: string | null;
-  utmSource: string | null;
-  createdAt: string;
+  source: string | null;
+  campaign: string | null;
+  content: string | null;
+  booked: boolean;
+  won: boolean;
+  dateAdded: string;
 }
 
-const scoreConfig: Record<string, { label: string; color: string; bg: string }> = {
-  qualified: { label: "Qualified", color: "text-emerald-500", bg: "bg-emerald-500/10" },
-  raw: { label: "Raw", color: "text-gray-400", bg: "bg-gray-400/10" },
-  disqualified: { label: "Disqualified", color: "text-red-500", bg: "bg-red-500/10" },
-};
+interface AdAnalyticsData {
+  connected: boolean;
+  range: string;
+  ghlLocationId: string | null;
+  summary: { totalLeads: number; bookedCalls: number; won: number };
+  campaigns: Bucket[];
+  creatives: Bucket[];
+  sources: Bucket[];
+  recentLeads: RecentLead[];
+  diagnostics: {
+    scanned: number;
+    withUtm: number;
+    mode: "search" | "list" | "none";
+    truncated: boolean;
+    since: string;
+  };
+  computedAt: string;
+}
 
 const dateRanges = [
   { label: "7d", value: "7" },
@@ -57,81 +50,67 @@ const dateRanges = [
   { label: "All", value: "all" },
 ];
 
-interface FetchError {
-  code: "missing_table" | "db_error" | "network";
-  configured: boolean;
-  /** Tables present in the connected database (only sent for missing_table). */
-  tables?: string[];
+const EMPTY: AdAnalyticsData = {
+  connected: true,
+  range: "30",
+  ghlLocationId: null,
+  summary: { totalLeads: 0, bookedCalls: 0, won: 0 },
+  campaigns: [],
+  creatives: [],
+  sources: [],
+  recentLeads: [],
+  diagnostics: { scanned: 0, withUtm: 0, mode: "none", truncated: false, since: "" },
+  computedAt: "",
+};
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function rate(part: number, total: number): string {
+  if (total === 0) return "0%";
+  return `${Math.round((part / total) * 100)}%`;
 }
 
 export function AdAnalyticsSection() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState("30");
-  const [error, setError] = useState<FetchError | null>(null);
-  const [summary, setSummary] = useState<Summary>({
-    totalLeads: 0,
-    qualified: 0,
-    raw: 0,
-    disqualified: 0,
-    bookedCalls: 0,
-    showedCalls: 0,
-    opportunities: 0,
-    purchases: 0,
-  });
-  const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
-  const [creatives, setCreatives] = useState<CreativeRow[]>([]);
-  const [recentLeads, setRecentLeads] = useState<LeadRow[]>([]);
+  const [data, setData] = useState<AdAnalyticsData>(EMPTY);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async (range: string, refresh: boolean) => {
     setLoading(true);
     setError(null);
-    fetch(`/api/dashboard/ad-analytics?days=${days}`)
-      .then(async (r) => {
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          // Surface misconfiguration instead of rendering it as "no data yet".
-          setError({
-            code: data.code === "missing_table" ? "missing_table" : "db_error",
-            configured: Boolean(data.configured),
-            tables: Array.isArray(data.tables) ? data.tables : undefined,
-          });
-          setCampaigns([]);
-          setCreatives([]);
-          setRecentLeads([]);
-          return;
-        }
-        setSummary(data.summary || summary);
-        setCampaigns(data.campaigns || []);
-        setCreatives(data.creatives || []);
-        setRecentLeads(data.recentLeads || []);
-      })
-      .catch(() => {
-        setError({ code: "network", configured: false });
-        setCampaigns([]);
-        setCreatives([]);
-        setRecentLeads([]);
-      })
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+    try {
+      const r = await fetch(
+        `/api/dashboard/ad-analytics?days=${range}${refresh ? "&refresh=1" : ""}`
+      );
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(body.message || body.error || `Request failed (${r.status})`);
+        setData({ ...EMPTY, range });
+        return;
+      }
+      setData(body as AdAnalyticsData);
+    } catch {
+      setError("Couldn't reach the analytics API. Check your connection and reload.");
+      setData({ ...EMPTY, range });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  function qualRate(qualified: number, total: number): string {
-    if (total === 0) return "0%";
-    return `${Math.round((qualified / total) * 100)}%`;
-  }
+  useEffect(() => {
+    load(days, false);
+  }, [days, load]);
 
-  function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
-  function formatSource(source: string | null): string {
-    if (!source) return "—";
-    return source.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  }
+  const { summary, diagnostics } = data;
+  const profileUrl = (id: string) =>
+    data.ghlLocationId
+      ? `https://app.gohighlevel.com/v2/location/${data.ghlLocationId}/contacts/detail/${id}`
+      : null;
 
   return (
     <div className="space-y-6">
@@ -141,36 +120,74 @@ export function AdAnalyticsSection() {
             Ad Analytics
           </h2>
           <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Which campaigns and creatives drive qualified leads (from your UTM tracking).
+            Which campaigns and creatives drive booked calls, from the UTM data on your
+            GoHighLevel contacts.
           </p>
         </div>
-        <div className="flex items-center rounded-lg border border-[var(--card-border)] overflow-hidden">
-          {dateRanges.map((range) => (
-            <button
-              key={range.value}
-              onClick={() => setDays(range.value)}
-              className="px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                background: days === range.value ? "linear-gradient(135deg, #2563EB, #06B6D4)" : "transparent",
-                color: days === range.value ? "#fff" : "var(--text-muted)",
-              }}
-            >
-              {range.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg border border-[var(--card-border)] overflow-hidden">
+            {dateRanges.map((range) => (
+              <button
+                key={range.value}
+                onClick={() => setDays(range.value)}
+                className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={{
+                  background:
+                    days === range.value
+                      ? "linear-gradient(135deg, #2563EB, #06B6D4)"
+                      : "transparent",
+                  color: days === range.value ? "#fff" : "var(--text-muted)",
+                }}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => load(days, true)}
+            disabled={loading}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--card-border)] transition-colors disabled:opacity-40"
+            style={{ color: "var(--text-muted)" }}
+            title="Re-scan GoHighLevel now instead of using the 10-minute cache"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* Connection problem — shown instead of the tables' empty states */}
-      {!loading && error && <ConnectionWarning error={error} />}
+      {!loading && !data.connected && (
+        <Notice
+          title="Connect GoHighLevel to see ad analytics"
+          detail={
+            <>
+              Ad Analytics reads UTM attribution from your GHL contacts. Add your Location ID in{" "}
+              <Link href="/dashboard/settings" className="underline">
+                Settings
+              </Link>{" "}
+              and hit Connect.
+            </>
+          }
+        />
+      )}
+
+      {!loading && error && (
+        <Notice title="GoHighLevel didn't return contacts" detail={error} />
+      )}
+
+      {!loading && !error && data.connected && diagnostics.scanned > 0 && diagnostics.withUtm === 0 && (
+        <Notice
+          title={`None of the ${diagnostics.scanned} contacts added in this window carry UTM data`}
+          detail="Open one of those leads in GoHighLevel and check where the UTM values live. They need to be in the contact's Attribution panel or in custom fields named utm_source, utm_campaign and utm_content. If the values are only in the contact's notes or in a workflow, they can't be reported on."
+        />
+      )}
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Leads", value: summary.totalLeads },
-          { label: "Qualified", value: summary.qualified },
-          { label: "Booked Calls", value: summary.bookedCalls },
-          { label: "Purchases", value: summary.purchases },
+          { label: "Ad Leads", value: String(summary.totalLeads) },
+          { label: "Booked Calls", value: String(summary.bookedCalls) },
+          { label: "Booking Rate", value: rate(summary.bookedCalls, summary.totalLeads) },
+          { label: "Won", value: String(summary.won) },
         ].map((stat) => (
           <div key={stat.label} className="glass-card p-4">
             <p className="text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
@@ -183,118 +200,112 @@ export function AdAnalyticsSection() {
         ))}
       </div>
 
-      {/* Campaign Performance */}
-      <div className="glass-card overflow-hidden">
-        <div className="p-4 border-b border-[var(--card-border)]">
-          <p className="section-header mb-0">By Campaign (Angle)</p>
-        </div>
-        {loading ? (
-          <Spinner />
-        ) : error ? null : campaigns.length === 0 ? (
-          <EmptyState message="No campaign data yet. UTM-tagged ad traffic will appear here." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[var(--card-border)]">
-                  {["Campaign", "Total", "Qualified", "Booked", "Purchased", "Qual Rate"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.map((row) => (
-                  <tr key={row.campaign} className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>{row.campaign || "—"}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.total}</td>
-                    <td className="px-4 py-3 text-sm text-emerald-500 font-semibold">{row.qualified}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.booked}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.purchased}</td>
-                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>{qualRate(row.qualified, row.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {!loading && data.connected && !error && (
+        <p className="text-xs -mt-2" style={{ color: "var(--text-muted)" }}>
+          Scanned {diagnostics.scanned.toLocaleString("en-US")} contact
+          {diagnostics.scanned === 1 ? "" : "s"} added since {formatDate(diagnostics.since)};{" "}
+          {diagnostics.withUtm.toLocaleString("en-US")} with UTM attribution.
+          {diagnostics.truncated ? " Scan capped at 1,000 contacts." : ""}
+          {data.computedAt ? ` Updated ${new Date(data.computedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.` : ""}
+        </p>
+      )}
 
-      {/* Creative Performance */}
-      <div className="glass-card overflow-hidden">
-        <div className="p-4 border-b border-[var(--card-border)]">
-          <p className="section-header mb-0">By Creative (Ad)</p>
-        </div>
-        {loading ? (
-          <Spinner />
-        ) : error ? null : creatives.length === 0 ? (
-          <EmptyState message="No creative data yet. Use utm_content in your ad URLs to track individual ads." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[var(--card-border)]">
-                  {["Creative", "Total", "Qualified", "Booked", "Purchased", "Qual Rate"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {creatives.map((row) => (
-                  <tr key={row.creative} className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>{row.creative || "—"}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.total}</td>
-                    <td className="px-4 py-3 text-sm text-emerald-500 font-semibold">{row.qualified}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.booked}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{row.purchased}</td>
-                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>{qualRate(row.qualified, row.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <BucketTable
+        title="By Campaign (Angle)"
+        firstCol="Campaign"
+        rows={data.campaigns}
+        loading={loading}
+        empty="No campaign data yet. Leads whose link carried utm_campaign will appear here."
+      />
+
+      <BucketTable
+        title="By Creative (Ad)"
+        firstCol="Creative"
+        rows={data.creatives}
+        loading={loading}
+        empty="No creative data yet. Use utm_content in your ad URLs to track individual ads."
+      />
+
+      <BucketTable
+        title="By Source"
+        firstCol="Source"
+        rows={data.sources}
+        loading={loading}
+        empty="No source data yet. Leads whose link carried utm_source will appear here."
+      />
 
       {/* Recent Leads */}
       <div className="glass-card overflow-hidden">
         <div className="p-4 border-b border-[var(--card-border)]">
-          <p className="section-header mb-0">Recent Leads</p>
+          <p className="section-header mb-0">Recent Ad Leads</p>
         </div>
         {loading ? (
           <Spinner />
-        ) : error ? null : recentLeads.length === 0 ? (
-          <EmptyState message="No leads from ads yet. Leads will appear here once UTM-tagged traffic converts." />
+        ) : data.recentLeads.length === 0 ? (
+          <EmptyState message="No leads from ads yet. Contacts that arrived through a UTM-tagged link will appear here." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--card-border)]">
-                  {["Name", "Email", "Score", "Campaign", "Creative", "Form", "Date"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                  {["Name", "Email", "Source", "Campaign", "Creative", "Status", "Added"].map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest"
+                      style={{ color: "var(--text-muted)" }}
+                    >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {recentLeads.map((lead) => {
-                  const sc = scoreConfig[lead.leadScore || "raw"] || scoreConfig.raw;
-                  const name = [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "—";
+                {data.recentLeads.map((lead) => {
+                  const url = profileUrl(lead.id);
                   return (
-                    <tr key={lead.id} className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors">
-                      <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>{name}</td>
-                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-muted)" }}>{lead.email || "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${sc.color} ${sc.bg}`}>{sc.label}</span>
+                    <tr
+                      key={lead.id}
+                      className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
+                    >
+                      <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                        {url ? (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline"
+                            title="Open in GoHighLevel"
+                          >
+                            {lead.name}
+                          </a>
+                        ) : (
+                          lead.name
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{lead.utmCampaign || "—"}</td>
-                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>{lead.utmContent || "—"}</td>
-                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-muted)" }}>{formatSource(lead.formSource)}</td>
-                      <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>{formatDate(lead.createdAt)}</td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-muted)" }}>
+                        {lead.email || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
+                        {lead.source || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
+                        {lead.campaign || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
+                        {lead.content || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {lead.won ? (
+                          <Pill text="Won" color="text-emerald-500" bg="bg-emerald-500/10" />
+                        ) : lead.booked ? (
+                          <Pill text="Booked" color="text-blue-500" bg="bg-blue-500/10" />
+                        ) : (
+                          <Pill text="Lead" color="text-gray-400" bg="bg-gray-400/10" />
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                        {formatDate(lead.dateAdded)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -307,45 +318,84 @@ export function AdAnalyticsSection() {
   );
 }
 
-function ConnectionWarning({ error }: { error: FetchError }) {
-  let title: string;
-  let detail: string;
+function BucketTable({
+  title,
+  firstCol,
+  rows,
+  loading,
+  empty,
+}: {
+  title: string;
+  firstCol: string;
+  rows: Bucket[];
+  loading: boolean;
+  empty: string;
+}) {
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="p-4 border-b border-[var(--card-border)]">
+        <p className="section-header mb-0">{title}</p>
+      </div>
+      {loading ? (
+        <Spinner />
+      ) : rows.length === 0 ? (
+        <EmptyState message={empty} />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-[var(--card-border)]">
+                {[firstCol, "Leads", "Booked", "Booking Rate", "Won"].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={row.key}
+                  className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
+                >
+                  <td className="px-4 py-3 text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                    {row.label}
+                  </td>
+                  <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
+                    {row.total}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-blue-500 font-semibold">{row.booked}</td>
+                  <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>
+                    {rate(row.booked, row.total)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-emerald-500 font-semibold">{row.won}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
-  if (error.code === "network") {
-    title = "Couldn't reach the analytics API";
-    detail = "Check your connection and reload the page.";
-  } else if (!error.configured) {
-    title = "Ad Analytics isn't connected to the nexli.net leads database";
-    detail =
-      "Leads from UTM-tagged links are stored by the marketing site, which uses a separate database from this portal. " +
-      "Add MARKETING_DATABASE_URL to the portal's Vercel project (same value as nexli.net's DATABASE_URL) and redeploy.";
-  } else if (error.code === "missing_table") {
-    title = "Connected, but the leads table wasn't found";
-    const list = error.tables;
-    const tableList =
-      list === undefined
-        ? ""
-        : list.length === 0
-          ? " That database has no tables at all."
-          : ` Tables it does have: ${list.join(", ")}.`;
-    detail =
-      "MARKETING_DATABASE_URL is set but that database has no leads table." +
-      tableList +
-      " If those are portal tables (users, engagements, invoices), the value is the portal's own DATABASE_URL, not nexli.net's. " +
-      "If they are marketing tables (vsl_tracking) the leads table was never created there.";
-  } else {
-    title = "Connected, but the leads table couldn't be read";
-    detail =
-      "The marketing database returned an error. Check the portal's Vercel function logs for \"[ad-analytics] Error\".";
-  }
+function Pill({ text, color, bg }: { text: string; color: string; bg: string }) {
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${color} ${bg}`}>
+      {text}
+    </span>
+  );
+}
 
+function Notice({ title, detail }: { title: string; detail: ReactNode }) {
   return (
     <div
       className="rounded-xl border px-4 py-3"
-      style={{
-        borderColor: "rgba(245, 158, 11, 0.4)",
-        background: "rgba(245, 158, 11, 0.08)",
-      }}
+      style={{ borderColor: "rgba(245, 158, 11, 0.4)", background: "rgba(245, 158, 11, 0.08)" }}
     >
       <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
         {title}

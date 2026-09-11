@@ -11,6 +11,7 @@ import {
 } from "@/lib/ghl-client";
 import { ensurePipelineTable, MAX_VALUE_CENTS } from "@/lib/pipeline-table";
 import { PIPELINE } from "@/lib/drs-pricing";
+import { hasBookedTag } from "@/lib/ghl-attribution";
 
 /**
  * Internal sales pipeline — owner-scoped. Manual leads plus an automatic
@@ -63,18 +64,10 @@ async function markSynced(ownerId: string): Promise<void> {
   });
 }
 
-/**
- * A contact counts as "booked" when a tag shows they booked a call at some
- * point (cal.com bookings, "booked call", "call booked", …) — evidence of
- * real interest even if the event itself is outside the calendar window.
- */
-function hasBookedTag(tags: string[] | undefined): boolean {
-  if (!tags) return false;
-  return tags.some((raw) => {
-    const t = raw.toLowerCase();
-    return t.includes("cal.com") || (t.includes("book") && t.includes("call"));
-  });
-}
+// hasBookedTag (shared with Ad Analytics) lives in lib/ghl-attribution: a
+// contact counts as "booked" when a tag shows they booked a call at some
+// point — evidence of real interest even if the event itself is outside the
+// calendar window.
 
 async function syncBookedCalls(ownerId: string): Promise<void> {
   const [user] = await db
