@@ -18,14 +18,19 @@ export type BillingPlan = "monthly" | "annual";
 
 /**
  * Performance-based ad management. There is no monthly ad retainer — the
- * Provider earns a percentage of the revenue the Client actually collects
- * from tax advisory clients attributable to the Nexli acquisition system
- * (i.e., strictly the clients the Provider-managed ads bring in), attributed
- * via the tracking system. Billed as results come in, outside the flat
- * platform price. The flat price covers the buildout AND ongoing maintenance.
+ * Provider earns a flat percentage of the revenue the Client actually
+ * collects from tax advisory clients attributable to the Nexli acquisition
+ * system (i.e., strictly the clients the Provider-managed ads bring in),
+ * attributed via the tracking system. Billed as results come in, outside the
+ * flat platform price. The flat price covers the buildout AND ongoing
+ * maintenance.
+ *
+ * Deliberately low (6%, down from 20% in Sep 2026): the client keeps the
+ * bulk of their margin on the new advisory revenue, and the fee mainly
+ * helps offset the monthly platform investment with a small upside on top.
  */
 export const AD_PERFORMANCE = {
-  PERCENT_OF_COLLECTED_REVENUE: 20, // 20% of revenue the client actually collects (leaves margin for ad contractors)
+  PERCENT_OF_COLLECTED_REVENUE: 6, // flat 6% of revenue the client actually collects
   ADVERTISED_SERVICE: "tax planning",
 } as const;
 

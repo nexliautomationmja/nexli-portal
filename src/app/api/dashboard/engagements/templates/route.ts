@@ -10,6 +10,7 @@ import {
   DRS_ANNUAL_TEMPLATE_NAME,
   DRS_ANNUAL_TEMPLATE_CONTENT,
 } from "@/lib/engagement-defaults";
+import { AD_PERFORMANCE } from "@/lib/drs-pricing";
 
 // Two flat all-in-one default templates (Monthly + Annual), auto-seeded for
 // every user.
@@ -36,18 +37,23 @@ function isStaleOldPricing(content: string): boolean {
   return OLD_PRICING_MARKERS.some((m) => content.includes(m));
 }
 
-// Revision marker: every shipped default since Sep 2026 contains the Nexli
-// Triple Guarantee section. A DRS-named row that has the flat-pricing ad
-// section but lacks the guarantee is an older revision — either an old
-// shipped seed or a user's edited copy of one. We can't tell those apart,
-// so the refresh must NEVER overwrite: the old row is renamed "(previous)"
+// Revision markers: every shipped default since Sep 2026 contains the Nexli
+// Triple Guarantee section, and its Section 3(a) states the CURRENT ad
+// performance percentage. A DRS-named row that has the flat-pricing ad
+// section but lacks either marker is an older revision (e.g. the 20%
+// letters shipped before the fee dropped to 6%) — either an old shipped
+// seed or a user's edited copy of one. We can't tell those apart, so the
+// refresh must NEVER overwrite: the old row is renamed "(previous)"
 // (preserving any edits) and a fresh seed is inserted under the default
 // name. The compose UI regenerates DRS letters from code anyway; this keeps
 // the stored rows from drifting.
+const CURRENT_AD_FEE_PHRASE = `equal to ${AD_PERFORMANCE.PERCENT_OF_COLLECTED_REVENUE}% of the revenue actually collected`;
+
 function isStaleShippedRevision(content: string): boolean {
   return (
     content.includes("AD MANAGEMENT (PERFORMANCE-BASED)") &&
-    !content.includes("NEXLI TRIPLE GUARANTEE")
+    (!content.includes("NEXLI TRIPLE GUARANTEE") ||
+      !content.includes(CURRENT_AD_FEE_PHRASE))
   );
 }
 
