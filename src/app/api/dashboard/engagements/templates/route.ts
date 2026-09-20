@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { engagementTemplates } from "@/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or, like, inArray } from "drizzle-orm";
 import {
   DRS_TEMPLATE_NAME,
   DRS_MONTHLY_TEMPLATE_NAME,
@@ -40,14 +40,9 @@ function isStaleOldPricing(content: string): boolean {
 
 // Revision check: a DRS-named row that is a Service Engagement Agreement but
 // does not match the currently shipped revision for its plan (same fee line,
-// same Section 3 / Section 4 headings — see isCurrentDrsRevision) is an
-// older revision: the 20%/6% revenue-share letters, the $39,997 annual
-// letter, or a user's edited copy of one. We can't tell those apart, so the
-// refresh must NEVER overwrite: the old row is renamed "(previous <date>)"
-// (preserving any edits) and a fresh seed is inserted under the default
-// name. The compose UI regenerates DRS letters from code anyway; this keeps
-// the stored rows from drifting, and any future price or clause change
-// refreshes automatically.
+// same Section 3 / Section 4 headings, current revision markers — see
+// isCurrentDrsRevision) is an older revision: the 20%/6% revenue-share
+// letters, the $39,997 annual letter, the stacking-bonus letter, etc.
 function isStaleShippedRevision(content: string, plan: BillingPlan): boolean {
   return (
     content.includes("SERVICE ENGAGEMENT AGREEMENT") &&
@@ -55,15 +50,29 @@ function isStaleShippedRevision(content: string, plan: BillingPlan): boolean {
   );
 }
 
+// Superseded DRS template names that earlier revisions of this route seeded
+// or renamed: the old Starter template, the transitional single
+// "Digital Rainmaker System" template, and the "(previous …)" / "(legacy)"
+// copies the old non-destructive refresh left behind. Marcel asked (Sep 20
+// 2026) for all of these to go so only the current Monthly/Annual pair is
+// listed. Edits to DRS-named templates were never used anyway — the compose
+// UI regenerates DRS letters from code — so nothing functional is lost.
+const SUPERSEDED_EXACT_NAMES = ["Starter Digital Rainmaker System", DRS_TEMPLATE_NAME];
+const SUPERSEDED_NAME_PATTERNS = [
+  "%Digital Rainmaker System%(previous%",
+  "%Digital Rainmaker System%(legacy)%",
+];
+
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Auto-seed default templates if they don't exist; refresh templates that
-  // still hold an older shipped default (user-edited content never matches a
-  // legacy hash and is left untouched).
+  // Auto-seed the default templates if missing; overwrite in place any
+  // default-named row that still holds an older revision, so the Templates
+  // list always shows exactly the current letters. Only DRS-named rows are
+  // ever touched.
   for (const tmpl of DEFAULT_TEMPLATES) {
     const [existing] = await db
       .select({
@@ -87,75 +96,26 @@ export async function GET() {
       });
     } else if (
       existing.content !== tmpl.content &&
-      isStaleOldPricing(existing.content)
+      (isStaleOldPricing(existing.content) ||
+        isStaleShippedRevision(existing.content, tmpl.plan))
     ) {
-      // Auto-upgrade a stale old-pricing DRS template to the flat default —
-      // these markers only ever appear in pre-flat seeds, never user copy.
       await db
         .update(engagementTemplates)
         .set({ content: tmpl.content, updatedAt: new Date() })
         .where(eq(engagementTemplates.id, existing.id));
-    } else if (
-      existing.content !== tmpl.content &&
-      isStaleShippedRevision(existing.content, tmpl.plan)
-    ) {
-      // Older revision (possibly user-edited): preserve it under a dated
-      // "(previous …)" name and seed the current default fresh.
-      const stamp = new Date().toISOString().slice(0, 10);
-      await db
-        .update(engagementTemplates)
-        .set({ name: `${tmpl.name} (previous ${stamp})`, updatedAt: new Date() })
-        .where(eq(engagementTemplates.id, existing.id));
-      await db.insert(engagementTemplates).values({
-        ownerId: session.user.id,
-        name: tmpl.name,
-        content: tmpl.content,
-      });
     }
   }
 
-  // Remove auto-seeded legacy templates that were superseded: the old
-  // Starter template (old pricing) and the transitional single
-  // "Digital Rainmaker System" template (replaced by the Monthly/Annual
-  // pair). Only unedited auto-seeded content is deleted — a template the
-  // user modified never matches these checks.
-  const legacyNames = ["Starter Digital Rainmaker System", DRS_TEMPLATE_NAME];
-  for (const legacyName of legacyNames) {
-    const rows = await db
-      .select({ id: engagementTemplates.id, content: engagementTemplates.content })
-      .from(engagementTemplates)
-      .where(
-        and(
-          eq(engagementTemplates.ownerId, session.user.id),
-          eq(engagementTemplates.name, legacyName)
-        )
-      );
-    for (const row of rows) {
-      const isExactSeed =
-        row.content === DRS_MONTHLY_TEMPLATE_CONTENT ||
-        row.content === DRS_ANNUAL_TEMPLATE_CONTENT;
-      // Heuristic match: an older seeded revision (old pricing markers, or
-      // the flat fee-section phrasing from an earlier constants revision).
-      const looksSeeded =
-        isStaleOldPricing(row.content) ||
-        row.content.includes("Monthly Investment:") ||
-        row.content.includes("Annual Investment (Paid in Full):");
-
-      if (isExactSeed) {
-        // Provably our unedited seed — safe to delete outright.
-        await db
-          .delete(engagementTemplates)
-          .where(eq(engagementTemplates.id, row.id));
-      } else if (looksSeeded) {
-        // Might carry user edits — never destroy content. Rename it out of
-        // the legacy name so it stops being reprocessed but stays available.
-        await db
-          .update(engagementTemplates)
-          .set({ name: `${legacyName} (legacy)`, updatedAt: new Date() })
-          .where(eq(engagementTemplates.id, row.id));
-      }
-    }
-  }
+  // Delete superseded DRS template rows (see SUPERSEDED_* above).
+  await db.delete(engagementTemplates).where(
+    and(
+      eq(engagementTemplates.ownerId, session.user.id),
+      or(
+        inArray(engagementTemplates.name, SUPERSEDED_EXACT_NAMES),
+        ...SUPERSEDED_NAME_PATTERNS.map((p) => like(engagementTemplates.name, p))
+      )
+    )
+  );
 
   const templates = await db
     .select()
