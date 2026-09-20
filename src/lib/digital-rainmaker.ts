@@ -6,13 +6,14 @@
  * platform invoice that mirrors the flat all-in-one fee structure:
  *
  *   - Monthly plan → $4,997/month, recurring monthly, due at signing
- *   - Annual plan  → $39,997/year prepaid, recurring yearly, due at signing
+ *   - Annual plan  → $42,000/year prepaid, recurring yearly, due at signing
  *
  * There are no setup fees and no separate ad-management invoices — ad
- * management is performance-based and billed manually as results come in
- * (see AD_PERFORMANCE in drs-pricing.ts). The billing plan is snapshotted
- * onto engagement.metadata at compose time so a signed client keeps their
- * plan even if pricing changes.
+ * management is included in the flat price, and the only performance-based
+ * compensation is the milestone Success Bonus (SUCCESS_BONUS in
+ * drs-pricing.ts), invoiced manually when a milestone is hit. The billing
+ * plan is snapshotted onto engagement.metadata at compose time so a signed
+ * client keeps their plan even if pricing changes.
  *
  * Each generated invoice carries metadata { engagementId, drsRole } where
  * drsRole is "platform_monthly" or "platform_annual". The existing recurring
@@ -42,9 +43,9 @@ import { createNotification } from "@/lib/notifications";
 
 // Pricing lives in drs-pricing.ts (client-safe module); re-exported here so
 // existing server-side imports keep working.
-import { DRS_PRICING, AD_PERFORMANCE, type BillingPlan } from "./drs-pricing";
+import { DRS_PRICING, type BillingPlan } from "./drs-pricing";
 
-export { DRS_PRICING, AD_PERFORMANCE } from "./drs-pricing";
+export { DRS_PRICING, SUCCESS_BONUS } from "./drs-pricing";
 export type { BillingPlan } from "./drs-pricing";
 
 export type DrsRole = "platform_monthly" | "platform_annual";

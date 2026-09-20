@@ -6,7 +6,7 @@ import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/co
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
 import { generateDrsContent } from "@/lib/engagement-defaults";
-import { DRS_PRICING, AD_PERFORMANCE, type BillingPlan } from "@/lib/drs-pricing";
+import { DRS_PRICING, type BillingPlan } from "@/lib/drs-pricing";
 
 const fmtWhole = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
 
@@ -70,7 +70,7 @@ export function EngagementsClient() {
   const [showPreview, setShowPreview] = useState(false);
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
-  // Billing plan (flat all-in-one): monthly $4,997 or annual $39,997 prepaid
+  // Billing plan (flat all-in-one): monthly $4,997 or annual $42,000 prepaid
   const [billingPlan, setBillingPlan] = useState<BillingPlan>("monthly");
 
   useEffect(() => {
@@ -628,7 +628,7 @@ export function EngagementsClient() {
                     </label>
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ad management is separate and performance-based ({AD_PERFORMANCE.PERCENT_OF_COLLECTED_REVENUE}% of collected revenue from the advisory clients the ads bring in) — no ad line item on the invoice.
+                    Ad management is included in the flat price — no ad line item on the invoice, no revenue share. Success bonuses (Section 3) are invoiced manually when a revenue milestone is hit.
                   </p>
                 </div>
               )}

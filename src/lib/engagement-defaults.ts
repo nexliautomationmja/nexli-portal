@@ -1,15 +1,18 @@
 /**
  * Default engagement letter template content for the Digital Rainmaker System.
  *
- * One flat all-in-one price ($4,997/mo or $39,997/yr prepaid) plus a separate,
- * performance-based ad management arrangement. All dollar amounts are
+ * One flat all-in-one price ($4,997/mo or $42,000/yr prepaid) with ad
+ * management included and no revenue share; the only performance-based
+ * compensation is the milestone Success Bonus. All dollar amounts are
  * interpolated from the pricing constants in drs-pricing.ts so the contract
  * can never drift from what the billing engine actually charges.
  */
 
 import {
   DRS_PRICING,
-  AD_PERFORMANCE,
+  ADVERTISED_SERVICE,
+  SUCCESS_BONUS,
+  successBonusSchedule,
   TRIPLE_GUARANTEE,
   type BillingPlan,
 } from "./drs-pricing";
@@ -18,6 +21,10 @@ import {
 
 function fmt(cents: number): string {
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+}
+
+function fmtWhole(cents: number): string {
+  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
 }
 
 // Dual-pricing presentation (never "fee added at checkout") — see drs-pricing.ts.
@@ -31,26 +38,57 @@ export const DRS_TEMPLATE_NAME = "Digital Rainmaker System";
  * Builds the full DRS engagement letter for the chosen billing plan. The fee
  * structure is a single flat all-in-one investment — monthly or annual
  * prepaid — with no setup fees, covering the buildout AND ongoing
- * maintenance. Ad management is a separate, performance-based arrangement
- * (Section 3), and the Nexli Triple Guarantee (Section 4) carves out express
- * exceptions to the no-refund/no-credit and no-results-guarantee clauses.
- * Section numbering is identical for both plans.
+ * maintenance. Ad management is included in the flat price with no revenue
+ * share; the only performance-based compensation is the milestone Success
+ * Bonus (Section 3). The Nexli Triple Guarantee (Section 4) carves out
+ * express exceptions to the no-refund/no-credit and no-results-guarantee
+ * clauses. Section numbering is identical for both plans.
  */
+
+/** The Section 2(a) fee line for a plan — also the revision anchor used by the template refresh. */
+export function drsFeeLine(plan: BillingPlan): string {
+  return plan === "annual"
+    ? `a) Annual Investment (Paid in Full): ${fmt(DRS_PRICING.ANNUAL_CENTS)} USD/year`
+    : `a) Monthly Investment: ${fmt(DRS_PRICING.MONTHLY_CENTS)} USD/month`;
+}
+
+const AD_SECTION_HEADING = "3. AD MANAGEMENT & SUCCESS BONUS";
+const GUARANTEE_SECTION_HEADING = "4. THE NEXLI TRIPLE GUARANTEE";
+
+/**
+ * True when a stored DRS letter matches the currently shipped revision for
+ * its plan: same fee line (so any price change is detected), plus the
+ * current Section 3 and Section 4 headings (so clause rewrites are detected).
+ */
+export function isCurrentDrsRevision(content: string, plan: BillingPlan): boolean {
+  return (
+    content.includes(drsFeeLine(plan)) &&
+    content.includes(AD_SECTION_HEADING) &&
+    content.includes(GUARANTEE_SECTION_HEADING)
+  );
+}
+
 export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const monthly = fmt(DRS_PRICING.MONTHLY_CENTS);
   const annual = fmt(DRS_PRICING.ANNUAL_CENTS);
   const monthlyAnnualized = fmt(DRS_PRICING.MONTHLY_CENTS * 12);
-  const adPct = AD_PERFORMANCE.PERCENT_OF_COLLECTED_REVENUE;
-  const service = AD_PERFORMANCE.ADVERTISED_SERVICE;
+  const service = ADVERTISED_SERVICE;
   const g = TRIPLE_GUARANTEE;
   const launchCredit = fmt(g.LAUNCH_CREDIT_CENTS);
+  const bonusPct = SUCCESS_BONUS.BONUS_PERCENT_OF_MILESTONE;
+  const bonusSchedule = successBonusSchedule()
+    .map(
+      (t) =>
+        `— When Attributed Revenue in a Contract Year reaches ${fmtWhole(t.milestoneCents)}: one-time bonus of ${fmt(t.bonusCents)} USD`
+    )
+    .join("\n\n");
 
   const feeStructure =
     plan === "annual"
-      ? `a) Annual Investment (Paid in Full): ${annual} USD/year — Due upon execution of this Agreement. This all-in-one investment covers the buildout and ongoing maintenance of the complete Digital Rainmaker System — website, AI automations, dashboard access, and technical support — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless canceled.
+      ? `${drsFeeLine("annual")} — Due upon execution of this Agreement. This all-in-one investment covers the buildout and ongoing maintenance of the complete Digital Rainmaker System — website, AI automations, dashboard access, ad management, and technical support — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless canceled.
 
 b) There are no separate setup fees. This payment activates the Agreement and authorizes Provider to begin work.`
-      : `a) Monthly Investment: ${monthly} USD/month — All-in-one recurring investment covering the buildout and ongoing maintenance of the complete Digital Rainmaker System, including the website, AI automations, dashboard access, and technical support. Billed monthly via ACH bank transfer or card through Stripe.
+      : `${drsFeeLine("monthly")} — All-in-one recurring investment covering the buildout and ongoing maintenance of the complete Digital Rainmaker System, including the website, AI automations, dashboard access, ad management, and technical support. Billed monthly via ACH bank transfer or card through Stripe.
 
 b) There are no separate setup fees. The first monthly payment is due upon execution of this Agreement and activates the Agreement, authorizing Provider to begin work.`;
 
@@ -83,19 +121,19 @@ e) Payment Processing Integration — Create a Stripe account for Client or conn
 
 ${feeStructure}
 
-3. AD MANAGEMENT (PERFORMANCE-BASED)
+${AD_SECTION_HEADING}
 
-Ad management is an optional, separate, performance-based service. Provider only earns when the advertising produces revenue for Client:
+a) Ad Management Included: Provider manages Client's advertising campaigns (the "acquisition system") as part of the platform investment in Section 2. There is no ad management retainer, no setup fee, and no percentage of Client's revenue charged for this service.
 
-a) Performance Fee: Provider shall be paid a performance fee equal to ${adPct}% of the revenue actually collected by Client from each tax advisory client generated through Provider-managed advertising campaigns and attributed via the Nexli tracking system (the "acquisition system"). This fee applies strictly to the clients the advertising brings to the firm — Client's pre-existing clients, and ${service} engagements not attributable to the acquisition system, are outside this fee.
+b) Ad Spend: Client is responsible for ad spend paid directly to the advertising platform (Meta, Google, etc.). Ad spend is the Client's own budget and is separate from and in addition to the platform investment.
 
-b) No Ad Management Retainer: There is no monthly ad management fee. Provider is paid solely on the ${adPct}% collected-revenue basis described above — if the advertising does not produce collected revenue from attributable tax advisory clients, no performance fee is owed.
+c) Success Bonus: "Attributed Revenue" means revenue actually collected by Client from tax advisory clients generated through Provider-managed advertising campaigns and attributed via the Nexli tracking system. Client's pre-existing clients, and ${service} engagements not attributable to the acquisition system, are excluded. "Contract Year" means each successive twelve (12) month period beginning on the effective date of this Agreement; cumulative Attributed Revenue resets to zero at the start of each Contract Year. Each time cumulative Attributed Revenue within a Contract Year first reaches a milestone below, Client shall pay Provider the one-time bonus for that milestone (${bonusPct}% of the milestone amount). Each milestone bonus is payable once per Contract Year, is invoiced by Provider when the milestone is reached, and is due within fifteen (15) days of the invoice date. No bonus is owed for any milestone that is not reached.
 
-c) Ad Spend: Client is responsible for ad spend paid directly to the advertising platform (Meta, Google, etc.). Ad spend is the Client's own budget and is separate from and in addition to the performance fee.
+${bonusSchedule}
 
-d) Attribution & Reporting: Advisory clients and their collected revenue are attributed using the Nexli tracking system (UTM tracking and conversion attribution). Provider will provide performance reporting so both parties can see which clients and revenue are attributable to the advertising.
+d) Attribution & Reporting: Attributed Revenue is measured using the Nexli tracking system (UTM tracking and conversion attribution). Provider will provide performance reporting so both parties can see which clients and revenue are attributable to the advertising and where cumulative Attributed Revenue stands against the milestones above.
 
-4. THE NEXLI TRIPLE GUARANTEE
+${GUARANTEE_SECTION_HEADING}
 
 Provider stands behind the Digital Rainmaker System with the following three guarantees, offered so Client can start with confidence. If any provision of this Section 4 conflicts with any other provision of this Agreement (including the non-refundability and no-credit provisions of Section 5 and the results disclaimer in Section 9), this Section 4 controls.
 
@@ -103,7 +141,7 @@ a) ${g.QUALIFIED_OPPORTUNITIES} Qualified Advisory Opportunities in ${g.OPPORTUN
 
 b) ${g.LAUNCH_DAYS}-Day Launch Guarantee: Once Provider has received all required assets, access, approvals, and onboarding information from Client, Provider guarantees Client's acquisition system will be built and launched within ${g.LAUNCH_DAYS} days. If Provider misses that deadline because of delays on Provider's end, Client receives a ${launchCredit} credit ${plan === "annual" ? "applied, at Client's election, toward Client's next invoice from Provider or refunded to Client within thirty (30) days" : "toward Client's next monthly payment"}.
 
-c) Performance-Aligned Compensation: Provider's performance fee is tied to actual results. Provider receives ${adPct}% of collected revenue from tax advisory clients attributable to Provider's acquisition system, as set out in Section 3 — meaning Provider's biggest upside comes when Client's firm generates revenue from the clients Provider helps acquire.
+c) Flat-Rate, No Revenue Share: The platform investment in Section 2 is Provider's only recurring fee. Provider never takes a percentage of Client's revenue and never charges a fee per client the advertising brings in. The only performance-based compensation under this Agreement is the Success Bonus in Section 3(c), which is owed solely after Provider's acquisition system has already produced the milestone revenue for Client.
 
 5. PAYMENT TERMS
 

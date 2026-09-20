@@ -9,14 +9,15 @@ import {
   DRS_MONTHLY_TEMPLATE_CONTENT,
   DRS_ANNUAL_TEMPLATE_NAME,
   DRS_ANNUAL_TEMPLATE_CONTENT,
+  isCurrentDrsRevision,
 } from "@/lib/engagement-defaults";
-import { AD_PERFORMANCE } from "@/lib/drs-pricing";
+import type { BillingPlan } from "@/lib/drs-pricing";
 
 // Two flat all-in-one default templates (Monthly + Annual), auto-seeded for
 // every user.
-const DEFAULT_TEMPLATES = [
-  { name: DRS_MONTHLY_TEMPLATE_NAME, content: DRS_MONTHLY_TEMPLATE_CONTENT },
-  { name: DRS_ANNUAL_TEMPLATE_NAME, content: DRS_ANNUAL_TEMPLATE_CONTENT },
+const DEFAULT_TEMPLATES: { name: string; content: string; plan: BillingPlan }[] = [
+  { name: DRS_MONTHLY_TEMPLATE_NAME, content: DRS_MONTHLY_TEMPLATE_CONTENT, plan: "monthly" },
+  { name: DRS_ANNUAL_TEMPLATE_NAME, content: DRS_ANNUAL_TEMPLATE_CONTENT, plan: "annual" },
 ];
 
 // Phrases that only appear in the OLD (pre-flat) pricing templates — setup
@@ -37,23 +38,20 @@ function isStaleOldPricing(content: string): boolean {
   return OLD_PRICING_MARKERS.some((m) => content.includes(m));
 }
 
-// Revision markers: every shipped default since Sep 2026 contains the Nexli
-// Triple Guarantee section, and its Section 3(a) states the CURRENT ad
-// performance percentage. A DRS-named row that has the flat-pricing ad
-// section but lacks either marker is an older revision (e.g. the 20%
-// letters shipped before the fee dropped to 6%) — either an old shipped
-// seed or a user's edited copy of one. We can't tell those apart, so the
-// refresh must NEVER overwrite: the old row is renamed "(previous)"
+// Revision check: a DRS-named row that is a Service Engagement Agreement but
+// does not match the currently shipped revision for its plan (same fee line,
+// same Section 3 / Section 4 headings — see isCurrentDrsRevision) is an
+// older revision: the 20%/6% revenue-share letters, the $39,997 annual
+// letter, or a user's edited copy of one. We can't tell those apart, so the
+// refresh must NEVER overwrite: the old row is renamed "(previous <date>)"
 // (preserving any edits) and a fresh seed is inserted under the default
 // name. The compose UI regenerates DRS letters from code anyway; this keeps
-// the stored rows from drifting.
-const CURRENT_AD_FEE_PHRASE = `equal to ${AD_PERFORMANCE.PERCENT_OF_COLLECTED_REVENUE}% of the revenue actually collected`;
-
-function isStaleShippedRevision(content: string): boolean {
+// the stored rows from drifting, and any future price or clause change
+// refreshes automatically.
+function isStaleShippedRevision(content: string, plan: BillingPlan): boolean {
   return (
-    content.includes("AD MANAGEMENT (PERFORMANCE-BASED)") &&
-    (!content.includes("NEXLI TRIPLE GUARANTEE") ||
-      !content.includes(CURRENT_AD_FEE_PHRASE))
+    content.includes("SERVICE ENGAGEMENT AGREEMENT") &&
+    !isCurrentDrsRevision(content, plan)
   );
 }
 
@@ -99,13 +97,14 @@ export async function GET() {
         .where(eq(engagementTemplates.id, existing.id));
     } else if (
       existing.content !== tmpl.content &&
-      isStaleShippedRevision(existing.content)
+      isStaleShippedRevision(existing.content, tmpl.plan)
     ) {
-      // Pre-guarantee revision (possibly user-edited): preserve it under a
-      // "(previous)" name and seed the current default fresh.
+      // Older revision (possibly user-edited): preserve it under a dated
+      // "(previous …)" name and seed the current default fresh.
+      const stamp = new Date().toISOString().slice(0, 10);
       await db
         .update(engagementTemplates)
-        .set({ name: `${tmpl.name} (previous)`, updatedAt: new Date() })
+        .set({ name: `${tmpl.name} (previous ${stamp})`, updatedAt: new Date() })
         .where(eq(engagementTemplates.id, existing.id));
       await db.insert(engagementTemplates).values({
         ownerId: session.user.id,

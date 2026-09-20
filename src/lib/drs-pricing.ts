@@ -6,37 +6,64 @@
  *
  * One flat all-in-one price: the whole Digital Rainmaker System for a single
  * monthly (or discounted annual) investment — no setup fees, no ad-management
- * tiers. Ad management is separate and performance-based (see AD_PERFORMANCE).
+ * tiers, no revenue share. Ad management is included in the flat price (the
+ * client pays ad spend directly to the platforms). The only performance-based
+ * compensation is the milestone SUCCESS_BONUS below.
  */
 
 export const DRS_PRICING = {
   MONTHLY_CENTS: 499_700, // $4,997.00 / month — all-in-one
-  ANNUAL_CENTS: 3_999_700, // $39,997.00 / year prepaid (~33% off vs monthly)
+  ANNUAL_CENTS: 4_200_000, // $42,000.00 / year prepaid (~30% off vs $59,964 at the monthly rate; covers processing fees)
 } as const;
 
 export type BillingPlan = "monthly" | "annual";
 
+/** The service the Provider-managed ads promote (used in attribution wording). */
+export const ADVERTISED_SERVICE = "tax planning";
+
 /**
- * Performance-based ad management. There is no monthly ad retainer — the
- * Provider earns a flat percentage of the revenue the Client actually
- * collects from tax advisory clients attributable to the Nexli acquisition
- * system (i.e., strictly the clients the Provider-managed ads bring in),
- * attributed via the tracking system. Billed as results come in, outside the
- * flat platform price. The flat price covers the buildout AND ongoing
- * maintenance.
+ * Success bonus — the ONLY performance-based compensation. Nexli never takes
+ * a percentage of the client's revenue (Marcel, Sep 2026: "not price
+ * gouging"). Instead, each time the cumulative revenue a client actually
+ * collects from advisory clients attributable to Nexli's campaigns
+ * ("Attributed Revenue") first reaches a milestone within a contract year,
+ * the client owes a one-time bonus for that milestone. Each milestone pays
+ * once per contract year; the counter resets every contract year. Invoiced
+ * manually when a milestone is hit — never auto-invoiced.
  *
- * Deliberately low (6%, down from 20% in Sep 2026): the client keeps the
- * bulk of their margin on the new advisory revenue, and the fee mainly
- * helps offset the monthly platform investment with a small upside on top.
+ * Bonus = milestone × BONUS_PERCENT_OF_MILESTONE, so one number tunes the
+ * whole schedule. At 2%: $250K→$5,000, $500K→$10,000, $1M→$20,000,
+ * $2M→$40,000 … $10M→$200,000. If every milestone is hit in one contract
+ * year the cumulative bonus is $1,115,000 on $10M of Attributed Revenue
+ * (~11%); at the first milestone it is 2%.
+ *
+ * PLACEHOLDER: the 2% rate has not been confirmed by Marcel — the milestones
+ * are his, the amounts are a starting point.
  */
-export const AD_PERFORMANCE = {
-  PERCENT_OF_COLLECTED_REVENUE: 6, // flat 6% of revenue the client actually collects
-  ADVERTISED_SERVICE: "tax planning",
+export const SUCCESS_BONUS = {
+  MILESTONES_USD: [
+    250_000, 500_000, 1_000_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000,
+    6_000_000, 7_000_000, 8_000_000, 9_000_000, 10_000_000,
+  ],
+  BONUS_PERCENT_OF_MILESTONE: 2,
 } as const;
+
+export type SuccessBonusTier = { milestoneCents: number; bonusCents: number };
+
+/** The bonus schedule as (milestone, bonus) pairs in cents, ascending. */
+export function successBonusSchedule(): SuccessBonusTier[] {
+  return SUCCESS_BONUS.MILESTONES_USD.map((usd) => ({
+    milestoneCents: usd * 100,
+    bonusCents: Math.round(
+      (usd * 100 * SUCCESS_BONUS.BONUS_PERCENT_OF_MILESTONE) / 100
+    ),
+  }));
+}
 
 /**
  * The Nexli Triple Guarantee — written into the engagement letter
- * (engagement-defaults.ts) so firm owners have less fear of starting.
+ * (engagement-defaults.ts) so firm owners have less fear of starting. The
+ * third leg is the flat-rate / no-revenue-share promise.
  */
 export const TRIPLE_GUARANTEE = {
   QUALIFIED_OPPORTUNITIES: 10, // qualified advisory opportunities…
@@ -52,8 +79,8 @@ export const TRIPLE_GUARANTEE = {
  * average ~18–20% annual churn (top shops 8–10%), typical client lifespan
  * 2–5 years — but ~25% of agencies see tenures under a year, and a new
  * agency should assume the conservative end. Marcel's own estimate is 6–8
- * months; 8 × $4,997 = $39,976 ≈ the $39,997 annual plan, so every open
- * lead ≈ $40K expected value regardless of plan. Editable per lead.
+ * months; 8 × $4,997 = $39,976, so every open lead ≈ $40K expected value
+ * (close to the $42,000 annual plan). Editable per lead.
  */
 export const PIPELINE = {
   EXPECTED_LIFETIME_MONTHS: 8,
