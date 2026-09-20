@@ -15,6 +15,10 @@ export interface BookRow {
   company: string | null;
   billingPlan: "monthly" | "annual" | null;
   signedAt: string | null;
+  /** Day the client started: the DRS engagement's execution date (fallbacks: any signed engagement, first payment). */
+  startDate: string | null;
+  /** Next contract-year anniversary after today — when the Success Bonus is billable (drs-pricing.ts SUCCESS_BONUS). */
+  contractYearEnd: string | null;
   dealsCount: number;
   revenue: number;
   mrr: number;
@@ -29,6 +33,18 @@ export interface BookKpis {
   totalRevenue: number;
   totalMrr: number;
   totalOutstanding: number;
+}
+
+// The end of the client's current contract year: start date + whole years,
+// rolled forward until it lands after `now`. Contract years are 12 months
+// from the engagement's effective date (engagement letter Section 3(c)).
+export function nextContractYearEnd(start: Date, now: Date = new Date()): Date {
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+  while (end.getTime() <= now.getTime()) {
+    end.setFullYear(end.getFullYear() + 1);
+  }
+  return end;
 }
 
 // Monthly-equivalent revenue for a recurring invoice, in cents.
@@ -60,6 +76,11 @@ export async function getBookOfBusiness(
       name: sql<string>`MAX(${engagementSigners.name})`,
       dealsCount: sql<number>`COUNT(DISTINCT ${engagementSigners.engagementId})::int`,
       firstSignedAt: sql<string | null>`MIN(${engagementSigners.signedAt})`,
+      // Execution date of the Digital Rainmaker engagement specifically
+      // (DRS letters snapshot metadata.billingPlan at compose time).
+      drsSignedAt: sql<
+        string | null
+      >`MIN(${engagementSigners.signedAt}) FILTER (WHERE ${engagements.metadata}->>'billingPlan' IS NOT NULL)`,
       latestPlan: sql<
         string | null
       >`(ARRAY_AGG(${engagements.metadata}->>'billingPlan' ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
@@ -85,6 +106,7 @@ export async function getBookOfBusiness(
       totalOutstanding: sql<number>`COALESCE(SUM(${invoices.balanceDue}), 0)::int`,
       invoiceCount: sql<number>`COUNT(*)::int`,
       lastPaymentAt: sql<string | null>`MAX(${invoices.paidAt})`,
+      firstPaymentAt: sql<string | null>`MIN(${invoices.paidAt})`,
     })
     .from(invoices)
     .where(eq(invoices.ownerId, ownerId))
@@ -122,12 +144,19 @@ export async function getBookOfBusiness(
       const inv = invoiceMap.get(sg.email);
       const totalPaid = inv?.totalPaid || 0;
       const mrr = mrrMap.get(sg.email) || 0;
+      const startDate =
+        sg.drsSignedAt || sg.firstSignedAt || inv?.firstPaymentAt || null;
+      const contractYearEnd = startDate
+        ? nextContractYearEnd(new Date(startDate), new Date(now)).toISOString()
+        : null;
       return {
         email: sg.email,
         name: inv?.name || sg.name || sg.email.split("@")[0],
         company: inv?.company || null,
         billingPlan: (sg.latestPlan as "monthly" | "annual" | null) || null,
         signedAt: sg.firstSignedAt,
+        startDate,
+        contractYearEnd,
         dealsCount: sg.dealsCount,
         revenue: totalPaid,
         mrr,

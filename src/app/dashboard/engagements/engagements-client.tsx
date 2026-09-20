@@ -628,7 +628,7 @@ export function EngagementsClient() {
                     </label>
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ad management is included in the flat price — no ad line item on the invoice, no revenue share. Success bonuses (Section 3) are invoiced manually when a revenue milestone is hit.
+                    Ad management is included in the flat price — no ad line item on the invoice, no revenue share. The Success Bonus (Section 3) is invoiced manually at the end of each contract year, or when the client leaves.
                   </p>
                 </div>
               )}

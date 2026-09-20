@@ -21,6 +21,8 @@ interface ClientRow {
   company: string | null;
   billingPlan: "monthly" | "annual" | null;
   signedAt: string | null;
+  startDate: string | null;
+  contractYearEnd: string | null;
   dealsCount: number;
   revenue: number;
   mrr: number;
@@ -43,6 +45,14 @@ function formatDate(dateStr: string | null): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+// Contract-year end within 30 days: time to tally Attributed Revenue and
+// invoice the Success Bonus (engagement letter Section 3(c)).
+function yearEndSoon(dateStr: string | null): boolean {
+  if (!dateStr) return false;
+  const days = (new Date(dateStr).getTime() - Date.now()) / 86_400_000;
+  return days <= 30;
 }
 
 export function ClientTrackerClient() {
@@ -141,7 +151,8 @@ export function ClientTrackerClient() {
   const headers = [
     "Client",
     "Plan",
-    "Signed",
+    "Started",
+    "Year Ends",
     "Deals",
     ...(isAdmin ? ["Their Revenue"] : []),
     "You Collect",
@@ -268,8 +279,15 @@ export function ClientTrackerClient() {
                           <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                        {formatDate(c.signedAt)}
+                      <td className="px-4 py-3 text-xs" style={{ color: "var(--text-main)" }} title="Day the client started with you (engagement execution date)">
+                        {formatDate(c.startDate ?? c.signedAt)}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-xs"
+                        style={{ color: yearEndSoon(c.contractYearEnd) ? "#f59e0b" : "var(--text-muted)" }}
+                        title="End of the current contract year — when the Success Bonus is billed"
+                      >
+                        {formatDate(c.contractYearEnd)}
                       </td>
                       <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
                         {c.dealsCount}

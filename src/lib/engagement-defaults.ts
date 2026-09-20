@@ -55,16 +55,25 @@ export function drsFeeLine(plan: BillingPlan): string {
 const AD_SECTION_HEADING = "3. AD MANAGEMENT & SUCCESS BONUS";
 const GUARANTEE_SECTION_HEADING = "4. THE NEXLI TRIPLE GUARANTEE";
 
+// Phrases every currently shipped letter contains. ADD ONE whenever a clause
+// is rewritten without changing a heading or the fee line, so the stored
+// seeded templates (templates/route.ts) are refreshed instead of drifting.
+const CURRENT_REVISION_MARKERS = [
+  "Success Bonus on Termination", // Sep 20 2026: non-stacking bonus, billed at year end or departure
+];
+
 /**
  * True when a stored DRS letter matches the currently shipped revision for
- * its plan: same fee line (so any price change is detected), plus the
- * current Section 3 and Section 4 headings (so clause rewrites are detected).
+ * its plan: same fee line (so any price change is detected), the current
+ * Section 3 and Section 4 headings, and every CURRENT_REVISION_MARKERS
+ * phrase (so clause rewrites are detected).
  */
 export function isCurrentDrsRevision(content: string, plan: BillingPlan): boolean {
   return (
     content.includes(drsFeeLine(plan)) &&
     content.includes(AD_SECTION_HEADING) &&
-    content.includes(GUARANTEE_SECTION_HEADING)
+    content.includes(GUARANTEE_SECTION_HEADING) &&
+    CURRENT_REVISION_MARKERS.every((m) => content.includes(m))
   );
 }
 
@@ -127,7 +136,9 @@ a) Ad Management Included: Provider manages Client's advertising campaigns (the 
 
 b) Ad Spend: Client is responsible for ad spend paid directly to the advertising platform (Meta, Google, etc.). Ad spend is the Client's own budget and is separate from and in addition to the platform investment.
 
-c) Success Bonus: "Attributed Revenue" means revenue actually collected by Client from tax advisory clients generated through Provider-managed advertising campaigns and attributed via the Nexli tracking system. Client's pre-existing clients, and ${service} engagements not attributable to the acquisition system, are excluded. "Contract Year" means each successive twelve (12) month period beginning on the effective date of this Agreement; cumulative Attributed Revenue resets to zero at the start of each Contract Year. Each time cumulative Attributed Revenue within a Contract Year first reaches a milestone below, Client shall pay Provider the one-time bonus for that milestone (${bonusPct}% of the milestone amount). Each milestone bonus is payable once per Contract Year, is invoiced by Provider when the milestone is reached, and is due within fifteen (15) days of the invoice date. No bonus is owed for any milestone that is not reached.
+c) Success Bonus: "Attributed Revenue" means revenue actually collected by Client from tax advisory clients generated through Provider-managed advertising campaigns and attributed via the Nexli tracking system. Client's pre-existing clients, and ${service} engagements not attributable to the acquisition system, are excluded. "Contract Year" means each successive twelve (12) month period beginning on the effective date of this Agreement; cumulative Attributed Revenue resets to zero at the start of each Contract Year. For each Contract Year, Client shall pay Provider a single Success Bonus equal to ${bonusPct}% of the highest milestone below that cumulative Attributed Revenue reached during that Contract Year. Milestone bonuses do not stack — only the bonus for the highest milestone reached applies. No Success Bonus is owed for a Contract Year in which cumulative Attributed Revenue does not reach the first milestone. The Success Bonus is invoiced by Provider at the earlier of (i) the last day of the Contract Year or (ii) the effective date of termination of this Agreement or cessation of the Services for any reason, and is due within fifteen (15) days of the invoice date.
+
+Only the bonus for the highest milestone reached applies:
 
 ${bonusSchedule}
 
@@ -141,7 +152,7 @@ a) ${g.QUALIFIED_OPPORTUNITIES} Qualified Advisory Opportunities in ${g.OPPORTUN
 
 b) ${g.LAUNCH_DAYS}-Day Launch Guarantee: Once Provider has received all required assets, access, approvals, and onboarding information from Client, Provider guarantees Client's acquisition system will be built and launched within ${g.LAUNCH_DAYS} days. If Provider misses that deadline because of delays on Provider's end, Client receives a ${launchCredit} credit ${plan === "annual" ? "applied, at Client's election, toward Client's next invoice from Provider or refunded to Client within thirty (30) days" : "toward Client's next monthly payment"}.
 
-c) Flat-Rate, No Revenue Share: The platform investment in Section 2 is Provider's only recurring fee. Provider never takes a percentage of Client's revenue and never charges a fee per client the advertising brings in. The only performance-based compensation under this Agreement is the Success Bonus in Section 3(c), which is owed solely after Provider's acquisition system has already produced the milestone revenue for Client.
+c) Flat-Rate, No Revenue Share: The platform investment in Section 2 is Provider's only recurring fee. Provider never takes a percentage of Client's revenue and never charges a fee per client the advertising brings in. The only performance-based compensation under this Agreement is the Success Bonus in Section 3(c), which is owed solely after Provider's acquisition system has already produced the milestone revenue for Client, whether billed at the end of the Contract Year or on termination.
 
 5. PAYMENT TERMS
 
@@ -200,6 +211,8 @@ a) Either party may terminate the platform investment with thirty (30) days' wri
 b) Provider may immediately suspend or terminate access for non-payment, breach of this Agreement, or misuse of the platform.
 
 c) Upon termination, Client retains ownership of their website and content per Section 7(a). All access to Provider's proprietary systems ceases per Section 7(c).
+
+d) Success Bonus on Termination: If this Agreement terminates or Client discontinues the Services for any reason before the end of a Contract Year, the Success Bonus for the highest milestone reached in that Contract Year as of the termination date becomes due and is invoiced at termination per Section 3(c). This obligation survives termination of this Agreement.
 
 13. DISPUTE RESOLUTION
 

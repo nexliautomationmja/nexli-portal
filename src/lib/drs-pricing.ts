@@ -24,18 +24,22 @@ export const ADVERTISED_SERVICE = "tax planning";
 /**
  * Success bonus — the ONLY performance-based compensation. Nexli never takes
  * a percentage of the client's revenue (Marcel, Sep 2026: "not price
- * gouging"). Instead, each time the cumulative revenue a client actually
- * collects from advisory clients attributable to Nexli's campaigns
- * ("Attributed Revenue") first reaches a milestone within a contract year,
- * the client owes a one-time bonus for that milestone. Each milestone pays
- * once per contract year; the counter resets every contract year. Invoiced
- * manually when a milestone is hit — never auto-invoiced.
+ * gouging"). Instead, for each contract year the client owes ONE bonus:
+ * BONUS_PERCENT_OF_MILESTONE of the HIGHEST milestone that the cumulative
+ * revenue the client actually collects from advisory clients attributable
+ * to Nexli's campaigns ("Attributed Revenue") reached in that year.
+ * Milestones do not stack ($1.2M generated → the $1M bonus only). Nothing
+ * is owed below the first milestone ($250K). The counter resets every
+ * contract year (12 months from the engagement's effective date).
  *
- * Bonus = milestone × BONUS_PERCENT_OF_MILESTONE, so one number tunes the
- * whole schedule. At 2%: $250K→$5,000, $500K→$10,000, $1M→$20,000,
- * $2M→$40,000 … $10M→$200,000. If every milestone is hit in one contract
- * year the cumulative bonus is $1,115,000 on $10M of Attributed Revenue
- * (~11%); at the first milestone it is 2%.
+ * Billed manually, never auto-invoiced, at the EARLIER of: the end of the
+ * contract year, or the client leaving / the service ending for any reason
+ * (a client who hit $1M and cancels in month 8 still owes the $1M bonus on
+ * the way out — Section 12(d)). The Client Tracker shows each client's
+ * start date and next contract-year end for this reason.
+ *
+ * At 2%: $250K→$5,000, $500K→$10,000, $1M→$20,000, $2M→$40,000 …
+ * $10M→$200,000. Max exposure is therefore 2% of the milestone reached.
  *
  * PLACEHOLDER: the 2% rate has not been confirmed by Marcel — the milestones
  * are his, the amounts are a starting point.
