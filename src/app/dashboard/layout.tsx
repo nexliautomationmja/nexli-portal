@@ -27,19 +27,39 @@ export default async function DashboardLayout({
 
   // Tier and billing state come from the DB, not the JWT: the JWT lives 30
   // days and would otherwise let a paused firm keep using the dashboard.
-  const [account] = await db
-    .select({
-      role: users.role,
-      tier: users.tier,
-      subscriptionStatus: users.subscriptionStatus,
-    })
-    .from(users)
-    .where(eq(users.id, session.user.id))
-    .limit(1);
+  //
+  // Defensive: an error thrown in a layout is NOT caught by this segment's
+  // error.tsx — it escapes to the root and takes the whole dashboard down
+  // with Next's raw "Application error" page. If the lookup fails (DB blip,
+  // or a column that a pending migration hasn't added yet), fall back to the
+  // session's role/tier and let the page render; a paused Foundation firm
+  // is still gated again at next sign-in.
+  let account:
+    | {
+        role: "admin" | "client";
+        tier: string | null;
+        subscriptionStatus: string | null;
+      }
+    | undefined;
+  let accountLookupFailed = false;
+  try {
+    [account] = await db
+      .select({
+        role: users.role,
+        tier: users.tier,
+        subscriptionStatus: users.subscriptionStatus,
+      })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1);
+  } catch (err) {
+    accountLookupFailed = true;
+    console.error("[dashboard layout] account lookup failed:", err);
+  }
 
   const role = account?.role ?? session.user.role;
   const isAdmin = role === "admin";
-  const tier = normalizeTier(account?.tier);
+  const tier = normalizeTier(account?.tier ?? session.user.tier);
   const isFoundationClient = !isAdmin && tier === "foundation";
 
   // Current pathname is forwarded by middleware as a request header.
@@ -50,6 +70,7 @@ export default async function DashboardLayout({
   // redirects itself, so there is no loop). Admin and DRS bypass.
   if (
     isFoundationClient &&
+    !accountLookupFailed &&
     !isSubscriptionActive(account?.subscriptionStatus)
   ) {
     if (!onBillingPausedPage) redirect(BILLING_PAUSED_PATH);
