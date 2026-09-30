@@ -4,11 +4,23 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-export function LoginForm() {
+const SUBSCRIPTION_INACTIVE_MESSAGE =
+  "Your subscription is paused. Contact support@nexli.net to reactivate.";
+
+/** Map a NextAuth sign-in error code to the message shown under the form. */
+function messageForError(code: string | null | undefined): string {
+  if (code === "subscription_inactive") return SUBSCRIPTION_INACTIVE_MESSAGE;
+  return "Invalid email or password.";
+}
+
+export function LoginForm({ initialErrorCode }: { initialErrorCode?: string | null }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  // A server-side redirect flow lands here with ?error=CredentialsSignin&code=…
+  const [error, setError] = useState(
+    initialErrorCode ? messageForError(initialErrorCode) : ""
+  );
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,7 +37,8 @@ export function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Invalid email or password.");
+      // NextAuth v5 exposes the CredentialsSignin subclass `code` here.
+      setError(messageForError(result.code));
       return;
     }
 

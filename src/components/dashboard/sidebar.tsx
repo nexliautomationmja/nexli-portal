@@ -30,9 +30,12 @@ import {
 } from "@/components/ui/icons";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { ShimmerPill } from "@/components/ui/shimmer-pill";
+import type { Tier } from "@/lib/tier-access";
 
 interface SidebarProps {
   isAdmin: boolean;
+  /** Commercial tier; Foundation firms only see the firm-facing nav. */
+  tier?: Tier;
   userName?: string | null;
 }
 
@@ -71,35 +74,78 @@ interface NavItem {
 // Icon chips follow the Digital Rainmaker color language:
 // blue = website/core, violet = AI/automation, cyan = portal/centerpiece,
 // amber = reviews/analysis, emerald = money, teal = misc.
-const clientNav: NavItem[] = [
+
+/**
+ * Firm-facing tools every tier gets: the client portal, documents, billing
+ * and tax workflow. Listed in the order the full nav shows them.
+ */
+const firmNav: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutIcon, accent: "blue" },
   { href: "/dashboard/clients", label: "Clients", icon: UsersIcon, accent: "cyan" },
-  { href: "/dashboard/contacts", label: "Contacts", icon: UsersIcon, accent: "teal" },
-  { href: "/dashboard/pipeline", label: "Pipeline", icon: KanbanIcon, accent: "violet" },
-  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon, accent: "amber" },
-  { href: "/dashboard/messages", label: "Messages", icon: MessageIcon, accent: "blue" },
   { href: "/dashboard/portal-messages", label: "Client Messages", icon: SendIcon, accent: "cyan" },
   { href: "/dashboard/documents", label: "Documents", icon: FileIcon, accent: "emerald" },
   { href: "/dashboard/engagements", label: "Engagements", icon: PenLineIcon, accent: "violet" },
-  { href: "/dashboard/onboarding", label: "Onboarding", icon: RocketIcon, accent: "cyan" },
-  { href: "/dashboard/contract-analyzer", label: "Contract Analyzer", icon: ScanIcon, accent: "amber" },
   { href: "/dashboard/invoices", label: "Invoices", icon: InvoiceIcon, accent: "emerald" },
   { href: "/dashboard/tax-returns", label: "Tax Returns", icon: KanbanIcon, accent: "blue" },
   { href: "/dashboard/tax-organizers", label: "Tax Organizers", icon: FormIcon, accent: "violet" },
   { href: "/dashboard/tax-forms", label: "Tax Center", icon: FormIcon, accent: "amber" },
-  { href: "/dashboard/client-tracker", label: "Client Tracker", icon: ChartIcon, accent: "cyan" },
   { href: "/dashboard/settings", label: "Settings", icon: GearIcon, accent: "neutral" },
 ];
 
+/**
+ * Agency tooling backed by GHL / ad platforms / DRS onboarding. Only the
+ * full Digital Rainmaker System tier (and admins) see these. Keep in sync
+ * with AGENCY_ROUTE_PREFIXES in src/lib/tier-access.ts.
+ */
+const agencyNav: NavItem[] = [
+  { href: "/dashboard/contacts", label: "Contacts", icon: UsersIcon, accent: "teal" },
+  { href: "/dashboard/pipeline", label: "Pipeline", icon: KanbanIcon, accent: "violet" },
+  { href: "/dashboard/calendar", label: "Calendar", icon: CalendarIcon, accent: "amber" },
+  { href: "/dashboard/messages", label: "Messages", icon: MessageIcon, accent: "blue" },
+  { href: "/dashboard/onboarding", label: "Onboarding", icon: RocketIcon, accent: "cyan" },
+  { href: "/dashboard/contract-analyzer", label: "Contract Analyzer", icon: ScanIcon, accent: "amber" },
+  { href: "/dashboard/client-tracker", label: "Client Tracker", icon: ChartIcon, accent: "cyan" },
+];
+
+/** The historical full-nav ordering, interleaving agency items among firm ones. */
+const fullNavOrder = [
+  "/dashboard",
+  "/dashboard/clients",
+  "/dashboard/contacts",
+  "/dashboard/pipeline",
+  "/dashboard/calendar",
+  "/dashboard/messages",
+  "/dashboard/portal-messages",
+  "/dashboard/documents",
+  "/dashboard/engagements",
+  "/dashboard/onboarding",
+  "/dashboard/contract-analyzer",
+  "/dashboard/invoices",
+  "/dashboard/tax-returns",
+  "/dashboard/tax-organizers",
+  "/dashboard/tax-forms",
+  "/dashboard/client-tracker",
+  "/dashboard/settings",
+];
+
+const fullNav: NavItem[] = fullNavOrder
+  .map((href) => [...firmNav, ...agencyNav].find((n) => n.href === href))
+  .filter((n): n is NavItem => !!n);
+
 const adminNav: NavItem[] = [];
 
-export function Sidebar({ isAdmin, userName }: SidebarProps) {
+export function Sidebar({ isAdmin, tier = "drs", userName }: SidebarProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const navItems = isAdmin ? [...clientNav, ...adminNav] : clientNav;
+  // Admin → everything; Foundation → firm tools only; DRS → the full list.
+  const navItems = isAdmin
+    ? [...fullNav, ...adminNav]
+    : tier === "foundation"
+      ? firmNav
+      : fullNav;
 
   const initials = userName
     ? userName

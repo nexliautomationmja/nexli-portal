@@ -10,9 +10,12 @@ import {
   taxReturns,
   engagements,
   engagementSigners,
+  users,
 } from "@/db/schema";
-import { eq, and, gt, lt, isNull, desc, asc } from "drizzle-orm";
+import { eq, and, gt, lt, isNull, desc, asc, sql } from "drizzle-orm";
 import { createNotification } from "@/lib/notifications";
+import { getNexliAdminId } from "@/lib/foundation-project";
+import { FOUNDATION_TIER } from "@/lib/foundation-config";
 import type { NextRequest } from "next/server";
 
 export const PORTAL_SESSION_COOKIE = "nexli-portal-session";
@@ -157,6 +160,29 @@ export async function createPortalSession(email: string): Promise<string> {
         .where(eq(engagements.id, signer.engagementId))
         .limit(1);
       if (eng) ownerId = eng.ownerId;
+    }
+  }
+
+  // Firm Foundation owner with no client records yet (e.g. the agreement
+  // engagement was not created): they are Nexli's client, so scope the
+  // session to the Nexli admin account.
+  if (!ownerId) {
+    const [foundationUser] = await db
+      .select({ name: users.name, companyName: users.companyName })
+      .from(users)
+      .where(
+        and(
+          sql`lower(${users.email}) = ${normalEmail}`,
+          eq(users.role, "client"),
+          eq(users.tier, FOUNDATION_TIER)
+        )
+      )
+      .limit(1);
+    if (foundationUser) {
+      clientName =
+        clientName || foundationUser.name || foundationUser.companyName;
+      const adminId = await getNexliAdminId();
+      if (adminId) ownerId = adminId;
     }
   }
 

@@ -1,0 +1,176 @@
+/**
+ * Firm Foundation emails. These are sent BY NEXLI to the firm owner (not by
+ * the firm to its clients), so they use the default Nexli wrapper with no
+ * per-firm branding.
+ */
+
+import { emailWrapper } from "@/lib/email";
+import { getPortalUrl } from "@/lib/foundation-config";
+
+const buttonStyle = `display:inline-block;background-color:#2563EB;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
+
+const secondaryButtonStyle = `display:inline-block;background-color:#1e1e2a;color:#ffffff;text-decoration:none;padding:12px 28px;border:1px solid #2a2a3a;border-radius:12px;font-size:13px;font-weight:700;`;
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export const FOUNDATION_SENDER_NAME = "Nexli";
+
+// ── Welcome email (set password + what happens next) ─────
+
+export function buildWelcomeEmail(params: {
+  firstName?: string | null;
+  firmName: string;
+  setupUrl: string;
+  agreementUrl?: string | null;
+  dashboardUrl: string;
+  liveInDays: number;
+  setupExpiresAt?: Date | null;
+  /** Product name in the heading; defaults to "Firm Foundation". */
+  productName?: string;
+  /**
+   * Nexli client portal (magic-link login) where the firm owner is Nexli's
+   * client. Defaults to `${getPortalUrl()}/portal`.
+   */
+  portalUrl?: string;
+}): { subject: string; html: string } {
+  const {
+    firstName,
+    firmName,
+    setupUrl,
+    agreementUrl,
+    dashboardUrl,
+    liveInDays,
+    setupExpiresAt,
+    productName = "Firm Foundation",
+    portalUrl = `${getPortalUrl()}/portal`,
+  } = params;
+  const product = escapeHtml(productName);
+
+  const greeting = firstName ? `Hi ${escapeHtml(firstName)}` : "Hi there";
+  const firm = escapeHtml(firmName);
+  const expiryNote = setupExpiresAt
+    ? `This link expires ${setupExpiresAt.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })}.`
+    : "";
+
+  const agreementBlock = agreementUrl
+    ? `
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+      <p style="margin:0 0 8px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Service Agreement</p>
+      <p style="margin:0 0 14px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+        We&rsquo;ve also sent your Firm Foundation Service Agreement for e-signature. It takes about two minutes and we can&rsquo;t begin your build until it&rsquo;s signed.
+      </p>
+      <div style="text-align:center;">
+        <a href="${agreementUrl}" style="${secondaryButtonStyle}">Review &amp; Sign Agreement</a>
+      </div>
+    </div>`
+    : "";
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Welcome to ${product}</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
+      ${greeting}, your subscription for <strong style="color:#fff;">${firm}</strong> is active. Let&rsquo;s get your portal set up.
+    </p>
+    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+      <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">What happens next</p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; <strong style="color:#fff;">Set your password</strong> using the button below.</p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; <strong style="color:#fff;">Sign your service agreement</strong> (sent in a separate email).</p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; <strong style="color:#fff;">Upload your logo and content</strong> in the dashboard so we can start your build.</p>
+      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; <strong style="color:#fff;">Go live within ${liveInDays} days</strong> of us receiving your assets.</p>
+    </div>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${setupUrl}" style="${buttonStyle}">Set Your Password</a>
+    </div>
+    ${agreementBlock}
+    <div style="margin:24px 0 20px;">
+      <p style="margin:0 0 6px;color:#fff;font-size:15px;font-weight:800;">Your two logins</p>
+      <p style="margin:0 0 14px;color:#9999a8;font-size:13px;line-height:1.6;">
+        You&rsquo;ll use two separate sign-ins with Nexli. Keep this email handy.
+      </p>
+      <div style="margin:0 0 12px;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+        <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">1 &middot; Your firm dashboard</p>
+        <p style="margin:0 0 10px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+          Set your password with the button above, then sign in any time at
+          <a href="${dashboardUrl}" class="nxl-link" style="color:#2563EB;text-decoration:none;">${escapeHtml(dashboardUrl)}</a>.
+          This is where you run <strong style="color:#fff;">${firm}</strong>:
+        </p>
+        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Your branded client portal</p>
+        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Engagement letters and e-signatures</p>
+        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Invoices and payments</p>
+        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Document collection</p>
+      </div>
+      <div style="padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+        <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">2 &middot; Your Nexli client portal</p>
+        <p style="margin:0 0 10px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+          Go to <a href="${portalUrl}" class="nxl-link" style="color:#2563EB;text-decoration:none;">${escapeHtml(portalUrl)}</a>,
+          enter this email address and we&rsquo;ll send you a one-click sign-in link. No password needed. This is where you are <em>our</em> client:
+        </p>
+        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Your ${product} project status and website preview</p>
+        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Your service agreement</p>
+        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Messages and files from the Nexli team</p>
+      </div>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        ${expiryNote} Once set, sign in any time at <a href="${dashboardUrl}" class="nxl-link" style="color:#2563EB;text-decoration:none;">${escapeHtml(dashboardUrl)}</a>
+      </p>
+      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
+        ${setupUrl}
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: `Welcome to ${productName} — set up your ${firmName} portal`,
+    html,
+  };
+}
+
+// ── Agreement reminder (resend of the signing link) ─────
+
+export function buildAgreementReminderEmail(params: {
+  firstName?: string | null;
+  firmName: string;
+  engageUrl: string;
+  expiresAt: Date;
+}): { subject: string; html: string } {
+  const { firstName, firmName, engageUrl, expiresAt } = params;
+  const greeting = firstName ? `Hi ${escapeHtml(firstName)}` : "Hi there";
+  const expDate = expiresAt.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Your Service Agreement Is Waiting</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
+      ${greeting}, the Firm Foundation Service Agreement for <strong style="color:#fff;">${escapeHtml(firmName)}</strong> still needs your signature. We can&rsquo;t begin your website and portal build until it&rsquo;s signed.
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${engageUrl}" style="${buttonStyle}">Review &amp; Sign</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        This link expires ${expDate} &bull; No account required
+      </p>
+      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
+        ${engageUrl}
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: `Reminder: sign your Firm Foundation Service Agreement — ${firmName}`,
+    html,
+  };
+}

@@ -11,10 +11,17 @@ import {
 } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { getPortalSessionFromRequest } from "@/lib/portal-auth";
+import {
+  getFoundationProjectForEmail,
+  getNexliAdminId,
+  type FoundationProject,
+} from "@/lib/foundation-project";
 
 export async function GET(req: NextRequest) {
   const session = await getPortalSessionFromRequest(req);
-  if (!session) {
+  // A session with no ownerId cannot be tenant-scoped — refuse rather than
+  // falling back to an email-only query that would leak across firms.
+  if (!session || !session.ownerId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -25,11 +32,7 @@ export async function GET(req: NextRequest) {
   const clientInvoices = await db
     .select()
     .from(invoices)
-    .where(
-      ownerId
-        ? and(eq(invoices.clientEmail, email), eq(invoices.ownerId, ownerId))
-        : eq(invoices.clientEmail, email)
-    )
+    .where(and(eq(invoices.clientEmail, email), eq(invoices.ownerId, ownerId)))
     .orderBy(desc(invoices.createdAt));
 
   const visibleInvoices = clientInvoices.filter((i) => i.status !== "draft");
@@ -42,31 +45,25 @@ export async function GET(req: NextRequest) {
   const clientDocs = await db
     .select()
     .from(documents)
-    .where(
-      ownerId
-        ? and(eq(documents.clientEmail, email), eq(documents.ownerId, ownerId))
-        : eq(documents.clientEmail, email)
-    );
+    .where(and(eq(documents.clientEmail, email), eq(documents.ownerId, ownerId)));
 
   // Active upload links
   const activeLinks = await db
     .select()
     .from(documentLinks)
     .where(
-      ownerId
-        ? and(eq(documentLinks.clientEmail, email), eq(documentLinks.ownerId, ownerId), eq(documentLinks.status, "active"))
-        : and(eq(documentLinks.clientEmail, email), eq(documentLinks.status, "active"))
+      and(
+        eq(documentLinks.clientEmail, email),
+        eq(documentLinks.ownerId, ownerId),
+        eq(documentLinks.status, "active")
+      )
     );
 
   // E-signature requests
   const esignRequests = await db
     .select()
     .from(eSignatures)
-    .where(
-      ownerId
-        ? and(eq(eSignatures.signerEmail, email), eq(eSignatures.ownerId, ownerId))
-        : eq(eSignatures.signerEmail, email)
-    );
+    .where(and(eq(eSignatures.signerEmail, email), eq(eSignatures.ownerId, ownerId)));
 
   const pendingEsigns = esignRequests.filter((e) =>
     ["pending", "sent", "viewed"].includes(e.status)
@@ -80,7 +77,7 @@ export async function GET(req: NextRequest) {
 
   // Filter signers by ownerId through engagements table
   let filteredSigners = signerRows;
-  if (ownerId && signerRows.length > 0) {
+  if (signerRows.length > 0) {
     const engagementIds = [...new Set(signerRows.map((s) => s.engagementId))];
     const ownedEngagementIds = new Set<string>();
     for (const eid of engagementIds) {
@@ -102,11 +99,7 @@ export async function GET(req: NextRequest) {
   const clientReturns = await db
     .select()
     .from(taxReturns)
-    .where(
-      ownerId
-        ? and(eq(taxReturns.clientEmail, email), eq(taxReturns.ownerId, ownerId))
-        : eq(taxReturns.clientEmail, email)
-    );
+    .where(and(eq(taxReturns.clientEmail, email), eq(taxReturns.ownerId, ownerId)));
 
   const inProgressReturns = clientReturns.filter((r) =>
     ["not_started", "documents_received", "in_progress"].includes(r.status)
@@ -209,6 +202,18 @@ export async function GET(req: NextRequest) {
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
+  // Firm Foundation project tracker — only when this portal account is a
+  // Foundation firm owner whose records are owned by the Nexli admin.
+  let foundationProject: FoundationProject | null = null;
+  try {
+    const adminId = await getNexliAdminId();
+    if (adminId && ownerId === adminId) {
+      foundationProject = await getFoundationProjectForEmail(email);
+    }
+  } catch (err) {
+    console.warn("[portal overview] foundation project lookup failed:", err);
+  }
+
   return NextResponse.json({
     stats: {
       totalOwed,
@@ -222,5 +227,6 @@ export async function GET(req: NextRequest) {
     actionItems: actionItems.slice(0, 5),
     recentActivity: activity.slice(0, 10),
     clientName: session.clientName,
+    foundationProject,
   });
 }

@@ -4,8 +4,10 @@ import { db } from "@/db";
 import { invoices, invoiceLineItems, invoiceReminders, users } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { sendEmailWithLog, buildInvoiceEmail } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncInvoiceToAccounting } from "@/lib/accounting-sync";
+import { resolveStripeAccountForOwner } from "@/lib/stripe";
 
 export async function POST(
   _req: NextRequest,
@@ -56,6 +58,7 @@ export async function POST(
   const invoiceUrl = `${portalUrl}/invoice/${invoice.token}`;
 
   try {
+    const branding = await getOwnerBranding(session.user.id);
     const { subject, html } = buildInvoiceEmail({
       clientName: invoice.clientName,
       senderName,
@@ -63,11 +66,13 @@ export async function POST(
       total: formatCurrency(invoice.total, invoice.currency),
       dueDate: invoice.dueDate,
       invoiceUrl,
+      branding,
     });
     await sendEmailWithLog({
       to: invoice.clientEmail,
       subject,
       html,
+      fromName: branding.fromName,
       recipientName: invoice.clientName,
       emailType: "invoice",
       relatedId: invoice.id,
@@ -109,5 +114,18 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ invoice: updated });
+  // Warn (don't block) if the firm can't yet accept online payments: the
+  // client will see a "pay by the method on the invoice" notice instead of
+  // the Stripe checkout button.
+  let warning: "payments_not_configured" | undefined;
+  try {
+    const resolution = await resolveStripeAccountForOwner(session.user.id);
+    if (resolution.mode === "not_configured") {
+      warning = "payments_not_configured";
+    }
+  } catch (err) {
+    console.error("Stripe account resolution failed on send:", err);
+  }
+
+  return NextResponse.json({ invoice: updated, warning });
 }

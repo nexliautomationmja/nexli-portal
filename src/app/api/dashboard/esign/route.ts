@@ -10,6 +10,7 @@ import {
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { sendEmailWithLog, buildEsignRequestEmail } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -112,14 +113,16 @@ export async function POST(req: NextRequest) {
   const senderName = session.user.name || session.user.email || "Your Service Provider";
 
   try {
+    const branding = await getOwnerBranding(session.user.id);
     const { subject, html } = buildEsignRequestEmail({
       signerName,
       senderName,
       documentName: doc.fileName,
       signUrl,
       expiresAt,
+      branding,
     });
-    await sendEmailWithLog({ to: signerEmail, subject, html, recipientName: signerName, emailType: "esign_request", relatedId: esign.id, sentBy: session.user.id });
+    await sendEmailWithLog({ to: signerEmail, subject, html, fromName: branding.fromName, recipientName: signerName, emailType: "esign_request", relatedId: esign.id, sentBy: session.user.id });
   } catch (err) {
     console.error("Failed to send e-sign email:", err);
   }

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { invoices } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { createCheckoutSession } from "@/lib/stripe";
+import {
+  createCheckoutSession,
+  resolveStripeAccountForOwner,
+} from "@/lib/stripe";
 import { cardPriceCents } from "@/lib/drs-pricing";
 
 export async function POST(
@@ -48,6 +51,19 @@ export async function POST(
     );
   }
 
+  // Which Stripe account should this charge land on?
+  //  - connected      → direct charge on the firm's Express account
+  //  - platform       → Nexli's own account (legacy behavior)
+  //  - not_configured → firm hasn't finished Connect onboarding
+  const resolution = await resolveStripeAccountForOwner(invoice.ownerId);
+
+  if (resolution.mode === "not_configured") {
+    return NextResponse.json(
+      { error: "payments_not_configured" },
+      { status: 409 }
+    );
+  }
+
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
   const invoicePageUrl = `${portalUrl}/invoice/${token}`;
@@ -58,23 +74,27 @@ export async function POST(
   const chargeCents = method === "card" ? cardPriceCents(balanceDue) : balanceDue;
 
   try {
-    const { sessionId, checkoutUrl } = await createCheckoutSession({
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      clientEmail: invoice.clientEmail,
-      amountCents: balanceDue,
-      chargeCents,
-      method,
-      currency: invoice.currency,
-      successUrl: `${invoicePageUrl}?payment=success`,
-      cancelUrl: `${invoicePageUrl}?payment=canceled`,
-    });
+    const { sessionId, checkoutUrl, stripeAccount } =
+      await createCheckoutSession({
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        clientEmail: invoice.clientEmail,
+        amountCents: balanceDue,
+        chargeCents,
+        method,
+        currency: invoice.currency,
+        successUrl: `${invoicePageUrl}?payment=success`,
+        cancelUrl: `${invoicePageUrl}?payment=canceled`,
+        stripeAccount: resolution.stripeAccount ?? undefined,
+      });
 
-    // Store the session ID for reference
+    // Store the session ID and the account it was created on so webhooks and
+    // any later PaymentIntent lookups hit the right Stripe account.
     await db
       .update(invoices)
       .set({
         stripeCheckoutSessionId: sessionId,
+        stripeAccountId: stripeAccount,
         updatedAt: new Date(),
       })
       .where(eq(invoices.id, invoice.id));

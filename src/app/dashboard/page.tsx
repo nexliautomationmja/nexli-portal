@@ -4,6 +4,11 @@ import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { OverviewClient } from "./dashboard-client";
+import { FoundationProjectCard } from "@/components/portal/foundation-project-card";
+import {
+  getFoundationProjectForEmail,
+  type FoundationProject,
+} from "@/lib/foundation-project";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -11,6 +16,20 @@ export default async function DashboardPage() {
 
   const firstName = session.user.name?.split(" ")[0] || "there";
   const userId = session.user.id!;
+
+  // Firm Foundation owners see their build progress on their own dashboard too.
+  let foundationProject: FoundationProject | null = null;
+  if (
+    session.user.role === "client" &&
+    session.user.tier === "foundation" &&
+    session.user.email
+  ) {
+    try {
+      foundationProject = await getFoundationProjectForEmail(session.user.email);
+    } catch (err) {
+      console.warn("[dashboard] foundation project lookup failed:", err);
+    }
+  }
 
   // Get document stats server-side. Defensive: if the DB is briefly
   // unreachable, fall back to zeroed stats so the landing page still renders
@@ -51,6 +70,10 @@ export default async function DashboardPage() {
           Your document portal and CRM overview.
         </p>
       </div>
+
+      {foundationProject && (
+        <FoundationProjectCard project={foundationProject} showDashboardLink={false} />
+      )}
 
       <OverviewClient
         docStats={docStats}

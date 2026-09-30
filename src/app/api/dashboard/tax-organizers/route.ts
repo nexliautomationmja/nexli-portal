@@ -9,6 +9,7 @@ import {
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { sendEmailWithLog, buildTaxOrganizerEmail } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 
 export async function GET() {
   const session = await auth();
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
   let emailSent = false;
   try {
     const senderName = session.user.name || session.user.email || "Your CPA";
+    const branding = await getOwnerBranding(session.user.id);
     const { subject, html } = buildTaxOrganizerEmail({
       clientName,
       senderName,
@@ -106,12 +108,14 @@ export async function POST(req: NextRequest) {
       returnType: rt,
       organizerUrl,
       expiresAt,
+      branding,
     });
 
     await sendEmailWithLog({
       to: clientEmail,
       subject,
       html,
+      fromName: branding.fromName,
       recipientName: clientName,
       emailType: "tax_organizer_request",
       relatedId: link.id,

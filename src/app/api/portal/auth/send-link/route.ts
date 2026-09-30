@@ -8,11 +8,14 @@ import {
   eSignatures,
   documentLinks,
   portalMagicLinks,
+  users,
 } from "@/db/schema";
-import { eq, and, gt, count } from "drizzle-orm";
+import { eq, and, gt, count, sql } from "drizzle-orm";
 import { generateMagicLink } from "@/lib/portal-auth";
 import { sendEmailWithLog, buildMagicLinkEmail } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { FOUNDATION_TIER } from "@/lib/foundation-config";
 
 export async function POST(req: NextRequest) {
   // Rate limit by IP (10 requests per 15 min)
@@ -63,13 +66,13 @@ export async function POST(req: NextRequest) {
 
   // Check if any data exists for this email (across all client-facing tables)
   const [inv] = await db
-    .select({ id: invoices.id, clientName: invoices.clientName })
+    .select({ id: invoices.id, clientName: invoices.clientName, ownerId: invoices.ownerId })
     .from(invoices)
     .where(eq(invoices.clientEmail, email))
     .limit(1);
 
   const [doc] = await db
-    .select({ id: documents.id, clientName: documents.clientName })
+    .select({ id: documents.id, clientName: documents.clientName, ownerId: documents.ownerId })
     .from(documents)
     .where(eq(documents.clientEmail, email))
     .limit(1);
@@ -81,22 +84,45 @@ export async function POST(req: NextRequest) {
     .limit(1);
 
   const [taxReturn] = await db
-    .select({ id: taxReturns.id, clientName: taxReturns.clientName })
+    .select({ id: taxReturns.id, clientName: taxReturns.clientName, ownerId: taxReturns.ownerId })
     .from(taxReturns)
     .where(eq(taxReturns.clientEmail, email))
     .limit(1);
 
   const [esign] = await db
-    .select({ id: eSignatures.id, signerName: eSignatures.signerName })
+    .select({ id: eSignatures.id, signerName: eSignatures.signerName, ownerId: eSignatures.ownerId })
     .from(eSignatures)
     .where(eq(eSignatures.signerEmail, email))
     .limit(1);
 
   const [link] = await db
-    .select({ id: documentLinks.id, clientName: documentLinks.clientName })
+    .select({ id: documentLinks.id, clientName: documentLinks.clientName, ownerId: documentLinks.ownerId })
     .from(documentLinks)
     .where(eq(documentLinks.clientEmail, email))
     .limit(1);
+
+  // Firm Foundation owners are Nexli's clients: they can sign in here even
+  // before their service agreement (or any other client record) exists.
+  const [foundationUser] = await db
+    .select({ id: users.id, name: users.name, companyName: users.companyName })
+    .from(users)
+    .where(
+      and(
+        sql`lower(${users.email}) = ${email}`,
+        eq(users.role, "client"),
+        eq(users.tier, FOUNDATION_TIER)
+      )
+    )
+    .limit(1);
+
+  // Firm that owns this client's records — drives the email branding.
+  const ownerId =
+    inv?.ownerId ||
+    doc?.ownerId ||
+    taxReturn?.ownerId ||
+    esign?.ownerId ||
+    link?.ownerId ||
+    null;
 
   // Determine client name from whichever record we found
   const clientName =
@@ -106,9 +132,19 @@ export async function POST(req: NextRequest) {
     taxReturn?.clientName ||
     esign?.signerName ||
     link?.clientName ||
+    foundationUser?.name ||
+    foundationUser?.companyName ||
     null;
 
-  const hasData = !!(inv || doc || signer || taxReturn || esign || link);
+  const hasData = !!(
+    inv ||
+    doc ||
+    signer ||
+    taxReturn ||
+    esign ||
+    link ||
+    foundationUser
+  );
 
   if (!hasData) {
     return NextResponse.json(
@@ -119,12 +155,18 @@ export async function POST(req: NextRequest) {
 
   try {
     const magicLinkUrl = await generateMagicLink(email);
+    if (process.env.NODE_ENV !== "production") {
+      // Local demos without Resend: the link is printed to the server log.
+      console.log("[portal magic link]", magicLinkUrl);
+    }
+    const branding = await getOwnerBranding(ownerId);
     const { subject, html } = buildMagicLinkEmail({
       clientName: clientName!,
       magicLinkUrl,
       expiresInMinutes: 15,
+      branding,
     });
-    await sendEmailWithLog({ to: email, subject, html, recipientName: clientName || undefined, emailType: "magic_link" });
+    await sendEmailWithLog({ to: email, subject, html, fromName: branding.fromName, recipientName: clientName || undefined, emailType: "magic_link" });
   } catch (err) {
     console.error("Failed to send magic link:", err);
   }

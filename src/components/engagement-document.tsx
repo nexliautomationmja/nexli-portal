@@ -1,6 +1,10 @@
 "use client";
 
+import { NEXLI_BRANDING, type OwnerBranding } from "@/lib/branding";
+
 interface DocumentPreviewProps {
+  /** Firm branding for the letterhead; defaults to Nexli. */
+  branding?: OwnerBranding;
   content: string;
   subject: string;
   clientName: string;
@@ -29,6 +33,7 @@ function formatSignedDate(input: Date | string | null | undefined): string {
 }
 
 export function DocumentPreview({
+  branding = NEXLI_BRANDING,
   content,
   subject,
   clientName,
@@ -69,12 +74,15 @@ export function DocumentPreview({
           "'Georgia', 'Times New Roman', 'Garamond', serif",
       }}
     >
-      {/* Dark branded header with Nexli logo */}
+      {/* Dark branded letterhead — the firm's logo, or Nexli's by default */}
       <div
         style={{
           background: "#0a0a0f",
           padding: "20px 48px",
           borderRadius: "4px 4px 0 0",
+          borderTop: branding.brandColor
+            ? `4px solid ${branding.brandColor}`
+            : undefined,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -82,9 +90,9 @@ export function DocumentPreview({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/logos/nexli-logo-white-wordmark@2x.png"
-          alt="Nexli"
-          style={{ height: 28 }}
+          src={branding.logoUrl}
+          alt={branding.displayName}
+          style={{ height: 28, maxWidth: 200, objectFit: "contain" }}
         />
         <span
           style={{
@@ -250,14 +258,25 @@ export function DocumentPreview({
           Payments for services rendered under this engagement are processed
           through Stripe, Inc., a third-party payment processor. By executing
           this agreement, you acknowledge and agree that{" "}
-          {fromCompany || fromName} and Nexli are not responsible for any
-          payment holds, account freezes, processing delays, or disputes
-          imposed by Stripe or your financial institution. To minimize
-          processing issues, we recommend maintaining a complete and accurate
-          business profile with your payment provider. All payment data is
-          handled directly by Stripe in accordance with their security and
-          privacy policies; neither {fromCompany || fromName} nor Nexli
-          stores your full payment credentials.
+          {fromCompany || fromName} is not responsible for any payment holds,
+          account freezes, processing delays, or disputes imposed by Stripe or
+          your financial institution. To minimize processing issues, we
+          recommend maintaining a complete and accurate business profile with
+          your payment provider. All payment data is handled directly by
+          Stripe in accordance with their security and privacy policies;{" "}
+          {fromCompany || fromName} does not store your full payment
+          credentials.
+        </p>
+        <p
+          style={{
+            margin: "10px 0 0",
+            fontSize: 11,
+            lineHeight: 1.7,
+            color: "#9ca3af",
+          }}
+        >
+          This document is delivered through the Nexli Portal platform. The
+          platform provider is not a party to this agreement.
         </p>
       </div>
 

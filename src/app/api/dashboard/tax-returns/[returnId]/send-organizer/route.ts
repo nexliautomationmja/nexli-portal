@@ -5,6 +5,7 @@ import { taxReturns, taxOrganizerLinks, documentAuditLog } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import { sendEmailWithLog, buildTaxOrganizerEmail } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 
 export async function POST(
   req: NextRequest,
@@ -59,6 +60,7 @@ export async function POST(
   try {
     const senderName =
       session.user.name || session.user.email || "Your CPA";
+    const branding = await getOwnerBranding(session.user.id);
     const { subject, html } = buildTaxOrganizerEmail({
       clientName: taxReturn.clientName,
       senderName,
@@ -66,12 +68,14 @@ export async function POST(
       returnType: taxReturn.returnType,
       organizerUrl,
       expiresAt,
+      branding,
     });
 
     await sendEmailWithLog({
       to: taxReturn.clientEmail,
       subject,
       html,
+      fromName: branding.fromName,
       recipientName: taxReturn.clientName,
       emailType: "tax_organizer_request",
       relatedId: link.id,
