@@ -6,7 +6,16 @@ export const metadata = {
   title: "Sign In | Nexli Dashboard",
 };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; code?: string }>;
+}) {
+  // When NextAuth redirects back here after a failed server-side sign-in it
+  // appends ?error=CredentialsSignin&code=<code>; surface that in the form.
+  const { error, code } = await searchParams;
+  const initialErrorCode = error ? code || error : null;
+
   return (
     <div
       className="min-h-screen flex items-center justify-center px-4"
@@ -37,7 +46,7 @@ export default function LoginPage() {
 
         {/* Login Card */}
         <div className="glass-card p-8 md:p-10">
-          <LoginForm />
+          <LoginForm initialErrorCode={initialErrorCode} />
         </div>
 
         {/* Client Portal Link */}

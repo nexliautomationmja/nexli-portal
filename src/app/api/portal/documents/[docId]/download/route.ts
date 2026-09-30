@@ -10,7 +10,8 @@ export async function GET(
   { params }: { params: Promise<{ docId: string }> }
 ) {
   const session = await getPortalSessionFromRequest(req);
-  if (!session) {
+  // Require a tenant-scoped session; no email-only fallback.
+  if (!session || !session.ownerId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -30,7 +31,7 @@ export async function GET(
   if (
     !doc.sharedWithClient ||
     doc.clientEmail !== session.email ||
-    (session.ownerId && doc.ownerId !== session.ownerId)
+    doc.ownerId !== session.ownerId
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -1,6 +1,10 @@
 "use client";
 
+import { NEXLI_BRANDING, type OwnerBranding } from "@/lib/branding";
+
 interface InvoiceDocumentPreviewProps {
+  /** Firm branding for the header; defaults to Nexli. */
+  branding?: OwnerBranding;
   clientName: string;
   clientEmail: string;
   clientCompany?: string;
@@ -49,6 +53,7 @@ const mutedStyle: React.CSSProperties = {
 };
 
 export function InvoiceDocumentPreview({
+  branding = NEXLI_BRANDING,
   clientName,
   clientEmail,
   clientCompany,
@@ -144,6 +149,9 @@ export function InvoiceDocumentPreview({
           background: "#0a0a0f",
           padding: "20px 48px",
           borderRadius: "4px 4px 0 0",
+          borderTop: branding.brandColor
+            ? `4px solid ${branding.brandColor}`
+            : undefined,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -151,9 +159,9 @@ export function InvoiceDocumentPreview({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/logos/nexli-logo-white-wordmark@2x.png"
-          alt="Nexli"
-          style={{ height: 28 }}
+          src={branding.logoUrl}
+          alt={branding.displayName}
+          style={{ height: 28, maxWidth: 200, objectFit: "contain" }}
         />
         <span
           style={{

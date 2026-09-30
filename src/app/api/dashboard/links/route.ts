@@ -5,6 +5,7 @@ import { documentLinks, documentAuditLog } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { sendEmailWithLog, buildUploadRequestEmail } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 
 export async function GET() {
   const session = await auth();
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
   if (deliveryMethod === "email" && clientEmail) {
     try {
       const senderName = session.user.name || session.user.email || "Your Service Provider";
+      const branding = await getOwnerBranding(session.user.id);
       const { subject, html } = buildUploadRequestEmail({
         clientName: clientName || "",
         senderName,
@@ -76,8 +78,9 @@ export async function POST(req: NextRequest) {
         requiredDocs: requiredDocuments || [],
         message,
         expiresAt,
+        branding,
       });
-      await sendEmailWithLog({ to: clientEmail, subject, html, recipientName: clientName, emailType: "upload_request", relatedId: link.id, sentBy: session.user.id });
+      await sendEmailWithLog({ to: clientEmail, subject, html, fromName: branding.fromName, recipientName: clientName, emailType: "upload_request", relatedId: link.id, sentBy: session.user.id });
       emailSent = true;
     } catch (err) {
       console.error("Failed to send upload request email:", err);

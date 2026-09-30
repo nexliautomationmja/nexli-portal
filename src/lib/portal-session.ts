@@ -11,6 +11,8 @@ import { PORTAL_SESSION_COOKIE } from "./portal-auth";
 export async function getPortalSessionServer(): Promise<{
   email: string;
   clientName: string | null;
+  /** The firm (users.id) whose records this client belongs to. */
+  ownerId: string | null;
 } | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
@@ -28,6 +30,10 @@ export async function getPortalSessionServer(): Promise<{
     .limit(1);
 
   return session
-    ? { email: session.email, clientName: session.clientName }
+    ? {
+        email: session.email,
+        clientName: session.clientName,
+        ownerId: session.ownerId,
+      }
     : null;
 }

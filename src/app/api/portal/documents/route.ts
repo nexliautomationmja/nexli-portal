@@ -6,7 +6,9 @@ import { getPortalSessionFromRequest } from "@/lib/portal-auth";
 
 export async function GET(req: NextRequest) {
   const session = await getPortalSessionFromRequest(req);
-  if (!session) {
+  // A session with no ownerId cannot be tenant-scoped — refuse rather than
+  // falling back to an email-only query that would leak across firms.
+  if (!session || !session.ownerId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -17,33 +19,21 @@ export async function GET(req: NextRequest) {
   const clientDocs = await db
     .select()
     .from(documents)
-    .where(
-      ownerId
-        ? and(eq(documents.clientEmail, email), eq(documents.ownerId, ownerId))
-        : eq(documents.clientEmail, email)
-    )
+    .where(and(eq(documents.clientEmail, email), eq(documents.ownerId, ownerId)))
     .orderBy(desc(documents.createdAt));
 
   // Active upload links
   const uploadLinks = await db
     .select()
     .from(documentLinks)
-    .where(
-      ownerId
-        ? and(eq(documentLinks.clientEmail, email), eq(documentLinks.ownerId, ownerId))
-        : eq(documentLinks.clientEmail, email)
-    )
+    .where(and(eq(documentLinks.clientEmail, email), eq(documentLinks.ownerId, ownerId)))
     .orderBy(desc(documentLinks.createdAt));
 
   // E-signature requests
   const esignRequests = await db
     .select()
     .from(eSignatures)
-    .where(
-      ownerId
-        ? and(eq(eSignatures.signerEmail, email), eq(eSignatures.ownerId, ownerId))
-        : eq(eSignatures.signerEmail, email)
-    )
+    .where(and(eq(eSignatures.signerEmail, email), eq(eSignatures.ownerId, ownerId)))
     .orderBy(desc(eSignatures.createdAt));
 
   // Documents shared by CPA to this client
@@ -51,16 +41,11 @@ export async function GET(req: NextRequest) {
     .select()
     .from(documents)
     .where(
-      ownerId
-        ? and(
-            eq(documents.clientEmail, email),
-            eq(documents.ownerId, ownerId),
-            eq(documents.sharedWithClient, true)
-          )
-        : and(
-            eq(documents.clientEmail, email),
-            eq(documents.sharedWithClient, true)
-          )
+      and(
+        eq(documents.clientEmail, email),
+        eq(documents.ownerId, ownerId),
+        eq(documents.sharedWithClient, true)
+      )
     )
     .orderBy(desc(documents.sharedAt));
 

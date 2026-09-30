@@ -18,6 +18,7 @@ import {
   sendEmailWithLog,
   buildTaxOrganizerConfirmationEmail,
 } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 
 function getSupabase() {
   return createClient(
@@ -301,6 +302,7 @@ export async function POST(
       const portalUrl =
         process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
       const uploadUrl = `${portalUrl}/upload/${uploadToken}`;
+      const branding = await getOwnerBranding(link.ownerId);
 
       const { subject, html } = buildTaxOrganizerConfirmationEmail({
         clientName: link.clientName || "Client",
@@ -311,12 +313,14 @@ export async function POST(
         uploadedCount: uploadedDocIds.length,
         uploadUrl,
         expiresAt: uploadExpiresAt,
+        branding,
       });
 
       await sendEmailWithLog({
         to: link.clientEmail,
         subject,
         html,
+        fromName: branding.fromName,
         recipientName: link.clientName || undefined,
         emailType: "tax_organizer_confirmation",
         relatedId: submission.id,

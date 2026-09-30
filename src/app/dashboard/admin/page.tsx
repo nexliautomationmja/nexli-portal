@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { ClientListCard } from "@/components/dashboard/admin/client-list-card";
 import { ClientDetailPanel } from "@/components/dashboard/admin/client-detail-panel";
 import { compactNumber } from "@/lib/format";
+import { CreateFirmDialog } from "./_components/create-firm-dialog";
+import { FirmProvisioningCard } from "./_components/firm-provisioning-card";
 
 interface ClientRow {
   id: string;
@@ -19,6 +21,22 @@ interface ClientRow {
   active: boolean;
   pageViews30d: number;
   uniqueVisitors30d: number;
+  // Firm Foundation provisioning fields
+  phone: string | null;
+  tier: string | null;
+  subscriptionStatus: string | null;
+  subscriptionCurrentPeriodEnd: string | null;
+  provisionedAt: string | null;
+  foundationAgreementEngagementId: string | null;
+  foundationAgreementSentAt: string | null;
+  welcomeEmailSentAt: string | null;
+  // Firm Foundation website (null until generated)
+  site: {
+    status: string;
+    slug: string;
+    domain: string | null;
+    generatedBy?: string | null;
+  } | null;
 }
 
 interface AdminData {
@@ -75,25 +93,29 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [portalData, setPortalData] = useState<PortalSessionsData | null>(null);
   const [portalLoading, setPortalLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
   const selectedClientId = searchParams.get("client");
 
-  useEffect(() => {
-    fetch("/api/dashboard/admin/clients")
+  const refetchClients = useCallback(() => {
+    return fetch("/api/dashboard/admin/clients")
       .then((r) => r.json())
       .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+      .catch(() => setData(null));
+  }, []);
+
+  useEffect(() => {
+    refetchClients().finally(() => setLoading(false));
 
     fetch("/api/dashboard/portal-sessions")
       .then((r) => r.json())
       .then(setPortalData)
       .catch(() => setPortalData(null))
       .finally(() => setPortalLoading(false));
-  }, []);
+  }, [refetchClients]);
 
   function selectClient(clientId: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -117,14 +139,31 @@ export default function AdminPage() {
   return (
     <div className="max-w-[1600px] mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
-          Client Overview
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-          Monitor all client websites and analytics from one view.
-        </p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-main)" }}>
+            Client Overview
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+            Monitor all client websites and analytics from one view.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="self-start sm:self-auto px-5 py-2.5 rounded-full text-xs font-bold bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-500 active:scale-[0.98] transition-all"
+        >
+          + Create firm
+        </button>
       </div>
+
+      <CreateFirmDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(userId) => {
+          refetchClients().then(() => selectClient(userId));
+        }}
+      />
 
       {/* Aggregate stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -222,7 +261,10 @@ export default function AdminPage() {
         {/* RIGHT: Detail panel */}
         <main className="lg:col-span-8 xl:col-span-9">
           {selectedClient ? (
-            <ClientDetailPanel client={selectedClient} />
+            <>
+              <FirmProvisioningCard client={selectedClient} onChanged={refetchClients} />
+              <ClientDetailPanel client={selectedClient} />
+            </>
           ) : (
             <GlassCard>
               <div className="py-24 text-center">

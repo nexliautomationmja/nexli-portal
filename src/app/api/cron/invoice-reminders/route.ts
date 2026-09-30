@@ -6,6 +6,7 @@ import {
   sendEmailWithLog,
   buildInvoiceReminderEmail,
 } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 import {
   formatCurrency,
   generateInvoiceNumber,
@@ -81,6 +82,7 @@ export async function GET(req: NextRequest) {
           process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
         const invoiceUrl = `${portalUrl}/invoice/${invoice.token}`;
         const isOverdue = invoice.dueDate <= now;
+        const branding = await getOwnerBranding(invoice.ownerId);
 
         const { subject, html } = buildInvoiceReminderEmail({
           clientName: invoice.clientName,
@@ -90,9 +92,10 @@ export async function GET(req: NextRequest) {
           dueDate: invoice.dueDate,
           isOverdue,
           invoiceUrl,
+          branding,
         });
 
-        await sendEmailWithLog({ to: invoice.clientEmail, subject, html, recipientName: invoice.clientName, emailType: "invoice_reminder", relatedId: invoice.id });
+        await sendEmailWithLog({ to: invoice.clientEmail, subject, html, fromName: branding.fromName, recipientName: invoice.clientName, emailType: "invoice_reminder", relatedId: invoice.id });
 
         await db
           .update(invoiceReminders)

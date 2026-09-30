@@ -9,6 +9,7 @@ import {
   calculateLineAmount,
   calculateInvoiceTotals,
 } from "@/lib/invoice-utils";
+import { resolveStripeAccountForOwner } from "@/lib/stripe";
 
 interface BatchClient {
   clientName: string;
@@ -169,11 +170,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Warn (don't block) when the firm can't yet accept online payments.
+  let warning: "payments_not_configured" | undefined;
+  if (sendImmediately && created.length > 0) {
+    try {
+      const resolution = await resolveStripeAccountForOwner(session.user.id);
+      if (resolution.mode === "not_configured") {
+        warning = "payments_not_configured";
+      }
+    } catch (err) {
+      console.error("Stripe account resolution failed on batch send:", err);
+    }
+  }
+
   return NextResponse.json(
     {
       created: created.length,
       errors: errors.length > 0 ? errors : undefined,
       invoiceIds: created,
+      warning,
     },
     { status: 201 }
   );

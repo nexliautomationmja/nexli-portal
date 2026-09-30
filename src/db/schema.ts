@@ -11,6 +11,7 @@ import {
   integer,
   real,
 } from "drizzle-orm/pg-core";
+import type { FirmSiteConfig } from "@/lib/firm-sites/types";
 
 // ── Enums ──────────────────────────────────────────────
 export const userRoleEnum = pgEnum("user_role", ["admin", "client"]);
@@ -42,6 +43,35 @@ export const users = pgTable(
     vercelTeamId: text("vercel_team_id"),
 
     websiteUrl: text("website_url"),
+    phone: text("phone"),
+    bookingUrl: text("booking_url"),
+
+    // Per-firm branding shown to the firm's clients (portal chrome, emails,
+    // invoice and engagement PDFs). Null falls back to Nexli defaults.
+    portalDisplayName: text("portal_display_name"),
+    logoUrl: text("logo_url"),
+    brandColor: text("brand_color"), // hex, e.g. "#0f766e"
+
+    // Commercial tier. null is treated as "drs" (legacy full-service client).
+    tier: text("tier"), // 'drs' | 'foundation'
+    stripeCustomerId: text("stripe_customer_id").unique(),
+    stripeSubscriptionId: text("stripe_subscription_id").unique(),
+    subscriptionStatus: text("subscription_status"), // Stripe status string
+    subscriptionCurrentPeriodEnd: timestamp("subscription_current_period_end"),
+    subscriptionStartedAt: timestamp("subscription_started_at"),
+
+    // Stripe Connect (Express) — the firm's own account for client payments
+    stripeConnectAccountId: text("stripe_connect_account_id").unique(),
+    stripeConnectOnboardedAt: timestamp("stripe_connect_onboarded_at"),
+    stripeConnectChargesEnabled: boolean("stripe_connect_charges_enabled")
+      .default(false)
+      .notNull(),
+
+    // Firm Foundation provisioning stamps (each step is idempotent on its stamp)
+    foundationAgreementEngagementId: uuid("foundation_agreement_engagement_id"),
+    foundationAgreementSentAt: timestamp("foundation_agreement_sent_at"),
+    welcomeEmailSentAt: timestamp("welcome_email_sent_at"),
+    provisionedAt: timestamp("provisioned_at"),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -49,6 +79,26 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex("users_email_idx").on(table.email),
+    index("users_tier_idx").on(table.tier),
+  ]
+);
+
+// ── Password setup tokens (welcome email → set first password) ──
+export const passwordSetupTokens = pgTable(
+  "password_setup_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(), // sha256 of the raw token
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("password_setup_tokens_hash_idx").on(table.tokenHash),
+    index("password_setup_tokens_user_idx").on(table.userId),
   ]
 );
 
@@ -223,6 +273,33 @@ export const brandFiles = pgTable(
     index("brand_files_client_category_idx").on(table.clientId, table.category),
   ]
 );
+
+// ── Firm Sites (Firm Foundation websites, rendered by the marketing app) ──
+// Migration: scripts/add-firm-sites.sql (hand-written; do not use drizzle-kit).
+// Read-only mirror for the marketing app: /lib/firm-sites-schema.ts (repo root).
+export const firmSites = pgTable(
+  "firm_sites",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull().unique(),
+    domain: text("domain").unique(),
+    status: text("status").notNull().default("draft"), // 'draft' | 'published'
+    config: jsonb("config").$type<FirmSiteConfig>().notNull(),
+    previewToken: text("preview_token").notNull().unique(),
+    generatedBy: text("generated_by").notNull().default("template"), // 'claude' | 'template' | 'manual'
+    generationNotes: text("generation_notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    publishedAt: timestamp("published_at"),
+  },
+  (table) => [index("firm_sites_status_idx").on(table.status)]
+);
+
+export type FirmSiteRow = typeof firmSites.$inferSelect;
 
 // ══════════════════════════════════════════════════════════
 // ══  DOCUMENT PORTAL TABLES  ═════════════════════════════
@@ -589,6 +666,9 @@ export const invoices = pgTable(
     paymentUrl: text("payment_url"),
     paymentMethod: text("payment_method"), // "card" | "ach"
     achSettlementStatus: text("ach_settlement_status"), // "pending" | "approved" | "declined"
+    // Connected account the checkout was created on (Stripe Connect direct
+    // charge). Null means the platform (Nexli) account.
+    stripeAccountId: text("stripe_account_id"),
 
     // Partial payment tracking (integer cents)
     amountPaid: integer("amount_paid").default(0).notNull(),
@@ -1009,39 +1089,6 @@ export const vslTracking = pgTable(
 // ══════════════════════════════════════════════════════════
 // ══  LEADS (marketing site — shared DB)  ═════════════════
 // ══════════════════════════════════════════════════════════
-
-export const leads = pgTable(
-  "leads",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    email: text("email"),
-    firstName: text("first_name"),
-    lastName: text("last_name"),
-    firmName: text("firm_name"),
-
-    // Lead classification
-    leadScore: text("lead_score"), // 'raw' | 'qualified' | 'disqualified'
-    formSource: text("form_source"),
-
-    // Attribution
-    utmSource: text("utm_source"),
-    utmMedium: text("utm_medium"),
-    utmCampaign: text("utm_campaign"),
-    utmContent: text("utm_content"),
-    utmTerm: text("utm_term"),
-    landingPage: text("landing_page"),
-
-    // Lifecycle
-    bookedCallAt: timestamp("booked_call_at"),
-    showedCallAt: timestamp("showed_call_at"),
-    opportunityAt: timestamp("opportunity_at"),
-    purchasedAt: timestamp("purchased_at"),
-
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => [
-    index("leads_email_idx").on(table.email),
-    index("leads_lead_score_idx").on(table.leadScore),
-    index("leads_created_idx").on(table.createdAt),
-  ]
-);
+// The `leads` table is owned by the marketing app at the repo root and is
+// declared for read access in ./external-schema.ts. It is intentionally NOT
+// part of this schema so drizzle-kit can never generate a migration for it.

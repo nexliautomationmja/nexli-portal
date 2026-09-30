@@ -1,6 +1,11 @@
 import { Resend } from "resend";
 import { db } from "@/db";
 import { emailLog } from "@/db/schema";
+import {
+  NEXLI_BRANDING,
+  absoluteLogoUrl,
+  type OwnerBranding,
+} from "@/lib/branding";
 
 let _resend: Resend | null = null;
 function getResend() {
@@ -13,15 +18,35 @@ function getResend() {
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL || "Nexli Portal <portal@documents.nexli.net>";
 
+/** The bare verified sender address parsed out of FROM_EMAIL. */
+const FROM_ADDRESS = (() => {
+  const match = FROM_EMAIL.match(/<([^>]+)>/);
+  return (match ? match[1] : FROM_EMAIL).trim();
+})();
+
+/**
+ * Build the RFC 5322 From header. The address is always the verified sender;
+ * only the display name changes per firm (e.g. "Smith CPA via Nexli Portal").
+ */
+function buildFrom(fromName?: string): string {
+  const name = fromName?.trim();
+  if (!name) return FROM_EMAIL;
+  // Quote the display name so commas / punctuation in firm names are safe.
+  const safe = name.replace(/["\\\r\n]/g, "");
+  return `"${safe}" <${FROM_ADDRESS}>`;
+}
+
 interface SendEmailParams {
   to: string;
   subject: string;
   html: string;
+  /** Optional From display name; the address stays the verified sender. */
+  fromName?: string;
 }
 
-export async function sendEmail({ to, subject, html }: SendEmailParams) {
+export async function sendEmail({ to, subject, html, fromName }: SendEmailParams) {
   const { data, error } = await getResend().emails.send({
-    from: FROM_EMAIL,
+    from: buildFrom(fromName),
     to,
     subject,
     html,
@@ -46,13 +71,14 @@ export async function sendEmailWithLog({
   to,
   subject,
   html,
+  fromName,
   recipientName,
   emailType,
   relatedId,
   sentBy,
 }: SendEmailWithLogParams) {
   try {
-    const result = await sendEmail({ to, subject, html });
+    const result = await sendEmail({ to, subject, html, fromName });
     await db.insert(emailLog).values({
       recipientEmail: to,
       recipientName,
@@ -85,9 +111,37 @@ export async function sendEmailWithLog({
 // ── Shared email styles ──────────────────────────────────
 
 const PORTAL_URL = process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-const LOGO_URL = `${PORTAL_URL}/logos/nexli-logo-white-wordmark@2x.png`;
 
-export const emailWrapper = (content: string) => `
+/** Default accent used for links / buttons when a firm has no brand color. */
+const DEFAULT_ACCENT = "#2563EB";
+
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Shared HTML shell for every outbound email. Pass the firm's branding to
+ * swap the logo, footer attribution and accent color; defaults to Nexli.
+ */
+export const emailWrapper = (
+  content: string,
+  branding: OwnerBranding = NEXLI_BRANDING
+) => {
+  const logoUrl = absoluteLogoUrl(branding.logoUrl);
+  const logoAlt = escapeHtml(branding.displayName);
+  const accent = branding.brandColor || DEFAULT_ACCENT;
+  const accentBar = branding.brandColor
+    ? `<tr><td bgcolor="${accent}" style="background-color:${accent};height:4px;line-height:4px;font-size:0;">&nbsp;</td></tr>`
+    : "";
+  const footerLine = branding.isNexli
+    ? "Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System"
+    : `Sent securely by ${escapeHtml(branding.displayName)} via Nexli Portal`;
+
+  return `
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
@@ -111,7 +165,7 @@ export const emailWrapper = (content: string) => `
     .nxl-muted { color: #4a4a5a !important; }
     .nxl-footer { color: #666675 !important; }
     .nxl-green { color: #10B981 !important; }
-    .nxl-link { color: #2563EB !important; }
+    .nxl-link { color: ${accent} !important; }
     .nxl-label { color: #808090 !important; }
     u + .body-bg { background-color: #0a0a0f !important; }
     div[style*="margin: 16px 0"] { margin: 0 !important; }
@@ -132,7 +186,7 @@ export const emailWrapper = (content: string) => `
       .nxl-muted { color: #4a4a5a !important; }
       .nxl-footer { color: #666675 !important; }
       .nxl-green { color: #10B981 !important; }
-      .nxl-link { color: #2563EB !important; }
+      .nxl-link { color: ${accent} !important; }
       .nxl-label { color: #808090 !important; }
     }
     @media (prefers-color-scheme: dark) {
@@ -146,9 +200,10 @@ export const emailWrapper = (content: string) => `
   <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0a0a0f" class="body-bg" style="background-color:#0a0a0f;padding:40px 20px;">
     <tr><td align="center" bgcolor="#0a0a0f" style="background-color:#0a0a0f;">
       <table width="100%" class="card-bg" bgcolor="#111118" style="max-width:560px;background-color:#111118;border:1px solid #1e1e2a;border-radius:16px;overflow:hidden;">
+        ${accentBar}
         <!-- Logo Header -->
         <tr><td bgcolor="#111118" style="background-color:#111118;padding:32px 32px 0;text-align:center;">
-          <img src="${LOGO_URL}" alt="Nexli" width="130" style="display:inline-block;" />
+          <img src="${logoUrl}" alt="${logoAlt}" width="130" style="display:inline-block;max-height:56px;object-fit:contain;" />
         </td></tr>
         <!-- Content -->
         <tr><td bgcolor="#111118" style="background-color:#111118;padding:32px;">
@@ -158,15 +213,15 @@ export const emailWrapper = (content: string) => `
         <tr><td bgcolor="#111118" class="footer-border" style="background-color:#111118;padding:0 32px 32px;border-top:1px solid #1a1a24;padding-top:24px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr><td align="center" style="padding-bottom:12px;">
-              <img src="${LOGO_URL}" alt="Nexli" width="60" style="opacity:0.4;" />
+              <img src="${logoUrl}" alt="${logoAlt}" width="60" style="opacity:0.4;max-height:28px;object-fit:contain;" />
             </td></tr>
             <tr><td align="center">
               <p class="nxl-muted" style="margin:0;color:#4a4a5a;font-size:11px;">
-                Sent securely by Nexli Portal &bull; Powered by Digital Rainmaker System
+                ${footerLine}
               </p>
             </td></tr>
             <tr><td align="center" style="padding-top:12px;">
-              <a href="${PORTAL_URL}/portal" class="nxl-link" style="color:#2563EB;font-size:11px;text-decoration:none;opacity:0.6;">
+              <a href="${PORTAL_URL}/portal" class="nxl-link" style="color:${accent};font-size:11px;text-decoration:none;opacity:0.6;">
                 Sign in to your Client Portal
               </a>
             </td></tr>
@@ -178,8 +233,17 @@ export const emailWrapper = (content: string) => `
   </div>
 </body>
 </html>`;
+};
 
-const buttonStyle = `display:inline-block;background-color:#2563EB;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
+const DEFAULT_BUTTON_STYLE = `display:inline-block;background-color:#2563EB;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
+
+/** CTA button style — solid brand color when the firm set one, else the Nexli gradient. */
+function buttonStyleFor(branding?: OwnerBranding): string {
+  if (branding?.brandColor) {
+    return `display:inline-block;background-color:${branding.brandColor};background:${branding.brandColor};color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
+  }
+  return DEFAULT_BUTTON_STYLE;
+}
 
 // ── Upload Request Email ─────────────────────────────────
 
@@ -190,6 +254,7 @@ export function buildUploadRequestEmail(params: {
   requiredDocs: string[];
   message?: string;
   expiresAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { clientName, senderName, uploadUrl, requiredDocs, message, expiresAt } =
     params;
@@ -222,7 +287,7 @@ export function buildUploadRequestEmail(params: {
     ${messageBlock}
     ${docList}
     <div style="text-align:center;margin:28px 0;">
-      <a href="${uploadUrl}" style="${buttonStyle}">Upload Documents</a>
+      <a href="${uploadUrl}" style="${buttonStyleFor(params.branding)}">Upload Documents</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
@@ -232,7 +297,7 @@ export function buildUploadRequestEmail(params: {
         ${uploadUrl}
       </p>
     </div>
-  `);
+  `, params.branding);
 
   return {
     subject: `${senderName} requested documents from you`,
@@ -249,6 +314,7 @@ export function buildTaxOrganizerEmail(params: {
   returnType: string;
   organizerUrl: string;
   expiresAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { clientName, senderName, taxYear, returnType, organizerUrl, expiresAt } =
     params;
@@ -283,7 +349,7 @@ export function buildTaxOrganizerEmail(params: {
       <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Expires: <strong style="color:#fff;">${expDate}</strong></p>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${organizerUrl}" style="${buttonStyle}">Complete Tax Organizer</a>
+      <a href="${organizerUrl}" style="${buttonStyleFor(params.branding)}">Complete Tax Organizer</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
@@ -293,7 +359,7 @@ export function buildTaxOrganizerEmail(params: {
         Or copy this link: ${organizerUrl}
       </p>
     </div>
-  `);
+  `, params.branding);
 
   return {
     subject: `${senderName} sent your tax organizer for ${taxYear}`,
@@ -312,6 +378,7 @@ export function buildTaxOrganizerConfirmationEmail(params: {
   uploadedCount: number;
   uploadUrl: string;
   expiresAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const {
     clientName,
@@ -363,7 +430,7 @@ export function buildTaxOrganizerConfirmationEmail(params: {
     </p>` : ""}
     ${docList}
     ${recommendedDocs.length > 0 ? `<div style="text-align:center;margin:28px 0;">
-      <a href="${uploadUrl}" style="${buttonStyle}">Upload Documents</a>
+      <a href="${uploadUrl}" style="${buttonStyleFor(params.branding)}">Upload Documents</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
@@ -372,7 +439,7 @@ export function buildTaxOrganizerConfirmationEmail(params: {
     </div>` : `<p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       We&rsquo;ll be in touch if we need any additional information.
     </p>`}
-  `);
+  `, params.branding);
 
   return {
     subject: `Your ${taxYear} tax organizer has been received — documents needed`,
@@ -389,6 +456,7 @@ export function buildTaxOrganizerDocReminderEmail(params: {
   recommendedDocs: string[];
   uploadUrl: string;
   expiresAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { clientName, senderName, taxYear, recommendedDocs, uploadUrl, expiresAt } =
     params;
@@ -415,14 +483,14 @@ export function buildTaxOrganizerDocReminderEmail(params: {
     </p>
     ${docList}
     <div style="text-align:center;margin:28px 0;">
-      <a href="${uploadUrl}" style="${buttonStyle}">Upload Documents</a>
+      <a href="${uploadUrl}" style="${buttonStyleFor(params.branding)}">Upload Documents</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
         This link expires ${expDate} &bull; No account required
       </p>
     </div>
-  `);
+  `, params.branding);
 
   return {
     subject: `Reminder: Documents needed for your ${taxYear} tax return`,
@@ -438,6 +506,7 @@ export function buildEsignRequestEmail(params: {
   documentName: string;
   signUrl: string;
   expiresAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { signerName, senderName, documentName, signUrl, expiresAt } = params;
   const expDate = expiresAt.toLocaleDateString("en-US", {
@@ -456,14 +525,14 @@ export function buildEsignRequestEmail(params: {
       <p style="margin:8px 0 0;color:#fff;font-size:15px;font-weight:600;">${documentName}</p>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${signUrl}" style="${buttonStyle}">Review & Sign</a>
+      <a href="${signUrl}" style="${buttonStyleFor(params.branding)}">Review & Sign</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
         This link expires ${expDate} &bull; No account required
       </p>
     </div>
-  `);
+  `, params.branding);
 
   return {
     subject: `${senderName} needs your signature — ${documentName}`,
@@ -479,6 +548,7 @@ export function buildEsignCompletedEmail(params: {
   signerName: string;
   documentName: string;
   signedAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { senderName, signerName, documentName, signedAt } = params;
   const signDate = signedAt.toLocaleDateString("en-US", {
@@ -513,7 +583,7 @@ export function buildEsignCompletedEmail(params: {
     <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View the signed document in your Nexli Portal dashboard.
     </p>
-  `);
+  `, params.branding);
 
   return {
     subject: `${signerName} signed "${documentName}"`,
@@ -529,6 +599,7 @@ export function buildEngagementRequestEmail(params: {
   subject: string;
   engageUrl: string;
   expiresAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { clientName, senderName, subject, engageUrl, expiresAt } = params;
   const expDate = expiresAt.toLocaleDateString("en-US", {
@@ -547,14 +618,14 @@ export function buildEngagementRequestEmail(params: {
       <p style="margin:8px 0 0;color:#fff;font-size:15px;font-weight:600;">${subject}</p>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${engageUrl}" style="${buttonStyle}">Review & Sign</a>
+      <a href="${engageUrl}" style="${buttonStyleFor(params.branding)}">Review & Sign</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
         This link expires ${expDate} &bull; No account required
       </p>
     </div>
-  `);
+  `, params.branding);
 
   return {
     subject: `${senderName} sent you an engagement letter — ${subject}`,
@@ -569,6 +640,7 @@ export function buildEngagementSignedEmail(params: {
   clientName: string;
   subject: string;
   signedAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { senderName, clientName, subject, signedAt } = params;
   const signDate = signedAt.toLocaleDateString("en-US", {
@@ -603,7 +675,7 @@ export function buildEngagementSignedEmail(params: {
     <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View the signed engagement in your Nexli Portal dashboard.
     </p>
-  `);
+  `, params.branding);
 
   return {
     subject: `${clientName} signed your engagement letter — "${subject}"`,
@@ -631,7 +703,7 @@ export function buildOnboardingWelcomeEmail(params: {
       few quick items we need from you.
     </p>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${onboardingUrl}" style="${buttonStyle}">Open Your Launch Pad</a>
+      <a href="${onboardingUrl}" style="${buttonStyleFor()}">Open Your Launch Pad</a>
     </div>
     <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
       <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">What we need from you</p>
@@ -670,6 +742,7 @@ export function buildInvoiceEmail(params: {
   total: string;
   dueDate: Date;
   invoiceUrl: string;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { clientName, senderName, invoiceNumber, total, dueDate, invoiceUrl } =
     params;
@@ -701,14 +774,14 @@ export function buildInvoiceEmail(params: {
       </table>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${invoiceUrl}" style="${buttonStyle}">View &amp; Pay Invoice</a>
+      <a href="${invoiceUrl}" style="${buttonStyleFor(params.branding)}">View &amp; Pay Invoice</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
         No account required &bull; Secure payment via Stripe
       </p>
     </div>
-  `);
+  `, params.branding);
 
   return {
     subject: `Invoice ${invoiceNumber} from ${senderName} — ${total} due ${dueDateStr}`,
@@ -724,6 +797,7 @@ export function buildInvoicePaidEmail(params: {
   invoiceNumber: string;
   total: string;
   paidAt: Date;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { senderName, clientName, invoiceNumber, total, paidAt } = params;
   const paidDate = paidAt.toLocaleDateString("en-US", {
@@ -762,7 +836,7 @@ export function buildInvoicePaidEmail(params: {
     <p style="margin:24px 0 0;color:#666675;font-size:12px;text-align:center;">
       View invoice details in your Nexli Portal dashboard.
     </p>
-  `);
+  `, params.branding);
 
   return {
     subject: `${clientName} paid invoice ${invoiceNumber} — ${total}`,
@@ -780,6 +854,7 @@ export function buildInvoiceReminderEmail(params: {
   dueDate: Date;
   isOverdue: boolean;
   invoiceUrl: string;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const {
     clientName,
@@ -826,14 +901,14 @@ export function buildInvoiceReminderEmail(params: {
       </table>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${invoiceUrl}" style="${buttonStyle}">View &amp; Pay Invoice</a>
+      <a href="${invoiceUrl}" style="${buttonStyleFor(params.branding)}">View &amp; Pay Invoice</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
         No account required &bull; Secure payment via Stripe
       </p>
     </div>
-  `);
+  `, params.branding);
 
   const subjectLine = isOverdue
     ? `Overdue: Invoice ${invoiceNumber} — ${total} was due ${dueDateStr}`
@@ -848,16 +923,21 @@ export function buildMagicLinkEmail(params: {
   clientName: string;
   magicLinkUrl: string;
   expiresInMinutes: number;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const { clientName, magicLinkUrl, expiresInMinutes } = params;
+  const brand = params.branding ?? NEXLI_BRANDING;
+  const portalLabel = brand.isNexli
+    ? "Nexli Portal"
+    : `${escapeHtml(brand.displayName)} client portal`;
 
   const html = emailWrapper(`
-    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Sign in to Nexli Portal</h1>
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Sign in to ${portalLabel}</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
       Hi ${clientName}, click the button below to access your client portal.
     </p>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${magicLinkUrl}" style="${buttonStyle}">Sign In to Portal</a>
+      <a href="${magicLinkUrl}" style="${buttonStyleFor(params.branding)}">Sign In to Portal</a>
     </div>
     <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;text-align:center;">
       <p style="margin:0;color:#808090;font-size:12px;">
@@ -865,10 +945,12 @@ export function buildMagicLinkEmail(params: {
         If you didn&rsquo;t request this, you can safely ignore this email.
       </p>
     </div>
-  `);
+  `, params.branding);
 
   return {
-    subject: "Sign in to your Nexli Portal",
+    subject: brand.isNexli
+      ? "Sign in to your Nexli Portal"
+      : `Sign in to your ${brand.displayName} client portal`,
     html,
   };
 }
@@ -884,6 +966,7 @@ export function buildPaymentReceiptEmail(params: {
   remainingBalance: string | null;
   paidAt: Date;
   portalUrl: string;
+  branding?: OwnerBranding;
 }): { subject: string; html: string } {
   const {
     clientName,
@@ -937,12 +1020,12 @@ export function buildPaymentReceiptEmail(params: {
       </table>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${portalUrl}/portal" style="${buttonStyle}">View in Client Portal</a>
+      <a href="${portalUrl}/portal" style="${buttonStyleFor(params.branding)}">View in Client Portal</a>
     </div>
     <p style="margin:0;color:#666675;font-size:12px;text-align:center;">
       Keep this email as your payment confirmation.
     </p>
-  `);
+  `, params.branding);
 
   const subject = isPartial
     ? `Payment received — ${amountPaid} toward invoice ${invoiceNumber}`

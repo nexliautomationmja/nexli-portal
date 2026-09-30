@@ -8,10 +8,8 @@ import {
   users,
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import crypto from "crypto";
-import { sendEmailWithLog, buildEngagementRequestEmail } from "@/lib/email";
-import { generateSenderSignatureSvgDataUrl } from "@/lib/signature";
 import { type BillingPlan } from "@/lib/drs-pricing";
+import { createEngagement } from "@/lib/engagements";
 
 export async function GET() {
   const session = await auth();
@@ -41,7 +39,7 @@ export async function GET() {
       : [];
 
   // If more than one engagement, fetch all signers at once
-  let signersByEngagement: Record<string, (typeof allSigners)[number][]> = {};
+  const signersByEngagement: Record<string, (typeof allSigners)[number][]> = {};
   if (engagementIds.length > 0) {
     const signers = await db.select().from(engagementSigners);
     const ownerEngagementIds = new Set(engagementIds);
@@ -132,35 +130,14 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + expiresInDays);
-
   // Snapshot the chosen billing plan onto the engagement so auto-invoicing
   // bills the flat platform price that matches the signed contract.
   const plan: BillingPlan = billingPlan === "annual" ? "annual" : "monthly";
   const engagementMetadata = { billingPlan: plan };
 
-  const [engagement] = await db
-    .insert(engagements)
-    .values({
-      ownerId: session.user.id,
-      templateId: templateId || null,
-      subject,
-      content,
-      status: "sent",
-      sentAt: new Date(),
-      expiresAt,
-      metadata: engagementMetadata,
-    })
-    .returning();
-
-  // Create signers and send emails
-  const portalUrl =
-    process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-  const senderName = session.user.name || session.user.email || "Your Service Provider";
+  const senderName =
+    session.user.name || session.user.email || "Your Service Provider";
   const cpaEmail = session.user.email || "";
-  const emailErrors: string[] = [];
-  const signers: { name: string; email: string; engageUrl: string }[] = [];
 
   // Fetch company name for CPA representative role
   const [ownerInfo] = await db
@@ -168,81 +145,38 @@ export async function POST(req: NextRequest) {
     .from(users)
     .where(eq(users.id, session.user.id))
     .limit(1);
-  const companyName = ownerInfo?.companyName || "";
 
-  // Add the CPA (sender) as the first signer (order 0) — auto-signed.
-  // The sender's signature is generated as a cursive SVG using their name and
-  // attached immediately so the engagement letter ships pre-signed on the
-  // Nexli side. The recipient just needs to add their signature.
-  const cpaToken = crypto.randomBytes(32).toString("base64url");
-  const cpaEngageUrl = `${portalUrl}/engage/${cpaToken}`;
-  const senderSignatureSvg = generateSenderSignatureSvgDataUrl(senderName);
   const senderIp =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     "system";
 
-  await db.insert(engagementSigners).values({
-    engagementId: engagement.id,
-    name: senderName,
-    email: cpaEmail,
-    token: cpaToken,
-    order: 0,
-    status: "signed",
-    sentAt: new Date(),
-    signedAt: new Date(),
-    signatureData: senderSignatureSvg,
-    signatureIp: senderIp,
-    signatureUserAgent: "Auto-signed by sender on document creation",
-    role: companyName
-      ? `Authorized Representative, ${companyName}`
-      : "Authorized Representative",
+  const { engagement, signers, emailErrors } = await createEngagement({
+    ownerId: session.user.id,
+    senderName,
+    senderEmail: cpaEmail,
+    senderCompanyName: ownerInfo?.companyName || "",
+    subject,
+    content,
+    templateId: templateId || null,
+    expiresInDays,
+    recipients: recipients.map((r: { name: string; email: string }) => ({
+      name: r.name,
+      email: r.email,
+    })),
+    metadata: engagementMetadata,
+    requestIp: senderIp,
   });
-
-  signers.push({ name: senderName, email: cpaEmail, engageUrl: cpaEngageUrl });
-
-  // The CPA is auto-signed on creation, so no "please sign" email is sent
-  // to them. They still receive a notification when each recipient signs.
-
-  // Add client recipients as signers (order 1+)
-  for (let i = 0; i < recipients.length; i++) {
-    const { name, email } = recipients[i];
-    const token = crypto.randomBytes(32).toString("base64url");
-    const engageUrl = `${portalUrl}/engage/${token}`;
-
-    await db.insert(engagementSigners).values({
-      engagementId: engagement.id,
-      name,
-      email,
-      token,
-      order: i + 1,
-      status: "sent",
-      sentAt: new Date(),
-    });
-
-    signers.push({ name, email, engageUrl });
-
-    try {
-      const { subject: emailSubject, html } = buildEngagementRequestEmail({
-        clientName: name,
-        senderName,
-        subject,
-        engageUrl,
-        expiresAt,
-      });
-      await sendEmailWithLog({ to: email, subject: emailSubject, html, recipientName: name, emailType: "engagement_request", relatedId: engagement.id, sentBy: session.user.id });
-    } catch (err) {
-      console.error(`Failed to send engagement email to ${email}:`, err);
-      emailErrors.push(
-        `${email}: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-  }
 
   return NextResponse.json(
     {
       engagement,
-      signers,
+      // Same shape the client expects today (no tokens exposed).
+      signers: signers.map(({ name, email, engageUrl }) => ({
+        name,
+        email,
+        engageUrl,
+      })),
       emailErrors: emailErrors.length > 0 ? emailErrors : null,
     },
     { status: 201 }

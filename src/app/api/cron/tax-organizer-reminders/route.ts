@@ -6,6 +6,7 @@ import {
   sendEmailWithLog,
   buildTaxOrganizerDocReminderEmail,
 } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
 
         // Extract tax year from the submission if possible, otherwise use current year
         const taxYear = String(now.getFullYear() - 1);
+        const branding = await getOwnerBranding(link.ownerId);
 
         const { subject, html } = buildTaxOrganizerDocReminderEmail({
           clientName: link.clientName || "Client",
@@ -98,12 +100,14 @@ export async function GET(req: NextRequest) {
           recommendedDocs: requiredDocs,
           uploadUrl,
           expiresAt: link.expiresAt,
+          branding,
         });
 
         await sendEmailWithLog({
           to: link.clientEmail,
           subject,
           html,
+          fromName: branding.fromName,
           recipientName: link.clientName || undefined,
           emailType: "tax_organizer_doc_reminder",
           relatedId: link.id,

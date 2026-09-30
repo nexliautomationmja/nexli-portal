@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
 import { sendEmailWithLog, emailWrapper } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 
 export type NotificationType =
   | "invoice_paid"
@@ -56,7 +57,7 @@ export async function createNotification({
 
   // Send email to admin — await so Vercel doesn't kill it early
   try {
-    await sendNotificationEmail({ type, title, message });
+    await sendNotificationEmail({ userId, type, title, message });
   } catch (err) {
     console.error("Notification email failed:", err);
   }
@@ -65,12 +66,14 @@ export async function createNotification({
 }
 
 async function sendNotificationEmail(params: {
+  userId: string;
   type: NotificationType;
   title: string;
   message: string;
 }) {
-  const { type, title, message } = params;
+  const { userId, type, title, message } = params;
   const { emoji, color } = TYPE_CONFIG[type];
+  const branding = await getOwnerBranding(userId);
 
   const html = emailWrapper(`
     <div style="text-align:center;margin-bottom:20px;">
@@ -90,12 +93,13 @@ async function sendNotificationEmail(params: {
     <p style="margin:20px 0 0;color:#4a4a5a;font-size:10px;text-align:center;">
       <span style="color:${color};">${type.replace(/_/g, " ")}</span>
     </p>
-  `);
+  `, branding);
 
   await sendEmailWithLog({
     to: ADMIN_EMAIL,
     subject: `${emoji} ${title}`,
     html,
+    fromName: branding.fromName,
     recipientName: "Nexli Admin",
     emailType: `notification_${type}`,
   });

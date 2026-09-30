@@ -5,10 +5,12 @@ import { users, accountingConnections } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { GlassCard } from "@/components/ui/glass-card";
 import { PasswordForm } from "@/components/dashboard/settings/password-form";
+import { BrandingCard } from "@/components/dashboard/settings/branding-card";
 import { GHLConnection } from "@/components/dashboard/settings/ghl-connection";
 import { TrackingSnippet } from "@/components/dashboard/settings/tracking-snippet";
 import { AccountingConnections } from "@/components/dashboard/settings/accounting-connections";
 import { EmailLog } from "@/components/dashboard/settings/email-log";
+import { StripeConnectCard } from "@/components/dashboard/settings/stripe-connect-card";
 
 export default async function SettingsPage({
   searchParams,
@@ -91,6 +93,17 @@ export default async function SettingsPage({
         <PasswordForm />
       </GlassCard>
 
+      {/* Client-facing branding (portal, documents, emails) */}
+      <GlassCard>
+        <h3
+          className="text-sm font-semibold mb-5"
+          style={{ color: "var(--text-main)" }}
+        >
+          Branding
+        </h3>
+        <BrandingCard />
+      </GlassCard>
+
       {/* Accounting Software */}
       <GlassCard>
         <h3
@@ -142,6 +155,17 @@ export default async function SettingsPage({
           Email History
         </h3>
         <EmailLog />
+      </GlassCard>
+
+      {/* Stripe Connect — get paid to the firm's own bank */}
+      <GlassCard>
+        <h3
+          className="text-sm font-semibold mb-5"
+          style={{ color: "var(--text-main)" }}
+        >
+          Get paid: connect your bank
+        </h3>
+        <StripeConnectCard />
       </GlassCard>
     </div>
   );

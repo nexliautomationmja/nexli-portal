@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { documentLinks } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { sendEmailWithLog, buildUploadRequestEmail } from "@/lib/email";
+import { getOwnerBranding } from "@/lib/branding";
 
 export async function POST(
   _req: NextRequest,
@@ -49,6 +50,7 @@ export async function POST(
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
   const uploadUrl = `${portalUrl}/upload/${link.token}`;
   const senderName = session.user.name || session.user.email || "Your Service Provider";
+  const branding = await getOwnerBranding(session.user.id);
 
   const { subject, html } = buildUploadRequestEmail({
     clientName: link.clientName || "",
@@ -56,9 +58,10 @@ export async function POST(
     uploadUrl,
     requiredDocs: (link.requiredDocuments as string[]) || [],
     expiresAt: new Date(link.expiresAt),
+    branding,
   });
 
-  await sendEmailWithLog({ to: link.clientEmail, subject, html, recipientName: link.clientName || undefined, emailType: "upload_request", relatedId: link.id, sentBy: session.user.id });
+  await sendEmailWithLog({ to: link.clientEmail, subject, html, fromName: branding.fromName, recipientName: link.clientName || undefined, emailType: "upload_request", relatedId: link.id, sentBy: session.user.id });
 
   return NextResponse.json({ ok: true });
 }

@@ -8,6 +8,8 @@ import {
   PenLineIcon,
   KanbanIcon,
 } from "@/components/ui/icons";
+import { FoundationProjectCard } from "@/components/portal/foundation-project-card";
+import type { FoundationProject } from "@/lib/foundation-project";
 
 interface Stats {
   totalOwed: number;
@@ -39,6 +41,7 @@ interface OverviewData {
   actionItems: ActionItem[];
   recentActivity: ActivityItem[];
   clientName: string | null;
+  foundationProject?: FoundationProject | null;
 }
 
 function formatCents(cents: number): string {
@@ -124,6 +127,11 @@ export function PortalOverviewClient() {
           Here&apos;s an overview of your account.
         </p>
       </div>
+
+      {/* Firm Foundation project tracker (Foundation firm owners only) */}
+      {data.foundationProject && (
+        <FoundationProjectCard project={data.foundationProject} />
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
