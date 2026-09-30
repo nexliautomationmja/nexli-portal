@@ -9,9 +9,9 @@ import {
   appendActivity,
   defaultTaskState,
   serializeAdminOnboarding,
-  PHASE_ORDER,
+  phaseIdsFor,
   PHASE_INFO,
-  TASK_ORDER,
+  taskIdsFor,
   TASK_INFO,
   type OnboardingState,
   type PhaseId,
@@ -184,8 +184,11 @@ export async function PATCH(
   switch (body.action) {
     case "set_phase": {
       const phaseId = body.phaseId as PhaseId;
-      if (!PHASE_ORDER.includes(phaseId)) {
-        return NextResponse.json({ error: "Invalid phase" }, { status: 400 });
+      if (!phaseIdsFor(state).includes(phaseId)) {
+        return NextResponse.json(
+          { error: "Invalid phase for this engagement" },
+          { status: 400 }
+        );
       }
       const current = state.phases[phaseId];
       const title = PHASE_INFO[phaseId].title;
@@ -241,8 +244,11 @@ export async function PATCH(
 
     case "review_task": {
       const taskId = body.taskId as TaskId;
-      if (!TASK_ORDER.includes(taskId)) {
-        return NextResponse.json({ error: "Invalid task" }, { status: 400 });
+      if (!taskIdsFor(state).includes(taskId)) {
+        return NextResponse.json(
+          { error: "Invalid task for this engagement" },
+          { status: 400 }
+        );
       }
       const status = body.status;
       if (status !== "approved" && status !== "needs_attention") {

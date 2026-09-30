@@ -63,14 +63,52 @@ export interface OnboardingState {
   startedAt: string;
   startedBy: "auto_sign" | "admin";
   targetLaunchDate: string | null;
-  phases: Record<PhaseId, OnboardingPhaseState>;
-  tasks: Record<TaskId, OnboardingTaskState>;
+  /** A tier may seed a subset — see defaultOnboardingState. */
+  phases: Partial<Record<PhaseId, OnboardingPhaseState>>;
+  tasks: Partial<Record<TaskId, OnboardingTaskState>>;
   activity: OnboardingActivityEntry[];
 }
 
 // ── Template (copy lives in code) ─────────────────────────
 
 export const PHASE_ORDER: PhaseId[] = ["website", "automations", "portal"];
+
+/**
+ * What each tier actually buys, and therefore what its Launch Pad shows.
+ *
+ * Firm Foundation is a website and a client portal — no ads, no automations,
+ * so the automations phase and the dream-clients / Facebook / licence tasks
+ * would all be dead weight on that page. DRS keeps the full set.
+ */
+export type OnboardingTier = "foundation" | "drs";
+
+const TIER_PHASES: Record<OnboardingTier, PhaseId[]> = {
+  foundation: ["website", "portal"],
+  drs: ["website", "automations", "portal"],
+};
+
+const TIER_TASKS: Record<OnboardingTier, TaskId[]> = {
+  foundation: ["stripe_setup", "dns_access"],
+  drs: ["stripe_setup", "dns_access", "dream_clients", "fb_ads_invite", "drivers_license"],
+};
+
+/**
+ * Which phases/tasks this particular engagement has, in canonical order.
+ *
+ * The seeded state is the source of truth rather than the tier, so a record
+ * keeps whatever it was created with even if the tier definitions change
+ * later. Records seeded before tiers existed have every key, so they are
+ * unaffected.
+ */
+export function phaseIdsFor(state: OnboardingState): PhaseId[] {
+  const present = PHASE_ORDER.filter((id) => state.phases?.[id]);
+  return present.length ? present : PHASE_ORDER;
+}
+
+export function taskIdsFor(state: OnboardingState): TaskId[] {
+  const present = TASK_ORDER.filter((id) => state.tasks?.[id]);
+  return present.length ? present : TASK_ORDER;
+}
 
 export const PHASE_INFO: Record<
   PhaseId,
@@ -197,7 +235,8 @@ export function defaultTaskState(taskId: TaskId): OnboardingTaskState {
 }
 
 export function defaultOnboardingState(
-  startedBy: "auto_sign" | "admin"
+  startedBy: "auto_sign" | "admin",
+  tier: OnboardingTier = "drs"
 ): OnboardingState {
   const now = new Date().toISOString();
   const phase = (): OnboardingPhaseState => ({
@@ -212,18 +251,10 @@ export function defaultOnboardingState(
     startedAt: now,
     startedBy,
     targetLaunchDate: null,
-    phases: {
-      website: phase(),
-      automations: phase(),
-      portal: phase(),
-    },
-    tasks: {
-      stripe_setup: defaultTaskState("stripe_setup"),
-      dns_access: defaultTaskState("dns_access"),
-      dream_clients: defaultTaskState("dream_clients"),
-      fb_ads_invite: defaultTaskState("fb_ads_invite"),
-      drivers_license: defaultTaskState("drivers_license"),
-    },
+    phases: Object.fromEntries(TIER_PHASES[tier].map((id) => [id, phase()])) as OnboardingState["phases"],
+    tasks: Object.fromEntries(
+      TIER_TASKS[tier].map((id) => [id, defaultTaskState(id)])
+    ) as OnboardingState["tasks"],
     activity: [
       {
         at: now,
@@ -252,9 +283,10 @@ function getRows(result: unknown): Record<string, unknown>[] {
  */
 export async function initOnboarding(
   engagementId: string,
-  startedBy: "auto_sign" | "admin"
+  startedBy: "auto_sign" | "admin",
+  tier: OnboardingTier = "drs"
 ): Promise<boolean> {
-  const state = defaultOnboardingState(startedBy);
+  const state = defaultOnboardingState(startedBy, tier);
   const result = await db.execute(sql`
     UPDATE engagements
     SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{onboarding}', ${JSON.stringify(state)}::jsonb),
@@ -367,13 +399,13 @@ export async function getOnboardingBySignerToken(token: string) {
 export function computeProgress(state: OnboardingState): number {
   let earned = 0;
   let total = 0;
-  for (const id of PHASE_ORDER) {
+  for (const id of phaseIdsFor(state)) {
     const p = state.phases[id];
     total += 2;
     if (p?.status === "in_progress") earned += 1;
     if (p?.status === "done") earned += 2;
   }
-  for (const id of TASK_ORDER) {
+  for (const id of taskIdsFor(state)) {
     const t = state.tasks[id];
     const optional = TASK_INFO[id].optional;
     // needs_attention was sent back to the client — not complete
@@ -401,7 +433,7 @@ export function serializePublicOnboarding(state: OnboardingState) {
     startedAt: state.startedAt,
     targetLaunchDate: state.targetLaunchDate,
     progressPercent: computeProgress(state),
-    phases: PHASE_ORDER.map((id) => {
+    phases: phaseIdsFor(state).map((id) => {
       const p = state.phases[id];
       return {
         id,
@@ -413,7 +445,7 @@ export function serializePublicOnboarding(state: OnboardingState) {
         note: p?.note ?? null,
       };
     }),
-    tasks: TASK_ORDER.map((id) => {
+    tasks: taskIdsFor(state).map((id) => {
       const t = state.tasks[id];
       const info = TASK_INFO[id];
       const base = {
@@ -458,7 +490,7 @@ export function serializeAdminOnboarding(state: OnboardingState) {
   return {
     ...serializePublicOnboarding(state),
     startedBy: state.startedBy,
-    tasks: TASK_ORDER.map((id) => {
+    tasks: taskIdsFor(state).map((id) => {
       const t = state.tasks[id];
       const info = TASK_INFO[id];
       return {
