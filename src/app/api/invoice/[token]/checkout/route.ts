@@ -43,6 +43,15 @@ export async function POST(
     );
   }
 
+  // ACH-only invoices (e.g. the Enterprise License fee) never accept card —
+  // the pay page hides the option, and this is the server-side guarantee.
+  const achOnly = Boolean(
+    (invoice.metadata as { achOnly?: unknown } | null)?.achOnly
+  );
+  if (achOnly && method === "card") {
+    return NextResponse.json({ error: "card_not_accepted" }, { status: 400 });
+  }
+
   const balanceDue = invoice.balanceDue ?? invoice.total;
   if (balanceDue <= 0) {
     return NextResponse.json(

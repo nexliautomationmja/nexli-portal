@@ -20,7 +20,7 @@ interface ClientRow {
   email: string;
   name: string;
   company: string | null;
-  billingPlan: "monthly" | "annual" | null;
+  billingPlan: "monthly" | "annual" | "enterprise" | null;
   signedAt: string | null;
   startDate: string | null;
   contractYearEnd: string | null;
@@ -295,8 +295,20 @@ export function ClientTrackerClient() {
                       </td>
                       <td className="px-4 py-3">
                         {c.billingPlan ? (
-                          <span className={`badge ${c.billingPlan === "annual" ? "badge-violet" : "badge-blue"}`}>
-                            {c.billingPlan === "annual" ? "Annual" : "Monthly"}
+                          <span
+                            className={`badge ${
+                              c.billingPlan === "enterprise"
+                                ? "badge-amber"
+                                : c.billingPlan === "annual"
+                                  ? "badge-violet"
+                                  : "badge-blue"
+                            }`}
+                          >
+                            {c.billingPlan === "enterprise"
+                              ? "Enterprise"
+                              : c.billingPlan === "annual"
+                                ? "Annual"
+                                : "Monthly"}
                           </span>
                         ) : (
                           <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>

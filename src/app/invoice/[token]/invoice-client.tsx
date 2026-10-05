@@ -72,6 +72,8 @@ interface InvoiceData {
   clientCompany: string | null;
   paymentUrl: string | null;
   paidAt: string | null;
+  /** ACH/wire only (e.g. Enterprise License fee) — the card option is hidden. */
+  achOnly?: boolean;
 }
 
 function formatCurrency(cents: number, currency: string = "usd"): string {
@@ -912,7 +914,9 @@ function PayButton({
   const [payError, setPayError] = useState("");
 
   // Dual pricing: the invoice balance is the discounted bank transfer (ACH)
-  // price; card payments are charged at the card price.
+  // price; card payments are charged at the card price. ACH-only invoices
+  // (Enterprise) show just the bank-transfer button — no card, no comparison.
+  const achOnly = Boolean(invoice.achOnly);
   const achPrice = hasPartialPayment ? invoice.balanceDue : invoice.total;
   const cardPrice = cardPriceCents(achPrice);
   const achSavings = cardPrice - achPrice;
@@ -931,6 +935,12 @@ function PayButton({
         if (data.error === "payments_not_configured") {
           setPayError(
             "This firm hasn't enabled online payments yet. Please pay using the method listed on the invoice."
+          );
+          return;
+        }
+        if (data.error === "card_not_accepted") {
+          setPayError(
+            "Card payments are not accepted on this invoice. Please pay by bank transfer (ACH) or wire."
           );
           return;
         }
@@ -1006,31 +1016,40 @@ function PayButton({
             ? "Redirecting to payment..."
             : `Pay ${formatCurrency(achPrice, invoice.currency)} via bank transfer (ACH)`}
         </button>
-        <p style={{ margin: 0, color: "#059669", fontSize: 12, fontWeight: 600 }}>
-          Bank transfer price — save {formatCurrency(achSavings, invoice.currency)}
-        </p>
-        <button
-          onClick={() => handlePay("card")}
-          disabled={paying !== null}
-          style={{
-            display: "inline-block",
-            background: "transparent",
-            color: paying !== null ? "#94a3b8" : "#2563EB",
-            border: `2px solid ${paying !== null ? "#94a3b8" : "#2563EB"}`,
-            cursor: paying !== null ? "not-allowed" : "pointer",
-            padding: "12px 48px",
-            borderRadius: 12,
-            fontSize: 15,
-            fontWeight: 700,
-          }}
-        >
-          {paying === "card"
-            ? "Redirecting to payment..."
-            : `Pay ${formatCurrency(cardPrice, invoice.currency)} by credit/debit card`}
-        </button>
-        <p style={{ margin: 0, color: "#999", fontSize: 12 }}>
-          Card price
-        </p>
+        {achOnly ? (
+          <p style={{ margin: 0, color: "#6b7280", fontSize: 12, maxWidth: 420 }}>
+            Bank transfer (ACH) or wire only — card payments are not accepted on
+            this invoice. Work is scheduled once funds clear.
+          </p>
+        ) : (
+          <>
+            <p style={{ margin: 0, color: "#059669", fontSize: 12, fontWeight: 600 }}>
+              Bank transfer price — save {formatCurrency(achSavings, invoice.currency)}
+            </p>
+            <button
+              onClick={() => handlePay("card")}
+              disabled={paying !== null}
+              style={{
+                display: "inline-block",
+                background: "transparent",
+                color: paying !== null ? "#94a3b8" : "#2563EB",
+                border: `2px solid ${paying !== null ? "#94a3b8" : "#2563EB"}`,
+                cursor: paying !== null ? "not-allowed" : "pointer",
+                padding: "12px 48px",
+                borderRadius: 12,
+                fontSize: 15,
+                fontWeight: 700,
+              }}
+            >
+              {paying === "card"
+                ? "Redirecting to payment..."
+                : `Pay ${formatCurrency(cardPrice, invoice.currency)} by credit/debit card`}
+            </button>
+            <p style={{ margin: 0, color: "#999", fontSize: 12 }}>
+              Card price
+            </p>
+          </>
+        )}
       </div>
       {payError && (
         <p style={{ margin: "8px 0 0", color: "#DC2626", fontSize: 13 }}>

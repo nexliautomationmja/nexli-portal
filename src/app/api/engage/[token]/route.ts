@@ -13,6 +13,10 @@ import {
   getPrimaryClientSigner,
 } from "@/lib/digital-rainmaker";
 import { initOnboarding, getOnboardingState } from "@/lib/onboarding";
+import {
+  isEnterpriseEngagement,
+  triggerEnterprisePostSign,
+} from "@/lib/enterprise-invoicing";
 
 // GET — validate token, return engagement info, mark signer as viewed
 export async function GET(
@@ -207,59 +211,80 @@ export async function POST(
       .set({ status: "signed", updatedAt: new Date() })
       .where(eq(engagements.id, engagement.id));
 
-    // Digital Rainmaker System auto-invoicing: if this engagement was built
-    // from a DRS template, create the recurring invoice(s) for its plan
-    // (monthly $10,000 incl. ad budget, or annual $42,000 + $5,000/mo ad
-    // budget) due at signing.
+    // Nexli Enterprise License: one up-front ACH/wire-only invoice for the
+    // tier's license fee. Enterprise clients get no Launch Pad/onboarding
+    // (that's DRS-only) — the kickoff week is scheduled once funds clear.
+    let enterprise = false;
     try {
-      const primary = await getPrimaryClientSigner(engagement.id);
-      if (primary) {
-        await triggerDrsPostSign({ engagement, primarySigner: primary });
-      }
+      enterprise = await isEnterpriseEngagement(engagement.templateId);
     } catch (err) {
-      console.error("DRS post-sign trigger failed:", err);
+      console.error("Enterprise template check failed:", err);
     }
 
-    // Kick off the client onboarding Launch Pad. Never blocks signing —
-    // idempotent, so a concurrent second signer finishing is a no-op.
-    try {
-      await initOnboarding(engagement.id, "auto_sign");
-    } catch (err) {
-      console.error("Onboarding init failed:", err);
-    }
-
-    // Send every client signer their Launch Pad link (each uses their own
-    // token) — the engage link goes dead after signing, so this email is the
-    // durable way back in.
-    const portalUrl =
-      process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-    // Read the deadline back from the freshly initialised state so the email
-    // matches the Launch Pad exactly (null on legacy records).
-    let clientDueAt: string | null = null;
-    try {
-      clientDueAt = (await getOnboardingState(engagement.id))?.clientDueAt ?? null;
-    } catch (err) {
-      console.error("Onboarding state read failed:", err);
-    }
-    for (const s of allSigners) {
-      if (s.order === 0) continue; // sender's own token isn't a client link
+    if (enterprise) {
       try {
-        const { subject: welcomeSubject, html } = buildOnboardingWelcomeEmail({
-          clientName: s.name,
-          senderName: "The Nexli team",
-          onboardingUrl: `${portalUrl}/onboarding/${s.token}`,
-          clientDueAt,
-        });
-        await sendEmailWithLog({
-          to: s.email,
-          subject: welcomeSubject,
-          html,
-          recipientName: s.name,
-          emailType: "onboarding_welcome",
-          relatedId: engagement.id,
-        });
+        const primary = await getPrimaryClientSigner(engagement.id);
+        if (primary) {
+          await triggerEnterprisePostSign({ engagement, primarySigner: primary });
+        }
       } catch (err) {
-        console.error("Onboarding welcome email failed:", err);
+        console.error("Enterprise post-sign trigger failed:", err);
+      }
+    } else {
+      // Digital Rainmaker System auto-invoicing: if this engagement was built
+      // from a DRS template, create the recurring invoice(s) for its plan
+      // (monthly $10,000 incl. ad budget, or annual $42,000 + $5,000/mo ad
+      // budget) due at signing.
+      try {
+        const primary = await getPrimaryClientSigner(engagement.id);
+        if (primary) {
+          await triggerDrsPostSign({ engagement, primarySigner: primary });
+        }
+      } catch (err) {
+        console.error("DRS post-sign trigger failed:", err);
+      }
+
+      // Kick off the client onboarding Launch Pad. Never blocks signing —
+      // idempotent, so a concurrent second signer finishing is a no-op.
+      try {
+        await initOnboarding(engagement.id, "auto_sign");
+      } catch (err) {
+        console.error("Onboarding init failed:", err);
+      }
+
+      // Send every client signer their Launch Pad link (each uses their own
+      // token) — the engage link goes dead after signing, so this email is the
+      // durable way back in.
+      const portalUrl =
+        process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+      // Read the deadline back from the freshly initialised state so the email
+      // matches the Launch Pad exactly (null on legacy records).
+      let clientDueAt: string | null = null;
+      try {
+        clientDueAt = (await getOnboardingState(engagement.id))?.clientDueAt ?? null;
+      } catch (err) {
+        console.error("Onboarding state read failed:", err);
+      }
+      for (const s of allSigners) {
+        if (s.order === 0) continue; // sender's own token isn't a client link
+        try {
+          const { subject: welcomeSubject, html } = buildOnboardingWelcomeEmail({
+            clientName: s.name,
+            senderName: "The Nexli team",
+            onboardingUrl: `${portalUrl}/onboarding/${s.token}`,
+            clientDueAt,
+          });
+          await sendEmailWithLog({
+            to: s.email,
+            subject: welcomeSubject,
+            html,
+            recipientName: s.name,
+            emailType: "onboarding_welcome",
+            relatedId: engagement.id,
+          });
+        } catch (err) {
+          console.error("Onboarding welcome email failed:", err);
+        }
       }
     }
   }

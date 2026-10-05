@@ -19,7 +19,8 @@ export interface BookRow {
   email: string;
   name: string;
   company: string | null;
-  billingPlan: "monthly" | "annual" | null;
+  /** DRS billing plan, or "enterprise" when the latest signed letter is a Nexli Enterprise License. */
+  billingPlan: "monthly" | "annual" | "enterprise" | null;
   signedAt: string | null;
   /** Day the client started: the DRS engagement's execution date (fallbacks: any signed engagement, first payment). */
   startDate: string | null;
@@ -137,6 +138,11 @@ export async function getBookOfBusiness(
       latestTerm: sql<
         number | null
       >`(ARRAY_AGG((${engagements.metadata}->>'termMonths')::int ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
+      // Offer of the most recently signed engagement ("enterprise" for the
+      // Nexli Enterprise License; DRS letters leave it unset).
+      latestOffer: sql<
+        string | null
+      >`(ARRAY_AGG(${engagements.metadata}->>'offer' ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
     })
     .from(engagementSigners)
     .innerJoin(engagements, eq(engagementSigners.engagementId, engagements.id))
@@ -227,11 +233,15 @@ export async function getBookOfBusiness(
         typeof sg.latestTerm === "number" && sg.latestTerm > 0 ? sg.latestTerm : null;
       const termEnd =
         startDate && termMonths ? addMonths(new Date(startDate), termMonths).toISOString() : null;
+      const billingPlan: BookRow["billingPlan"] =
+        sg.latestOffer === "enterprise"
+          ? "enterprise"
+          : (sg.latestPlan as "monthly" | "annual" | null) || null;
       return {
         email: sg.email,
         name: inv?.name || sg.name || sg.email.split("@")[0],
         company: inv?.company || null,
-        billingPlan: (sg.latestPlan as "monthly" | "annual" | null) || null,
+        billingPlan,
         signedAt: sg.firstSignedAt,
         startDate,
         contractYearEnd,

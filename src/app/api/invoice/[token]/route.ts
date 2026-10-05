@@ -65,6 +65,9 @@ export async function GET(
       clientCompany: invoice.clientCompany,
       paymentUrl: invoice.paymentUrl,
       paidAt: invoice.paidAt,
+      achOnly: Boolean(
+        (invoice.metadata as { achOnly?: unknown } | null)?.achOnly
+      ),
     },
     lineItems: lineItems.sort((a, b) => a.order - b.order),
     from: {

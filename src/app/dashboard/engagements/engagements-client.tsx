@@ -7,6 +7,14 @@ import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
 import { generateDrsContent } from "@/lib/engagement-defaults";
 import { DRS_PRICING, TOTAL_MONTHLY_CENTS, TERM_MONTHS, type BillingPlan } from "@/lib/drs-pricing";
+import { generateEnterpriseContent } from "@/lib/enterprise-engagement";
+import {
+  ENTERPRISE_TIER_ORDER,
+  ENTERPRISE_TIERS,
+  isEnterpriseTemplateName,
+  renewalCents,
+  type EnterpriseTier,
+} from "@/lib/enterprise-pricing";
 
 const fmtWhole = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
 
@@ -73,6 +81,9 @@ export function EngagementsClient() {
   // Billing plan: monthly $10,000 ($5,000 platform + $5,000 ad budget, 6-mo term)
   // or annual $42,000 prepaid + $5,000/mo ad budget (12-mo term)
   const [billingPlan, setBillingPlan] = useState<BillingPlan>("monthly");
+  // Enterprise License tier (Core / Growth / Scale) — only used when the
+  // selected template is the Enterprise letter.
+  const [enterpriseTier, setEnterpriseTier] = useState<EnterpriseTier>("core");
 
   useEffect(() => {
     Promise.all([
@@ -97,6 +108,10 @@ export function EngagementsClient() {
     return !!tmpl && tmpl.name.toLowerCase().includes("digital rainmaker");
   }
 
+  function isEnterpriseTemplate(tmpl: Template | undefined): boolean {
+    return !!tmpl && isEnterpriseTemplateName(tmpl.name);
+  }
+
   function handleTemplateSelect(templateId: string) {
     setSelectedTemplate(templateId);
     const tmpl = templates.find((t) => t.id === templateId);
@@ -110,9 +125,22 @@ export function EngagementsClient() {
           : "monthly";
         setBillingPlan(plan);
         setContent(generateDrsContent(plan));
+      } else if (isEnterpriseTemplate(tmpl)) {
+        // Enterprise letters are regenerated per tier so the fee section
+        // always matches what gets invoiced at signing.
+        setEnterpriseTier("core");
+        setContent(generateEnterpriseContent("core"));
       } else {
         setContent(tmpl.content);
       }
+    }
+  }
+
+  function handleEnterpriseTierChange(tier: EnterpriseTier) {
+    setEnterpriseTier(tier);
+    const tmpl = templates.find((t) => t.id === selectedTemplate);
+    if (isEnterpriseTemplate(tmpl)) {
+      setContent(generateEnterpriseContent(tier));
     }
   }
 
@@ -158,6 +186,7 @@ export function EngagementsClient() {
           saveAsTemplate,
           templateName: saveAsTemplate ? templateName : undefined,
           billingPlan,
+          enterpriseTier,
         }),
       });
       const data = await res.json();
@@ -630,6 +659,48 @@ export function EngagementsClient() {
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. The Success Bonus (Section 3) is invoiced manually at the end of each contract year, or when the client leaves.
+                  </p>
+                </div>
+              )}
+
+              {/* Tier — only for the Nexli Enterprise License template */}
+              {isEnterpriseTemplate(templates.find((t) => t.id === selectedTemplate)) && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                    Tier
+                  </p>
+                  {ENTERPRISE_TIER_ORDER.map((tier) => {
+                    const info = ENTERPRISE_TIERS[tier];
+                    return (
+                      <label
+                        key={tier}
+                        className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                        style={{
+                          borderColor: enterpriseTier === tier ? "#2563EB" : "var(--card-border)",
+                          background: enterpriseTier === tier ? "rgba(37, 99, 235, 0.05)" : "var(--input-bg)",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="enterpriseTier"
+                          value={tier}
+                          checked={enterpriseTier === tier}
+                          onChange={() => handleEnterpriseTierChange(tier)}
+                          className="accent-blue-500"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                            {info.label} — {fmtWhole(info.priceCents)}
+                          </p>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            For {info.firmSize}. Renews at {fmtWhole(renewalCents(tier))}/yr.
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Invoiced in full at signing — ACH or wire only, no cards. The kickoff week is scheduled once funds clear. Annual renewal is invoiced manually 30 days before the anniversary.
                   </p>
                 </div>
               )}

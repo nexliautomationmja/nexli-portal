@@ -12,12 +12,23 @@ import {
   isCurrentDrsRevision,
 } from "@/lib/engagement-defaults";
 import type { BillingPlan } from "@/lib/drs-pricing";
+import {
+  ENTERPRISE_TEMPLATE_CONTENT,
+  isCurrentEnterpriseRevision,
+} from "@/lib/enterprise-engagement";
+import { ENTERPRISE_TEMPLATE_NAME } from "@/lib/enterprise-pricing";
 
-// Two flat all-in-one default templates (Monthly + Annual), auto-seeded for
-// every user.
-const DEFAULT_TEMPLATES: { name: string; content: string; plan: BillingPlan }[] = [
-  { name: DRS_MONTHLY_TEMPLATE_NAME, content: DRS_MONTHLY_TEMPLATE_CONTENT, plan: "monthly" },
-  { name: DRS_ANNUAL_TEMPLATE_NAME, content: DRS_ANNUAL_TEMPLATE_CONTENT, plan: "annual" },
+// Default templates auto-seeded for every user: the two flat all-in-one DRS
+// letters (Monthly + Annual) and the Nexli Enterprise License letter (seeded
+// at the Core tier; the compose UI regenerates per tier).
+type DefaultTemplate =
+  | { name: string; content: string; kind: "drs"; plan: BillingPlan }
+  | { name: string; content: string; kind: "enterprise"; plan?: undefined };
+
+const DEFAULT_TEMPLATES: DefaultTemplate[] = [
+  { name: DRS_MONTHLY_TEMPLATE_NAME, content: DRS_MONTHLY_TEMPLATE_CONTENT, kind: "drs", plan: "monthly" },
+  { name: DRS_ANNUAL_TEMPLATE_NAME, content: DRS_ANNUAL_TEMPLATE_CONTENT, kind: "drs", plan: "annual" },
+  { name: ENTERPRISE_TEMPLATE_NAME, content: ENTERPRISE_TEMPLATE_CONTENT, kind: "enterprise" },
 ];
 
 // Phrases that only appear in the OLD (pre-flat) pricing templates — setup
@@ -38,15 +49,22 @@ function isStaleOldPricing(content: string): boolean {
   return OLD_PRICING_MARKERS.some((m) => content.includes(m));
 }
 
-// Revision check: a DRS-named row that is a Service Engagement Agreement but
-// does not match the currently shipped revision for its plan (same fee line,
-// same Section 3 / Section 4 headings, current revision markers — see
-// isCurrentDrsRevision) is an older revision: the 20%/6% revenue-share
-// letters, the $39,997 annual letter, the stacking-bonus letter, etc.
-function isStaleShippedRevision(content: string, plan: BillingPlan): boolean {
+// Revision check: a default-named row that is the right kind of agreement
+// but does not match the currently shipped revision (same fee line, same
+// section headings, current revision markers — see isCurrentDrsRevision /
+// isCurrentEnterpriseRevision) is an older revision: for DRS the 20%/6%
+// revenue-share letters, the $39,997 annual letter, the stacking-bonus
+// letter, etc.
+function isStaleShippedRevision(content: string, tmpl: DefaultTemplate): boolean {
+  if (tmpl.kind === "enterprise") {
+    return (
+      content.includes("LICENSE AND IMPLEMENTATION AGREEMENT") &&
+      !isCurrentEnterpriseRevision(content, "core")
+    );
+  }
   return (
     content.includes("SERVICE ENGAGEMENT AGREEMENT") &&
-    !isCurrentDrsRevision(content, plan)
+    !isCurrentDrsRevision(content, tmpl.plan)
   );
 }
 
@@ -61,6 +79,7 @@ const SUPERSEDED_EXACT_NAMES = ["Starter Digital Rainmaker System", DRS_TEMPLATE
 const SUPERSEDED_NAME_PATTERNS = [
   "%Digital Rainmaker System%(previous%",
   "%Digital Rainmaker System%(legacy)%",
+  "%Nexli Enterprise License%(previous%",
 ];
 
 export async function GET() {
@@ -71,8 +90,8 @@ export async function GET() {
 
   // Auto-seed the default templates if missing; overwrite in place any
   // default-named row that still holds an older revision, so the Templates
-  // list always shows exactly the current letters. Only DRS-named rows are
-  // ever touched.
+  // list always shows exactly the current letters. Only default-named rows
+  // (DRS + Enterprise) are ever touched.
   for (const tmpl of DEFAULT_TEMPLATES) {
     const [existing] = await db
       .select({
@@ -97,7 +116,7 @@ export async function GET() {
     } else if (
       existing.content !== tmpl.content &&
       (isStaleOldPricing(existing.content) ||
-        isStaleShippedRevision(existing.content, tmpl.plan))
+        isStaleShippedRevision(existing.content, tmpl))
     ) {
       await db
         .update(engagementTemplates)

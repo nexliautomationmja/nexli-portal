@@ -9,6 +9,7 @@ import {
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { type BillingPlan, TERM_MONTHS } from "@/lib/drs-pricing";
+import { ENTERPRISE, isEnterpriseTier } from "@/lib/enterprise-pricing";
 import { createEngagement } from "@/lib/engagements";
 
 export async function GET() {
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
     saveAsTemplate,
     templateName,
     billingPlan,
+    enterpriseTier,
   } = body;
 
   if (
@@ -130,10 +132,21 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Snapshot the chosen billing plan onto the engagement so auto-invoicing
-  // bills the flat platform price that matches the signed contract.
-  const plan: BillingPlan = billingPlan === "annual" ? "annual" : "monthly";
-  const engagementMetadata = { billingPlan: plan, termMonths: TERM_MONTHS[plan] };
+  // Snapshot the chosen offer onto the engagement so auto-invoicing bills
+  // exactly what the signed contract says. Enterprise letters carry their
+  // tier (no billingPlan key — DRS-only logic keys on billingPlan); DRS
+  // letters carry the flat billing plan.
+  let engagementMetadata: Record<string, unknown>;
+  if (isEnterpriseTier(enterpriseTier)) {
+    engagementMetadata = {
+      offer: "enterprise",
+      enterpriseTier,
+      termMonths: ENTERPRISE.LICENSE_MONTHS,
+    };
+  } else {
+    const plan: BillingPlan = billingPlan === "annual" ? "annual" : "monthly";
+    engagementMetadata = { billingPlan: plan, termMonths: TERM_MONTHS[plan] };
+  }
 
   const senderName =
     session.user.name || session.user.email || "Your Service Provider";

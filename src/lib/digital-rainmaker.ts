@@ -107,7 +107,7 @@ async function drsInvoiceExists(
 
 // ── Invoice Send Helper ───────────────────────────────────
 
-async function emailInvoiceToClient(
+export async function emailInvoiceToClient(
   invoice: typeof invoices.$inferSelect,
   ownerId: string
 ) {
