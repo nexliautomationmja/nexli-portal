@@ -15,6 +15,7 @@ import { eq, and, desc, gte, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getBookOfBusiness } from "@/lib/book-of-business";
 import { listClientSurveys, listClientWeeklyUpdates } from "@/lib/client-success";
+import { getGuaranteeProgress, type GuaranteeProgress } from "@/lib/guarantee-progress";
 
 /**
  * Drill-down into a connected client's dashboard: THEIR book of business
@@ -58,8 +59,16 @@ export async function GET(
 
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [book, collectedRow, myBook, recentLeads, leadCountRow, trafficRows, recentLogins] =
-    await Promise.all([
+  const [
+    book,
+    collectedRow,
+    myBook,
+    recentLeads,
+    leadCountRow,
+    trafficRows,
+    recentLogins,
+    guarantee,
+  ] = await Promise.all([
       // Their book of business (signed-and-paid clients)
       getBookOfBusiness(client.id),
       // Raw total collected — same definition as the tracker's "Their revenue"
@@ -112,6 +121,12 @@ export async function GET(
         .where(eq(portalSessions.ownerId, client.id))
         .orderBy(desc(portalSessions.createdAt))
         .limit(10),
+      // The Nexli Guarantee: leads since campaign launch vs the contractual
+      // 50. Never fatal — GHL may be down; the page still renders.
+      getGuaranteeProgress(client.id).catch((err): GuaranteeProgress | null => {
+        console.error("Client detail: guarantee progress unavailable:", err);
+        return null;
+      }),
     ]);
 
   // Activity feed sources from their tenant
@@ -265,6 +280,7 @@ export async function GET(
       topClients: book.clients.slice(0, 8),
     },
     leads30d: leadCountRow[0]?.count || 0,
+    guarantee,
     traffic: {
       pageViews30d: daily.reduce((s, r) => s + r.pageViews, 0),
       uniqueVisitors30d: daily.reduce((s, r) => s + r.uniqueVisitors, 0),

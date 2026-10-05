@@ -437,6 +437,11 @@ html {
   border-color: var(--accent-amber-border);
   color: var(--accent-amber);
 }
+.icon-chip-rose {
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.15);
+  color: #e11d48;
+}
 .icon-chip-neutral {
   background: var(--input-bg);
   border-color: var(--card-border);
@@ -450,6 +455,7 @@ html {
 .dark .icon-chip-violet { filter: drop-shadow(0 4px 10px rgba(139, 92, 246, 0.35)); }
 .dark .icon-chip-emerald { filter: drop-shadow(0 4px 10px rgba(16, 185, 129, 0.35)); }
 .dark .icon-chip-amber { filter: drop-shadow(0 4px 10px rgba(245, 158, 11, 0.35)); }
+.dark .icon-chip-rose { filter: drop-shadow(0 4px 10px rgba(244, 63, 94, 0.35)); color: #fb7185; }
 
 /* Floating chips — the Launch Pad hero bob, toned down for nav rails.
    Stagger per item via inline animation-delay. */

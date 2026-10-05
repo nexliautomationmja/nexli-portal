@@ -83,16 +83,45 @@ export function successBonusSchedule(): SuccessBonusTier[] {
 }
 
 /**
- * The Nexli Triple Guarantee — written into the engagement letter
- * (engagement-defaults.ts) so firm owners have less fear of starting. The
- * third leg is the flat-rate / no-revenue-share promise.
+ * The Nexli Guarantee — written into the engagement letter (Section 4 of
+ * engagement-defaults.ts) so firm owners have less fear of starting:
+ *
+ *   a) 50 Qualified Leads within 90 days of campaign launch, else Nexli works
+ *      free until hit; if STILL unmet 120 days after launch the client may
+ *      terminate early with no further platform obligation (Oct 2026 —
+ *      Marcel: "work for free until we hit it, and if not hit by month 4
+ *      they can terminate early").
+ *   b) Launch within 21 days of receiving all client materials, else a
+ *      $1,000 credit.
+ *   c) Flat rate, no revenue share.
+ *
+ * Mirrors the marketing site's lib/agency-offer.ts (AGENCY_LEADS = 50,
+ * AGENCY_DAYS = 90). NOTE: the site still says a 14-day launch — the
+ * contract's 21 days is the binding figure; fix the site, not this.
  */
-export const TRIPLE_GUARANTEE = {
-  QUALIFIED_OPPORTUNITIES: 10, // qualified advisory opportunities…
-  OPPORTUNITY_WINDOW_DAYS: 90, // …within 90 days of campaign launch, else work free
+export const NEXLI_GUARANTEE = {
+  QUALIFIED_LEADS: 50, // qualified leads…
+  LEAD_WINDOW_DAYS: 90, // …within 90 days of campaign launch, else work free
+  EXIT_OPTION_DAYS: 120, // still unmet this many days after launch → client may terminate early
   LAUNCH_DAYS: 21, // launch within 21 days of receiving all client materials
   LAUNCH_CREDIT_CENTS: 100_000, // $1,000 credit toward next payment if Provider misses it
 } as const;
+
+/**
+ * What one tax advisory engagement is worth to the CLIENT's firm (industry
+ * range, midpoint $15,000). Used only to size the guaranteed pipeline in
+ * the contract and the progress tile — it is illustrative, never a revenue
+ * guarantee. Distinct from PIPELINE (Nexli's own LTV per DRS client).
+ */
+export const ADVISORY_ENGAGEMENT = {
+  LOW_USD: 5_000,
+  HIGH_USD: 25_000,
+  AVG_USD: 15_000,
+} as const;
+
+/** 50 leads × $15,000 = $750,000 of pipeline opportunity if every lead closed. */
+export const GUARANTEED_PIPELINE_VALUE_USD =
+  NEXLI_GUARANTEE.QUALIFIED_LEADS * ADVISORY_ENGAGEMENT.AVG_USD;
 
 /**
  * Pipeline economics: expected lifetime value of one DRS client, used as

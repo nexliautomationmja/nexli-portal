@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NexliLogo } from "@/components/ui/nexli-logo";
+import { NEXLI_GUARANTEE } from "@/lib/drs-pricing";
 
 // ══════════════════════════════════════════════════════════
 // Launch Pad — client-facing onboarding page, styled to match
@@ -69,6 +70,8 @@ interface LaunchPadData {
     targetLaunchDate: string | null;
     /** YYYY-MM-DD deadline for the client's items; null on legacy records. */
     clientDueAt: string | null;
+    /** YYYY-MM-DD the ad campaigns went live; null until launch. */
+    campaignLaunchedAt: string | null;
     /** 0 = due today, negative = overdue, null = no deadline. */
     daysUntilDue: number | null;
     isOverdue: boolean;
@@ -86,6 +89,17 @@ function formatDate(iso: string | null): string {
   if (!iso) return "";
   // Date-only strings get a fixed time so they don't shift a day in local TZ
   const d = iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/** A YYYY-MM-DD date plus n days, formatted like formatDate. */
+function formatDatePlusDays(dateOnly: string, days: number): string {
+  const d = new Date(`${dateOnly}T12:00:00`);
+  d.setDate(d.getDate() + days);
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -859,6 +873,16 @@ export function OnboardingClient({ token }: { token: string }) {
                   </span>
                 </div>
               </div>
+              {ob.campaignLaunchedAt && (
+                <p className="mt-4 text-xs text-center sm:text-left text-neutral-400">
+                  <span className="text-emerald-300 font-semibold">
+                    Campaigns live since {formatDate(ob.campaignLaunchedAt)}
+                  </span>
+                  {" · "}
+                  guarantee window ends{" "}
+                  {formatDatePlusDays(ob.campaignLaunchedAt, NEXLI_GUARANTEE.LEAD_WINDOW_DAYS)}
+                </p>
+              )}
             </div>
             <ProgressRing percent={ob.progressPercent} />
           </div>

@@ -17,7 +17,9 @@ import {
   ADVERTISED_SERVICE,
   SUCCESS_BONUS,
   successBonusSchedule,
-  TRIPLE_GUARANTEE,
+  NEXLI_GUARANTEE,
+  ADVISORY_ENGAGEMENT,
+  GUARANTEED_PIPELINE_VALUE_USD,
   type BillingPlan,
 } from "./drs-pricing";
 
@@ -34,10 +36,19 @@ function fmtWhole(cents: number): string {
 // Dual-pricing presentation (never "fee added at checkout") — see drs-pricing.ts.
 const PAYMENT_METHODS_CLAUSE = `Payments may be made via ACH bank transfer or credit/debit card, processed through Stripe. Amounts listed in this Agreement are the discounted bank transfer (ACH) prices. Credit/debit card payments are charged at the corresponding card price; the exact amount of each payment option is presented at checkout before payment. The card price applies to the full invoiced amount, including any Managed Advertising Budget.`;
 
+/** English words for the small set of numbers the letter spells out. */
+function numberWords(n: number): string {
+  const words: Record<number, string> = {
+    3: "three", 6: "six", 9: "nine", 12: "twelve", 18: "eighteen", 24: "twenty-four",
+    30: "thirty", 50: "fifty", 60: "sixty", 90: "ninety", 100: "one hundred",
+    120: "one hundred twenty", 150: "one hundred fifty", 180: "one hundred eighty",
+  };
+  return words[n] ?? String(n);
+}
+
 /** "six (6)" style wording for the term length. */
 function termWords(months: number): string {
-  const words: Record<number, string> = { 3: "three", 6: "six", 9: "nine", 12: "twelve", 18: "eighteen", 24: "twenty-four" };
-  return words[months] ? `${words[months]} (${months})` : `${months} (${months})`;
+  return `${numberWords(months)} (${months})`;
 }
 
 // ── Digital Rainmaker System Template ───────────────────
@@ -51,7 +62,7 @@ export const DRS_TEMPLATE_NAME = "Digital Rainmaker System";
  * maintenance, plus the Managed Advertising Budget (Section 3(b)). Ad
  * management is included with no revenue share; the only performance-based
  * compensation is the milestone Success Bonus (Section 3). The Initial Term
- * is in Section 5(d). The Nexli Triple Guarantee (Section 4) carves out
+ * is in Section 5(d). The Nexli Guarantee (Section 4) carves out
  * express exceptions to the no-refund/no-credit and no-results-guarantee
  * clauses. Section numbering is identical for both plans.
  */
@@ -64,7 +75,7 @@ export function drsFeeLine(plan: BillingPlan): string {
 }
 
 const AD_SECTION_HEADING = "3. AD MANAGEMENT & SUCCESS BONUS";
-const GUARANTEE_SECTION_HEADING = "4. THE NEXLI TRIPLE GUARANTEE";
+const GUARANTEE_SECTION_HEADING = "4. THE NEXLI GUARANTEE";
 
 // Phrases every currently shipped letter contains. ADD ONE whenever a clause
 // is rewritten without changing a heading or the fee line, so the stored
@@ -73,6 +84,7 @@ const CURRENT_REVISION_MARKERS = [
   "Success Bonus on Termination", // Sep 20 2026: non-stacking bonus, billed at year end or departure
   "Managed Advertising Budget", // Oct 5 2026: $5,000/mo ad budget collected by Nexli (Sections 2, 3(b))
   "Initial Term and Renewal", // Oct 5 2026: 6/12-month initial term (Section 5(d))
+  "Qualified Leads in", // Oct 5 2026: 50 qualified leads / 90 days, exit option at day 120 (Section 4(a))
 ];
 
 /**
@@ -98,8 +110,14 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const adSpend = fmt(DRS_PRICING.AD_SPEND_MONTHLY_CENTS);
   const term = TERM_MONTHS[plan];
   const service = ADVERTISED_SERVICE;
-  const g = TRIPLE_GUARANTEE;
+  const g = NEXLI_GUARANTEE;
   const launchCredit = fmt(g.LAUNCH_CREDIT_CENTS);
+  const leadWords = `${numberWords(g.QUALIFIED_LEADS)} (${g.QUALIFIED_LEADS})`;
+  const windowWords = `${numberWords(g.LEAD_WINDOW_DAYS)} (${g.LEAD_WINDOW_DAYS})`;
+  const exitWords = `${numberWords(g.EXIT_OPTION_DAYS)} (${g.EXIT_OPTION_DAYS})`;
+  const engagementAvg = `$${ADVISORY_ENGAGEMENT.AVG_USD.toLocaleString("en-US")}`;
+  const engagementRange = `$${ADVISORY_ENGAGEMENT.LOW_USD.toLocaleString("en-US")}–$${ADVISORY_ENGAGEMENT.HIGH_USD.toLocaleString("en-US")}`;
+  const pipelineValue = `$${GUARANTEED_PIPELINE_VALUE_USD.toLocaleString("en-US")}`;
   const bonusPct = SUCCESS_BONUS.BONUS_PERCENT_OF_MILESTONE;
   const bonusSchedule = successBonusSchedule()
     .map(
@@ -168,9 +186,9 @@ d) Attribution & Reporting: Attributed Revenue is measured using the Nexli track
 
 ${GUARANTEE_SECTION_HEADING}
 
-Provider stands behind the Digital Rainmaker System with the following three guarantees, offered so Client can start with confidence. If any provision of this Section 4 conflicts with any other provision of this Agreement (including the non-refundability and no-credit provisions of Section 5 and the results disclaimer in Section 9), this Section 4 controls.
+Provider stands behind the Digital Rainmaker System with the following guarantees, offered so Client can start with confidence. If any provision of this Section 4 conflicts with any other provision of this Agreement (including the Initial Term in Section 5(d), the non-refundability and no-credit provisions of Section 5, and the results disclaimer in Section 9), this Section 4 controls.
 
-a) ${g.QUALIFIED_OPPORTUNITIES} Qualified Advisory Opportunities in ${g.OPPORTUNITY_WINDOW_DAYS} Days: Provider guarantees at least ${g.QUALIFIED_OPPORTUNITIES} qualified tax advisory opportunities on Client's calendar within ${g.OPPORTUNITY_WINDOW_DAYS} days of campaign launch. If Provider does not hit that target, Provider continues working for free until it does — for monthly plans, Monthly Investment billing is suspended until the target is reached; for annual plans, the Agreement term is extended at no additional charge until the target is reached. This guarantee applies while Client's advertising campaigns remain active and Client is meeting its cooperation obligations under Section 6.
+a) ${g.QUALIFIED_LEADS} Qualified Leads in ${g.LEAD_WINDOW_DAYS} Days: Provider guarantees at least ${leadWords} Qualified Leads within ${windowWords} days of campaign launch. A "Qualified Lead" is a US-based business owner or high-income individual who matches the advisory criteria Client and Provider set together during onboarding and who has requested contact from Client's firm through the acquisition system. "Campaign launch" is the date Provider's advertising campaigns for Client go live, as recorded on Client's Launch Pad. At an average ${service} engagement of ${engagementAvg} (industry range ${engagementRange}), ${leadWords} Qualified Leads represent approximately ${pipelineValue} of pipeline opportunity; that figure sizes the opportunity only — it is not a guarantee of revenue, and Client's close rate determines actual results (Section 9(c)). If Provider does not deliver ${leadWords} Qualified Leads within the ${windowWords} day window, Provider continues working for free until it does — for monthly plans, the Platform Investment is suspended until the target is reached; for annual plans, the Agreement term is extended at no additional charge until the target is reached. The Managed Advertising Budget continues during any work-free period so Client's campaigns keep running. If the target has still not been reached ${exitWords} days after campaign launch, Client may terminate this Agreement on written notice with no further Platform Investment obligation, notwithstanding the Initial Term in Section 5(d). This guarantee applies while Client's advertising campaigns remain active, Client's Managed Advertising Budget is current, and Client is meeting its cooperation obligations under Section 6.
 
 b) ${g.LAUNCH_DAYS}-Day Launch Guarantee: Once Provider has received all required assets, access, approvals, and onboarding information from Client, Provider guarantees Client's acquisition system will be built and launched within ${g.LAUNCH_DAYS} days. If Provider misses that deadline because of delays on Provider's end, Client receives a ${launchCredit} credit ${plan === "annual" ? "applied, at Client's election, toward Client's next invoice from Provider or refunded to Client within thirty (30) days" : "toward Client's next monthly payment"}.
 
@@ -180,11 +198,11 @@ c) Flat-Rate, No Revenue Share: The Platform Investment in Section 2 is Provider
 
 a) ${PAYMENT_METHODS_CLAUSE}
 
-b) Except as expressly provided in Section 4 (The Nexli Triple Guarantee), all fees are non-refundable and no refunds will be issued once payment is received.
+b) Except as expressly provided in Section 4 (The Nexli Guarantee), all fees are non-refundable and no refunds will be issued once payment is received.
 
 c) This Agreement does not become effective and Provider has no obligation to begin work until the ${plan === "annual" ? `Annual Investment (${annual})` : `first Monthly Investment (${totalMonthly})`} is received.
 
-d) Initial Term and Renewal: This Agreement has an Initial Term of ${termWords(term)} months from the effective date. Advertising systems typically need ninety (90) days or more to mature, and the Initial Term exists so the acquisition system has the time it needs to produce results for Client. Either party may give thirty (30) days' written notice of termination at any time, but termination takes effect no earlier than the end of the Initial Term, and billing under Section 2 continues through that date. After the Initial Term this Agreement continues ${plan === "annual" ? "for successive twelve (12) month renewal terms" : "month-to-month"} until terminated on thirty (30) days' written notice. Except as expressly provided in Section 4 (The Nexli Triple Guarantee), no refunds or pro-rated credits will be issued for any billing period. Client retains access through the end of the paid billing cycle.
+d) Initial Term and Renewal: This Agreement has an Initial Term of ${termWords(term)} months from the effective date. Advertising systems typically need ninety (90) days or more to mature, and the Initial Term exists so the acquisition system has the time it needs to produce results for Client. Either party may give thirty (30) days' written notice of termination at any time, but termination takes effect no earlier than the end of the Initial Term, and billing under Section 2 continues through that date. After the Initial Term this Agreement continues ${plan === "annual" ? "for successive twelve (12) month renewal terms" : "month-to-month"} until terminated on thirty (30) days' written notice. Except as expressly provided in Section 4 (The Nexli Guarantee), no refunds or pro-rated credits will be issued for any billing period. Client retains access through the end of the paid billing cycle.
 
 6. PROJECT TIMELINE & CLIENT COOPERATION
 
@@ -214,7 +232,7 @@ a) Provider's total cumulative liability under this Agreement shall not exceed t
 
 b) In no event shall Provider be liable for any indirect, incidental, consequential, special, or exemplary damages, including but not limited to loss of revenue, profits, data, business opportunities, or goodwill, even if advised of the possibility of such damages.
 
-c) Except as expressly set forth in Section 4 (The Nexli Triple Guarantee), Provider does not guarantee specific business results, revenue increases, lead generation volumes, or return on investment. Results depend on market conditions, Client's industry, and Client's use of the system.
+c) Except as expressly set forth in Section 4 (The Nexli Guarantee), Provider does not guarantee specific business results, revenue increases, lead generation volumes, or return on investment. Results depend on market conditions, Client's industry, and Client's use of the system.
 
 d) Provider is not liable for any third-party service disruptions, including but not limited to Stripe, DNS providers, or telecommunications carriers.
 

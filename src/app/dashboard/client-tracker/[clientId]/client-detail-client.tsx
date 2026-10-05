@@ -31,6 +31,21 @@ interface DetailData {
     }[];
   };
   leads30d: number;
+  /** The Nexli Guarantee tracker; null when they have no DRS engagement (or GHL was down). */
+  guarantee: {
+    launchedAt: string | null;
+    target: number;
+    leads: number;
+    daysElapsed: number;
+    daysRemaining: number;
+    windowEndsAt: string | null;
+    exitOptionAt: string | null;
+    status: "not_launched" | "on_track" | "behind" | "met" | "missed";
+    pipelineValueCents: number;
+    avgEngagementCents: number;
+    source: "ghl" | "notifications" | "none";
+    computedAt: string;
+  } | null;
   traffic: {
     pageViews30d: number;
     uniqueVisitors30d: number;
@@ -404,11 +419,37 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
   const { client, theirBook, traffic, youCollect, activity } = data;
   const displayName = client.name || client.email.split("@")[0];
 
-  const statCards = [
+  const guarantee = data.guarantee;
+  const guaranteeCard = guarantee
+    ? {
+        label: "Guarantee",
+        value: `${guarantee.leads} / ${guarantee.target}`,
+        sub:
+          guarantee.status === "not_launched"
+            ? "Not launched"
+            : guarantee.status === "met"
+              ? "Met ✓"
+              : guarantee.status === "missed"
+                ? "Missed — working free"
+                : `${guarantee.daysRemaining} ${guarantee.daysRemaining === 1 ? "day" : "days"} left`,
+        accent:
+          guarantee.status === "met" || guarantee.status === "on_track"
+            ? "icon-chip-emerald"
+            : guarantee.status === "behind"
+              ? "icon-chip-amber"
+              : guarantee.status === "missed"
+                ? "icon-chip-rose"
+                : "icon-chip-neutral",
+        emoji: "🛡️",
+      }
+    : null;
+
+  const statCards: { label: string; value: string; sub?: string; accent: string; emoji: string }[] = [
     { label: "Their Revenue", value: money(theirBook.kpis.totalRevenue), accent: "icon-chip-emerald", emoji: "💰" },
     { label: "Their MRR", value: money(theirBook.kpis.totalMrr), accent: "icon-chip-cyan", emoji: "🔁" },
     { label: "Their Clients", value: String(theirBook.kpis.totalClients), accent: "icon-chip-violet", emoji: "🤝" },
     { label: "Leads (30d)", value: String(data.leads30d), accent: "icon-chip-amber", emoji: "🧲" },
+    ...(guaranteeCard ? [guaranteeCard] : []),
     { label: "Site Visitors (30d)", value: traffic.uniqueVisitors30d.toLocaleString("en-US"), accent: "icon-chip-blue", emoji: "🌐" },
   ];
 
@@ -467,7 +508,7 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
       />
 
       {/* Their KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {statCards.map((s, i) => (
           <div key={s.label} className="glass-card p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -484,6 +525,11 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
             <p className="stat-value" style={{ color: "var(--text-main)" }}>
               {s.value}
             </p>
+            {s.sub && (
+              <p className="text-xs mt-1 font-medium" style={{ color: "var(--text-muted)" }}>
+                {s.sub}
+              </p>
+            )}
           </div>
         ))}
       </div>

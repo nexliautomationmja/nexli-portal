@@ -19,6 +19,7 @@ import {
   type LicenseFileMeta,
 } from "@/lib/onboarding";
 import { getSupabase } from "@/lib/supabase";
+import { NEXLI_GUARANTEE } from "@/lib/drs-pricing";
 
 async function getOwnedEngagement(engagementId: string, ownerId: string) {
   const [engagement] = await db
@@ -263,6 +264,23 @@ export async function PATCH(
         message: clientDueAt
           ? `Client items due date set to ${formatDueDate(clientDueAt)}`
           : "Client items due date cleared",
+      });
+      break;
+    }
+
+    case "set_campaign_launched": {
+      // The day the ad campaigns went live — starts the Nexli Guarantee
+      // clock (see lib/guarantee-progress.ts). Null clears it.
+      const campaignLaunchedAt = isoDate(body.campaignLaunchedAt);
+      await setOnboardingValues(engagementId, [
+        { segments: ["campaignLaunchedAt"], value: campaignLaunchedAt },
+      ]);
+      await appendActivity(engagementId, {
+        actor: "agency",
+        type: "campaign_launched",
+        message: campaignLaunchedAt
+          ? `Campaigns went live on ${formatDueDate(campaignLaunchedAt)} — the ${NEXLI_GUARANTEE.LEAD_WINDOW_DAYS}-day guarantee clock is running`
+          : "Campaign launch date cleared",
       });
       break;
     }

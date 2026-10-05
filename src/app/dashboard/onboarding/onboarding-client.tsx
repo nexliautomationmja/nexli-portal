@@ -19,6 +19,7 @@ interface RawOnboardingState {
   tasks?: Record<string, RawTaskState>;
   targetLaunchDate?: string | null;
   clientDueAt?: string | null;
+  campaignLaunchedAt?: string | null;
 }
 
 interface EngagementRow {
@@ -67,6 +68,7 @@ interface AdminDetail {
     startedAt: string;
     targetLaunchDate: string | null;
     clientDueAt: string | null;
+    campaignLaunchedAt: string | null;
     daysUntilDue: number | null;
     isOverdue: boolean;
     clientItemsComplete: boolean;
@@ -255,6 +257,11 @@ export function OnboardingDashboardClient() {
                             {pendingReview > 0 && (
                               <span className="badge badge-amber">
                                 {pendingReview} to review
+                              </span>
+                            )}
+                            {state.campaignLaunchedAt && (
+                              <span className="badge badge-emerald">
+                                Live since {formatDate(state.campaignLaunchedAt)}
                               </span>
                             )}
                           </div>
@@ -565,6 +572,34 @@ function OnboardingDetail({
                         : `${ob.daysUntilDue}d left`}
                     </span>
                   ) : null}
+                </div>
+              </div>
+              <div>
+                <label
+                  className="block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Campaign launched (starts the 90-day guarantee clock)
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="date"
+                    defaultValue={ob.campaignLaunchedAt || ""}
+                    onChange={(e) =>
+                      patch({
+                        action: "set_campaign_launched",
+                        campaignLaunchedAt: e.target.value || null,
+                      })
+                    }
+                    className="glass-input"
+                  />
+                  {ob.campaignLaunchedAt ? (
+                    <span className="badge badge-emerald">
+                      Live since {formatDate(ob.campaignLaunchedAt)}
+                    </span>
+                  ) : (
+                    <span className="badge badge-gray">Not launched</span>
+                  )}
                 </div>
               </div>
             </GlassCard>

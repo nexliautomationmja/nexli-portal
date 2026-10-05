@@ -69,6 +69,13 @@ export interface OnboardingState {
    * treat undefined as null (no deadline).
    */
   clientDueAt?: string | null;
+  /**
+   * The day Nexli's ad campaigns for this client went live (YYYY-MM-DD).
+   * Starts the Nexli Guarantee clock (NEXLI_GUARANTEE.LEAD_WINDOW_DAYS) —
+   * admin-set from the Onboarding page. Legacy states lack the key; treat
+   * undefined as null (not launched).
+   */
+  campaignLaunchedAt?: string | null;
   /** YYYY-MM-DD dates on which a due-date reminder email went out. */
   dueRemindersSent?: string[];
   /** ISO timestamp of the admin "overdue" notification, once sent. */
@@ -277,6 +284,7 @@ export function defaultOnboardingState(
     startedBy,
     targetLaunchDate: null,
     clientDueAt: addDaysToDateOnly(now.slice(0, 10), CLIENT_ITEMS_DUE_DAYS),
+    campaignLaunchedAt: null,
     dueRemindersSent: [],
     overdueNotifiedAt: null,
     phases: Object.fromEntries(TIER_PHASES[tier].map((id) => [id, phase()])) as OnboardingState["phases"],
@@ -521,6 +529,7 @@ export function serializePublicOnboarding(state: OnboardingState) {
     startedAt: state.startedAt,
     targetLaunchDate: state.targetLaunchDate,
     clientDueAt: state.clientDueAt ?? null,
+    campaignLaunchedAt: state.campaignLaunchedAt ?? null,
     daysUntilDue: daysUntilDue(state),
     isOverdue: isClientOverdue(state),
     clientItemsComplete: clientItemsComplete(state),
