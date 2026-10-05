@@ -14,6 +14,7 @@ import {
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getBookOfBusiness } from "@/lib/book-of-business";
+import { listClientSurveys, listClientWeeklyUpdates } from "@/lib/client-success";
 
 /**
  * Drill-down into a connected client's dashboard: THEIR book of business
@@ -236,6 +237,20 @@ export async function GET(
   const myRow =
     myBook.clients.find((c) => c.email.toLowerCase() === clientEmailLc) || null;
 
+  // Customer success: their pulse-check history and the weekly updates we've
+  // written them. Never fatal — the page must render even if the tables are
+  // missing on a fresh database.
+  let surveys: Awaited<ReturnType<typeof listClientSurveys>> = [];
+  let weeklyUpdates: Awaited<ReturnType<typeof listClientWeeklyUpdates>> = [];
+  try {
+    [surveys, weeklyUpdates] = await Promise.all([
+      listClientSurveys(client.id, 8),
+      listClientWeeklyUpdates(client.id, 6),
+    ]);
+  } catch (err) {
+    console.error("Client detail: customer-success data unavailable:", err);
+  }
+
   return NextResponse.json({
     client: {
       id: client.id,
@@ -256,9 +271,24 @@ export async function GET(
       daily,
     },
     youCollect: myRow
-      ? { revenue: myRow.revenue, mrr: myRow.mrr, outstanding: myRow.outstanding }
+      ? {
+          revenue: myRow.revenue,
+          mrr: myRow.mrr,
+          outstanding: myRow.outstanding,
+          adSpendCollected: myRow.adSpendCollected,
+        }
       : null,
     activity: activity.slice(0, 20),
+    surveys: surveys.map((s) => ({
+      id: s.id,
+      weekStart: s.weekStart,
+      score: s.score,
+      valueAnswer: s.valueAnswer,
+      comment: s.comment,
+      sentAt: s.sentAt,
+      submittedAt: s.submittedAt,
+    })),
+    weeklyUpdates,
   });
 }
 

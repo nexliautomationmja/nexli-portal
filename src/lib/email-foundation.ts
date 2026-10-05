@@ -174,3 +174,138 @@ export function buildAgreementReminderEmail(params: {
     html,
   };
 }
+
+// ── Weekly customer-success emails (DRS clients) ─────────
+
+function formatWeekOf(weekStart: string): string {
+  const d = new Date(`${weekStart}T00:00:00Z`);
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * Monday pulse check. Five 1-click score buttons each land on the survey page
+ * with that score pre-selected; the client can still adjust before submitting.
+ */
+export function buildWeeklySurveyEmail(params: {
+  clientName?: string | null;
+  weekStart: string;
+  /** `${portalUrl}/survey/${token}` — no query string. */
+  surveyUrl: string;
+}): { subject: string; html: string } {
+  const { clientName, weekStart, surveyUrl } = params;
+  const firstName = (clientName || "").trim().split(/\s+/)[0];
+  const greeting = firstName ? `Hi ${escapeHtml(firstName)}` : "Hi there";
+
+  const scoreButton = (n: number) =>
+    `<td align="center" style="padding:0 4px;">
+      <a href="${surveyUrl}?s=${n}" style="display:block;width:44px;height:44px;line-height:44px;border-radius:12px;background-color:#1e1e2a;border:1px solid #2a2a3a;color:#ffffff;font-size:18px;font-weight:800;text-decoration:none;text-align:center;">${n}</a>
+    </td>`;
+
+  const html = emailWrapper(`
+    <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Week of ${formatWeekOf(weekStart)}</p>
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">60-second pulse check</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;line-height:1.6;">
+      ${greeting}, Marcel here. One quick question so we catch anything early: <strong style="color:#fff;">how confident are you in the results you&rsquo;re seeing this week?</strong>
+    </p>
+    <div style="margin:20px 0;padding:20px 16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+        <tr>${[1, 2, 3, 4, 5].map(scoreButton).join("")}</tr>
+      </table>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:10px;">
+        <tr>
+          <td style="color:#808090;font-size:11px;text-align:left;">Not at all</td>
+          <td style="color:#808090;font-size:11px;text-align:right;">Very</td>
+        </tr>
+      </table>
+    </div>
+    <p style="margin:0 0 20px;color:#9999a8;font-size:13px;line-height:1.6;text-align:center;">
+      Tap a number and you&rsquo;re nearly done &mdash; two more taps on the next page. I read every one of these personally.
+    </p>
+    <div style="text-align:center;margin:20px 0 28px;">
+      <a href="${surveyUrl}" style="${secondaryButtonStyle}">Open the survey</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        Your answers go straight to Marcel. Link is private to you.
+      </p>
+      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
+        ${surveyUrl}
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: "Quick pulse check — how's this week going?",
+    html,
+  };
+}
+
+/**
+ * The weekly "here's what we did on your account" note. Body is plain text;
+ * blank lines become paragraphs.
+ */
+export function buildWeeklyUpdateEmail(params: {
+  clientName?: string | null;
+  weekStart: string;
+  headline?: string | null;
+  body: string;
+  adSpendCents?: number | null;
+  dashboardUrl: string;
+  /** This week's unanswered survey link, if any. */
+  surveyUrl?: string | null;
+}): { subject: string; html: string } {
+  const { clientName, weekStart, headline, body, adSpendCents, dashboardUrl, surveyUrl } = params;
+  const firstName = (clientName || "").trim().split(/\s+/)[0];
+  const greeting = firstName ? `Hi ${escapeHtml(firstName)}` : "Hi there";
+  const weekLabel = `Week of ${formatWeekOf(weekStart)}`;
+  const title = headline?.trim() ? escapeHtml(headline.trim()) : "This week on your account";
+
+  const paragraphs = body
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map(
+      (p) =>
+        `<p style="margin:0 0 12px;color:#ccccda;font-size:14px;line-height:1.7;">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`
+    )
+    .join("");
+
+  const adSpendBlock =
+    adSpendCents != null && adSpendCents > 0
+      ? `<div style="margin:20px 0;padding:14px 16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+          <p style="margin:0;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Ad budget deployed this week</p>
+          <p style="margin:6px 0 0;color:#fff;font-size:20px;font-weight:800;">$${Math.round(adSpendCents / 100).toLocaleString("en-US")}</p>
+        </div>`
+      : "";
+
+  const surveyBlock = surveyUrl
+    ? `<div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;text-align:center;">
+        <p style="margin:0 0 10px;color:#b3b3c0;font-size:13px;line-height:1.6;">How are we doing? It takes less than a minute.</p>
+        <a href="${surveyUrl}" style="${secondaryButtonStyle}">Take this week&rsquo;s 60-second pulse check</a>
+      </div>`
+    : "";
+
+  const html = emailWrapper(`
+    <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">${weekLabel} &middot; From your Nexli team</p>
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">${title}</h1>
+    <p style="margin:0 0 20px;color:#9999a8;font-size:14px;">${greeting}, here&rsquo;s what we worked on for you this week.</p>
+    <div style="margin:0 0 8px;">${paragraphs}</div>
+    ${adSpendBlock}
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${dashboardUrl}" style="${buttonStyle}">Open your dashboard</a>
+    </div>
+    ${surveyBlock}
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        Questions? Just reply to this email &mdash; it goes straight to Marcel.
+      </p>
+    </div>
+  `);
+
+  return {
+    subject: headline?.trim()
+      ? `Your weekly update: ${headline.trim()}`
+      : `Your weekly update from Nexli — ${weekLabel}`,
+    html,
+  };
+}

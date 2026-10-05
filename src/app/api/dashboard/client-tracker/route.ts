@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { invoices, users } from "@/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getBookOfBusiness } from "@/lib/book-of-business";
+import { latestSurveyScores } from "@/lib/client-success";
 
 /**
  * Client Tracker — internal book of business, built entirely from the owner's
@@ -28,6 +29,7 @@ export async function GET() {
   const isAdmin = session.user.role === "admin";
   const linkByEmail = new Map<string, { id: string; websiteUrl: string | null }>();
   const theirRevenueByOwner = new Map<string, number>();
+  let pulseByAccount = new Map<string, { score: number; submittedAt: Date }>();
 
   if (isAdmin && book.length > 0) {
     // Client accounts are few; match in JS so the email join is
@@ -56,16 +58,27 @@ export async function GET() {
         )
         .groupBy(invoices.ownerId);
       for (const r of revenueRows) theirRevenueByOwner.set(r.ownerId, r.totalPaid);
+
+      // Latest weekly pulse-check score per linked client. Never fatal —
+      // the roster must render even if the survey tables aren't there yet.
+      try {
+        pulseByAccount = await latestSurveyScores(accounts.map((a) => a.id));
+      } catch (err) {
+        console.error("Client tracker: pulse scores unavailable:", err);
+      }
     }
   }
 
   const clients = book.map((c) => {
     const account = linkByEmail.get(c.email.toLowerCase()) || null;
+    const pulse = account ? pulseByAccount.get(account.id) : undefined;
     return {
       ...c,
       clientUserId: account?.id ?? null,
       websiteUrl: account?.websiteUrl ?? null,
       theirRevenue: account ? theirRevenueByOwner.get(account.id) || 0 : null,
+      latestScore: pulse?.score ?? null,
+      latestScoreAt: pulse ? pulse.submittedAt.toISOString() : null,
     };
   });
 

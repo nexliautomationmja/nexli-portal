@@ -13,6 +13,7 @@ interface Kpis {
   totalMrr: number;
   totalOutstanding: number;
   totalClientRevenue?: number;
+  totalAdSpend?: number;
 }
 
 interface ClientRow {
@@ -23,8 +24,10 @@ interface ClientRow {
   signedAt: string | null;
   startDate: string | null;
   contractYearEnd: string | null;
+  termEnd?: string | null;
   dealsCount: number;
   revenue: number;
+  adSpendCollected?: number;
   mrr: number;
   outstanding: number;
   lastPaymentAt: string | null;
@@ -32,6 +35,15 @@ interface ClientRow {
   clientUserId?: string | null;
   websiteUrl?: string | null;
   theirRevenue?: number | null;
+  latestScore?: number | null;
+  latestScoreAt?: string | null;
+}
+
+// Weekly pulse-check score → traffic light (matches LOW_SCORE_MAX = 2).
+function pulseColor(score: number): string {
+  if (score <= 2) return "#f43f5e";
+  if (score === 3) return "#f59e0b";
+  return "#10b981";
 }
 
 function money(cents: number): string {
@@ -144,20 +156,31 @@ export function ClientTrackerClient() {
       ? [{ label: "Clients' Revenue", value: money(kpis.totalClientRevenue || 0) }]
       : []),
     { label: "You Collected", value: money(kpis.totalRevenue) },
+    { label: "Ad Spend Collected", value: money(kpis.totalAdSpend || 0) },
     { label: "Active MRR", value: money(kpis.totalMrr) },
     { label: "Outstanding", value: money(kpis.totalOutstanding) },
   ];
+  const statGridCls =
+    statCards.length >= 7
+      ? "md:grid-cols-4 lg:grid-cols-7"
+      : statCards.length === 6
+        ? "md:grid-cols-3 lg:grid-cols-6"
+        : "md:grid-cols-5";
 
+  // Keep in sync with the <td> sequence in the table body below.
   const headers = [
     "Client",
     "Plan",
     "Started",
     "Year Ends",
+    "Term Ends",
     "Deals",
     ...(isAdmin ? ["Their Revenue"] : []),
     "You Collect",
+    "Ad Spend",
     "Your MRR",
     "Outstanding",
+    ...(isAdmin ? ["Pulse"] : []),
     "Status",
   ];
 
@@ -200,7 +223,7 @@ export function ClientTrackerClient() {
       </div>
 
       {/* KPI row */}
-      <div className={`grid grid-cols-2 gap-4 ${statCards.length === 6 ? "md:grid-cols-3 lg:grid-cols-6" : "md:grid-cols-5"}`}>
+      <div className={`grid grid-cols-2 gap-4 ${statGridCls}`}>
         {statCards.map((s) => (
           <div key={s.label} className="glass-card p-4">
             <p className="text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
@@ -289,6 +312,13 @@ export function ClientTrackerClient() {
                       >
                         {formatDate(c.contractYearEnd)}
                       </td>
+                      <td
+                        className="px-4 py-3 text-xs"
+                        style={{ color: "var(--text-muted)" }}
+                        title="End of the current engagement term"
+                      >
+                        {formatDate(c.termEnd ?? null)}
+                      </td>
                       <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
                         {c.dealsCount}
                       </td>
@@ -315,12 +345,44 @@ export function ClientTrackerClient() {
                       <td className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-main)" }}>
                         {money(c.revenue)}
                       </td>
+                      <td
+                        className="px-4 py-3 text-sm"
+                        style={{ color: "var(--text-muted)" }}
+                        title="Ad budget collected from this client (passed through to ads, not revenue)"
+                      >
+                        {c.adSpendCollected && c.adSpendCollected > 0 ? money(c.adSpendCollected) : "—"}
+                      </td>
                       <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
                         {c.mrr > 0 ? `${money(c.mrr)}/mo` : "—"}
                       </td>
                       <td className="px-4 py-3 text-sm" style={{ color: c.outstanding > 0 ? "#f43f5e" : "var(--text-muted)" }}>
                         {c.outstanding > 0 ? money(c.outstanding) : "—"}
                       </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          {c.latestScore != null ? (
+                            <span
+                              className="inline-flex items-center gap-1.5 text-sm font-semibold"
+                              style={{ color: "var(--text-main)" }}
+                              title={`Latest pulse check: ${c.latestScore}/5 on ${formatDate(c.latestScoreAt ?? null)}`}
+                            >
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ background: pulseColor(c.latestScore) }}
+                              />
+                              {c.latestScore}/5
+                            </span>
+                          ) : (
+                            <span
+                              className="text-sm"
+                              style={{ color: "var(--text-muted)" }}
+                              title="No pulse-check response yet — surveys go out Mondays"
+                            >
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <span className={`badge ${c.status === "active" ? "badge-emerald" : "badge-gray"}`}>
                           {c.status === "active" ? "Active" : "Signed"}

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { sql } from "drizzle-orm";
-import bcrypt from "bcryptjs";
-import { randomUUID } from "crypto";
+import { ClientAccountError, ensureClientAccount } from "@/lib/client-accounts";
 
 /**
  * Connect a Client Tracker row to a client dashboard account. The link is the
@@ -25,52 +21,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const email =
-    typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-  const name = typeof body.name === "string" ? body.name.trim().slice(0, 200) : "";
-  const company =
-    typeof body.company === "string" ? body.company.trim().slice(0, 200) : "";
-  if (!email || !email.includes("@")) {
-    return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
-  }
+  const email = typeof body.email === "string" ? body.email : "";
+  const name = typeof body.name === "string" ? body.name : "";
+  const company = typeof body.company === "string" ? body.company : "";
 
-  const findExisting = () =>
-    db
-      .select({ id: users.id, role: users.role })
-      .from(users)
-      .where(sql`LOWER(${users.email}) = ${email}`)
-      .limit(1);
-
-  const [existing] = await findExisting();
-  if (existing) {
-    if (existing.role !== "client") {
-      return NextResponse.json(
-        { error: "This email belongs to an admin account and can't be connected." },
-        { status: 409 }
-      );
-    }
-    return NextResponse.json({ clientUserId: existing.id, created: false });
-  }
-
-  const hashedPassword = await bcrypt.hash(randomUUID(), 12);
   try {
-    const [created] = await db
-      .insert(users)
-      .values({
-        email,
-        name: name || null,
-        companyName: company || null,
-        role: "client",
-        hashedPassword,
-      })
-      .returning({ id: users.id });
-    return NextResponse.json({ clientUserId: created.id, created: true });
+    const result = await ensureClientAccount({ email, name, company });
+    return NextResponse.json(result);
   } catch (err) {
-    // Unique-email race (double click / concurrent connect): fall back to
-    // the row the other request created.
-    const [raced] = await findExisting();
-    if (raced?.role === "client") {
-      return NextResponse.json({ clientUserId: raced.id, created: false });
+    if (err instanceof ClientAccountError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error("Connect dashboard failed:", err);
     return NextResponse.json(

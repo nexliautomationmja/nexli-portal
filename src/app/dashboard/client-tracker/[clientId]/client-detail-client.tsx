@@ -36,12 +36,76 @@ interface DetailData {
     uniqueVisitors30d: number;
     daily: { date: string; pageViews: number; uniqueVisitors: number }[];
   };
-  youCollect: { revenue: number; mrr: number; outstanding: number } | null;
+  youCollect: {
+    revenue: number;
+    mrr: number;
+    outstanding: number;
+    adSpendCollected?: number;
+  } | null;
   activity: {
     at: string;
     type: "payment" | "invoice" | "engagement" | "lead" | "portal_login";
     message: string;
   }[];
+  surveys?: SurveyItem[];
+  weeklyUpdates?: WeeklyUpdateItem[];
+}
+
+interface SurveyItem {
+  id: string;
+  weekStart: string;
+  score: number | null;
+  valueAnswer: string | null;
+  comment: string | null;
+  sentAt: string | null;
+  submittedAt: string | null;
+}
+
+interface WeeklyUpdateItem {
+  id: string;
+  weekStart: string;
+  headline: string | null;
+  body: string;
+  adSpendCents: number | null;
+  status: string;
+  sentAt: string | null;
+  viewedAt: string | null;
+  updatedAt: string;
+}
+
+// Monday (UTC, YYYY-MM-DD) of the week containing `d` — mirrors
+// weekStartOf() in src/lib/client-success-tables.ts for the week picker.
+function mondayOf(d: Date = new Date()): string {
+  const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dow = day.getUTCDay();
+  day.setUTCDate(day.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+  return day.toISOString().slice(0, 10);
+}
+
+function weekLabel(weekStart: string): string {
+  return new Date(`${weekStart}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function shortDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function pulseColor(score: number): string {
+  if (score <= 2) return "#f43f5e";
+  if (score === 3) return "#f59e0b";
+  return "#10b981";
+}
+
+function valueLabel(v: string | null): string {
+  if (v === "yes") return "Yes";
+  if (v === "somewhat") return "Somewhat";
+  if (v === "no") return "No";
+  return "—";
 }
 
 function money(cents: number): string {
@@ -444,6 +508,14 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
               {money(youCollect.outstanding)} outstanding
             </p>
           )}
+          {(youCollect.adSpendCollected ?? 0) > 0 && (
+            <p className="text-sm" style={{ color: "var(--text-muted)" }} title="Ad budget passed through to ads — not counted in revenue">
+              <span className="font-bold" style={{ color: "var(--text-main)" }}>
+                {money(youCollect.adSpendCollected ?? 0)}
+              </span>{" "}
+              ad spend collected
+            </p>
+          )}
         </div>
       )}
 
@@ -517,6 +589,307 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
           )}
         </div>
       </div>
+
+      {/* Customer success: weekly update composer + pulse-check history */}
+      <div className="grid lg:grid-cols-2 gap-6 items-start">
+        <WeeklyUpdatePanel
+          clientId={client.id}
+          clientLabel={displayName}
+          updates={data.weeklyUpdates || []}
+          onChange={(updates) => setData((prev) => (prev ? { ...prev, weeklyUpdates: updates } : prev))}
+        />
+        <CustomerSuccessPanel surveys={data.surveys || []} />
+      </div>
+    </div>
+  );
+}
+
+// ── Weekly Update composer ───────────────────────────────
+
+function WeeklyUpdatePanel({
+  clientId,
+  clientLabel,
+  updates,
+  onChange,
+}: {
+  clientId: string;
+  clientLabel: string;
+  updates: WeeklyUpdateItem[];
+  onChange: (updates: WeeklyUpdateItem[]) => void;
+}) {
+  const [weekStart, setWeekStart] = useState(() => mondayOf());
+  const [headline, setHeadline] = useState("");
+  const [body, setBody] = useState("");
+  const [adSpend, setAdSpend] = useState("");
+  const [busy, setBusy] = useState<"draft" | "send" | null>(null);
+  const [message, setMessage] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
+
+  const existingForWeek = updates.find((u) => u.weekStart === weekStart) || null;
+
+  // Load the chosen week's note into the composer so Marcel edits in place.
+  useEffect(() => {
+    setMessage(null);
+    if (existingForWeek) {
+      setHeadline(existingForWeek.headline || "");
+      setBody(existingForWeek.body);
+      setAdSpend(
+        existingForWeek.adSpendCents != null ? String(Math.round(existingForWeek.adSpendCents / 100)) : ""
+      );
+    } else {
+      setHeadline("");
+      setBody("");
+      setAdSpend("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart, existingForWeek?.id]);
+
+  async function submit(action: "draft" | "send") {
+    if (!body.trim()) {
+      setMessage({ kind: "error", text: "Write the update first." });
+      return;
+    }
+    if (action === "send" && !window.confirm(`Email this update to ${clientLabel} now?`)) return;
+    setBusy(action);
+    setMessage(null);
+    try {
+      const dollars = adSpend.trim() === "" ? null : Number(adSpend);
+      const res = await fetch(`/api/dashboard/client-tracker/${clientId}/weekly-update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weekStart,
+          headline: headline.trim() || null,
+          body,
+          adSpendCents: dollars == null || Number.isNaN(dollars) ? null : Math.round(dollars * 100),
+          action,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage({ kind: "error", text: data.error || "Couldn't save. Please try again." });
+        return;
+      }
+      const saved = data.update as WeeklyUpdateItem;
+      const next = [saved, ...updates.filter((u) => u.id !== saved.id)].sort((a, b) =>
+        b.weekStart.localeCompare(a.weekStart)
+      );
+      onChange(next);
+      if (data.warning) {
+        setMessage({ kind: "warn", text: data.warning });
+      } else {
+        setMessage({
+          kind: "ok",
+          text: action === "send" ? `Sent to ${clientLabel}.` : "Draft saved.",
+        });
+      }
+    } catch {
+      setMessage({ kind: "error", text: "Couldn't save. Please try again." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const textareaCls =
+    "w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 resize-none transition-colors";
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="p-4 border-b border-[var(--card-border)] flex items-center justify-between gap-3">
+        <p className="section-header mb-0">Weekly Update</p>
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Emailed + shown on their Overview
+        </span>
+      </div>
+
+      <div className="p-4 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "var(--text-muted)" }}>
+              Week of
+            </label>
+            <input
+              type="date"
+              value={weekStart}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v) setWeekStart(mondayOf(new Date(`${v}T00:00:00Z`)));
+              }}
+              className="glass-input"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "var(--text-muted)" }}>
+              Ad budget deployed ($, optional)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={adSpend}
+              onChange={(e) => setAdSpend(e.target.value)}
+              placeholder="e.g. 2500"
+              className="glass-input"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "var(--text-muted)" }}>
+            Headline (optional)
+          </label>
+          <input
+            type="text"
+            value={headline}
+            onChange={(e) => setHeadline(e.target.value.slice(0, 200))}
+            placeholder="e.g. New landing page live, 3 booked calls"
+            className="glass-input"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "var(--text-muted)" }}>
+            What the team worked on
+          </label>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value.slice(0, 10_000))}
+            placeholder={"What we did this week, what's next, anything we need from them.\n\nBlank lines become paragraphs."}
+            className={`${textareaCls} h-36`}
+            style={{ color: "var(--text-main)" }}
+          />
+        </div>
+
+        {existingForWeek?.status === "sent" && (
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            This week&apos;s update was sent {shortDate(existingForWeek.sentAt)}
+            {existingForWeek.viewedAt ? ` · opened ${shortDate(existingForWeek.viewedAt)}` : " · not opened yet"}.
+            Sending again re-emails the edited version.
+          </p>
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => submit("draft")}
+            disabled={busy !== null}
+            className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)] disabled:opacity-50"
+            style={{ borderColor: "var(--card-border)", color: "var(--text-muted)" }}
+          >
+            {busy === "draft" ? "Saving…" : "Save draft"}
+          </button>
+          <button
+            type="button"
+            onClick={() => submit("send")}
+            disabled={busy !== null}
+            className="btn-primary px-5 py-2 text-sm"
+          >
+            {busy === "send" ? "Sending…" : "Send to client"}
+          </button>
+          {message && (
+            <span
+              className="text-xs font-medium"
+              style={{
+                color:
+                  message.kind === "ok" ? "#10b981" : message.kind === "warn" ? "#f59e0b" : "#f43f5e",
+              }}
+            >
+              {message.text}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {updates.length > 0 && (
+        <div className="border-t border-[var(--card-border)]">
+          <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+            History
+          </p>
+          <div className="divide-y divide-[var(--card-border)]">
+            {updates.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => setWeekStart(u.weekStart)}
+                className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors hover:bg-[var(--input-bg)] ${
+                  u.weekStart === weekStart ? "bg-[var(--input-bg)]" : ""
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate" style={{ color: "var(--text-main)" }}>
+                    {u.headline || `Week of ${weekLabel(u.weekStart)}`}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                    Week of {weekLabel(u.weekStart)}
+                    {u.adSpendCents ? ` · ${money(u.adSpendCents)} ads` : ""}
+                    {u.status === "sent" ? ` · sent ${shortDate(u.sentAt)}` : ` · edited ${shortDate(u.updatedAt)}`}
+                    {u.viewedAt ? " · opened" : ""}
+                  </p>
+                </div>
+                <span className={`badge shrink-0 ${u.status === "sent" ? "badge-emerald" : "badge-gray"}`}>
+                  {u.status === "sent" ? "Sent" : "Draft"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Customer Success (pulse-check history) ──────────────
+
+function CustomerSuccessPanel({ surveys }: { surveys: SurveyItem[] }) {
+  const answered = surveys.filter((s) => s.submittedAt && s.score != null);
+  const latest = answered[0] || null;
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="p-4 border-b border-[var(--card-border)] flex items-center justify-between gap-3">
+        <p className="section-header mb-0">Customer Success</p>
+        {latest && latest.score != null && (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--text-main)" }}>
+            <span className="w-2 h-2 rounded-full" style={{ background: pulseColor(latest.score) }} />
+            Latest {latest.score}/5
+          </span>
+        )}
+      </div>
+      {surveys.length === 0 ? (
+        <p className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>
+          No responses yet — surveys go out Mondays.
+        </p>
+      ) : (
+        <div className="divide-y divide-[var(--card-border)]">
+          {surveys.map((s) => {
+            const scored = s.submittedAt && s.score != null;
+            return (
+              <div key={s.id} className="px-4 py-3 flex items-start gap-3">
+                <span
+                  className="mt-1.5 w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ background: scored ? pulseColor(s.score as number) : "var(--card-border)" }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                      {scored ? `${s.score}/5 · Getting value: ${valueLabel(s.valueAnswer)}` : "No response"}
+                    </p>
+                    <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
+                      {scored ? shortDate(s.submittedAt) : s.sentAt ? `sent ${shortDate(s.sentAt)}` : "not sent"}
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Week of {weekLabel(s.weekStart)}
+                  </p>
+                  {s.comment && (
+                    <p className="mt-1.5 text-sm whitespace-pre-wrap" style={{ color: "var(--text-main)" }}>
+                      &ldquo;{s.comment}&rdquo;
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

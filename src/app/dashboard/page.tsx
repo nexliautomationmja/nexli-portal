@@ -9,6 +9,9 @@ import {
   getFoundationProjectForEmail,
   type FoundationProject,
 } from "@/lib/foundation-project";
+import { getClientSuccessForUser, type LatestUpdate } from "@/lib/client-success";
+import { WeeklyUpdateCard } from "@/components/dashboard/weekly-update-card";
+import { SurveyPromptCard } from "@/components/dashboard/survey-prompt-card";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -16,6 +19,18 @@ export default async function DashboardPage() {
 
   const firstName = session.user.name?.split(" ")[0] || "there";
   const userId = session.user.id!;
+
+  // Digital Rainmaker clients (tier null or "drs") see the latest weekly
+  // update from their Nexli team and this week's pulse check, if still open.
+  let latestUpdate: LatestUpdate | null = null;
+  let pendingSurvey: { token: string; weekStart: string } | null = null;
+  if (session.user.role === "client" && session.user.tier !== "foundation") {
+    try {
+      ({ latestUpdate, pendingSurvey } = await getClientSuccessForUser(userId));
+    } catch (err) {
+      console.warn("[dashboard] client success lookup failed:", err);
+    }
+  }
 
   // Firm Foundation owners see their build progress on their own dashboard too.
   let foundationProject: FoundationProject | null = null;
@@ -74,6 +89,9 @@ export default async function DashboardPage() {
       {foundationProject && (
         <FoundationProjectCard project={foundationProject} showDashboardLink={false} />
       )}
+
+      {pendingSurvey && <SurveyPromptCard token={pendingSurvey.token} />}
+      {latestUpdate && <WeeklyUpdateCard update={latestUpdate} />}
 
       <OverviewClient
         docStats={docStats}
