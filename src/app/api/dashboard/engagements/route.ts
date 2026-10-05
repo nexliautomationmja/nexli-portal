@@ -8,7 +8,7 @@ import {
   users,
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { type BillingPlan } from "@/lib/drs-pricing";
+import { type BillingPlan, TERM_MONTHS } from "@/lib/drs-pricing";
 import { createEngagement } from "@/lib/engagements";
 
 export async function GET() {
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
   // Snapshot the chosen billing plan onto the engagement so auto-invoicing
   // bills the flat platform price that matches the signed contract.
   const plan: BillingPlan = billingPlan === "annual" ? "annual" : "monthly";
-  const engagementMetadata = { billingPlan: plan };
+  const engagementMetadata = { billingPlan: plan, termMonths: TERM_MONTHS[plan] };
 
   const senderName =
     session.user.name || session.user.email || "Your Service Provider";

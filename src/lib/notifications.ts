@@ -13,7 +13,11 @@ export type NotificationType =
   | "document_viewed"
   | "portal_message"
   | "tax_organizer_submitted"
-  | "onboarding_task_submitted";
+  | "onboarding_task_submitted"
+  | "onboarding_overdue"
+  | "survey_submitted"
+  | "survey_low_score"
+  | "weekly_update_due";
 
 interface CreateNotificationParams {
   userId: string;
@@ -41,6 +45,10 @@ const TYPE_CONFIG: Record<
   portal_message: { emoji: "\u{1F4AC}", color: "#2563EB" },
   tax_organizer_submitted: { emoji: "\u{1F4CB}", color: "#10B981" },
   onboarding_task_submitted: { emoji: "\u{1F680}", color: "#06B6D4" },
+  onboarding_overdue: { emoji: "\u23F0", color: "#F43F5E" },
+  survey_submitted: { emoji: "\u{1F4DD}", color: "#2563EB" },
+  survey_low_score: { emoji: "\u{1F6A8}", color: "#F43F5E" },
+  weekly_update_due: { emoji: "\u{1F4EC}", color: "#F59E0B" },
 };
 
 export async function createNotification({

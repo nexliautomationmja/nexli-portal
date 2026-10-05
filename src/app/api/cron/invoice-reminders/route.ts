@@ -177,6 +177,10 @@ export async function GET(req: NextRequest) {
             amountPaid: 0,
             balanceDue: template.total,
             recurringParentId: template.id,
+            // Carry the DRS tags ({ engagementId, drsRole, adSpendCents, … })
+            // so the Client Tracker can split the ad-budget pass-through out
+            // of revenue on every rolled-forward invoice, not just the parent.
+            metadata: template.metadata,
           })
           .returning({ id: invoices.id });
 
@@ -194,6 +198,7 @@ export async function GET(req: NextRequest) {
               quantity: item.quantity,
               unitPrice: item.unitPrice,
               amount: item.amount,
+              billingType: item.billingType,
               order: item.order,
             }))
           );

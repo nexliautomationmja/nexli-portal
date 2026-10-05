@@ -5,20 +5,24 @@
  * is fully signed by all parties, this module creates a single recurring
  * platform invoice that mirrors the flat all-in-one fee structure:
  *
- *   - Monthly plan → $4,997/month, recurring monthly, due at signing
- *   - Annual plan  → $42,000/year prepaid, recurring yearly, due at signing
+ *   - Monthly plan → ONE $10,000/month invoice (two lines: $5,000 platform +
+ *                    $5,000 Managed Advertising Budget), recurring monthly
+ *   - Annual plan  → $42,000/year platform, recurring yearly, PLUS a separate
+ *                    $5,000/month Managed Advertising Budget invoice
  *
- * There are no setup fees and no separate ad-management invoices — ad
- * management is included in the flat price, and the only performance-based
- * compensation is the milestone Success Bonus (SUCCESS_BONUS in
- * drs-pricing.ts), invoiced manually when a milestone is hit. The billing
- * plan is snapshotted onto engagement.metadata at compose time so a signed
- * client keeps their plan even if pricing changes.
+ * There are no setup fees. Ad management is included in the platform price;
+ * the ad budget is pass-through (deployed on the client's ad accounts, no
+ * markup). The only performance-based compensation is the milestone Success
+ * Bonus (SUCCESS_BONUS in drs-pricing.ts), invoiced manually. The billing
+ * plan and initial term are snapshotted onto engagement.metadata at compose
+ * time so a signed client keeps their terms even if pricing changes.
  *
- * Each generated invoice carries metadata { engagementId, drsRole } where
- * drsRole is "platform_monthly" or "platform_annual". The existing recurring
- * cron (api/cron/invoice-reminders) rolls the parent invoice forward by its
- * interval, so subsequent monthly/annual invoices are generated automatically.
+ * Each generated invoice carries metadata { engagementId, drsRole,
+ * adSpendCents, termMonths? } where drsRole is "platform_monthly",
+ * "platform_annual" or "ad_spend_monthly" and adSpendCents is the
+ * pass-through portion of that invoice's total (book-of-business.ts splits
+ * it out of revenue). The recurring cron (api/cron/invoice-reminders) rolls
+ * each parent forward by its interval and copies the metadata.
  *
  * Template detection is by name (case-insensitive contains "digital rainmaker").
  */
@@ -44,20 +48,25 @@ import { createNotification } from "@/lib/notifications";
 
 // Pricing lives in drs-pricing.ts (client-safe module); re-exported here so
 // existing server-side imports keep working.
-import { DRS_PRICING, type BillingPlan } from "./drs-pricing";
+import { DRS_PRICING, TOTAL_MONTHLY_CENTS, type BillingPlan } from "./drs-pricing";
 
 export { DRS_PRICING, SUCCESS_BONUS } from "./drs-pricing";
 export type { BillingPlan } from "./drs-pricing";
 
-export type DrsRole = "platform_monthly" | "platform_annual";
+export type DrsRole = "platform_monthly" | "platform_annual" | "ad_spend_monthly";
 
 interface DrsMetadata {
   engagementId: string;
   drsRole: DrsRole;
+  /** Managed Advertising Budget (pass-through) included in this invoice's total, in cents. */
+  adSpendCents: number;
+  /** Initial contract term snapshotted from the engagement, when known. */
+  termMonths?: number;
 }
 
 interface EngagementMeta {
   billingPlan?: BillingPlan;
+  termMonths?: number;
 }
 
 // ── Template Detection ────────────────────────────────────
@@ -81,13 +90,16 @@ export async function isDigitalRainmakerEngagement(
 
 // ── Idempotency Helper ────────────────────────────────────
 
-/** True if a platform invoice already exists for this engagement. */
-async function drsInvoiceExists(engagementId: string): Promise<boolean> {
+/** True if a DRS invoice with this role already exists for the engagement. */
+async function drsInvoiceExists(
+  engagementId: string,
+  drsRole: DrsRole
+): Promise<boolean> {
   const rows = await db
     .select({ id: invoices.id })
     .from(invoices)
     .where(
-      sql`${invoices.metadata} @> ${JSON.stringify({ engagementId })}::jsonb`
+      sql`${invoices.metadata} @> ${JSON.stringify({ engagementId, drsRole })}::jsonb`
     )
     .limit(1);
   return rows.length > 0;
@@ -147,12 +159,81 @@ interface PostSignTriggerArgs {
   };
 }
 
+interface DrsInvoiceSpec {
+  role: DrsRole;
+  interval: "monthly" | "yearly";
+  totalCents: number;
+  adSpendCents: number;
+  label: string;
+  notes: string;
+  lines: { description: string; amountCents: number; billingType: "monthly" | "yearly" }[];
+}
+
+/** The invoices a freshly signed DRS engagement should produce for its plan. */
+export function drsInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
+  const platform = formatCurrency(DRS_PRICING.MONTHLY_CENTS, "usd");
+  const adBudget = formatCurrency(DRS_PRICING.AD_SPEND_MONTHLY_CENTS, "usd");
+  const adLine = {
+    description: "Managed Advertising Budget — Monthly (deployed on your ad accounts, pass-through)",
+    amountCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
+    billingType: "monthly" as const,
+  };
+  if (plan === "annual") {
+    return [
+      {
+        role: "platform_annual",
+        interval: "yearly",
+        totalCents: DRS_PRICING.ANNUAL_CENTS,
+        adSpendCents: 0,
+        label: "Annual platform",
+        notes:
+          "Annual all-in-one platform investment for the Digital Rainmaker System, paid in full. Renews yearly.",
+        lines: [
+          {
+            description: "Digital Rainmaker System — Annual Platform (Paid in Full)",
+            amountCents: DRS_PRICING.ANNUAL_CENTS,
+            billingType: "yearly",
+          },
+        ],
+      },
+      {
+        role: "ad_spend_monthly",
+        interval: "monthly",
+        totalCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
+        adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
+        label: "Monthly ad budget",
+        notes: `Managed Advertising Budget (${adBudget}/month) for the Digital Rainmaker System — deployed on your behalf on the advertising platforms at no markup. Billed automatically each month.`,
+        lines: [adLine],
+      },
+    ];
+  }
+  return [
+    {
+      role: "platform_monthly",
+      interval: "monthly",
+      totalCents: TOTAL_MONTHLY_CENTS,
+      adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
+      label: "Monthly",
+      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform (buildout, maintenance, ad management, support) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Billed automatically each month.`,
+      lines: [
+        {
+          description: "Digital Rainmaker System — Monthly Platform",
+          amountCents: DRS_PRICING.MONTHLY_CENTS,
+          billingType: "monthly",
+        },
+        adLine,
+      ],
+    },
+  ];
+}
+
 /**
  * Called from the engage route after all signers have signed. For a Digital
- * Rainmaker engagement, creates the single recurring platform invoice
- * (monthly or annual) due at signing.
+ * Rainmaker engagement, creates the recurring invoice(s) for the plan — see
+ * drsInvoiceSpecs — all due at signing.
  *
- * Idempotent — will only create the invoice once per engagement.
+ * Idempotent per (engagement, drsRole) — a retry only creates what's missing.
+ * Returns the first invoice created (or null when nothing was created).
  */
 export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
   const { engagement, primarySigner } = args;
@@ -160,95 +241,100 @@ export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
   if (!(await isDigitalRainmakerEngagement(engagement.templateId))) {
     return null;
   }
-  if (await drsInvoiceExists(engagement.id)) {
-    return null;
-  }
 
   const engMeta = (engagement.metadata ?? {}) as EngagementMeta;
   const plan: BillingPlan = engMeta.billingPlan === "annual" ? "annual" : "monthly";
+  const termMonths =
+    typeof engMeta.termMonths === "number" && engMeta.termMonths > 0
+      ? engMeta.termMonths
+      : undefined;
 
-  const isAnnual = plan === "annual";
-  const amountCents = isAnnual
-    ? DRS_PRICING.ANNUAL_CENTS
-    : DRS_PRICING.MONTHLY_CENTS;
-  const role: DrsRole = isAnnual ? "platform_annual" : "platform_monthly";
-  const description = isAnnual
-    ? "Digital Rainmaker System — Annual (Paid in Full)"
-    : "Digital Rainmaker System — Monthly";
+  const created: (typeof invoices.$inferSelect)[] = [];
 
-  const dueDate = new Date(); // due immediately at signing
+  for (const spec of drsInvoiceSpecs(plan)) {
+    if (await drsInvoiceExists(engagement.id, spec.role)) continue;
 
-  // Next recurrence: one interval out, so the cron generates the next invoice
-  // when this billing cycle ends.
-  const nextRecurrence = new Date(dueDate);
-  if (isAnnual) {
-    nextRecurrence.setFullYear(nextRecurrence.getFullYear() + 1);
-  } else {
-    nextRecurrence.setMonth(nextRecurrence.getMonth() + 1);
-  }
+    const dueDate = new Date(); // due immediately at signing
 
-  const invoiceNumber = await generateInvoiceNumber();
-  const token = generateInvoiceToken();
-  const metadata: DrsMetadata = { engagementId: engagement.id, drsRole: role };
+    // Next recurrence: one interval out, so the cron generates the next
+    // invoice when this billing cycle ends.
+    const nextRecurrence = new Date(dueDate);
+    if (spec.interval === "yearly") {
+      nextRecurrence.setFullYear(nextRecurrence.getFullYear() + 1);
+    } else {
+      nextRecurrence.setMonth(nextRecurrence.getMonth() + 1);
+    }
 
-  const [invoice] = await db
-    .insert(invoices)
-    .values({
-      ownerId: engagement.ownerId,
-      clientName: primarySigner.name,
-      clientEmail: primarySigner.email,
-      invoiceNumber,
-      token,
-      currency: "usd",
-      subtotal: amountCents,
-      taxRate: 0,
-      taxAmount: 0,
-      total: amountCents,
-      amountPaid: 0,
-      balanceDue: amountCents,
-      isRecurring: true,
-      recurringInterval: isAnnual ? "yearly" : "monthly",
-      nextRecurrenceDate: nextRecurrence,
-      dueDate,
-      notes: isAnnual
-        ? "Annual all-in-one investment for the Digital Rainmaker System, paid in full. Renews yearly."
-        : "Monthly all-in-one investment for the Digital Rainmaker System. Billed automatically each month.",
-      status: "sent",
-      sentAt: new Date(),
-      metadata,
-    })
-    .returning();
+    const invoiceNumber = await generateInvoiceNumber();
+    const token = generateInvoiceToken();
+    const metadata: DrsMetadata = {
+      engagementId: engagement.id,
+      drsRole: spec.role,
+      adSpendCents: spec.adSpendCents,
+      ...(termMonths ? { termMonths } : {}),
+    };
 
-  await db.insert(invoiceLineItems).values({
-    invoiceId: invoice.id,
-    description,
-    quantity: 100, // qty 1 (stored × 100)
-    unitPrice: amountCents,
-    amount: amountCents,
-    billingType: isAnnual ? "yearly" : "monthly",
-    order: 0,
-  });
+    const [invoice] = await db
+      .insert(invoices)
+      .values({
+        ownerId: engagement.ownerId,
+        clientName: primarySigner.name,
+        clientEmail: primarySigner.email,
+        invoiceNumber,
+        token,
+        currency: "usd",
+        subtotal: spec.totalCents,
+        taxRate: 0,
+        taxAmount: 0,
+        total: spec.totalCents,
+        amountPaid: 0,
+        balanceDue: spec.totalCents,
+        isRecurring: true,
+        recurringInterval: spec.interval,
+        nextRecurrenceDate: nextRecurrence,
+        dueDate,
+        notes: spec.notes,
+        status: "sent",
+        sentAt: new Date(),
+        metadata,
+      })
+      .returning();
 
-  await emailInvoiceToClient(invoice, engagement.ownerId);
-
-  try {
-    await createNotification({
-      userId: engagement.ownerId,
-      type: "invoice_paid", // closest existing type
-      title: "DRS Invoice Sent",
-      message: `${isAnnual ? "Annual" : "Monthly"} invoice ${invoice.invoiceNumber} (${formatCurrency(amountCents, "usd")}) sent to ${primarySigner.name}`,
-      metadata: {
+    await db.insert(invoiceLineItems).values(
+      spec.lines.map((line, i) => ({
         invoiceId: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
-        engagementId: engagement.id,
-        drsRole: role,
-      },
-    });
-  } catch (err) {
-    console.error("DRS: notification failed:", err);
+        description: line.description,
+        quantity: 100, // qty 1 (stored × 100)
+        unitPrice: line.amountCents,
+        amount: line.amountCents,
+        billingType: line.billingType,
+        order: i,
+      }))
+    );
+
+    await emailInvoiceToClient(invoice, engagement.ownerId);
+
+    try {
+      await createNotification({
+        userId: engagement.ownerId,
+        type: "invoice_paid", // closest existing type
+        title: "DRS Invoice Sent",
+        message: `${spec.label} invoice ${invoice.invoiceNumber} (${formatCurrency(spec.totalCents, "usd")}) sent to ${primarySigner.name}`,
+        metadata: {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          engagementId: engagement.id,
+          drsRole: spec.role,
+        },
+      });
+    } catch (err) {
+      console.error("DRS: notification failed:", err);
+    }
+
+    created.push(invoice);
   }
 
-  return invoice;
+  return created[0] ?? null;
 }
 
 // ── Helper for engage route ───────────────────────────────

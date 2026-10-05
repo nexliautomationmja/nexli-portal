@@ -6,7 +6,7 @@ import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/co
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
 import { generateDrsContent } from "@/lib/engagement-defaults";
-import { DRS_PRICING, type BillingPlan } from "@/lib/drs-pricing";
+import { DRS_PRICING, TOTAL_MONTHLY_CENTS, TERM_MONTHS, type BillingPlan } from "@/lib/drs-pricing";
 
 const fmtWhole = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
 
@@ -70,7 +70,8 @@ export function EngagementsClient() {
   const [showPreview, setShowPreview] = useState(false);
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
-  // Billing plan (flat all-in-one): monthly $4,997 or annual $42,000 prepaid
+  // Billing plan: monthly $10,000 ($5,000 platform + $5,000 ad budget, 6-mo term)
+  // or annual $42,000 prepaid + $5,000/mo ad budget (12-mo term)
   const [billingPlan, setBillingPlan] = useState<BillingPlan>("monthly");
 
   useEffect(() => {
@@ -592,13 +593,13 @@ export function EngagementsClient() {
                   {([
                     {
                       value: "monthly" as BillingPlan,
-                      label: `Monthly — ${fmtWhole(DRS_PRICING.MONTHLY_CENTS)}/mo`,
-                      sub: "All-in-one, billed monthly.",
+                      label: `Monthly — ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo`,
+                      sub: `${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} platform + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} managed ad budget, one invoice. ${TERM_MONTHS.monthly}-month initial term.`,
                     },
                     {
                       value: "annual" as BillingPlan,
-                      label: `Annual — ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)}/yr`,
-                      sub: `Paid in full, ~${Math.round((1 - DRS_PRICING.ANNUAL_CENTS / (DRS_PRICING.MONTHLY_CENTS * 12)) * 100)}% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly.`,
+                      label: `Annual — ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)}/yr + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget`,
+                      sub: `Platform paid in full (~${Math.round((1 - DRS_PRICING.ANNUAL_CENTS / (DRS_PRICING.MONTHLY_CENTS * 12)) * 100)}% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly); ad budget billed monthly. ${TERM_MONTHS.annual}-month initial term.`,
                     },
                   ]).map((opt) => (
                     <label
@@ -628,7 +629,7 @@ export function EngagementsClient() {
                     </label>
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ad management is included in the flat price — no ad line item on the invoice, no revenue share. The Success Bonus (Section 3) is invoiced manually at the end of each contract year, or when the client leaves.
+                    Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. The Success Bonus (Section 3) is invoiced manually at the end of each contract year, or when the client leaves.
                   </p>
                 </div>
               )}

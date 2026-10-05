@@ -4,19 +4,37 @@
  * Client-safe: no server-only imports, so these constants can be used from
  * both API routes and client components (compose UI, invoice pay page).
  *
- * One flat all-in-one price: the whole Digital Rainmaker System for a single
- * monthly (or discounted annual) investment — no setup fees, no ad-management
- * tiers, no revenue share. Ad management is included in the flat price (the
- * client pays ad spend directly to the platforms). The only performance-based
- * compensation is the milestone SUCCESS_BONUS below.
+ * One flat all-in-one platform price — $5,000/mo or $42,000/yr prepaid — with
+ * no setup fees, no ad-management tiers, no revenue share. Ad management is
+ * included. On top of the platform price every client funds a Managed
+ * Advertising Budget of $5,000/mo that Nexli collects and deploys on the ad
+ * platforms on the client's behalf (pass-through, no markup — see
+ * AD_SPEND_MONTHLY_CENTS and engagement letter Section 3(b)). Monthly plan
+ * = one $10,000 invoice (two line items); annual = $42,000 yearly + a
+ * $5,000 monthly ad-budget invoice. The only performance-based compensation
+ * is the milestone SUCCESS_BONUS below.
+ *
+ * Minimum term (Oct 2026): 6 months on monthly, 12 on annual — ads need
+ * ~90 days to mature; the goal is retention, not lock-in.
  */
 
 export const DRS_PRICING = {
-  MONTHLY_CENTS: 499_700, // $4,997.00 / month — all-in-one
-  ANNUAL_CENTS: 4_200_000, // $42,000.00 / year prepaid (~30% off vs $59,964 at the monthly rate; covers processing fees)
+  MONTHLY_CENTS: 500_000, // $5,000.00 / month — platform (all-in-one)
+  ANNUAL_CENTS: 4_200_000, // $42,000.00 / year prepaid (~30% off vs $60,000 at the monthly rate; covers processing fees)
+  AD_SPEND_MONTHLY_CENTS: 500_000, // $5,000.00 / month Managed Advertising Budget (pass-through)
 } as const;
 
+/** What a monthly-plan client pays each month: platform + ad budget. */
+export const TOTAL_MONTHLY_CENTS =
+  DRS_PRICING.MONTHLY_CENTS + DRS_PRICING.AD_SPEND_MONTHLY_CENTS; // $10,000
+
 export type BillingPlan = "monthly" | "annual";
+
+/** Initial contract term per plan, in months. */
+export const TERM_MONTHS: Record<BillingPlan, number> = {
+  monthly: 6,
+  annual: 12,
+};
 
 /** The service the Provider-managed ads promote (used in attribution wording). */
 export const ADVERTISED_SERVICE = "tax planning";
@@ -83,12 +101,13 @@ export const TRIPLE_GUARANTEE = {
  * average ~18–20% annual churn (top shops 8–10%), typical client lifespan
  * 2–5 years — but ~25% of agencies see tenures under a year, and a new
  * agency should assume the conservative end. Marcel's own estimate is 6–8
- * months; 8 × $4,997 = $39,976, so every open lead ≈ $40K expected value
- * (close to the $42,000 annual plan). Editable per lead.
+ * months; 8 × $5,000 = $40,000 platform revenue, so every open lead ≈ $40K
+ * expected value (the ad budget is pass-through and excluded). Editable per
+ * lead.
  */
 export const PIPELINE = {
   EXPECTED_LIFETIME_MONTHS: 8,
-  DEFAULT_DEAL_VALUE_CENTS: 8 * DRS_PRICING.MONTHLY_CENTS, // $39,976
+  DEFAULT_DEAL_VALUE_CENTS: 8 * DRS_PRICING.MONTHLY_CENTS, // $40,000
 } as const;
 
 /**

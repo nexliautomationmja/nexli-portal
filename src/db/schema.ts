@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   integer,
   real,
+  date,
 } from "drizzle-orm/pg-core";
 import type { FirmSiteConfig } from "@/lib/firm-sites/types";
 
@@ -1060,6 +1061,61 @@ export const notifications = pgTable(
   (table) => [
     index("notifications_user_read_idx").on(table.userId, table.read),
     index("notifications_user_created_idx").on(table.userId, table.createdAt),
+  ]
+);
+
+// ── Customer success: weekly pulse surveys + weekly updates ──
+// Created at runtime by ensureClientSuccessTables() in
+// src/lib/client-success-tables.ts (mirror: scripts/add-client-success.sql).
+// Both key on the DRS client's users.id (role "client"), resolved through the
+// Client Tracker "Connect" mapping.
+export const clientSurveys = pgTable(
+  "client_surveys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    weekStart: date("week_start").notNull(), // Monday, YYYY-MM-DD
+    sentAt: timestamp("sent_at"),
+    viewedAt: timestamp("viewed_at"),
+    submittedAt: timestamp("submitted_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+    resultsScore: integer("results_score"), // 1..5
+    valueAnswer: text("value_answer"), // 'yes' | 'somewhat' | 'no'
+    comment: text("comment"),
+    alertedAt: timestamp("alerted_at"), // low-score alert sent
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("client_surveys_client_week_idx").on(table.clientUserId, table.weekStart),
+    index("client_surveys_client_created_idx").on(table.clientUserId, table.createdAt),
+    index("client_surveys_submitted_idx").on(table.submittedAt),
+  ]
+);
+
+export const clientWeeklyUpdates = pgTable(
+  "client_weekly_updates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    weekStart: date("week_start").notNull(), // Monday, YYYY-MM-DD
+    headline: text("headline"),
+    body: text("body").notNull(),
+    adSpendCents: integer("ad_spend_cents"), // optional "deployed this week"
+    authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+    status: text("status").default("draft").notNull(), // 'draft' | 'sent'
+    sentAt: timestamp("sent_at"),
+    viewedAt: timestamp("viewed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("client_weekly_updates_client_week_idx").on(table.clientUserId, table.weekStart),
+    index("client_weekly_updates_client_sent_idx").on(table.clientUserId, table.sentAt),
   ]
 );
 

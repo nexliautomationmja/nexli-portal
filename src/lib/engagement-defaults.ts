@@ -1,15 +1,19 @@
 /**
  * Default engagement letter template content for the Digital Rainmaker System.
  *
- * One flat all-in-one price ($4,997/mo or $42,000/yr prepaid) with ad
- * management included and no revenue share; the only performance-based
- * compensation is the milestone Success Bonus. All dollar amounts are
- * interpolated from the pricing constants in drs-pricing.ts so the contract
- * can never drift from what the billing engine actually charges.
+ * Platform price $5,000/mo or $42,000/yr prepaid, plus a $5,000/mo Managed
+ * Advertising Budget that Nexli deploys on the client's behalf (pass-through).
+ * Ad management included, no revenue share; the only performance-based
+ * compensation is the milestone Success Bonus. Initial term 6 months
+ * (monthly) / 12 months (annual). All dollar amounts are interpolated from
+ * the pricing constants in drs-pricing.ts so the contract can never drift
+ * from what the billing engine actually charges.
  */
 
 import {
   DRS_PRICING,
+  TOTAL_MONTHLY_CENTS,
+  TERM_MONTHS,
   ADVERTISED_SERVICE,
   SUCCESS_BONUS,
   successBonusSchedule,
@@ -28,7 +32,13 @@ function fmtWhole(cents: number): string {
 }
 
 // Dual-pricing presentation (never "fee added at checkout") — see drs-pricing.ts.
-const PAYMENT_METHODS_CLAUSE = `Payments may be made via ACH bank transfer or credit/debit card, processed through Stripe. Amounts listed in this Agreement are the discounted bank transfer (ACH) prices. Credit/debit card payments are charged at the corresponding card price; the exact amount of each payment option is presented at checkout before payment.`;
+const PAYMENT_METHODS_CLAUSE = `Payments may be made via ACH bank transfer or credit/debit card, processed through Stripe. Amounts listed in this Agreement are the discounted bank transfer (ACH) prices. Credit/debit card payments are charged at the corresponding card price; the exact amount of each payment option is presented at checkout before payment. The card price applies to the full invoiced amount, including any Managed Advertising Budget.`;
+
+/** "six (6)" style wording for the term length. */
+function termWords(months: number): string {
+  const words: Record<number, string> = { 3: "three", 6: "six", 9: "nine", 12: "twelve", 18: "eighteen", 24: "twenty-four" };
+  return words[months] ? `${words[months]} (${months})` : `${months} (${months})`;
+}
 
 // ── Digital Rainmaker System Template ───────────────────
 
@@ -36,11 +46,12 @@ export const DRS_TEMPLATE_NAME = "Digital Rainmaker System";
 
 /**
  * Builds the full DRS engagement letter for the chosen billing plan. The fee
- * structure is a single flat all-in-one investment — monthly or annual
+ * structure is a flat all-in-one Platform Investment — monthly or annual
  * prepaid — with no setup fees, covering the buildout AND ongoing
- * maintenance. Ad management is included in the flat price with no revenue
- * share; the only performance-based compensation is the milestone Success
- * Bonus (Section 3). The Nexli Triple Guarantee (Section 4) carves out
+ * maintenance, plus the Managed Advertising Budget (Section 3(b)). Ad
+ * management is included with no revenue share; the only performance-based
+ * compensation is the milestone Success Bonus (Section 3). The Initial Term
+ * is in Section 5(d). The Nexli Triple Guarantee (Section 4) carves out
  * express exceptions to the no-refund/no-credit and no-results-guarantee
  * clauses. Section numbering is identical for both plans.
  */
@@ -49,7 +60,7 @@ export const DRS_TEMPLATE_NAME = "Digital Rainmaker System";
 export function drsFeeLine(plan: BillingPlan): string {
   return plan === "annual"
     ? `a) Annual Investment (Paid in Full): ${fmt(DRS_PRICING.ANNUAL_CENTS)} USD/year`
-    : `a) Monthly Investment: ${fmt(DRS_PRICING.MONTHLY_CENTS)} USD/month`;
+    : `a) Monthly Investment: ${fmt(TOTAL_MONTHLY_CENTS)} USD/month`;
 }
 
 const AD_SECTION_HEADING = "3. AD MANAGEMENT & SUCCESS BONUS";
@@ -60,6 +71,8 @@ const GUARANTEE_SECTION_HEADING = "4. THE NEXLI TRIPLE GUARANTEE";
 // seeded templates (templates/route.ts) are refreshed instead of drifting.
 const CURRENT_REVISION_MARKERS = [
   "Success Bonus on Termination", // Sep 20 2026: non-stacking bonus, billed at year end or departure
+  "Managed Advertising Budget", // Oct 5 2026: $5,000/mo ad budget collected by Nexli (Sections 2, 3(b))
+  "Initial Term and Renewal", // Oct 5 2026: 6/12-month initial term (Section 5(d))
 ];
 
 /**
@@ -81,6 +94,9 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const monthly = fmt(DRS_PRICING.MONTHLY_CENTS);
   const annual = fmt(DRS_PRICING.ANNUAL_CENTS);
   const monthlyAnnualized = fmt(DRS_PRICING.MONTHLY_CENTS * 12);
+  const totalMonthly = fmt(TOTAL_MONTHLY_CENTS);
+  const adSpend = fmt(DRS_PRICING.AD_SPEND_MONTHLY_CENTS);
+  const term = TERM_MONTHS[plan];
   const service = ADVERTISED_SERVICE;
   const g = TRIPLE_GUARANTEE;
   const launchCredit = fmt(g.LAUNCH_CREDIT_CENTS);
@@ -94,12 +110,18 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
 
   const feeStructure =
     plan === "annual"
-      ? `${drsFeeLine("annual")} — Due upon execution of this Agreement. This all-in-one investment covers the buildout and ongoing maintenance of the complete Digital Rainmaker System — website, AI automations, dashboard access, ad management, and technical support — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless canceled.
+      ? `${drsFeeLine("annual")} — Due upon execution of this Agreement. This all-in-one Platform Investment covers the buildout and ongoing maintenance of the complete Digital Rainmaker System — website, AI automations, dashboard access, ad management, and technical support — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 12.
 
-b) There are no separate setup fees. This payment activates the Agreement and authorizes Provider to begin work.`
-      : `${drsFeeLine("monthly")} — All-in-one recurring investment covering the buildout and ongoing maintenance of the complete Digital Rainmaker System, including the website, AI automations, dashboard access, ad management, and technical support. Billed monthly via ACH bank transfer or card through Stripe.
+b) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly beginning upon execution of this Agreement and deployed by Provider on Client's behalf under Section 3(b). Billed via ACH bank transfer or card through Stripe.
 
-b) There are no separate setup fees. The first monthly payment is due upon execution of this Agreement and activates the Agreement, authorizing Provider to begin work.`;
+c) There are no separate setup fees. The Annual Investment payment activates the Agreement and authorizes Provider to begin work.
+
+d) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 5(d).`
+      : `${drsFeeLine("monthly")} — Comprising (i) a Platform Investment of ${monthly} USD/month, the all-in-one recurring investment covering the buildout and ongoing maintenance of the complete Digital Rainmaker System, including the website, AI automations, dashboard access, ad management, and technical support; and (ii) a Managed Advertising Budget of ${adSpend} USD/month that Provider deploys on Client's behalf under Section 3(b). Billed as a single monthly invoice via ACH bank transfer or card through Stripe.
+
+b) There are no separate setup fees. The first Monthly Investment is due upon execution of this Agreement and activates the Agreement, authorizing Provider to begin work.
+
+c) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 5(d).`;
 
   return `DIGITAL RAINMAKER SYSTEM
 SERVICE ENGAGEMENT AGREEMENT
@@ -132,9 +154,9 @@ ${feeStructure}
 
 ${AD_SECTION_HEADING}
 
-a) Ad Management Included: Provider manages Client's advertising campaigns (the "acquisition system") as part of the platform investment in Section 2. There is no ad management retainer, no setup fee, and no percentage of Client's revenue charged for this service.
+a) Ad Management Included: Provider manages Client's advertising campaigns (the "acquisition system") as part of the Platform Investment in Section 2. There is no ad management retainer, no setup fee, and no percentage of Client's revenue charged for this service.
 
-b) Ad Spend: Client is responsible for ad spend paid directly to the advertising platform (Meta, Google, etc.). Ad spend is the Client's own budget and is separate from and in addition to the platform investment.
+b) Managed Advertising Budget: Client funds a Managed Advertising Budget of ${adSpend} USD per month, billed by Provider as set out in Section 2, which Provider deploys on Client's behalf to the advertising platforms (Meta, Google, etc.) at Provider's discretion in pursuit of the Section 4(a) guarantee. The budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider reports the budget deployed to date in its weekly updates to Client. Any portion of the budget not deployed in a given month carries forward and is deployed in subsequent months. Upon termination or expiration of this Agreement, any undeployed balance is deployed on Client's campaigns through the end of the then-current term or notice period and is not refundable. The budget may be increased only upon Client's written authorization.
 
 c) Success Bonus: "Attributed Revenue" means revenue actually collected by Client from tax advisory clients generated through Provider-managed advertising campaigns and attributed via the Nexli tracking system. Client's pre-existing clients, and ${service} engagements not attributable to the acquisition system, are excluded. "Contract Year" means each successive twelve (12) month period beginning on the effective date of this Agreement; cumulative Attributed Revenue resets to zero at the start of each Contract Year. For each Contract Year, Client shall pay Provider a single Success Bonus equal to ${bonusPct}% of the highest milestone below that cumulative Attributed Revenue reached during that Contract Year. Milestone bonuses do not stack — only the bonus for the highest milestone reached applies. No Success Bonus is owed for a Contract Year in which cumulative Attributed Revenue does not reach the first milestone. The Success Bonus is invoiced by Provider at the earlier of (i) the last day of the Contract Year or (ii) the effective date of termination of this Agreement or cessation of the Services for any reason, and is due within fifteen (15) days of the invoice date.
 
@@ -152,7 +174,7 @@ a) ${g.QUALIFIED_OPPORTUNITIES} Qualified Advisory Opportunities in ${g.OPPORTUN
 
 b) ${g.LAUNCH_DAYS}-Day Launch Guarantee: Once Provider has received all required assets, access, approvals, and onboarding information from Client, Provider guarantees Client's acquisition system will be built and launched within ${g.LAUNCH_DAYS} days. If Provider misses that deadline because of delays on Provider's end, Client receives a ${launchCredit} credit ${plan === "annual" ? "applied, at Client's election, toward Client's next invoice from Provider or refunded to Client within thirty (30) days" : "toward Client's next monthly payment"}.
 
-c) Flat-Rate, No Revenue Share: The platform investment in Section 2 is Provider's only recurring fee. Provider never takes a percentage of Client's revenue and never charges a fee per client the advertising brings in. The only performance-based compensation under this Agreement is the Success Bonus in Section 3(c), which is owed solely after Provider's acquisition system has already produced the milestone revenue for Client, whether billed at the end of the Contract Year or on termination.
+c) Flat-Rate, No Revenue Share: The Platform Investment in Section 2 is Provider's only fee for its services; the Managed Advertising Budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider never takes a percentage of Client's revenue and never charges a fee per client the advertising brings in. The only performance-based compensation under this Agreement is the Success Bonus in Section 3(c), which is owed solely after Provider's acquisition system has already produced the milestone revenue for Client, whether billed at the end of the Contract Year or on termination.
 
 5. PAYMENT TERMS
 
@@ -160,15 +182,15 @@ a) ${PAYMENT_METHODS_CLAUSE}
 
 b) Except as expressly provided in Section 4 (The Nexli Triple Guarantee), all fees are non-refundable and no refunds will be issued once payment is received.
 
-c) This Agreement does not become effective and Provider has no obligation to begin work until the ${plan === "annual" ? `Annual Investment (${annual})` : `first Monthly Investment (${monthly})`} is received.
+c) This Agreement does not become effective and Provider has no obligation to begin work until the ${plan === "annual" ? `Annual Investment (${annual})` : `first Monthly Investment (${totalMonthly})`} is received.
 
-d) The platform investment is ${plan === "annual" ? "billed annually and renews each year" : "month-to-month with no minimum commitment"}. Client may cancel at any time; however, except as expressly provided in Section 4 (The Nexli Triple Guarantee), no refunds or pro-rated credits will be issued for the current billing period. Client retains access through the end of the paid billing cycle.
+d) Initial Term and Renewal: This Agreement has an Initial Term of ${termWords(term)} months from the effective date. Advertising systems typically need ninety (90) days or more to mature, and the Initial Term exists so the acquisition system has the time it needs to produce results for Client. Either party may give thirty (30) days' written notice of termination at any time, but termination takes effect no earlier than the end of the Initial Term, and billing under Section 2 continues through that date. After the Initial Term this Agreement continues ${plan === "annual" ? "for successive twelve (12) month renewal terms" : "month-to-month"} until terminated on thirty (30) days' written notice. Except as expressly provided in Section 4 (The Nexli Triple Guarantee), no refunds or pro-rated credits will be issued for any billing period. Client retains access through the end of the paid billing cycle.
 
 6. PROJECT TIMELINE & CLIENT COOPERATION
 
 a) The setup phase (Phase 1) shall be completed within thirty (30) calendar days of this Agreement's execution, with launch due within ${g.LAUNCH_DAYS} days of Provider's receipt of all required client materials per the Section 4(b) guarantee.
 
-b) Client agrees to provide timely cooperation, including but not limited to: DNS editor access, business information, brand assets, content materials, and responsiveness to Provider communications.
+b) Client agrees to provide timely cooperation, including but not limited to: DNS editor access, business information, brand assets, content materials, and responsiveness to Provider communications. Client shall submit all onboarding items requested on Provider's Launch Pad (including payment processing setup, DNS access, and the other items listed there) within five (5) days of receiving the Launch Pad link; the ${g.LAUNCH_DAYS}-day launch guarantee in Section 4(b) runs from Provider's receipt of all such items.
 
 c) If Client fails to provide required access, materials, or cooperation within the 30-day setup period, the project shall be deemed complete regardless of outstanding deliverables. Provider is not responsible for delays caused by Client's non-cooperation.
 
@@ -206,7 +228,7 @@ Both parties agree to maintain the confidentiality of proprietary information di
 
 12. TERMINATION
 
-a) Either party may terminate the platform investment with thirty (30) days' written notice. Access continues through the end of the current paid billing cycle.
+a) Either party may terminate this Agreement with thirty (30) days' written notice, effective no earlier than the end of the Initial Term set out in Section 5(d). Access continues through the end of the current paid billing cycle.
 
 b) Provider may immediately suspend or terminate access for non-payment, breach of this Agreement, or misuse of the platform.
 

@@ -29,6 +29,12 @@ const TYPE_ICONS: Record<string, string> = {
   new_lead: "\u{1F514}",
   portal_login: "\u{1F511}",
   document_viewed: "\u{1F441}",
+  tax_organizer_submitted: "\u{1F4CB}",
+  onboarding_task_submitted: "\u{1F680}",
+  onboarding_overdue: "\u23F0",
+  survey_submitted: "\u{1F4DD}",
+  survey_low_score: "\u{1F6A8}",
+  weekly_update_due: "\u{1F4EC}",
   portal_message: "\u{1F4AC}",
 };
 

@@ -86,6 +86,7 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/invoice/") ||
     pathname.startsWith("/tax-organizer/") ||
     pathname.startsWith("/onboarding/") ||
+    pathname.startsWith("/survey/") ||
     pathname.startsWith("/setup-password") ||
     pathname.startsWith("/api/upload/") ||
     pathname.startsWith("/api/esign/") ||
@@ -93,6 +94,7 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/api/invoice/") ||
     pathname.startsWith("/api/tax-organizer/") ||
     pathname.startsWith("/api/onboarding/") ||
+    pathname.startsWith("/api/survey/") ||
     pathname.startsWith("/api/preview/") ||
     pathname.startsWith("/api/auth/setup-password") ||
     // Machine-to-machine routes authenticate with their own secrets /
@@ -186,12 +188,14 @@ export const config = {
     "/invoice/:path*",
     "/tax-organizer/:path*",
     "/onboarding/:path*",
+    "/survey/:path*",
     "/api/upload/:path*",
     "/api/esign/:path*",
     "/api/engage/:path*",
     "/api/invoice/:path*",
     "/api/tax-organizer/:path*",
     "/api/onboarding/:path*",
+    "/api/survey/:path*",
     "/api/preview/:path*",
   ],
 };
