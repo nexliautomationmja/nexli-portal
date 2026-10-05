@@ -256,7 +256,6 @@ const PHASE_ACCENT: Record<string, Accent> = {
 const TASK_ACCENT: Record<string, Accent> = {
   stripe_setup: "stripe",
   dns_access: "blue",
-  dream_clients: "violet",
   fb_ads_invite: "emerald",
   drivers_license: "amber",
 };
@@ -374,7 +373,6 @@ const PHASE_ICON: Record<string, React.ReactNode> = {
 
 const TASK_ICON: Record<string, React.ReactNode> = {
   dns_access: PATHS.globe,
-  dream_clients: PATHS.star,
   drivers_license: PATHS.idCard,
 };
 
@@ -1254,9 +1252,6 @@ function TaskCard({
         {task.type === "confirm" && (
           <FbConfirm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
-        {task.type === "form" && (
-          <DreamClientsForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
-        )}
         {task.type === "upload" && (
           <LicenseUpload task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
@@ -1646,189 +1641,6 @@ function StripeSetup({
           </span>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Top 3 best clients questionnaire ──
-
-function DreamClientsForm({
-  task,
-  token,
-  onSubmitted,
-  accent,
-}: {
-  task: TaskData;
-  token: string;
-  onSubmitted: () => void;
-  accent: Accent;
-}) {
-  // Form submissions round-trip publicly, so a task sent back for changes
-  // re-opens with the client's previous answers instead of a blank slate.
-  const prev = task.submission;
-  const [client1, setClient1] = useState(prev?.client1 ?? "");
-  const [client2, setClient2] = useState(prev?.client2 ?? "");
-  const [client3, setClient3] = useState(prev?.client3 ?? "");
-  const [commonality, setCommonality] = useState(prev?.commonality ?? "");
-  const [avatar, setAvatar] = useState(prev?.avatar ?? "");
-  const [notes, setNotes] = useState(prev?.notes ?? "");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [justSent, setJustSent] = useState(false);
-
-  const done =
-    justSent || task.status === "submitted" || task.status === "approved";
-
-  if (done) {
-    const sub = task.submission;
-    const saved = [sub?.client1, sub?.client2, sub?.client3].filter(Boolean);
-    return (
-      <div className="space-y-3">
-        <SubmittedNote accent={accent}>
-          Got it — that&apos;s exactly who we&apos;ll go hunting for. 🎯
-        </SubmittedNote>
-        {saved.length > 0 && (
-          <div className="rounded-xl p-4 bg-white/5 border border-white/10 space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
-              Your dream-client profile
-            </p>
-            {sub?.avatar && (
-              <p className="text-sm text-neutral-300">
-                <span className="font-bold text-white">Your avatar: </span>
-                {sub.avatar}
-              </p>
-            )}
-            <ol className="list-decimal pl-4 space-y-1">
-              {saved.map((c, i) => (
-                <li key={i} className="text-sm text-neutral-300">
-                  {c}
-                </li>
-              ))}
-            </ol>
-            {sub?.commonality && (
-              <p className="text-sm text-neutral-300">
-                <span className="font-bold text-white">In common: </span>
-                {sub.commonality}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  async function handleSubmit() {
-    if (
-      !client1.trim() ||
-      !client2.trim() ||
-      !client3.trim() ||
-      !commonality.trim() ||
-      !avatar.trim()
-    ) {
-      setError(
-        "Please fill in all three clients, what they have in common, and your avatar."
-      );
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/onboarding/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taskId: "dream_clients",
-          submission: { client1, client2, client3, commonality, avatar, notes },
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || "Something went wrong. Please try again.");
-        return;
-      }
-      setJustSent(true);
-      onSubmitted();
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const labelCls =
-    "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-neutral-500";
-
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-neutral-400">
-        This is how we aim your ads — describe the clients you wish you had ten
-        more of. Who are they, what kind of business, why were they great?
-      </p>
-
-      {[
-        { label: "Best client #1 *", value: client1, set: setClient1 },
-        { label: "Best client #2 *", value: client2, set: setClient2 },
-        { label: "Best client #3 *", value: client3, set: setClient3 },
-      ].map((f) => (
-        <div key={f.label}>
-          <label className={labelCls}>{f.label}</label>
-          <input
-            type="text"
-            value={f.value}
-            onChange={(e) => f.set(e.target.value)}
-            placeholder="e.g. Owner of a 12-location dental group, ~$4M revenue"
-            className="lp-input"
-          />
-        </div>
-      ))}
-
-      <div>
-        <label className={labelCls}>What do these three have in common? *</label>
-        <textarea
-          value={commonality}
-          onChange={(e) => setCommonality(e.target.value)}
-          rows={3}
-          placeholder="Industry, size, mindset, how they found you, what they buy from you…"
-          className="lp-input resize-none"
-        />
-      </div>
-
-      <div className="rounded-xl p-4 border border-amber-400/25 bg-amber-400/[0.06] space-y-1.5">
-        <p className="text-xs font-black text-amber-300">
-          ⭐ Now bring it all together — who&apos;s your avatar? *
-        </p>
-        <p className="text-xs text-neutral-400">
-          Who specifically are you{" "}
-          <span className="font-bold text-white">100% confident</span> you can
-          save 6 to 7 figures from paying taxes to the IRS? Not just someone you
-          can market to — someone whose problems you can actually solve. A
-          surgeon? A doctor? A dental-practice owner?
-        </p>
-        <input
-          type="text"
-          value={avatar}
-          onChange={(e) => setAvatar(e.target.value)}
-          placeholder="e.g. Surgeons who own their practice · multi-location dental group owners"
-          className="lp-input"
-        />
-      </div>
-
-      <div>
-        <label className={labelCls}>Anything else about your ideal client?</label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={2}
-          placeholder="Optional — deal size, location, services they need most…"
-          className="lp-input resize-none"
-        />
-      </div>
-
-      {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
-
-      <button onClick={handleSubmit} disabled={submitting} className={CTA_CLASSES}>
-        {submitting ? "Sending…" : "Lock in my dream-client profile 🎯"}
-      </button>
     </div>
   );
 }

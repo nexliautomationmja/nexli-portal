@@ -17,7 +17,6 @@ export type PhaseId = "website" | "automations" | "portal";
 export type TaskId =
   | "stripe_setup"
   | "dns_access"
-  | "dream_clients"
   | "fb_ads_invite"
   | "drivers_license";
 export type PhaseStatus = "pending" | "in_progress" | "done";
@@ -121,7 +120,11 @@ const TIER_PHASES: Record<OnboardingTier, PhaseId[]> = {
 
 const TIER_TASKS: Record<OnboardingTier, TaskId[]> = {
   foundation: ["stripe_setup", "dns_access"],
-  drs: ["stripe_setup", "dns_access", "dream_clients", "fb_ads_invite", "drivers_license"],
+  // Oct 2026: the "top 3 best clients" questionnaire was dropped — the ad
+  // offer targets 6–8 figure business owners / taxpayers across the board.
+  // Legacy records that still carry a dream_clients key are simply ignored
+  // (taskIdsFor only yields ids present in TASK_ORDER).
+  drs: ["stripe_setup", "dns_access", "fb_ads_invite", "drivers_license"],
 };
 
 /**
@@ -193,7 +196,6 @@ export const PHASE_INFO: Record<
 export const TASK_ORDER: TaskId[] = [
   "stripe_setup",
   "dns_access",
-  "dream_clients",
   "fb_ads_invite",
   "drivers_license",
 ];
@@ -223,14 +225,6 @@ export const TASK_INFO: Record<
     optional: false,
     description:
       "Tell us where your domain lives (GoDaddy, Namecheap, etc.) and share the login so we can connect your new website. Your info is sent securely and only visible to your Nexli team.",
-  },
-  dream_clients: {
-    title: "Your Top 3 Best Clients",
-    emoji: "🎯",
-    type: "form",
-    optional: false,
-    description:
-      "Tell us about your three best clients — the ones you'd clone if you could — and what they have in common. Then bring it together: name your avatar, the one person you're 100% confident you can save six to seven figures in taxes. Your whole tax-planning offer and ad targeting get built around that avatar.",
   },
   fb_ads_invite: {
     title: "Facebook Ads Account Invite",
