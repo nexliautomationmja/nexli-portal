@@ -67,6 +67,12 @@ interface LaunchPadData {
   onboarding: {
     startedAt: string;
     targetLaunchDate: string | null;
+    /** YYYY-MM-DD deadline for the client's items; null on legacy records. */
+    clientDueAt: string | null;
+    /** 0 = due today, negative = overdue, null = no deadline. */
+    daysUntilDue: number | null;
+    isOverdue: boolean;
+    clientItemsComplete: boolean;
     progressPercent: number;
     phases: PhaseData[];
     tasks: TaskData[];
@@ -97,6 +103,40 @@ function timeAgo(iso: string): string {
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
   return formatDate(iso);
+}
+
+/** Deadline status pill for the "What we need from you" header. */
+function DuePill({ ob }: { ob: LaunchPadData["onboarding"] }) {
+  if (ob.clientItemsComplete) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+        All in ✓
+      </span>
+    );
+  }
+  if (!ob.clientDueAt || ob.daysUntilDue === null) return null;
+  if (ob.isOverdue) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+        Overdue · was due {formatDate(ob.clientDueAt)}
+      </span>
+    );
+  }
+  const days = ob.daysUntilDue;
+  const label =
+    days === 0 ? "Due today" : days === 1 ? "1 day left" : `${days} days left`;
+  const urgent = days <= 2;
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+        urgent
+          ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+          : "bg-white/5 text-neutral-300 border-white/10"
+      }`}
+    >
+      {label}
+    </span>
+  );
 }
 
 const REGISTRARS = [
@@ -789,15 +829,35 @@ export function OnboardingClient({ token }: { token: string }) {
                 ))}
               </div>
 
-              <div className="mt-6 inline-flex flex-col items-center sm:items-start">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
-                  Estimated Launch
-                </span>
-                <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
-                  {ob.targetLaunchDate
-                    ? formatDate(ob.targetLaunchDate)
-                    : "Being scheduled"}
-                </span>
+              <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-x-8 gap-y-4">
+                <div className="inline-flex flex-col items-center sm:items-start">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+                    Estimated Launch
+                  </span>
+                  <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
+                    {ob.targetLaunchDate
+                      ? formatDate(ob.targetLaunchDate)
+                      : "Being scheduled"}
+                  </span>
+                </div>
+                <div className="inline-flex flex-col items-center sm:items-start">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+                    Your items due
+                  </span>
+                  <span
+                    className={`text-lg font-bold ${
+                      ob.clientItemsComplete
+                        ? "text-emerald-300"
+                        : ob.isOverdue
+                          ? "text-rose-400"
+                          : ob.daysUntilDue !== null && ob.daysUntilDue <= 2
+                            ? "text-amber-300"
+                            : "text-white"
+                    }`}
+                  >
+                    {ob.clientDueAt ? formatDate(ob.clientDueAt) : "—"}
+                  </span>
+                </div>
               </div>
             </div>
             <ProgressRing percent={ob.progressPercent} />
@@ -880,9 +940,12 @@ export function OnboardingClient({ token }: { token: string }) {
             <h2 className="text-xl sm:text-2xl font-bold text-white" style={SYNE}>
               What we need from you
             </h2>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-              {tasksDone} of {ob.tasks.length} done
-            </span>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                {tasksDone} of {ob.tasks.length} done
+              </span>
+              <DuePill ob={ob} />
+            </div>
           </div>
           <div className="space-y-4">
             {ob.tasks.map((task) => (

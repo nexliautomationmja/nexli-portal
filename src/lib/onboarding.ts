@@ -63,10 +63,35 @@ export interface OnboardingState {
   startedAt: string;
   startedBy: "auto_sign" | "admin";
   targetLaunchDate: string | null;
+  /**
+   * Deadline for the client's own items (YYYY-MM-DD). Seeded to kickoff +
+   * CLIENT_ITEMS_DUE_DAYS; admin-editable. Legacy states lack the key —
+   * treat undefined as null (no deadline).
+   */
+  clientDueAt?: string | null;
+  /** YYYY-MM-DD dates on which a due-date reminder email went out. */
+  dueRemindersSent?: string[];
+  /** ISO timestamp of the admin "overdue" notification, once sent. */
+  overdueNotifiedAt?: string | null;
   /** A tier may seed a subset — see defaultOnboardingState. */
   phases: Partial<Record<PhaseId, OnboardingPhaseState>>;
   tasks: Partial<Record<TaskId, OnboardingTaskState>>;
   activity: OnboardingActivityEntry[];
+}
+
+/** Clients get this many days from kickoff to submit all their items. */
+export const CLIENT_ITEMS_DUE_DAYS = 5;
+
+/** YYYY-MM-DD in UTC — date-only strings never drift with the server TZ. */
+export function toDateOnly(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Date-only string + n days (UTC arithmetic, no DST drift). */
+export function addDaysToDateOnly(dateOnly: string, days: number): string {
+  const d = new Date(`${dateOnly}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return toDateOnly(d);
 }
 
 // ── Template (copy lives in code) ─────────────────────────
@@ -251,6 +276,9 @@ export function defaultOnboardingState(
     startedAt: now,
     startedBy,
     targetLaunchDate: null,
+    clientDueAt: addDaysToDateOnly(now.slice(0, 10), CLIENT_ITEMS_DUE_DAYS),
+    dueRemindersSent: [],
+    overdueNotifiedAt: null,
     phases: Object.fromEntries(TIER_PHASES[tier].map((id) => [id, phase()])) as OnboardingState["phases"],
     tasks: Object.fromEntries(
       TIER_TASKS[tier].map((id) => [id, defaultTaskState(id)])
@@ -394,6 +422,19 @@ export async function getOnboardingBySignerToken(token: string) {
   return { signer, engagement, owner: owner || null, onboarding };
 }
 
+/** Read the current onboarding state for an engagement (null if not started). */
+export async function getOnboardingState(
+  engagementId: string
+): Promise<OnboardingState | null> {
+  const [row] = await db
+    .select({ metadata: engagements.metadata })
+    .from(engagements)
+    .where(eq(engagements.id, engagementId))
+    .limit(1);
+  const metadata = (row?.metadata || {}) as Record<string, unknown>;
+  return (metadata.onboarding as OnboardingState | undefined) || null;
+}
+
 // ── Progress ──────────────────────────────────────────────
 
 export function computeProgress(state: OnboardingState): number {
@@ -418,6 +459,53 @@ export function computeProgress(state: OnboardingState): number {
   return total === 0 ? 0 : Math.round((earned / total) * 100);
 }
 
+// ── Client due date ───────────────────────────────────────
+
+/**
+ * Tasks the client still owes. Mirrors computeProgress: a task is done once
+ * submitted or approved; optional tasks the client never touched are not
+ * owed (but an optional task sent back as needs_attention is).
+ */
+export function clientItemsOutstanding(state: OnboardingState): TaskId[] {
+  return taskIdsFor(state).filter((id) => {
+    const t = state.tasks[id];
+    const done = t?.status === "submitted" || t?.status === "approved";
+    if (done) return false;
+    const touched = t && t.status !== "todo";
+    if (TASK_INFO[id].optional && !touched) return false;
+    return true;
+  });
+}
+
+export function clientItemsComplete(state: OnboardingState): boolean {
+  return clientItemsOutstanding(state).length === 0;
+}
+
+/**
+ * Whole days until clientDueAt (UTC calendar days): 0 = due today, negative
+ * = overdue. Null when the state has no deadline (legacy records).
+ */
+export function daysUntilDue(
+  state: OnboardingState,
+  now: Date = new Date()
+): number | null {
+  const due = state.clientDueAt;
+  if (!due || !/^\d{4}-\d{2}-\d{2}$/.test(due)) return null;
+  const dueMs = Date.parse(`${due}T00:00:00Z`);
+  const todayMs = Date.parse(`${toDateOnly(now)}T00:00:00Z`);
+  if (Number.isNaN(dueMs) || Number.isNaN(todayMs)) return null;
+  return Math.round((dueMs - todayMs) / 86_400_000);
+}
+
+/** Past the deadline with items still owed. */
+export function isClientOverdue(
+  state: OnboardingState,
+  now: Date = new Date()
+): boolean {
+  const days = daysUntilDue(state, now);
+  return days !== null && days < 0 && !clientItemsComplete(state);
+}
+
 // ── Serializers ───────────────────────────────────────────
 
 const ACTIVITY_LIMIT = 50;
@@ -432,6 +520,10 @@ export function serializePublicOnboarding(state: OnboardingState) {
   return {
     startedAt: state.startedAt,
     targetLaunchDate: state.targetLaunchDate,
+    clientDueAt: state.clientDueAt ?? null,
+    daysUntilDue: daysUntilDue(state),
+    isOverdue: isClientOverdue(state),
+    clientItemsComplete: clientItemsComplete(state),
     progressPercent: computeProgress(state),
     phases: phaseIdsFor(state).map((id) => {
       const p = state.phases[id];

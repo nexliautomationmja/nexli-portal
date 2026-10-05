@@ -18,6 +18,7 @@ interface RawOnboardingState {
   phases?: Record<string, RawPhaseState>;
   tasks?: Record<string, RawTaskState>;
   targetLaunchDate?: string | null;
+  clientDueAt?: string | null;
 }
 
 interface EngagementRow {
@@ -65,6 +66,10 @@ interface AdminDetail {
   onboarding: {
     startedAt: string;
     targetLaunchDate: string | null;
+    clientDueAt: string | null;
+    daysUntilDue: number | null;
+    isOverdue: boolean;
+    clientItemsComplete: boolean;
     progressPercent: number;
     phases: AdminPhase[];
     tasks: AdminTask[];
@@ -98,6 +103,41 @@ function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Mirrors TASK_INFO[id].optional in src/lib/onboarding.ts (server-only module).
+const OPTIONAL_TASKS = new Set(["fb_ads_invite"]);
+
+/** Client items still owed — same rule as clientItemsOutstanding() server-side. */
+function rawItemsOutstanding(state: RawOnboardingState): number {
+  return Object.entries(state.tasks || {}).filter(([id, t]) => {
+    if (t.status === "submitted" || t.status === "approved") return false;
+    if (OPTIONAL_TASKS.has(id) && t.status === "todo") return false;
+    return true;
+  }).length;
+}
+
+/** Whole local-calendar days until a YYYY-MM-DD date (0 = today, negative = past). */
+function daysUntil(dateOnly: string): number {
+  const due = new Date(`${dateOnly}T12:00:00`);
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
+}
+
+function dueStatusFor(state: RawOnboardingState): {
+  label: string | null;
+  badge: "badge-rose" | "badge-amber" | "badge-emerald" | null;
+} {
+  if (!state.clientDueAt) return { label: null, badge: null };
+  const outstanding = rawItemsOutstanding(state);
+  if (outstanding === 0) return { label: "All in", badge: "badge-emerald" };
+  const days = daysUntil(state.clientDueAt);
+  if (days < 0) return { label: "Overdue", badge: "badge-rose" };
+  if (days <= 2) {
+    return { label: days === 0 ? "Due today" : `${days}d left`, badge: "badge-amber" };
+  }
+  return { label: null, badge: null };
 }
 
 // ─── Main ──────────────────────────────────────────────────
@@ -196,6 +236,7 @@ export function OnboardingDashboardClient() {
                   const state = eng.metadata!.onboarding!;
                   const { phasesDone, phaseCount, pendingReview } =
                     roughProgress(state);
+                  const due = dueStatusFor(state);
                   return (
                     <button
                       key={eng.id}
@@ -237,6 +278,25 @@ export function OnboardingDashboardClient() {
                               style={{ color: "var(--text-main)" }}
                             >
                               {formatDate(state.targetLaunchDate)}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span
+                              className="text-[10px] font-black uppercase tracking-[0.15em] block"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              Due
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className="text-xs font-semibold"
+                                style={{ color: "var(--text-main)" }}
+                              >
+                                {formatDate(state.clientDueAt)}
+                              </span>
+                              {due.badge && (
+                                <span className={`badge ${due.badge}`}>{due.label}</span>
+                              )}
                             </span>
                           </div>
                           <div className="w-28">
@@ -474,6 +534,38 @@ function OnboardingDetail({
                   }
                   className="glass-input"
                 />
+              </div>
+              <div>
+                <label
+                  className="block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Client items due (shown to client)
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="date"
+                    defaultValue={ob.clientDueAt || ""}
+                    onChange={(e) =>
+                      patch({
+                        action: "set_client_due_date",
+                        clientDueAt: e.target.value || null,
+                      })
+                    }
+                    className="glass-input"
+                  />
+                  {ob.clientItemsComplete ? (
+                    <span className="badge badge-emerald">All in</span>
+                  ) : ob.isOverdue ? (
+                    <span className="badge badge-rose">Overdue</span>
+                  ) : ob.daysUntilDue !== null && ob.daysUntilDue <= 2 ? (
+                    <span className="badge badge-amber">
+                      {ob.daysUntilDue === 0
+                        ? "Due today"
+                        : `${ob.daysUntilDue}d left`}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </GlassCard>
 

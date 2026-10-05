@@ -31,6 +31,16 @@ async function getOwnedEngagement(engagementId: string, ownerId: string) {
   return engagement || null;
 }
 
+/** "Oct 10, 2026" from a YYYY-MM-DD string (UTC, so the day never shifts). */
+function formatDueDate(dateOnly: string): string {
+  return new Date(`${dateOnly}T12:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 function getOnboardingState(
   engagement: typeof engagements.$inferSelect
 ): OnboardingState | null {
@@ -239,6 +249,21 @@ export async function PATCH(
       await setOnboardingValues(engagementId, [
         { segments: ["targetLaunchDate"], value: isoDate(body.targetLaunchDate) },
       ]);
+      break;
+    }
+
+    case "set_client_due_date": {
+      const clientDueAt = isoDate(body.clientDueAt);
+      await setOnboardingValues(engagementId, [
+        { segments: ["clientDueAt"], value: clientDueAt },
+      ]);
+      await appendActivity(engagementId, {
+        actor: "agency",
+        type: "due_date_set",
+        message: clientDueAt
+          ? `Client items due date set to ${formatDueDate(clientDueAt)}`
+          : "Client items due date cleared",
+      });
       break;
     }
 

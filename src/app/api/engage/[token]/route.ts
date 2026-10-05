@@ -12,7 +12,7 @@ import {
   triggerDrsPostSign,
   getPrimaryClientSigner,
 } from "@/lib/digital-rainmaker";
-import { initOnboarding } from "@/lib/onboarding";
+import { initOnboarding, getOnboardingState } from "@/lib/onboarding";
 
 // GET — validate token, return engagement info, mark signer as viewed
 export async function GET(
@@ -208,8 +208,9 @@ export async function POST(
       .where(eq(engagements.id, engagement.id));
 
     // Digital Rainmaker System auto-invoicing: if this engagement was built
-    // from a DRS template, create the flat recurring platform invoice
-    // (monthly $4,997 or annual $42,000) due at signing.
+    // from a DRS template, create the recurring invoice(s) for its plan
+    // (monthly $10,000 incl. ad budget, or annual $42,000 + $5,000/mo ad
+    // budget) due at signing.
     try {
       const primary = await getPrimaryClientSigner(engagement.id);
       if (primary) {
@@ -232,6 +233,14 @@ export async function POST(
     // durable way back in.
     const portalUrl =
       process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
+    // Read the deadline back from the freshly initialised state so the email
+    // matches the Launch Pad exactly (null on legacy records).
+    let clientDueAt: string | null = null;
+    try {
+      clientDueAt = (await getOnboardingState(engagement.id))?.clientDueAt ?? null;
+    } catch (err) {
+      console.error("Onboarding state read failed:", err);
+    }
     for (const s of allSigners) {
       if (s.order === 0) continue; // sender's own token isn't a client link
       try {
@@ -239,6 +248,7 @@ export async function POST(
           clientName: s.name,
           senderName: "The Nexli team",
           onboardingUrl: `${portalUrl}/onboarding/${s.token}`,
+          clientDueAt,
         });
         await sendEmailWithLog({
           to: s.email,

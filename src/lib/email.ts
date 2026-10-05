@@ -685,12 +685,44 @@ export function buildEngagementSignedEmail(params: {
 
 // ── Onboarding Launch Pad Welcome Email ──────────────────
 
+/** "Friday, October 10" from a YYYY-MM-DD string (UTC, so the day never shifts). */
+function formatDueDateLong(dateOnly: string): string {
+  return new Date(`${dateOnly}T12:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "Oct 10" from a YYYY-MM-DD string. */
+function formatDueDateShort(dateOnly: string): string {
+  return new Date(`${dateOnly}T12:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Weekday name ("Friday") from a YYYY-MM-DD string. */
+function weekdayOf(dateOnly: string): string {
+  return new Date(`${dateOnly}T12:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    timeZone: "UTC",
+  });
+}
+
 export function buildOnboardingWelcomeEmail(params: {
   clientName: string;
   senderName: string;
   onboardingUrl: string;
+  /** YYYY-MM-DD deadline for the client's items; omitted on legacy records. */
+  clientDueAt?: string | null;
 }): { subject: string; html: string } {
-  const { clientName, senderName, onboardingUrl } = params;
+  const { clientName, senderName, onboardingUrl, clientDueAt } = params;
+  const dueLine = clientDueAt
+    ? `<p style="margin:12px 0 0;color:#F59E0B;font-size:13px;font-weight:700;">Please have everything in by ${formatDueDateLong(clientDueAt)} so we can start building right away.</p>`
+    : "";
 
   const html = emailWrapper(`
     <div style="text-align:center;margin-bottom:16px;">
@@ -712,6 +744,7 @@ export function buildOnboardingWelcomeEmail(params: {
       <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x1F3AF; Your top 3 best clients — we build your ad offer around them</p>
       <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x1F4E3; Facebook Ads partner invite (if you run ads)</p>
       <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x1FAAA; Driver's license front &amp; back (phone number verification)</p>
+      ${dueLine}
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
@@ -727,6 +760,75 @@ export function buildOnboardingWelcomeEmail(params: {
     subject: `🚀 Your Launch Pad is live — watch your build in real time`,
     html,
   };
+}
+
+// ── Onboarding Due-Date Reminder Email ───────────────────
+
+export function buildOnboardingDueReminderEmail(params: {
+  clientName: string;
+  senderName: string;
+  /** YYYY-MM-DD */
+  dueDate: string;
+  /** Whole days until due; 0 = due today; negative = overdue. */
+  daysLeft: number;
+  outstandingItems: string[];
+  onboardingUrl: string;
+  branding?: OwnerBranding;
+}): { subject: string; html: string } {
+  const { clientName, senderName, dueDate, daysLeft, outstandingItems, onboardingUrl } =
+    params;
+  const overdue = daysLeft < 0;
+  const count = outstandingItems.length;
+  const plural = count === 1 ? "item" : "items";
+  const longDate = formatDueDateLong(dueDate);
+
+  const timing = overdue
+    ? `were due <strong style="color:#fff;">${longDate}</strong> — ${
+        -daysLeft === 1 ? "1 day" : `${-daysLeft} days`
+      } ago`
+    : daysLeft === 0
+      ? `are due <strong style="color:#fff;">today</strong> (${longDate})`
+      : `are due <strong style="color:#fff;">${longDate}</strong> — ${
+          daysLeft === 1 ? "1 day" : `${daysLeft} days`
+        } left`;
+
+  const subject = overdue
+    ? `Overdue: onboarding ${plural} ${count === 1 ? "was" : "were"} due ${formatDueDateShort(dueDate)}`
+    : daysLeft === 0
+      ? `Reminder: ${count} onboarding ${plural} due today`
+      : `Reminder: ${count} onboarding ${plural} due ${weekdayOf(dueDate)}`;
+
+  const itemList = `
+    <div style="margin:20px 0;padding:16px;background-color:${overdue ? "#1f0d12" : "#1f1a0d"};border:1px solid ${overdue ? "#3d1020" : "#3d3010"};border-radius:12px;">
+      <p style="margin:0 0 12px;color:${overdue ? "#F43F5E" : "#F59E0B"};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">${overdue ? "Overdue" : "Still Needed"}</p>
+      ${outstandingItems.map((item) => `<p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; ${escapeHtml(item)}</p>`).join("")}
+    </div>`;
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">${overdue ? "Your onboarding items are overdue" : "Quick reminder from your Launch Pad"}</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;line-height:1.6;">
+      Hi ${escapeHtml(clientName || "there")}, <strong style="color:#fff;">${escapeHtml(senderName)}</strong> still needs ${count} ${plural} from you to keep your build on schedule. Your items ${timing}.
+    </p>
+    ${itemList}
+    <p style="margin:0 0 4px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+      ${overdue
+        ? "We can&rsquo;t move forward on the pieces that depend on these — please send them over as soon as you can and we&rsquo;ll pick right back up."
+        : "Everything takes just a few minutes and goes straight to your Nexli team through your Launch Pad."}
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${onboardingUrl}" style="${buttonStyleFor(params.branding)}">Open Your Launch Pad</a>
+    </div>
+    <div style="text-align:center;">
+      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+        Your link updates in real time &bull; No account required
+      </p>
+      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
+        ${onboardingUrl}
+      </p>
+    </div>
+  `, params.branding);
+
+  return { subject, html };
 }
 
 // ══════════════════════════════════════════════════════════
