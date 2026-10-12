@@ -12,7 +12,7 @@ import {
 import { getClientSuccessForUser, type LatestUpdate } from "@/lib/client-success";
 import { WeeklyUpdateCard } from "@/components/dashboard/weekly-update-card";
 import { SurveyPromptCard } from "@/components/dashboard/survey-prompt-card";
-import { GuaranteeProgressCard } from "@/components/dashboard/guarantee-progress-card";
+import { CampaignProgressCard } from "@/components/dashboard/campaign-progress-card";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
 
       {pendingSurvey && <SurveyPromptCard token={pendingSurvey.token} />}
       {session.user.role === "client" && session.user.tier !== "foundation" && (
-        <GuaranteeProgressCard />
+        <CampaignProgressCard />
       )}
       {latestUpdate && <WeeklyUpdateCard update={latestUpdate} />}
 

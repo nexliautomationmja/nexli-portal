@@ -5,17 +5,21 @@
  * both API routes and client components (compose UI, invoice pay page).
  *
  * One flat all-in-one platform price — $5,000/mo or $42,000/yr prepaid — with
- * no setup fees, no ad-management tiers, no revenue share. Ad management is
- * included. On top of the platform price every client funds a Managed
- * Advertising Budget of $5,000/mo that Nexli collects and deploys on the ad
- * platforms on the client's behalf (pass-through, no markup — see
+ * no setup fees, no ad-management tiers, no revenue share, no performance
+ * fee, no bonus, and (since Oct 12 2026) no guarantees of any kind. Ad
+ * management is included. On top of the platform price every client funds a
+ * Managed Advertising Budget of $5,000/mo that Nexli collects and deploys on
+ * the ad platforms on the client's behalf (pass-through, no markup — see
  * AD_SPEND_MONTHLY_CENTS and engagement letter Section 3(b)). Monthly plan
  * = one $10,000 invoice (two line items); annual = $42,000 yearly + a
- * $5,000 monthly ad-budget invoice. The only performance-based compensation
- * is the milestone SUCCESS_BONUS below.
+ * $5,000 monthly ad-budget invoice.
  *
- * Minimum term (Oct 2026): 6 months on monthly, 12 on annual — ads need
- * ~90 days to mature; the goal is retention, not lock-in.
+ * Marcel's stance: clients keep all of the upside ("the cherry on top");
+ * Nexli's upside is graduating them to the Enterprise tier
+ * (enterprise-pricing.ts), not backend bonuses.
+ *
+ * Minimum term: 6 months on monthly, 12 on annual — ads need ~90 days to
+ * mature; the goal is retention, not lock-in.
  */
 
 export const DRS_PRICING = {
@@ -40,78 +44,11 @@ export const TERM_MONTHS: Record<BillingPlan, number> = {
 export const ADVERTISED_SERVICE = "tax planning";
 
 /**
- * Success bonus — the ONLY performance-based compensation. Nexli never takes
- * a percentage of the client's revenue (Marcel, Sep 2026: "not price
- * gouging"). Instead, for each contract year the client owes ONE bonus:
- * BONUS_PERCENT_OF_MILESTONE of the HIGHEST milestone that the cumulative
- * revenue the client actually collects from advisory clients attributable
- * to Nexli's campaigns ("Attributed Revenue") reached in that year.
- * Milestones do not stack ($1.2M generated → the $1M bonus only). Nothing
- * is owed below the first milestone ($250K). The counter resets every
- * contract year (12 months from the engagement's effective date).
- *
- * Billed manually, never auto-invoiced, at the EARLIER of: the end of the
- * contract year, or the client leaving / the service ending for any reason
- * (a client who hit $1M and cancels in month 8 still owes the $1M bonus on
- * the way out — Section 12(d)). The Client Tracker shows each client's
- * start date and next contract-year end for this reason.
- *
- * At 2%: $250K→$5,000, $500K→$10,000, $1M→$20,000, $2M→$40,000 …
- * $10M→$200,000. Max exposure is therefore 2% of the milestone reached.
- *
- * PLACEHOLDER: the 2% rate has not been confirmed by Marcel — the milestones
- * are his, the amounts are a starting point.
- */
-export const SUCCESS_BONUS = {
-  MILESTONES_USD: [
-    250_000, 500_000, 1_000_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000,
-    6_000_000, 7_000_000, 8_000_000, 9_000_000, 10_000_000,
-  ],
-  BONUS_PERCENT_OF_MILESTONE: 2,
-} as const;
-
-export type SuccessBonusTier = { milestoneCents: number; bonusCents: number };
-
-/** The bonus schedule as (milestone, bonus) pairs in cents, ascending. */
-export function successBonusSchedule(): SuccessBonusTier[] {
-  return SUCCESS_BONUS.MILESTONES_USD.map((usd) => ({
-    milestoneCents: usd * 100,
-    bonusCents: Math.round(
-      (usd * 100 * SUCCESS_BONUS.BONUS_PERCENT_OF_MILESTONE) / 100
-    ),
-  }));
-}
-
-/**
- * The Nexli Guarantee — written into the engagement letter (Section 4 of
- * engagement-defaults.ts) so firm owners have less fear of starting:
- *
- *   a) 50 Qualified Leads within 90 days of campaign launch, else Nexli works
- *      free until hit; if STILL unmet 120 days after launch the client may
- *      terminate early with no further platform obligation (Oct 2026 —
- *      Marcel: "work for free until we hit it, and if not hit by month 4
- *      they can terminate early").
- *   b) Launch within 21 days of receiving all client materials, else a
- *      $1,000 credit.
- *   c) Flat rate, no revenue share.
- *
- * Mirrors the marketing site's lib/agency-offer.ts (AGENCY_LEADS = 50,
- * AGENCY_DAYS = 90). NOTE: the site still says a 14-day launch — the
- * contract's 21 days is the binding figure; fix the site, not this.
- */
-export const NEXLI_GUARANTEE = {
-  QUALIFIED_LEADS: 50, // qualified leads…
-  LEAD_WINDOW_DAYS: 90, // …within 90 days of campaign launch, else work free
-  EXIT_OPTION_DAYS: 120, // still unmet this many days after launch → client may terminate early
-  LAUNCH_DAYS: 21, // launch within 21 days of receiving all client materials
-  LAUNCH_CREDIT_CENTS: 100_000, // $1,000 credit toward next payment if Provider misses it
-} as const;
-
-/**
  * What one tax advisory engagement is worth to the CLIENT's firm (industry
- * range, midpoint $15,000). Used only to size the guaranteed pipeline in
- * the contract and the progress tile — it is illustrative, never a revenue
- * guarantee. Distinct from PIPELINE (Nexli's own LTV per DRS client).
+ * range, midpoint $15,000). Used only to size the pipeline on the Campaign
+ * progress tile ("N leads ≈ $X of pipeline") — illustrative, never a
+ * revenue claim or a guarantee. Distinct from PIPELINE (Nexli's own LTV per
+ * DRS client).
  */
 export const ADVISORY_ENGAGEMENT = {
   LOW_USD: 5_000,
@@ -119,9 +56,13 @@ export const ADVISORY_ENGAGEMENT = {
   AVG_USD: 15_000,
 } as const;
 
-/** 50 leads × $15,000 = $750,000 of pipeline opportunity if every lead closed. */
-export const GUARANTEED_PIPELINE_VALUE_USD =
-  NEXLI_GUARANTEE.QUALIFIED_LEADS * ADVISORY_ENGAGEMENT.AVG_USD;
+/**
+ * Launch timeline written into the engagement letter (Sections 1 and 5):
+ * the acquisition system launches within this many days of receiving all
+ * client materials. A timeline commitment, not a guarantee — there is no
+ * credit if it slips.
+ */
+export const LAUNCH_TARGET_DAYS = 21;
 
 /**
  * Pipeline economics: expected lifetime value of one DRS client, used as

@@ -69,10 +69,9 @@ export interface OnboardingState {
    */
   clientDueAt?: string | null;
   /**
-   * The day Nexli's ad campaigns for this client went live (YYYY-MM-DD).
-   * Starts the Nexli Guarantee clock (NEXLI_GUARANTEE.LEAD_WINDOW_DAYS) —
-   * admin-set from the Onboarding page. Legacy states lack the key; treat
-   * undefined as null (not launched).
+   * The day the ad campaigns went live (YYYY-MM-DD) — the Campaign progress
+   * tile counts leads from this date. Admin-set from the Onboarding page.
+   * Legacy states lack the key; treat undefined as null (not launched).
    */
   campaignLaunchedAt?: string | null;
   /** YYYY-MM-DD dates on which a due-date reminder email went out. */

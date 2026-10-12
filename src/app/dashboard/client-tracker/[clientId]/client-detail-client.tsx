@@ -31,18 +31,14 @@ interface DetailData {
     }[];
   };
   leads30d: number;
-  /** The Nexli Guarantee tracker; null when they have no DRS engagement (or GHL was down). */
-  guarantee: {
+  /** Campaign progress tracker; null when they have no DRS engagement (or GHL was down). */
+  campaign: {
     launchedAt: string | null;
-    target: number;
     leads: number;
-    daysElapsed: number;
-    daysRemaining: number;
-    windowEndsAt: string | null;
-    exitOptionAt: string | null;
-    status: "not_launched" | "on_track" | "behind" | "met" | "missed";
+    daysSinceLaunch: number;
     pipelineValueCents: number;
     avgEngagementCents: number;
+    status: "not_launched" | "live";
     source: "ghl" | "notifications" | "none";
     computedAt: string;
   } | null;
@@ -419,28 +415,17 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
   const { client, theirBook, traffic, youCollect, activity } = data;
   const displayName = client.name || client.email.split("@")[0];
 
-  const guarantee = data.guarantee;
-  const guaranteeCard = guarantee
+  const campaign = data.campaign;
+  const campaignCard = campaign
     ? {
-        label: "Guarantee",
-        value: `${guarantee.leads} / ${guarantee.target}`,
+        label: "Leads since launch",
+        value: String(campaign.leads),
         sub:
-          guarantee.status === "not_launched"
+          campaign.status === "not_launched"
             ? "Not launched"
-            : guarantee.status === "met"
-              ? "Met ✓"
-              : guarantee.status === "missed"
-                ? "Missed — working free"
-                : `${guarantee.daysRemaining} ${guarantee.daysRemaining === 1 ? "day" : "days"} left`,
-        accent:
-          guarantee.status === "met" || guarantee.status === "on_track"
-            ? "icon-chip-emerald"
-            : guarantee.status === "behind"
-              ? "icon-chip-amber"
-              : guarantee.status === "missed"
-                ? "icon-chip-rose"
-                : "icon-chip-neutral",
-        emoji: "🛡️",
+            : `${campaign.daysSinceLaunch} ${campaign.daysSinceLaunch === 1 ? "day" : "days"} live`,
+        accent: campaign.status === "not_launched" ? "icon-chip-neutral" : "icon-chip-cyan",
+        emoji: "🚀",
       }
     : null;
 
@@ -449,7 +434,7 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
     { label: "Their MRR", value: money(theirBook.kpis.totalMrr), accent: "icon-chip-cyan", emoji: "🔁" },
     { label: "Their Clients", value: String(theirBook.kpis.totalClients), accent: "icon-chip-violet", emoji: "🤝" },
     { label: "Leads (30d)", value: String(data.leads30d), accent: "icon-chip-amber", emoji: "🧲" },
-    ...(guaranteeCard ? [guaranteeCard] : []),
+    ...(campaignCard ? [campaignCard] : []),
     { label: "Site Visitors (30d)", value: traffic.uniqueVisitors30d.toLocaleString("en-US"), accent: "icon-chip-blue", emoji: "🌐" },
   ];
 

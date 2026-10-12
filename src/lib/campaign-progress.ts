@@ -9,53 +9,41 @@ import {
   type GHLContact,
 } from "./ghl-client";
 import { extractUtm } from "./ghl-attribution";
-import { ADVISORY_ENGAGEMENT, NEXLI_GUARANTEE } from "./drs-pricing";
-import { addDaysToDateOnly, type OnboardingState } from "./onboarding";
+import { ADVISORY_ENGAGEMENT } from "./drs-pricing";
+import type { OnboardingState } from "./onboarding";
 
 /**
- * The Nexli Guarantee progress tracker.
+ * Campaign progress tracker.
  *
- * The engagement letter guarantees NEXLI_GUARANTEE.QUALIFIED_LEADS qualified
- * leads within LEAD_WINDOW_DAYS of campaign launch; if unmet Nexli works free,
- * and if still unmet EXIT_OPTION_DAYS after launch the client may terminate
- * early. "Campaign launch" is the YYYY-MM-DD the admin records on the
- * client's Launch Pad (engagements.metadata.onboarding.campaignLaunchedAt).
+ * Counts the leads a client's campaigns have generated since launch.
+ * "Campaign launch" is the YYYY-MM-DD the admin records on the client's
+ * Launch Pad (engagements.metadata.onboarding.campaignLaunchedAt).
  *
  * A lead is the same thing Ad Analytics counts: a GoHighLevel contact in the
  * client's own location that carries UTM data (lib/ghl-attribution). Clients
  * without a GHL location fall back to lead_notifications rows. Results are
- * memoized per client for 10 minutes — both the client Overview card and the
+ * memoized per client for 10 minutes — both the client Overview tile and the
  * admin Client Tracker read through this.
  */
 
-export type GuaranteeStatus = "not_launched" | "on_track" | "behind" | "met" | "missed";
+export type CampaignStatus = "not_launched" | "live";
 
-export interface GuaranteeProgress {
+export interface CampaignProgress {
   /** YYYY-MM-DD the campaigns went live, or null when not yet launched. */
   launchedAt: string | null;
-  target: number;
   leads: number;
-  daysElapsed: number;
-  daysRemaining: number;
-  /** YYYY-MM-DD the 90-day window closes. */
-  windowEndsAt: string | null;
-  /** YYYY-MM-DD from which the client may terminate early if still unmet. */
-  exitOptionAt: string | null;
-  status: GuaranteeStatus;
+  daysSinceLaunch: number;
   /** leads × ADVISORY_ENGAGEMENT.AVG_USD — illustrative, never a revenue claim. */
   pipelineValueCents: number;
   avgEngagementCents: number;
+  status: CampaignStatus;
   source: "ghl" | "notifications" | "none";
   computedAt: string;
 }
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const PAGE_LIMIT = 100;
-const MAX_PAGES = 50; // 5,000 contacts — sanity cap on a 90-day window
-/** Too early in the window to call a client "behind" (noise, ramp-up). */
-const GRACE_DAYS = 14;
-/** Pace tolerance: behind only when under 80% of the linear pace. */
-const PACE_TOLERANCE = 0.8;
+const MAX_PAGES = 50; // 5,000 contacts — sanity cap per scan
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -137,7 +125,7 @@ async function fetchContactsInWindow(
     }
     return [...byId.values()];
   } catch (err) {
-    console.error("[guarantee] contacts/search failed, falling back to list scan:", err);
+    console.error("[campaign-progress] contacts/search failed, falling back to list scan:", err);
   }
 
   let cursor: string | undefined;
@@ -153,11 +141,11 @@ async function fetchContactsInWindow(
   return [...byId.values()];
 }
 
-/** Qualified leads since launch: GHL contacts with UTM data, same as Ad Analytics. */
+/** Leads since launch: GHL contacts with UTM data, same as Ad Analytics. */
 async function countGhlLeads(locationId: string, since: Date, until: Date): Promise<number> {
   const [fieldDefs, contacts] = await Promise.all([
     getCustomFields(locationId).catch((err) => {
-      console.error("[guarantee] custom fields lookup failed (continuing):", err);
+      console.error("[campaign-progress] custom fields lookup failed (continuing):", err);
       return { customFields: [] };
     }),
     fetchContactsInWindow(locationId, since, until),
@@ -181,39 +169,20 @@ async function countNotificationLeads(clientUserId: string, since: Date): Promis
   return row?.count || 0;
 }
 
-/**
- * Status rules:
- *   met      — leads ≥ target (at any point)
- *   missed   — window over (daysElapsed > LEAD_WINDOW_DAYS) and still short
- *   behind   — ≥ GRACE_DAYS in and under 80% of the linear pace to target
- *   on_track — otherwise (including the first two weeks)
- */
-export function guaranteeStatus(leads: number, daysElapsed: number, target: number): GuaranteeStatus {
-  if (leads >= target) return "met";
-  if (daysElapsed > NEXLI_GUARANTEE.LEAD_WINDOW_DAYS) return "missed";
-  const pace = target * (daysElapsed / NEXLI_GUARANTEE.LEAD_WINDOW_DAYS) * PACE_TOLERANCE;
-  if (daysElapsed >= GRACE_DAYS && leads < pace) return "behind";
-  return "on_track";
-}
-
-function notLaunched(now: Date): GuaranteeProgress {
+function notLaunched(now: Date): CampaignProgress {
   return {
     launchedAt: null,
-    target: NEXLI_GUARANTEE.QUALIFIED_LEADS,
     leads: 0,
-    daysElapsed: 0,
-    daysRemaining: NEXLI_GUARANTEE.LEAD_WINDOW_DAYS,
-    windowEndsAt: null,
-    exitOptionAt: null,
-    status: "not_launched",
+    daysSinceLaunch: 0,
     pipelineValueCents: 0,
     avgEngagementCents: ADVISORY_ENGAGEMENT.AVG_USD * 100,
+    status: "not_launched",
     source: "none",
     computedAt: now.toISOString(),
   };
 }
 
-async function computeGuaranteeProgress(clientUserId: string): Promise<GuaranteeProgress | null> {
+async function computeCampaignProgress(clientUserId: string): Promise<CampaignProgress | null> {
   const [client] = await db
     .select({ email: users.email, ghlLocationId: users.ghlLocationId })
     .from(users)
@@ -230,11 +199,10 @@ async function computeGuaranteeProgress(clientUserId: string): Promise<Guarantee
 
   // Launch day counts from 00:00 UTC — date-only strings never drift with TZ.
   const since = new Date(`${launchedAt}T00:00:00Z`);
-  const daysElapsed = Math.max(0, Math.floor((now.getTime() - since.getTime()) / 86_400_000));
-  const daysRemaining = Math.max(0, NEXLI_GUARANTEE.LEAD_WINDOW_DAYS - daysElapsed);
+  const daysSinceLaunch = Math.max(0, Math.floor((now.getTime() - since.getTime()) / 86_400_000));
 
   let leads = 0;
-  let source: GuaranteeProgress["source"] = "notifications";
+  let source: CampaignProgress["source"] = "notifications";
   if (client.ghlLocationId) {
     leads = await countGhlLeads(client.ghlLocationId, since, now);
     source = "ghl";
@@ -242,18 +210,13 @@ async function computeGuaranteeProgress(clientUserId: string): Promise<Guarantee
     leads = await countNotificationLeads(clientUserId, since);
   }
 
-  const target = NEXLI_GUARANTEE.QUALIFIED_LEADS;
   return {
     launchedAt,
-    target,
     leads,
-    daysElapsed,
-    daysRemaining,
-    windowEndsAt: addDaysToDateOnly(launchedAt, NEXLI_GUARANTEE.LEAD_WINDOW_DAYS),
-    exitOptionAt: addDaysToDateOnly(launchedAt, NEXLI_GUARANTEE.EXIT_OPTION_DAYS),
-    status: guaranteeStatus(leads, daysElapsed, target),
+    daysSinceLaunch,
     pipelineValueCents: leads * ADVISORY_ENGAGEMENT.AVG_USD * 100,
     avgEngagementCents: ADVISORY_ENGAGEMENT.AVG_USD * 100,
+    status: "live",
     source,
     computedAt: now.toISOString(),
   };
@@ -261,20 +224,20 @@ async function computeGuaranteeProgress(clientUserId: string): Promise<Guarantee
 
 // ── Memo (per client, 10 min; in-flight calls are shared) ─────
 
-const cache = new Map<string, { expiresAt: number; promise: Promise<GuaranteeProgress | null> }>();
+const cache = new Map<string, { expiresAt: number; promise: Promise<CampaignProgress | null> }>();
 
 /**
- * Guarantee progress for a client dashboard account. Null when the client
+ * Campaign progress for a client dashboard account. Null when the client
  * has no DRS engagement at all; `status: "not_launched"` when there is one
  * but no campaign launch date has been recorded yet. Throws on GHL/DB
  * failure (callers decide whether that is fatal) and drops the memo entry
  * so the next call retries.
  */
-export async function getGuaranteeProgress(clientUserId: string): Promise<GuaranteeProgress | null> {
+export async function getCampaignProgress(clientUserId: string): Promise<CampaignProgress | null> {
   const hit = cache.get(clientUserId);
   if (hit && hit.expiresAt > Date.now()) return hit.promise;
 
-  const promise = computeGuaranteeProgress(clientUserId).catch((err) => {
+  const promise = computeCampaignProgress(clientUserId).catch((err) => {
     cache.delete(clientUserId);
     throw err;
   });

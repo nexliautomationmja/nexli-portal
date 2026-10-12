@@ -658,7 +658,7 @@ export function EngagementsClient() {
                     </label>
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. The Success Bonus (Section 3) is invoiced manually at the end of each contract year, or when the client leaves.
+                    Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. No performance fees, bonuses, or guarantees — the client keeps all of the upside.
                   </p>
                 </div>
               )}

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NexliLogo } from "@/components/ui/nexli-logo";
-import { NEXLI_GUARANTEE } from "@/lib/drs-pricing";
 
 // ══════════════════════════════════════════════════════════
 // Launch Pad — client-facing onboarding page, styled to match
@@ -89,17 +88,6 @@ function formatDate(iso: string | null): string {
   if (!iso) return "";
   // Date-only strings get a fixed time so they don't shift a day in local TZ
   const d = iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-/** A YYYY-MM-DD date plus n days, formatted like formatDate. */
-function formatDatePlusDays(dateOnly: string, days: number): string {
-  const d = new Date(`${dateOnly}T12:00:00`);
-  d.setDate(d.getDate() + days);
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -876,9 +864,6 @@ export function OnboardingClient({ token }: { token: string }) {
                   <span className="text-emerald-300 font-semibold">
                     Campaigns live since {formatDate(ob.campaignLaunchedAt)}
                   </span>
-                  {" · "}
-                  guarantee window ends{" "}
-                  {formatDatePlusDays(ob.campaignLaunchedAt, NEXLI_GUARANTEE.LEAD_WINDOW_DAYS)}
                 </p>
               )}
             </div>

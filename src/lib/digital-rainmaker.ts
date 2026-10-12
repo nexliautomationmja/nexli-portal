@@ -12,8 +12,7 @@
  *
  * There are no setup fees. Ad management is included in the platform price;
  * the ad budget is pass-through (deployed on the client's ad accounts, no
- * markup). The only performance-based compensation is the milestone Success
- * Bonus (SUCCESS_BONUS in drs-pricing.ts), invoiced manually. The billing
+ * markup). There is no performance fee, bonus, or revenue share. The billing
  * plan and initial term are snapshotted onto engagement.metadata at compose
  * time so a signed client keeps their terms even if pricing changes.
  *
@@ -50,7 +49,7 @@ import { createNotification } from "@/lib/notifications";
 // existing server-side imports keep working.
 import { DRS_PRICING, TOTAL_MONTHLY_CENTS, type BillingPlan } from "./drs-pricing";
 
-export { DRS_PRICING, SUCCESS_BONUS } from "./drs-pricing";
+export { DRS_PRICING } from "./drs-pricing";
 export type { BillingPlan } from "./drs-pricing";
 
 export type DrsRole = "platform_monthly" | "platform_annual" | "ad_spend_monthly";

@@ -24,8 +24,6 @@ export interface BookRow {
   signedAt: string | null;
   /** Day the client started: the DRS engagement's execution date (fallbacks: any signed engagement, first payment). */
   startDate: string | null;
-  /** Next contract-year anniversary after today — when the Success Bonus is billable (drs-pricing.ts SUCCESS_BONUS). */
-  contractYearEnd: string | null;
   /** Initial contract term snapshotted on the DRS engagement (6 monthly / 12 annual); null for engagements signed before terms existed. */
   termMonths: number | null;
   /** End of the initial term (startDate + termMonths); null when unknown. */
@@ -49,18 +47,6 @@ export interface BookKpis {
   totalAdSpend: number;
   totalMrr: number;
   totalOutstanding: number;
-}
-
-// The end of the client's current contract year: start date + whole years,
-// rolled forward until it lands after `now`. Contract years are 12 months
-// from the engagement's effective date (engagement letter Section 3(c)).
-export function nextContractYearEnd(start: Date, now: Date = new Date()): Date {
-  const end = new Date(start);
-  end.setFullYear(end.getFullYear() + 1);
-  while (end.getTime() <= now.getTime()) {
-    end.setFullYear(end.getFullYear() + 1);
-  }
-  return end;
 }
 
 /** `start` plus a whole number of months (end of the initial term). */
@@ -226,9 +212,6 @@ export async function getBookOfBusiness(
       const mrr = inv?.mrr || 0;
       const startDate =
         sg.drsSignedAt || sg.firstSignedAt || inv?.firstPaymentAt || null;
-      const contractYearEnd = startDate
-        ? nextContractYearEnd(new Date(startDate), new Date(now)).toISOString()
-        : null;
       const termMonths =
         typeof sg.latestTerm === "number" && sg.latestTerm > 0 ? sg.latestTerm : null;
       const termEnd =
@@ -244,7 +227,6 @@ export async function getBookOfBusiness(
         billingPlan,
         signedAt: sg.firstSignedAt,
         startDate,
-        contractYearEnd,
         termMonths,
         termEnd,
         dealsCount: sg.dealsCount,

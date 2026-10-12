@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getGuaranteeProgress } from "@/lib/guarantee-progress";
+import { getCampaignProgress } from "@/lib/campaign-progress";
 
 /**
- * The Nexli Guarantee progress for the signed-in client (their own
- * dashboard Overview card). Admins may read any client's via ?clientId=;
- * for everyone else the parameter is ignored so no tenant can read another.
+ * Campaign progress for the signed-in client (their own dashboard Overview
+ * tile). Admins may read any client's via ?clientId=; for everyone else the
+ * parameter is ignored so no tenant can read another.
  */
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -17,15 +17,15 @@ export async function GET(req: NextRequest) {
   const clientId = isAdmin && requested ? requested : session.user.id;
 
   try {
-    const progress = await getGuaranteeProgress(clientId);
+    const progress = await getCampaignProgress(clientId);
     if (!progress) {
       return NextResponse.json({ error: "no_engagement" }, { status: 404 });
     }
     return NextResponse.json(progress);
   } catch (err) {
-    console.error("[guarantee] Error:", err);
+    console.error("[campaign-progress] Error:", err);
     return NextResponse.json(
-      { error: "Failed to compute guarantee progress" },
+      { error: "Failed to compute campaign progress" },
       { status: 502 }
     );
   }

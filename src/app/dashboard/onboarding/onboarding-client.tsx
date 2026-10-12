@@ -579,7 +579,7 @@ function OnboardingDetail({
                   className="block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  Campaign launched (starts the 90-day guarantee clock)
+                  Campaign launched (ads live)
                 </label>
                 <div className="flex items-center gap-2 flex-wrap">
                   <input

@@ -3,11 +3,12 @@
  *
  * Platform price $5,000/mo or $42,000/yr prepaid, plus a $5,000/mo Managed
  * Advertising Budget that Nexli deploys on the client's behalf (pass-through).
- * Ad management included, no revenue share; the only performance-based
- * compensation is the milestone Success Bonus. Initial term 6 months
- * (monthly) / 12 months (annual). All dollar amounts are interpolated from
- * the pricing constants in drs-pricing.ts so the contract can never drift
- * from what the billing engine actually charges.
+ * Ad management included; no revenue share, no performance fee, no bonus,
+ * and no guarantees (Oct 12 2026 — the client keeps all the upside; Nexli's
+ * upside is the Enterprise tier). Initial term 6 months (monthly) / 12
+ * months (annual). All dollar amounts are interpolated from the pricing
+ * constants in drs-pricing.ts so the contract can never drift from what the
+ * billing engine actually charges.
  */
 
 import {
@@ -15,11 +16,7 @@ import {
   TOTAL_MONTHLY_CENTS,
   TERM_MONTHS,
   ADVERTISED_SERVICE,
-  SUCCESS_BONUS,
-  successBonusSchedule,
-  NEXLI_GUARANTEE,
-  ADVISORY_ENGAGEMENT,
-  GUARANTEED_PIPELINE_VALUE_USD,
+  LAUNCH_TARGET_DAYS,
   type BillingPlan,
 } from "./drs-pricing";
 
@@ -27,10 +24,6 @@ import {
 
 function fmt(cents: number): string {
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-}
-
-function fmtWhole(cents: number): string {
-  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
 }
 
 // Dual-pricing presentation (never "fee added at checkout") — see drs-pricing.ts.
@@ -60,11 +53,9 @@ export const DRS_TEMPLATE_NAME = "Digital Rainmaker System";
  * structure is a flat all-in-one Platform Investment — monthly or annual
  * prepaid — with no setup fees, covering the buildout AND ongoing
  * maintenance, plus the Managed Advertising Budget (Section 3(b)). Ad
- * management is included with no revenue share; the only performance-based
- * compensation is the milestone Success Bonus (Section 3). The Initial Term
- * is in Section 5(d). The Nexli Guarantee (Section 4) carves out
- * express exceptions to the no-refund/no-credit and no-results-guarantee
- * clauses. Section numbering is identical for both plans.
+ * management is included with no revenue share, no performance fee, and no
+ * bonus (Section 3(c)); there are no guarantees. The Initial Term is in
+ * Section 4(d). Section numbering is identical for both plans.
  */
 
 /** The Section 2(a) fee line for a plan — also the revision anchor used by the template refresh. */
@@ -74,30 +65,27 @@ export function drsFeeLine(plan: BillingPlan): string {
     : `a) Monthly Investment: ${fmt(TOTAL_MONTHLY_CENTS)} USD/month`;
 }
 
-const AD_SECTION_HEADING = "3. AD MANAGEMENT & SUCCESS BONUS";
-const GUARANTEE_SECTION_HEADING = "4. THE NEXLI GUARANTEE";
+const AD_SECTION_HEADING = "3. AD MANAGEMENT";
 
 // Phrases every currently shipped letter contains. ADD ONE whenever a clause
 // is rewritten without changing a heading or the fee line, so the stored
 // seeded templates (templates/route.ts) are refreshed instead of drifting.
 const CURRENT_REVISION_MARKERS = [
-  "Success Bonus on Termination", // Sep 20 2026: non-stacking bonus, billed at year end or departure
   "Managed Advertising Budget", // Oct 5 2026: $5,000/mo ad budget collected by Nexli (Sections 2, 3(b))
-  "Initial Term and Renewal", // Oct 5 2026: 6/12-month initial term (Section 5(d))
-  "Qualified Leads in", // Oct 5 2026: 50 qualified leads / 90 days, exit option at day 120 (Section 4(a))
+  "Initial Term and Renewal", // Oct 5 2026: 6/12-month initial term (Section 4(d))
+  "no performance fee, bonus, or revenue share", // Oct 12 2026: guarantees + Success Bonus removed
 ];
 
 /**
  * True when a stored DRS letter matches the currently shipped revision for
  * its plan: same fee line (so any price change is detected), the current
- * Section 3 and Section 4 headings, and every CURRENT_REVISION_MARKERS
- * phrase (so clause rewrites are detected).
+ * Section 3 heading, and every CURRENT_REVISION_MARKERS phrase (so clause
+ * rewrites are detected).
  */
 export function isCurrentDrsRevision(content: string, plan: BillingPlan): boolean {
   return (
     content.includes(drsFeeLine(plan)) &&
     content.includes(AD_SECTION_HEADING) &&
-    content.includes(GUARANTEE_SECTION_HEADING) &&
     CURRENT_REVISION_MARKERS.every((m) => content.includes(m))
   );
 }
@@ -110,36 +98,22 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const adSpend = fmt(DRS_PRICING.AD_SPEND_MONTHLY_CENTS);
   const term = TERM_MONTHS[plan];
   const service = ADVERTISED_SERVICE;
-  const g = NEXLI_GUARANTEE;
-  const launchCredit = fmt(g.LAUNCH_CREDIT_CENTS);
-  const leadWords = `${numberWords(g.QUALIFIED_LEADS)} (${g.QUALIFIED_LEADS})`;
-  const windowWords = `${numberWords(g.LEAD_WINDOW_DAYS)} (${g.LEAD_WINDOW_DAYS})`;
-  const exitWords = `${numberWords(g.EXIT_OPTION_DAYS)} (${g.EXIT_OPTION_DAYS})`;
-  const engagementAvg = `$${ADVISORY_ENGAGEMENT.AVG_USD.toLocaleString("en-US")}`;
-  const engagementRange = `$${ADVISORY_ENGAGEMENT.LOW_USD.toLocaleString("en-US")}–$${ADVISORY_ENGAGEMENT.HIGH_USD.toLocaleString("en-US")}`;
-  const pipelineValue = `$${GUARANTEED_PIPELINE_VALUE_USD.toLocaleString("en-US")}`;
-  const bonusPct = SUCCESS_BONUS.BONUS_PERCENT_OF_MILESTONE;
-  const bonusSchedule = successBonusSchedule()
-    .map(
-      (t) =>
-        `— When Attributed Revenue in a Contract Year reaches ${fmtWhole(t.milestoneCents)}: one-time bonus of ${fmt(t.bonusCents)} USD`
-    )
-    .join("\n\n");
+  const launchDays = LAUNCH_TARGET_DAYS;
 
   const feeStructure =
     plan === "annual"
-      ? `${drsFeeLine("annual")} — Due upon execution of this Agreement. This all-in-one Platform Investment covers the buildout and ongoing maintenance of the complete Digital Rainmaker System — website, AI automations, dashboard access, ad management, and technical support — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 12.
+      ? `${drsFeeLine("annual")} — Due upon execution of this Agreement. This all-in-one Platform Investment covers the buildout and ongoing maintenance of the complete Digital Rainmaker System — website, AI automations, dashboard access, ad management, and technical support — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11.
 
 b) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly beginning upon execution of this Agreement and deployed by Provider on Client's behalf under Section 3(b). Billed via ACH bank transfer or card through Stripe.
 
 c) There are no separate setup fees. The Annual Investment payment activates the Agreement and authorizes Provider to begin work.
 
-d) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 5(d).`
+d) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 4(d).`
       : `${drsFeeLine("monthly")} — Comprising (i) a Platform Investment of ${monthly} USD/month, the all-in-one recurring investment covering the buildout and ongoing maintenance of the complete Digital Rainmaker System, including the website, AI automations, dashboard access, ad management, and technical support; and (ii) a Managed Advertising Budget of ${adSpend} USD/month that Provider deploys on Client's behalf under Section 3(b). Billed as a single monthly invoice via ACH bank transfer or card through Stripe.
 
 b) There are no separate setup fees. The first Monthly Investment is due upon execution of this Agreement and activates the Agreement, authorizing Provider to begin work.
 
-c) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 5(d).`;
+c) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 4(d).`;
 
   return `DIGITAL RAINMAKER SYSTEM
 SERVICE ENGAGEMENT AGREEMENT
@@ -154,7 +128,7 @@ Client: [CLIENT NAME / COMPANY] ("Client")
 
 Provider agrees to deliver the Digital Rainmaker System, a comprehensive digital infrastructure and automation platform, consisting of the following:
 
-Phase 1 — Setup & Build (launched within ${g.LAUNCH_DAYS} days of Provider receiving all required client materials per the Section 4(b) guarantee; 30 days maximum)
+Phase 1 — Setup & Build (launched within ${launchDays} days of Provider receiving all required client materials; 30 days maximum)
 
 a) Website Development & Deployment — Design and build a professional website under Client's domain. Client must provide DNS editor access with their hosting provider to enable deployment.
 
@@ -174,45 +148,31 @@ ${AD_SECTION_HEADING}
 
 a) Ad Management Included: Provider manages Client's advertising campaigns (the "acquisition system") as part of the Platform Investment in Section 2. There is no ad management retainer, no setup fee, and no percentage of Client's revenue charged for this service.
 
-b) Managed Advertising Budget: Client funds a Managed Advertising Budget of ${adSpend} USD per month, billed by Provider as set out in Section 2, which Provider deploys on Client's behalf to the advertising platforms (Meta, Google, etc.) at Provider's discretion in pursuit of the Section 4(a) guarantee. The budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider reports the budget deployed to date in its weekly updates to Client. Any portion of the budget not deployed in a given month carries forward and is deployed in subsequent months. Upon termination or expiration of this Agreement, any undeployed balance is deployed on Client's campaigns through the end of the then-current term or notice period and is not refundable. The budget may be increased only upon Client's written authorization.
+b) Managed Advertising Budget: Client funds a Managed Advertising Budget of ${adSpend} USD per month, billed by Provider as set out in Section 2, which Provider deploys on Client's behalf to the advertising platforms (Meta, Google, etc.) at Provider's discretion to generate ${service} advisory leads for Client. The budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider reports the budget deployed to date in its weekly updates to Client. Any portion of the budget not deployed in a given month carries forward and is deployed in subsequent months. Upon termination or expiration of this Agreement, any undeployed balance is deployed on Client's campaigns through the end of the then-current term or notice period and is not refundable. The budget may be increased only upon Client's written authorization.
 
-c) Success Bonus: "Attributed Revenue" means revenue actually collected by Client from tax advisory clients generated through Provider-managed advertising campaigns and attributed via the Nexli tracking system. Client's pre-existing clients, and ${service} engagements not attributable to the acquisition system, are excluded. "Contract Year" means each successive twelve (12) month period beginning on the effective date of this Agreement; cumulative Attributed Revenue resets to zero at the start of each Contract Year. For each Contract Year, Client shall pay Provider a single Success Bonus equal to ${bonusPct}% of the highest milestone below that cumulative Attributed Revenue reached during that Contract Year. Milestone bonuses do not stack — only the bonus for the highest milestone reached applies. No Success Bonus is owed for a Contract Year in which cumulative Attributed Revenue does not reach the first milestone. The Success Bonus is invoiced by Provider at the earlier of (i) the last day of the Contract Year or (ii) the effective date of termination of this Agreement or cessation of the Services for any reason, and is due within fifteen (15) days of the invoice date.
+c) Flat-Rate, No Revenue Share: The Platform Investment in Section 2 is Provider's only fee for its services; the Managed Advertising Budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider never takes a percentage of Client's revenue, never charges a fee per client the advertising brings in, and there is no performance fee, bonus, or revenue share of any kind under this Agreement. Every dollar of advisory revenue the acquisition system produces belongs to Client.
 
-Only the bonus for the highest milestone reached applies:
+d) Attribution & Reporting: Leads and advisory clients generated through the acquisition system are attributed using the Nexli tracking system (UTM tracking and conversion attribution). Provider will provide performance reporting, including weekly updates, so both parties can see which leads, clients, and revenue are attributable to the advertising.
 
-${bonusSchedule}
-
-d) Attribution & Reporting: Attributed Revenue is measured using the Nexli tracking system (UTM tracking and conversion attribution). Provider will provide performance reporting so both parties can see which clients and revenue are attributable to the advertising and where cumulative Attributed Revenue stands against the milestones above.
-
-${GUARANTEE_SECTION_HEADING}
-
-Provider stands behind the Digital Rainmaker System with the following guarantees, offered so Client can start with confidence. If any provision of this Section 4 conflicts with any other provision of this Agreement (including the Initial Term in Section 5(d), the non-refundability and no-credit provisions of Section 5, and the results disclaimer in Section 9), this Section 4 controls.
-
-a) ${g.QUALIFIED_LEADS} Qualified Leads in ${g.LEAD_WINDOW_DAYS} Days: Provider guarantees at least ${leadWords} Qualified Leads within ${windowWords} days of campaign launch. A "Qualified Lead" is a US-based business owner or high-income individual who matches the advisory criteria Client and Provider set together during onboarding and who has requested contact from Client's firm through the acquisition system. "Campaign launch" is the date Provider's advertising campaigns for Client go live, as recorded on Client's Launch Pad. At an average ${service} engagement of ${engagementAvg} (industry range ${engagementRange}), ${leadWords} Qualified Leads represent approximately ${pipelineValue} of pipeline opportunity; that figure sizes the opportunity only — it is not a guarantee of revenue, and Client's close rate determines actual results (Section 9(c)). If Provider does not deliver ${leadWords} Qualified Leads within the ${windowWords} day window, Provider continues working for free until it does — for monthly plans, the Platform Investment is suspended until the target is reached; for annual plans, the Agreement term is extended at no additional charge until the target is reached. The Managed Advertising Budget continues during any work-free period so Client's campaigns keep running. If the target has still not been reached ${exitWords} days after campaign launch, Client may terminate this Agreement on written notice with no further Platform Investment obligation, notwithstanding the Initial Term in Section 5(d). This guarantee applies while Client's advertising campaigns remain active, Client's Managed Advertising Budget is current, and Client is meeting its cooperation obligations under Section 6.
-
-b) ${g.LAUNCH_DAYS}-Day Launch Guarantee: Once Provider has received all required assets, access, approvals, and onboarding information from Client, Provider guarantees Client's acquisition system will be built and launched within ${g.LAUNCH_DAYS} days. If Provider misses that deadline because of delays on Provider's end, Client receives a ${launchCredit} credit ${plan === "annual" ? "applied, at Client's election, toward Client's next invoice from Provider or refunded to Client within thirty (30) days" : "toward Client's next monthly payment"}.
-
-c) Flat-Rate, No Revenue Share: The Platform Investment in Section 2 is Provider's only fee for its services; the Managed Advertising Budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider never takes a percentage of Client's revenue and never charges a fee per client the advertising brings in. The only performance-based compensation under this Agreement is the Success Bonus in Section 3(c), which is owed solely after Provider's acquisition system has already produced the milestone revenue for Client, whether billed at the end of the Contract Year or on termination.
-
-5. PAYMENT TERMS
+4. PAYMENT TERMS
 
 a) ${PAYMENT_METHODS_CLAUSE}
 
-b) Except as expressly provided in Section 4 (The Nexli Guarantee), all fees are non-refundable and no refunds will be issued once payment is received.
+b) All fees are non-refundable and no refunds will be issued once payment is received.
 
 c) This Agreement does not become effective and Provider has no obligation to begin work until the ${plan === "annual" ? `Annual Investment (${annual})` : `first Monthly Investment (${totalMonthly})`} is received.
 
-d) Initial Term and Renewal: This Agreement has an Initial Term of ${termWords(term)} months from the effective date. Advertising systems typically need ninety (90) days or more to mature, and the Initial Term exists so the acquisition system has the time it needs to produce results for Client. Either party may give thirty (30) days' written notice of termination at any time, but termination takes effect no earlier than the end of the Initial Term, and billing under Section 2 continues through that date. After the Initial Term this Agreement continues ${plan === "annual" ? "for successive twelve (12) month renewal terms" : "month-to-month"} until terminated on thirty (30) days' written notice. Except as expressly provided in Section 4 (The Nexli Guarantee), no refunds or pro-rated credits will be issued for any billing period. Client retains access through the end of the paid billing cycle.
+d) Initial Term and Renewal: This Agreement has an Initial Term of ${termWords(term)} months from the effective date. Advertising systems typically need ninety (90) days or more to mature, and the Initial Term exists so the acquisition system has the time it needs to produce results for Client. Either party may give thirty (30) days' written notice of termination at any time, but termination takes effect no earlier than the end of the Initial Term, and billing under Section 2 continues through that date. After the Initial Term this Agreement continues ${plan === "annual" ? "for successive twelve (12) month renewal terms" : "month-to-month"} until terminated on thirty (30) days' written notice. No refunds or pro-rated credits will be issued for any billing period. Client retains access through the end of the paid billing cycle.
 
-6. PROJECT TIMELINE & CLIENT COOPERATION
+5. PROJECT TIMELINE & CLIENT COOPERATION
 
-a) The setup phase (Phase 1) shall be completed within thirty (30) calendar days of this Agreement's execution, with launch due within ${g.LAUNCH_DAYS} days of Provider's receipt of all required client materials per the Section 4(b) guarantee.
+a) The setup phase (Phase 1) shall be completed within thirty (30) calendar days of this Agreement's execution, with launch targeted within ${launchDays} days of Provider's receipt of all required client materials (Section 1).
 
-b) Client agrees to provide timely cooperation, including but not limited to: DNS editor access, business information, brand assets, content materials, and responsiveness to Provider communications. Client shall submit all onboarding items requested on Provider's Launch Pad (including payment processing setup, DNS access, and the other items listed there) within five (5) days of receiving the Launch Pad link; the ${g.LAUNCH_DAYS}-day launch guarantee in Section 4(b) runs from Provider's receipt of all such items.
+b) Client agrees to provide timely cooperation, including but not limited to: DNS editor access, business information, brand assets, content materials, and responsiveness to Provider communications. Client shall submit all onboarding items requested on Provider's Launch Pad (including payment processing setup, DNS access, and the other items listed there) within five (5) days of receiving the Launch Pad link; the ${launchDays}-day launch timeline runs from Provider's receipt of all such items.
 
 c) If Client fails to provide required access, materials, or cooperation within the 30-day setup period, the project shall be deemed complete regardless of outstanding deliverables. Provider is not responsible for delays caused by Client's non-cooperation.
 
-7. INTELLECTUAL PROPERTY
+6. INTELLECTUAL PROPERTY
 
 a) Client Ownership: Client retains full ownership of their website content, brand assets, domain name, and any original content created specifically for Client.
 
@@ -222,51 +182,49 @@ c) License Grant: Provider grants Client a non-exclusive, non-transferable, revo
 
 d) Client shall not reverse engineer, copy, modify, sublicense, or redistribute any of Provider's proprietary software, automations, or technology.
 
-8. ADDITIONAL SERVICES
+7. ADDITIONAL SERVICES
 
 Major website redesigns, feature additions, or custom development beyond the scope defined in Section 1 shall be quoted and billed on a project basis at Provider's then-current rates, subject to a separate written agreement.
 
-9. LIMITATION OF LIABILITY
+8. LIMITATION OF LIABILITY
 
 a) Provider's total cumulative liability under this Agreement shall not exceed the total fees actually paid by Client to Provider in the twelve (12) months preceding the claim.
 
 b) In no event shall Provider be liable for any indirect, incidental, consequential, special, or exemplary damages, including but not limited to loss of revenue, profits, data, business opportunities, or goodwill, even if advised of the possibility of such damages.
 
-c) Except as expressly set forth in Section 4 (The Nexli Guarantee), Provider does not guarantee specific business results, revenue increases, lead generation volumes, or return on investment. Results depend on market conditions, Client's industry, and Client's use of the system.
+c) Provider does not guarantee specific business results, revenue increases, lead generation volumes, or return on investment. Results depend on market conditions, Client's industry, and Client's use of the system.
 
 d) Provider is not liable for any third-party service disruptions, including but not limited to Stripe, DNS providers, or telecommunications carriers.
 
-10. INDEMNIFICATION
+9. INDEMNIFICATION
 
 Client agrees to indemnify, defend, and hold harmless Provider, its members, officers, employees, and agents from and against any and all claims, liabilities, damages, losses, costs, and expenses (including reasonable attorneys' fees) arising out of or related to: (a) Client's use of the Digital Rainmaker System; (b) Client's violation of any applicable law or regulation; (c) any content, data, or materials provided by Client.
 
-11. CONFIDENTIALITY
+10. CONFIDENTIALITY
 
 Both parties agree to maintain the confidentiality of proprietary information disclosed during the course of this engagement. This obligation survives termination of this Agreement.
 
-12. TERMINATION
+11. TERMINATION
 
-a) Either party may terminate this Agreement with thirty (30) days' written notice, effective no earlier than the end of the Initial Term set out in Section 5(d). Access continues through the end of the current paid billing cycle.
+a) Either party may terminate this Agreement with thirty (30) days' written notice, effective no earlier than the end of the Initial Term set out in Section 4(d). Access continues through the end of the current paid billing cycle.
 
 b) Provider may immediately suspend or terminate access for non-payment, breach of this Agreement, or misuse of the platform.
 
-c) Upon termination, Client retains ownership of their website and content per Section 7(a). All access to Provider's proprietary systems ceases per Section 7(c).
+c) Upon termination, Client retains ownership of their website and content per Section 6(a). All access to Provider's proprietary systems ceases per Section 6(c).
 
-d) Success Bonus on Termination: If this Agreement terminates or Client discontinues the Services for any reason before the end of a Contract Year, the Success Bonus for the highest milestone reached in that Contract Year as of the termination date becomes due and is invoiced at termination per Section 3(c). This obligation survives termination of this Agreement.
-
-13. DISPUTE RESOLUTION
+12. DISPUTE RESOLUTION
 
 Any dispute arising out of or relating to this Agreement shall be resolved by binding arbitration administered in the State of Florida, in accordance with the rules of the American Arbitration Association. The arbitrator's decision shall be final and binding. Each party shall bear its own costs and attorneys' fees.
 
-14. GOVERNING LAW
+13. GOVERNING LAW
 
 This Agreement shall be governed by and construed in accordance with the laws of the State of Florida, without regard to conflicts of law principles.
 
-15. ENTIRE AGREEMENT
+14. ENTIRE AGREEMENT
 
 This Agreement constitutes the entire agreement between the parties and supersedes all prior or contemporaneous negotiations, representations, warranties, and agreements, whether written or oral. This Agreement may not be amended except in writing signed by both parties.
 
-16. ELECTRONIC SIGNATURES
+15. ELECTRONIC SIGNATURES
 
 The parties agree that electronic signatures are legally binding and this Agreement may be executed electronically in compliance with the ESIGN Act (15 U.S.C. § 7001) and the Uniform Electronic Transactions Act (UETA).`;
 }
