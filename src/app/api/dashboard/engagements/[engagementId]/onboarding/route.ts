@@ -19,6 +19,29 @@ import {
   type LicenseFileMeta,
 } from "@/lib/onboarding";
 import { getSupabase } from "@/lib/supabase";
+import {
+  getDrsBillingStatus,
+  triggerDrsLaunchBilling,
+  sendOnboardingWelcomeEmails,
+  type DrsBillingStatus,
+} from "@/lib/digital-rainmaker";
+
+/** DRS billing sequence for the admin view; null when it can't be read. */
+async function loadBilling(engagementId: string): Promise<DrsBillingStatus | null> {
+  try {
+    return await getDrsBillingStatus(engagementId);
+  } catch (err) {
+    console.error("DRS billing status failed:", err);
+    return null;
+  }
+}
+
+const LAUNCH_BILLING_ERRORS: Record<string, string> = {
+  not_drs: "Monthly billing only applies to Digital Rainmaker engagements.",
+  setup_unpaid: "The setup invoice hasn't been paid yet.",
+  already_started: "The first monthly invoice was already sent.",
+  no_signer: "This engagement has no client signer to bill.",
+};
 
 async function getOwnedEngagement(engagementId: string, ownerId: string) {
   const [engagement] = await db
@@ -58,7 +81,12 @@ async function buildAdminResponse(
   }
   const state = getOnboardingState(engagement);
   if (!state) {
-    return NextResponse.json({ error: "Onboarding not started" }, { status: 404 });
+    // DRS: onboarding opens once the setup invoice is paid — include billing
+    // so the UI can show where the client is.
+    return NextResponse.json(
+      { error: "Onboarding not started", billing: await loadBilling(engagementId) },
+      { status: 404 }
+    );
   }
 
   const serialized = serializeAdminOnboarding(state);
@@ -116,6 +144,7 @@ async function buildAdminResponse(
       ),
     },
     clientSigners: signers.filter((s) => s.order > 0),
+    billing: await loadBilling(engagementId),
   });
 }
 
@@ -154,11 +183,16 @@ export async function POST(
     );
   }
 
-  await initOnboarding(engagementId, "admin");
+  if (await initOnboarding(engagementId, "admin")) {
+    await sendOnboardingWelcomeEmails(engagementId);
+  }
   return buildAdminResponse(engagementId, session.user.id);
 }
 
-// PATCH — { action, ... } dispatch, each a targeted jsonb write
+// PATCH — { action, ... } dispatch, each a targeted jsonb write.
+//   { action: "start_monthly_billing" } — DRS "Build complete": sends the first
+//   recurring invoice (due now). 200 = same body as GET (incl. billing);
+//   409 { error } when the setup isn't paid / it was already sent / etc.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ engagementId: string }> }
@@ -173,16 +207,28 @@ export async function PATCH(
   if (!engagement) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const state = getOnboardingState(engagement);
-  if (!state) {
-    return NextResponse.json({ error: "Onboarding not started" }, { status: 404 });
-  }
 
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  if (body.action === "start_monthly_billing") {
+    const result = await triggerDrsLaunchBilling(engagementId);
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: LAUNCH_BILLING_ERRORS[result.error] ?? "Couldn't start monthly billing." },
+        { status: 409 }
+      );
+    }
+    return buildAdminResponse(engagementId, session.user.id);
+  }
+
+  const state = getOnboardingState(engagement);
+  if (!state) {
+    return NextResponse.json({ error: "Onboarding not started" }, { status: 404 });
   }
 
   const now = new Date().toISOString();

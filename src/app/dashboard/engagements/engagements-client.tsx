@@ -6,7 +6,7 @@ import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/co
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
 import { generateDrsContent } from "@/lib/engagement-defaults";
-import { DRS_PRICING, SETUP_SCOPE, TOTAL_MONTHLY_CENTS, TERM_MONTHS, ANNUAL_UPFRONT_CENTS, RECURRING_START_DAYS, type BillingPlan } from "@/lib/drs-pricing";
+import { DRS_PRICING, SETUP_SCOPE, TOTAL_MONTHLY_CENTS, TERM_MONTHS, ANNUAL_UPFRONT_CENTS, type BillingPlan } from "@/lib/drs-pricing";
 import { generateEnterpriseContent } from "@/lib/enterprise-engagement";
 import {
   ENTERPRISE_TIER_ORDER,
@@ -623,12 +623,12 @@ export function EngagementsClient() {
                     {
                       value: "monthly" as BillingPlan,
                       label: `Monthly — ${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo`,
-                      sub: `Setup due at signing; the ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo (${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} upkeep + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget, one invoice) starts ${RECURRING_START_DAYS} days later. ${TERM_MONTHS.monthly}-month initial term.`,
+                      sub: `Setup due at signing; the ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo (${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} upkeep + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget, one invoice) starts when the build is complete. ${TERM_MONTHS.monthly}-month initial term.`,
                     },
                     {
                       value: "annual" as BillingPlan,
                       label: `Annual — ${fmtWhole(ANNUAL_UPFRONT_CENTS)} at signing + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget`,
-                      sub: `${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)} platform paid in full (~${Math.round((1 - DRS_PRICING.ANNUAL_CENTS / (DRS_PRICING.MONTHLY_CENTS * 12)) * 100)}% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly); ad budget billed monthly from day ${RECURRING_START_DAYS}, never front-loaded. ${TERM_MONTHS.annual}-month initial term.`,
+                      sub: `${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)} platform paid in full (~${Math.round((1 - DRS_PRICING.ANNUAL_CENTS / (DRS_PRICING.MONTHLY_CENTS * 12)) * 100)}% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly); ad budget billed monthly from launch, never front-loaded. ${TERM_MONTHS.annual}-month initial term.`,
                     },
                   ]).map((opt) => (
                     <label
@@ -658,7 +658,7 @@ export function EngagementsClient() {
                     </label>
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    <span className="font-semibold">Setup Fee covers:</span> {SETUP_SCOPE.map((g) => g.title).join(" · ")} — itemized in Section 1 of the letter and invoiced at signing (annual clients also pay the $42,000 platform fee at signing); the monthly invoice is dated ${RECURRING_START_DAYS} days out. Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. No performance fees, bonuses, or guarantees — the client keeps all of the upside.
+                    <span className="font-semibold">Setup Fee covers:</span> {SETUP_SCOPE.map((g) => g.title).join(" · ")} — itemized in Section 1 of the letter and invoiced at signing (annual clients pay setup + the $42,000 platform fee on one invoice at signing). Only the up-front invoice is sent at signing; the Launch Pad opens once it&apos;s paid, and the first monthly invoice goes out when you mark the build complete in Onboarding. Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. No performance fees, bonuses, or guarantees — the client keeps all of the upside.
                   </p>
                 </div>
               )}

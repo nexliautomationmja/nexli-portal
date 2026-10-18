@@ -5,6 +5,9 @@ import { getOwnerBranding } from "@/lib/branding";
 
 export type NotificationType =
   | "invoice_paid"
+  | "invoice_sent"
+  | "setup_paid"
+  | "monthly_paid"
   | "document_uploaded"
   | "engagement_signed"
   | "esign_completed"
@@ -36,6 +39,9 @@ const TYPE_CONFIG: Record<
   { emoji: string; color: string }
 > = {
   invoice_paid: { emoji: "\u{1F4B0}", color: "#10B981" },
+  invoice_sent: { emoji: "\u{1F4E8}", color: "#2563EB" },
+  setup_paid: { emoji: "\u2705", color: "#10B981" },
+  monthly_paid: { emoji: "\u{1F680}", color: "#10B981" },
   document_uploaded: { emoji: "\u{1F4C4}", color: "#2563EB" },
   engagement_signed: { emoji: "\u270D\uFE0F", color: "#10B981" },
   esign_completed: { emoji: "\u2705", color: "#10B981" },

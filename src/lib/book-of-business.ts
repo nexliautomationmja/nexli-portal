@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { invoices, engagements, engagementSigners } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { DRS_PRICING } from "@/lib/drs-pricing";
 
 /**
  * Book of business for any tenant: signed engagements + paid invoices owned
@@ -13,6 +14,11 @@ import { eq, and, sql } from "drizzle-orm";
  * digital-rainmaker.ts, copied to recurring children by the invoice cron).
  * That portion is deployed on the client's ad accounts, so it is reported
  * separately as `adSpendCollected` and excluded from `revenue` and `mrr`.
+ *
+ * Annual DRS clients pay ONE non-recurring `setup_annual` invoice ($32,000
+ * setup + $42,000 prepaid platform year). The whole amount counts as revenue
+ * when paid, and while the prepaid year runs (paidAt + 12 months) the
+ * platform portion contributes ANNUAL_CENTS / 12 to that client's MRR.
  */
 
 export interface BookRow {
@@ -201,6 +207,16 @@ export async function getBookOfBusiness(
       !(r.recurringEndDate && new Date(r.recurringEndDate).getTime() < now)
     ) {
       roll.mrr += monthlyEquivalent(total - adSpend, r.recurringInterval);
+    }
+
+    // Annual DRS: the prepaid platform year (inside the one-time
+    // setup_annual invoice) counts toward MRR for the 12 months after payment.
+    const drsRole = (r.metadata as { drsRole?: unknown } | null)?.drsRole;
+    if (drsRole === "setup_annual" && r.status === "paid" && r.paidAt) {
+      const prepaidEnd = addMonths(new Date(r.paidAt), 12).getTime();
+      if (now < prepaidEnd) {
+        roll.mrr += Math.round(DRS_PRICING.ANNUAL_CENTS / 12);
+      }
     }
     invoiceMap.set(r.email, roll);
   }

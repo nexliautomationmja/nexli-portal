@@ -2,17 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { engagements, engagementSigners, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  sendEmailWithLog,
-  buildEngagementSignedEmail,
-  buildOnboardingWelcomeEmail,
-} from "@/lib/email";
+import { sendEmailWithLog, buildEngagementSignedEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import {
   triggerDrsPostSign,
   getPrimaryClientSigner,
+  isDigitalRainmakerEngagement,
+  sendOnboardingWelcomeEmails,
 } from "@/lib/digital-rainmaker";
-import { initOnboarding, getOnboardingState } from "@/lib/onboarding";
+import { initOnboarding } from "@/lib/onboarding";
 import {
   isEnterpriseEngagement,
   triggerEnterprisePostSign,
@@ -205,6 +203,7 @@ export async function POST(
     (s) => s.id === signer.id || s.status === "signed"
   );
 
+  let isDrsLetter = false;
   if (allSigned) {
     await db
       .update(engagements)
@@ -221,6 +220,20 @@ export async function POST(
       console.error("Enterprise template check failed:", err);
     }
 
+    // Digital Rainmaker letters: signing sends ONLY the up-front invoice
+    // ($32,000 Setup Fee, or one $74,000 setup + annual invoice). Onboarding
+    // and the welcome email wait until that invoice is paid
+    // (onDrsInvoicePaid in lib/digital-rainmaker.ts).
+    let isDrs = false;
+    if (!enterprise) {
+      try {
+        isDrs = await isDigitalRainmakerEngagement(engagement.templateId);
+      } catch (err) {
+        console.error("DRS template check failed:", err);
+      }
+    }
+    isDrsLetter = isDrs;
+
     if (enterprise) {
       try {
         const primary = await getPrimaryClientSigner(engagement.id);
@@ -230,12 +243,7 @@ export async function POST(
       } catch (err) {
         console.error("Enterprise post-sign trigger failed:", err);
       }
-    } else {
-      // Digital Rainmaker System auto-invoicing: if this engagement was built
-      // from a DRS template, create the invoices for its plan — the one-time
-      // $32,000 Setup Fee plus the recurring platform/ad-budget invoice(s)
-      // (monthly $9,997 incl. ad budget, or annual $42,000 + $5,000/mo ad
-      // budget) — all due at signing.
+    } else if (isDrs) {
       try {
         const primary = await getPrimaryClientSigner(engagement.id);
         if (primary) {
@@ -244,49 +252,18 @@ export async function POST(
       } catch (err) {
         console.error("DRS post-sign trigger failed:", err);
       }
-
-      // Kick off the client onboarding Launch Pad. Never blocks signing —
-      // idempotent, so a concurrent second signer finishing is a no-op.
+    } else {
+      // Other letters: kick off the client onboarding Launch Pad right away.
+      // Never blocks signing — idempotent, so a concurrent second signer
+      // finishing is a no-op.
       try {
         await initOnboarding(engagement.id, "auto_sign");
       } catch (err) {
         console.error("Onboarding init failed:", err);
       }
 
-      // Send every client signer their Launch Pad link (each uses their own
-      // token) — the engage link goes dead after signing, so this email is the
-      // durable way back in.
-      const portalUrl =
-        process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
-      // Read the deadline back from the freshly initialised state so the email
-      // matches the Launch Pad exactly (null on legacy records).
-      let clientDueAt: string | null = null;
-      try {
-        clientDueAt = (await getOnboardingState(engagement.id))?.clientDueAt ?? null;
-      } catch (err) {
-        console.error("Onboarding state read failed:", err);
-      }
-      for (const s of allSigners) {
-        if (s.order === 0) continue; // sender's own token isn't a client link
-        try {
-          const { subject: welcomeSubject, html } = buildOnboardingWelcomeEmail({
-            clientName: s.name,
-            senderName: "The Nexli team",
-            onboardingUrl: `${portalUrl}/onboarding/${s.token}`,
-            clientDueAt,
-          });
-          await sendEmailWithLog({
-            to: s.email,
-            subject: welcomeSubject,
-            html,
-            recipientName: s.name,
-            emailType: "onboarding_welcome",
-            relatedId: engagement.id,
-          });
-        } catch (err) {
-          console.error("Onboarding welcome email failed:", err);
-        }
-      }
+      // Send every client signer their Launch Pad link.
+      await sendOnboardingWelcomeEmails(engagement.id);
     }
   }
 
@@ -328,7 +305,8 @@ export async function POST(
     ok: true,
     signedAt: new Date().toISOString(),
     allSigned,
-    onboardingUrl: allSigned ? `/onboarding/${signer.token}` : null,
+    // DRS: onboarding opens once the up-front invoice is paid, not at signing.
+    onboardingUrl: allSigned && !isDrsLetter ? `/onboarding/${signer.token}` : null,
   });
 }
 

@@ -302,10 +302,22 @@ export function OnboardingClient({ token }: { token: string }) {
 
   useEffect(() => {
     load(true);
+    // The background poll also recovers the not_started screen: once the
+    // setup invoice is paid the API returns 200, load() stores the data and
+    // clears errorKind, and the Launch Pad renders without a manual reload.
     const interval = setInterval(() => {
       if (!document.hidden) load(false);
     }, 45_000);
-    return () => clearInterval(interval);
+    // Re-check right away when the tab regains focus (e.g. after paying the
+    // invoice in another tab) instead of waiting for the next tick.
+    const onVisible = () => {
+      if (!document.hidden) load(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   function celebrate() {
@@ -337,7 +349,7 @@ export function OnboardingClient({ token }: { token: string }) {
         }
         body={
           notStarted
-            ? "We're getting things ready behind the scenes. Check back soon, or reach out to your Nexli team."
+            ? "Your Launch Pad opens as soon as your setup invoice is paid. Check your inbox for the invoice, or reach out to your Nexli team."
             : "Double-check the link from your email, or contact your Nexli team for a fresh one."
         }
       />

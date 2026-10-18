@@ -10,7 +10,7 @@
 // ══════════════════════════════════════════════════════════
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { BillingPlan } from "@/lib/drs-pricing";
+import { ANNUAL_UPFRONT_CENTS, type BillingPlan } from "@/lib/drs-pricing";
 import type { EnterpriseTier } from "@/lib/enterprise-pricing";
 import {
   ACCENT,
@@ -102,7 +102,15 @@ function EsignBadges() {
 
 type Signed = Extract<SignResult, { ok: true }>;
 
-function SignedNextSteps({ kind, result }: { kind: LetterKind; result: Signed }) {
+function SignedNextSteps({
+  kind,
+  plan,
+  result,
+}: {
+  kind: LetterKind;
+  plan: BillingPlan;
+  result: Signed;
+}) {
   if (!result.allSigned) {
     return (
       <p className="text-sm mt-2 text-neutral-300">
@@ -128,7 +136,9 @@ function SignedNextSteps({ kind, result }: { kind: LetterKind; result: Signed })
   return (
     <>
       <p className="text-sm mt-2 text-neutral-300">
-        Next: your setup invoice arrives by email, and your Launch Pad is ready.
+        {plan === "annual"
+          ? `Next: your $${(ANNUAL_UPFRONT_CENTS / 100).toLocaleString("en-US")} invoice is in your inbox. Your Launch Pad opens the moment it's paid.`
+          : "Next: your setup invoice is in your inbox. Your Launch Pad opens the moment it's paid."}
       </p>
       {result.onboardingUrl && (
         <div className="mt-5 flex justify-center">
@@ -279,7 +289,7 @@ export function EngageLaunchPadClient({
           <p className="text-sm mt-2 text-neutral-300">
             Thank you, {data.clientName}. Your signature has been recorded securely.
           </p>
-          <SignedNextSteps kind={kind} result={signed} />
+          <SignedNextSteps kind={kind} plan={plan} result={signed} />
           <div className="mt-6">
             <EsignBadges />
           </div>

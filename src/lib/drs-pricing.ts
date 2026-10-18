@@ -11,8 +11,15 @@
  * the client's behalf (pass-through, no markup — see AD_SPEND_MONTHLY_CENTS
  * and Section 3(b)). Annual option: setup fee + $42,000 prepaid platform +
  * the $5,000/mo ad budget. No ad-management tiers, no revenue share, no
- * performance fee, no bonus, no guarantees. Monthly plan = one $9,997
- * invoice (two line items) plus the setup invoice at signing.
+ * performance fee, no bonus, no guarantees.
+ *
+ * Billing sequence (lib/digital-rainmaker.ts):
+ *   1. Signing → the Setup Fee is invoiced ($32,000; annual clients get ONE
+ *      $74,000 setup + annual platform invoice).
+ *   2. That invoice is paid → onboarding (the Launch Pad) opens.
+ *   3. Build complete → the first monthly invoice is sent ($9,997 = platform
+ *      + ad budget on one invoice; annual clients: the $5,000 ad budget).
+ *   4. That invoice is paid → services and ads start.
  *
  * Marcel's stance: clients keep all of the upside ("the cherry on top");
  * Nexli's upside is graduating them to the Enterprise tier
@@ -28,14 +35,6 @@ export const DRS_PRICING = {
   ANNUAL_CENTS: 4_200_000, // $42,000.00 / year prepaid platform upkeep (~30% off vs $59,964 at the monthly rate)
   AD_SPEND_MONTHLY_CENTS: 500_000, // $5,000.00 / month Managed Advertising Budget (pass-through)
 } as const;
-
-/**
- * Recurring billing starts this many days after signing: the Setup Fee (and
- * the Annual Investment, for annual clients) is due at execution, while the
- * first Monthly Investment / first monthly ad-budget invoice is due 30 days
- * later, once Phase 1 is underway (Marcel, Oct 18 2026).
- */
-export const RECURRING_START_DAYS = 30;
 
 /** What an annual client pays at signing: Setup Fee + Annual Investment ($74,000). */
 export const ANNUAL_UPFRONT_CENTS =

@@ -16,7 +16,12 @@ import bcrypt from "bcryptjs";
 import { generateInvoiceNumber, generateInvoiceToken } from "@/lib/invoice-utils";
 import { generateSenderSignatureSvgDataUrl } from "@/lib/signature";
 import { generateDrsContent } from "@/lib/engagement-defaults";
-import { DRS_PRICING, TOTAL_MONTHLY_CENTS, type BillingPlan } from "@/lib/drs-pricing";
+import {
+  DRS_PRICING,
+  TOTAL_MONTHLY_CENTS,
+  ANNUAL_UPFRONT_CENTS,
+  type BillingPlan,
+} from "@/lib/drs-pricing";
 import {
   initOnboarding,
   setOnboardingValues,
@@ -43,17 +48,21 @@ interface DemoClient {
   company: string;
   plan: BillingPlan;
   signedDaysAgo: number;
-  /** Paid platform invoices: [daysAgo, amountCents][] — first one is the recurring parent. */
+  /**
+   * Paid monthly platform invoices: [daysAgo, amountCents][] — first one is
+   * the recurring parent. Monthly plan only; annual clients get one paid
+   * $74,000 setup_annual invoice + a paid ad_spend_monthly parent instead.
+   */
   paidInvoices: [number, number][];
   /** Optional outstanding (sent, unpaid) invoice: [daysAgo, amountCents]. */
   outstandingInvoice?: [number, number];
   onboarding: "just_started" | "early" | "mid" | "complete";
 }
 
-// Monthly-plan clients pay one $10,000 invoice (platform + ad budget);
-// annual clients pay $42,000 up front plus a $5,000/mo ad-budget invoice.
+// Monthly-plan clients pay the $32,000 setup, then one $9,997 invoice
+// (platform + ad budget) per month; annual clients pay ONE $74,000 invoice
+// (setup + prepaid year) plus a $5,000/mo ad-budget invoice.
 const MONTHLY = TOTAL_MONTHLY_CENTS;
-const ANNUAL = DRS_PRICING.ANNUAL_CENTS;
 const AD_SPEND = DRS_PRICING.AD_SPEND_MONTHLY_CENTS;
 
 const DEMO_CLIENTS: DemoClient[] = [
@@ -63,7 +72,7 @@ const DEMO_CLIENTS: DemoClient[] = [
     company: "Sinatra Wealth Management",
     plan: "annual",
     signedDaysAgo: 20,
-    paidInvoices: [[20, ANNUAL]],
+    paidInvoices: [],
     onboarding: "mid",
   },
   {
@@ -515,7 +524,20 @@ export async function POST() {
         status: "signed",
         sentAt: signedAt,
         expiresAt: daysAhead(365),
-        metadata: { billingPlan: c.plan, termMonths: c.plan === "annual" ? 12 : 6, demo: true },
+        metadata: {
+          billingPlan: c.plan,
+          termMonths: c.plan === "annual" ? 12 : 6,
+          demo: true,
+          // Build complete → first recurring invoice sent (demo clients past
+          // the "early" onboarding stage).
+          ...(c.onboarding === "mid" || c.onboarding === "complete"
+            ? {
+                billingStartedAt: daysAgo(
+                  c.plan === "annual" ? c.signedDaysAgo : c.paidInvoices[0]?.[0] ?? c.signedDaysAgo
+                ).toISOString(),
+              }
+            : {}),
+        },
       })
       .returning();
 
@@ -555,11 +577,11 @@ export async function POST() {
     // signed clients, paid invoices, leads and website traffic.
     await seedDemoDashboard(c);
 
-    // 4. Invoices — paid platform invoices (first is the recurring parent).
-    //    Monthly-plan invoices carry the $5,000 ad budget as a second line and
-    //    tag it in metadata.adSpendCents so the tracker splits it out.
+    // 4. Invoices — paid monthly platform invoices (first is the recurring
+    //    parent). They carry the $5,000 ad budget as a second line and tag it
+    //    in metadata.adSpendCents so the tracker splits it out.
     const isAnnual = c.plan === "annual";
-    for (let i = 0; i < c.paidInvoices.length; i++) {
+    for (let i = 0; i < (isAnnual ? 0 : c.paidInvoices.length); i++) {
       const [ago, amountCents] = c.paidInvoices[i];
       const created = daysAgo(ago);
       const isParent = i === 0;
@@ -580,67 +602,50 @@ export async function POST() {
           amountPaid: amountCents,
           balanceDue: 0,
           isRecurring: isParent,
-          recurringInterval: isParent ? (isAnnual ? "yearly" : "monthly") : null,
-          nextRecurrenceDate: isParent
-            ? isAnnual
-              ? daysAhead(365 - c.signedDaysAgo)
-              : daysAhead(30)
-            : null,
+          recurringInterval: isParent ? "monthly" : null,
+          nextRecurrenceDate: isParent ? daysAhead(30) : null,
           dueDate: created,
           paidAt: created,
           paymentMethod: "ach",
           status: "paid",
           sentAt: created,
-          notes: isAnnual
-            ? "Annual all-in-one platform investment for the Digital Rainmaker System, paid in full."
-            : "Monthly investment for the Digital Rainmaker System: $5,000 platform + $5,000 Managed Advertising Budget.",
+          notes: "Monthly investment for the Digital Rainmaker System: $4,997 platform + $5,000 Managed Advertising Budget.",
           metadata: {
             engagementId: engagement.id,
             demo: true,
-            drsRole: isAnnual ? "platform_annual" : "platform_monthly",
-            adSpendCents: isAnnual ? 0 : AD_SPEND,
-            termMonths: isAnnual ? 12 : 6,
+            drsRole: "platform_monthly",
+            adSpendCents: AD_SPEND,
+            termMonths: 6,
           },
         })
         .returning();
-      if (isAnnual) {
-        await db.insert(invoiceLineItems).values({
+      await db.insert(invoiceLineItems).values([
+        {
           invoiceId: invoice.id,
-          description: "Digital Rainmaker System — Annual Platform (Paid in Full)",
+          description: "Digital Rainmaker System — Monthly Platform",
           quantity: 100,
-          unitPrice: amountCents,
-          amount: amountCents,
-          billingType: "yearly",
+          unitPrice: amountCents - AD_SPEND,
+          amount: amountCents - AD_SPEND,
+          billingType: "monthly",
           order: 0,
-        });
-      } else {
-        await db.insert(invoiceLineItems).values([
-          {
-            invoiceId: invoice.id,
-            description: "Digital Rainmaker System — Monthly Platform",
-            quantity: 100,
-            unitPrice: amountCents - AD_SPEND,
-            amount: amountCents - AD_SPEND,
-            billingType: "monthly",
-            order: 0,
-          },
-          {
-            invoiceId: invoice.id,
-            description: "Managed Advertising Budget — Monthly (deployed on your ad accounts, pass-through)",
-            quantity: 100,
-            unitPrice: AD_SPEND,
-            amount: AD_SPEND,
-            billingType: "monthly",
-            order: 1,
-          },
-        ]);
-      }
+        },
+        {
+          invoiceId: invoice.id,
+          description: "Managed Advertising Budget — Monthly (deployed on your ad accounts, pass-through)",
+          quantity: 100,
+          unitPrice: AD_SPEND,
+          amount: AD_SPEND,
+          billingType: "monthly",
+          order: 1,
+        },
+      ]);
     }
 
-    // 4a. One-time Setup Fee, paid at signing (both plans).
+    // 4a. Up-front invoice, paid at signing: the $32,000 Setup Fee (monthly)
+    //     or ONE $74,000 setup + annual platform invoice (annual).
     {
       const created = daysAgo(c.signedDaysAgo);
-      const SETUP = DRS_PRICING.SETUP_FEE_CENTS;
+      const SETUP = isAnnual ? ANNUAL_UPFRONT_CENTS : DRS_PRICING.SETUP_FEE_CENTS;
       const [setupInvoice] = await db
         .insert(invoices)
         .values({
@@ -663,25 +668,42 @@ export async function POST() {
           paymentMethod: "ach",
           status: "paid",
           sentAt: created,
-          notes: "One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System.",
+          notes: isAnnual
+            ? "Setup Fee (Phase 1 Implementation) plus the annual platform investment for the first 12 months, paid in full."
+            : "One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System.",
           metadata: {
             engagementId: engagement.id,
             demo: true,
-            drsRole: "setup_fee",
+            drsRole: isAnnual ? "setup_annual" : "setup_fee",
             adSpendCents: 0,
             termMonths: isAnnual ? 12 : 6,
           },
         })
         .returning();
-      await db.insert(invoiceLineItems).values({
-        invoiceId: setupInvoice.id,
-        description: "Digital Rainmaker System — Setup Fee (Phase 1 Implementation)",
-        quantity: 100,
-        unitPrice: SETUP,
-        amount: SETUP,
-        billingType: "one_time",
-        order: 0,
-      });
+      await db.insert(invoiceLineItems).values([
+        {
+          invoiceId: setupInvoice.id,
+          description: "Digital Rainmaker System — Setup Fee (Phase 1 Implementation)",
+          quantity: 100,
+          unitPrice: DRS_PRICING.SETUP_FEE_CENTS,
+          amount: DRS_PRICING.SETUP_FEE_CENTS,
+          billingType: "one_time" as const,
+          order: 0,
+        },
+        ...(isAnnual
+          ? [
+              {
+                invoiceId: setupInvoice.id,
+                description: "Digital Rainmaker System — Annual Platform (12 months, paid in full)",
+                quantity: 100,
+                unitPrice: DRS_PRICING.ANNUAL_CENTS,
+                amount: DRS_PRICING.ANNUAL_CENTS,
+                billingType: "yearly" as const,
+                order: 1,
+              },
+            ]
+          : []),
+      ]);
     }
 
     // 4b. Annual clients also pay the ad budget monthly — one paid parent.

@@ -8,7 +8,6 @@ import {
   DRS_PRICING,
   TOTAL_MONTHLY_CENTS,
   ANNUAL_UPFRONT_CENTS,
-  RECURRING_START_DAYS,
   TERM_MONTHS,
   LAUNCH_TARGET_DAYS,
   type BillingPlan,
@@ -64,8 +63,8 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
     body: "fee",
     summary: ({ plan }) =>
       plan === "annual"
-        ? `${annualUpfront} is due at signing (${setup} one-time Setup Fee + ${annualPrepaid} for a prepaid year of platform operation). Separately, the ${adBudget}/month ad budget is billed monthly starting ${RECURRING_START_DAYS} days after signing. Initial term: ${TERM_MONTHS.annual} months.`
-        : `A one-time ${setup} Setup Fee is due at signing. Then ${totalMonthly}/month (${upkeep} platform + ${adBudget} ad budget) on one invoice, starting ${RECURRING_START_DAYS} days after signing. Initial term: ${TERM_MONTHS.monthly} months.`,
+        ? `${annualUpfront} is due at signing on one invoice (${setup} one-time Setup Fee + ${annualPrepaid} for a prepaid year of platform operation). Separately, the ${adBudget}/month ad budget is billed monthly starting at launch, when Nexli finishes the build; ads go live once that first invoice is paid. Initial term: ${TERM_MONTHS.annual} months.`
+        : `A one-time ${setup} Setup Fee is due at signing. Then ${totalMonthly}/month (${upkeep} platform + ${adBudget} ad budget) on one invoice, starting at launch, when Nexli finishes the build; ads and ongoing services start once that first monthly invoice is paid. Initial term: ${TERM_MONTHS.monthly} months.`,
   },
   "AD MANAGEMENT": {
     icon: X.megaphone,
@@ -77,13 +76,13 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
     icon: X.creditCard,
     accent: "cyan",
     summary: ({ plan }) =>
-      `Pay by ACH (the listed price) or card (the card price, shown at checkout). Fees are non-refundable, and work starts once ${plan === "annual" ? `the ${annualUpfront} due at signing is` : `the ${setup} Setup Fee is`} received. You can give 30 days' notice any time, but it takes effect no earlier than the end of the ${TERM_MONTHS[plan]}-month initial term; after that the agreement ${plan === "annual" ? "renews annually" : "continues month-to-month"}.`,
+      `Pay by ACH (the listed price) or card (the card price, shown at checkout). Fees are non-refundable. Work starts, and your Launch Pad opens, once ${plan === "annual" ? `the ${annualUpfront} invoice due at signing is` : `the ${setup} Setup Fee invoice is`} paid. The first monthly invoice goes out at launch, when the build is complete. You can give 30 days' notice any time, but it takes effect no earlier than the end of the ${TERM_MONTHS[plan]}-month initial term; after that the agreement ${plan === "annual" ? "renews annually" : "continues month-to-month"}.`,
   },
   "PROJECT TIMELINE & CLIENT COOPERATION": {
     icon: X.calendar,
     accent: "amber",
     summary: () =>
-      `Submit your Launch Pad items within 5 days of getting the link. Launch is targeted ${LAUNCH_TARGET_DAYS} days after Nexli has everything, and setup wraps within 30 days of signing. If required access or materials aren't provided in that 30-day window, setup is treated as complete.`,
+      `Submit your Launch Pad items within 5 days of getting the link. Launch is targeted ${LAUNCH_TARGET_DAYS} days after Nexli has everything, and setup wraps within 30 days of the agreement's effective date. If required access or materials aren't provided in that 30-day window, setup is treated as complete.`,
   },
   "INTELLECTUAL PROPERTY": {
     icon: X.shield,

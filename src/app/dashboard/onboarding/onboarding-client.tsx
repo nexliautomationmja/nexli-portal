@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { RocketIcon, CopyIcon, XIcon } from "@/components/ui/icons";
+import { DRS_PRICING, TOTAL_MONTHLY_CENTS } from "@/lib/drs-pricing";
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -27,7 +28,7 @@ interface EngagementRow {
   subject: string;
   status: string;
   createdAt: string;
-  metadata?: { onboarding?: RawOnboardingState } | null;
+  metadata?: { onboarding?: RawOnboardingState; billingPlan?: string } | null;
   signers: {
     id: string;
     name: string;
@@ -78,6 +79,23 @@ interface AdminDetail {
     activity: { at: string; actor: string; type: string; message: string }[];
   };
   clientSigners: { id: string; name: string; email: string; token: string; order: number }[];
+  billing?: AdminBilling | null;
+}
+
+interface BillingInvoiceRef {
+  invoiceId: string;
+  invoiceNumber: string;
+  status: string;
+  total: number; // cents
+  paidAt: string | null;
+}
+
+interface AdminBilling {
+  isDrs: boolean;
+  plan: "monthly" | "annual";
+  setup: BillingInvoiceRef | null;
+  firstMonthly: (BillingInvoiceRef & { createdAt: string }) | null;
+  billingStartedAt: string | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────
@@ -105,6 +123,18 @@ function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatUsd(cents: number): string {
+  return `$${(cents / 100).toLocaleString("en-US", {
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 // Mirrors TASK_INFO[id].optional in src/lib/onboarding.ts (server-only module).
@@ -355,14 +385,22 @@ export function OnboardingDashboardClient() {
                         {eng.subject}
                       </p>
                     </div>
-                    <button
-                      onClick={() => startOnboarding(eng.id)}
-                      disabled={starting === eng.id}
-                      className="px-5 py-2.5 rounded-full text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] disabled:opacity-50 shrink-0"
-                      style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-                    >
-                      {starting === eng.id ? "Starting…" : "Start Onboarding 🚀"}
-                    </button>
+                    <div className="flex items-center gap-3 flex-wrap justify-end">
+                      {(eng.metadata?.billingPlan === "monthly" ||
+                        eng.metadata?.billingPlan === "annual") && (
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          Onboarding opens automatically when the setup invoice is paid
+                        </span>
+                      )}
+                      <button
+                        onClick={() => startOnboarding(eng.id)}
+                        disabled={starting === eng.id}
+                        className="px-5 py-2.5 rounded-full text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] disabled:opacity-50 shrink-0"
+                        style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
+                      >
+                        {starting === eng.id ? "Starting…" : "Start Onboarding 🚀"}
+                      </button>
+                    </div>
                   </GlassCard>
                 ))}
               </div>
@@ -603,6 +641,14 @@ function OnboardingDetail({
                 </div>
               </div>
             </GlassCard>
+
+            {detail.billing?.isDrs && (
+              <BillingCard
+                engagementId={engagementId}
+                billing={detail.billing}
+                onUpdated={setDetail}
+              />
+            )}
 
             {/* Phases */}
             <section>
@@ -1074,6 +1120,140 @@ function AdminTaskCard({
       {task.adminNote && task.status === "needs_attention" && (
         <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
           Note sent to client: &ldquo;{task.adminNote}&rdquo;
+        </p>
+      )}
+    </GlassCard>
+  );
+}
+
+// ─── DRS billing (setup invoice → Build complete → first monthly) ────────
+
+function InvoiceStatusBadge({ inv }: { inv: BillingInvoiceRef }) {
+  return inv.status === "paid" ? (
+    <span className="badge badge-emerald">Paid ✓ {formatShortDate(inv.paidAt)}</span>
+  ) : (
+    <span className="badge badge-amber">Awaiting payment</span>
+  );
+}
+
+function BillingCard({
+  engagementId,
+  billing,
+  onUpdated,
+}: {
+  engagementId: string;
+  billing: AdminBilling;
+  onUpdated: (d: AdminDetail) => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { setup, firstMonthly, plan } = billing;
+  const setupPaid = setup?.status === "paid";
+  const monthlyLabel =
+    plan === "annual"
+      ? `(${formatUsd(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget)`
+      : `(${formatUsd(TOTAL_MONTHLY_CENTS)})`;
+
+  async function startMonthlyBilling() {
+    if (!window.confirm("Send the first monthly invoice now? Do this once the build is finished.")) {
+      return;
+    }
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/dashboard/engagements/${engagementId}/onboarding`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start_monthly_billing" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.error || "Couldn't send the first monthly invoice");
+        return;
+      }
+      onUpdated(body as AdminDetail);
+    } catch {
+      setError("Network error — please try again");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const linkStyle = { color: "#2563EB" };
+
+  return (
+    <GlassCard className="space-y-3">
+      <p
+        className="text-[10px] font-black uppercase tracking-[0.2em]"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Billing
+      </p>
+
+      {/* Row 1 — the up-front invoice sent at signing */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        {setup ? (
+          <>
+            <span className="text-sm" style={{ color: "var(--text-main)" }}>
+              Setup invoice{" "}
+              <a href={`/dashboard/invoices?id=${setup.invoiceId}`} className="font-semibold underline" style={linkStyle}>
+                {setup.invoiceNumber}
+              </a>{" "}
+              · {formatUsd(setup.total)}
+            </span>
+            <InvoiceStatusBadge inv={setup} />
+          </>
+        ) : (
+          <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+            No setup invoice found for this engagement.
+          </span>
+        )}
+      </div>
+
+      {/* Row 2 — first recurring invoice, sent on "Build complete" */}
+      {firstMonthly ? (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-sm" style={{ color: "var(--text-main)" }}>
+              First monthly{" "}
+              <a
+                href={`/dashboard/invoices?id=${firstMonthly.invoiceId}`}
+                className="font-semibold underline"
+                style={linkStyle}
+              >
+                {firstMonthly.invoiceNumber}
+              </a>{" "}
+              · {formatUsd(firstMonthly.total)} · sent {formatShortDate(firstMonthly.createdAt)}
+            </span>
+            <InvoiceStatusBadge inv={firstMonthly} />
+          </div>
+          {firstMonthly.status === "paid" && (
+            <p className="text-xs font-semibold" style={{ color: "#10B981" }}>
+              Clear to launch ads.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <button
+            type="button"
+            onClick={startMonthlyBilling}
+            disabled={!setupPaid || sending}
+            className="btn-primary"
+          >
+            {sending ? "Sending…" : `Build complete — send first monthly invoice ${monthlyLabel}`}
+          </button>
+          {!setupPaid && (
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Unlocks once the setup invoice is paid
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs font-semibold" style={{ color: "#F43F5E" }}>
+          {error}
         </p>
       )}
     </GlassCard>

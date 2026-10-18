@@ -345,6 +345,26 @@ export function InvoicesClient() {
     closeDetail();
   }
 
+  async function handleMarkedPaid(updated: Partial<Invoice> & { id: string }) {
+    setInvoices((prev) =>
+      prev.map((inv) => (inv.id === updated.id ? { ...inv, ...updated } : inv))
+    );
+    setShowDetail((cur) => (cur && cur.id === updated.id ? { ...cur, ...updated } : cur));
+    // Re-sync the list so line items / totals reflect the server exactly.
+    try {
+      const refreshRes = await fetch("/api/dashboard/invoices");
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        const list: Invoice[] = data.invoices || [];
+        setInvoices(list);
+        const fresh = list.find((inv) => inv.id === updated.id);
+        if (fresh) setShowDetail((cur) => (cur && cur.id === fresh.id ? fresh : cur));
+      }
+    } catch {
+      // The optimistic merge above is already on screen.
+    }
+  }
+
   async function handleDelete(id: string) {
     await fetch(`/api/dashboard/invoices/${id}`, { method: "DELETE" });
     setInvoices((prev) => prev.filter((inv) => inv.id !== id));
@@ -1384,6 +1404,14 @@ export function InvoicesClient() {
               </div>
             </div>
 
+            {["sent", "viewed", "overdue", "partial"].includes(showDetail.status) && (
+              <MarkPaidPanel
+                key={showDetail.id}
+                invoiceId={showDetail.id}
+                onPaid={handleMarkedPaid}
+              />
+            )}
+
             {/* Footer actions */}
             <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-between">
               <div className="flex gap-2">
@@ -2002,6 +2030,129 @@ export function InvoicesClient() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Mark as paid (wire / check / bank transfer outside Stripe) ──────────
+
+const MANUAL_PAYMENT_METHODS = [
+  { value: "wire", label: "Wire" },
+  { value: "ach", label: "ACH (outside Stripe)" },
+  { value: "check", label: "Check" },
+  { value: "other", label: "Other" },
+] as const;
+
+type ManualPaymentMethod = (typeof MANUAL_PAYMENT_METHODS)[number]["value"];
+
+function MarkPaidPanel({
+  invoiceId,
+  onPaid,
+}: {
+  invoiceId: string;
+  onPaid: (invoice: Partial<Invoice> & { id: string }) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState<ManualPaymentMethod>("wire");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/dashboard/invoices/${invoiceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark_paid",
+          method,
+          note: note.trim() || undefined,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.invoice) {
+        setError(body.error || "Couldn't mark this invoice as paid");
+        return;
+      }
+      setOpen(false);
+      setNote("");
+      await onPaid(body.invoice);
+    } catch {
+      setError("Network error — please try again");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="px-4 py-3 border-t border-[var(--card-border)] space-y-2">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="px-3 py-2 rounded-lg text-xs font-semibold text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors"
+        >
+          Mark as paid
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs font-semibold" style={{ color: "var(--text-main)" }}>
+              Method
+            </label>
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value as ManualPaymentMethod)}
+              className="glass-input text-xs"
+              disabled={saving}
+            >
+              {MANUAL_PAYMENT_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value.slice(0, 500))}
+            maxLength={500}
+            placeholder="Note (optional) — e.g. wire reference"
+            className="glass-input w-full text-xs"
+            disabled={saving}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={submit}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Confirm paid"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setError(null);
+              }}
+              disabled={saving}
+              className="px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-[var(--input-bg)]"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+        Use for wire, check, or bank transfers outside Stripe. This triggers the same next steps as
+        an online payment.
+      </p>
+      {error && <p className="text-xs font-semibold text-red-400">{error}</p>}
     </div>
   );
 }

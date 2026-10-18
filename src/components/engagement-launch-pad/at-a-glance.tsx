@@ -4,7 +4,6 @@
 
 import { ACCENT, Icon, IconChip, LpCard, PATHS, SYNE, labelCls, type Accent } from "@/components/launch-pad";
 import {
-  RECURRING_START_DAYS,
   TERM_MONTHS,
   LAUNCH_TARGET_DAYS,
   type BillingPlan,
@@ -82,9 +81,13 @@ function GlanceCard({ tiles, steps }: { tiles: Tile[]; steps: Step[] }) {
 export function DrsAtAGlance({ plan }: { plan: BillingPlan }) {
   const { setup, upkeep, adBudget, totalMonthly, annualPrepaid, annualUpfront } = DRS_FIGURES;
   const steps: Step[] = [
-    { n: 1, title: "Pay the setup fee", sub: plan === "annual" ? `${annualUpfront} at signing` : `${setup} at signing` },
-    { n: 2, title: "Launch Pad opens", sub: "Submit your items within 5 days" },
-    { n: 3, title: "Build & launch", sub: `Live within ${LAUNCH_TARGET_DAYS} days of your materials` },
+    { n: 1, title: "Pay the setup invoice", sub: plan === "annual" ? `${annualUpfront} at signing` : `${setup} at signing` },
+    { n: 2, title: "Launch Pad opens, build begins", sub: "Opens once paid · submit your items within 5 days" },
+    {
+      n: 3,
+      title: "Launch: first monthly invoice, ads go live",
+      sub: `Live within ${LAUNCH_TARGET_DAYS} days of your materials`,
+    },
   ];
   const tiles: Tile[] = [
     { label: "Setup fee", value: setup, sub: "one-time · due at signing", accent: "blue" },
@@ -92,13 +95,13 @@ export function DrsAtAGlance({ plan }: { plan: BillingPlan }) {
       ? {
           label: "Due at signing",
           value: annualUpfront,
-          sub: `setup + ${annualPrepaid} prepaid year · then ${adBudget}/mo ad budget from day ${RECURRING_START_DAYS}`,
+          sub: `at signing (setup + ${annualPrepaid} prepaid year, one invoice) · then ${adBudget}/mo ad budget from launch`,
           accent: "emerald",
         }
       : {
           label: "Monthly",
           value: `${totalMonthly}/mo`,
-          sub: `starts day ${RECURRING_START_DAYS} · ${upkeep} upkeep + ${adBudget} ad budget`,
+          sub: `starts at launch · ${upkeep} upkeep + ${adBudget} ad budget`,
           accent: "emerald",
         },
     {

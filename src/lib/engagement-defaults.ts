@@ -16,7 +16,6 @@
 import {
   DRS_PRICING,
   SETUP_SCOPE,
-  RECURRING_START_DAYS,
   ANNUAL_UPFRONT_CENTS,
   TOTAL_MONTHLY_CENTS,
   TERM_MONTHS,
@@ -85,7 +84,7 @@ const CURRENT_REVISION_MARKERS = [
   "Initial Term and Renewal", // Oct 5 2026: 6/12-month initial term (Section 4(d))
   "no performance fee, bonus, or revenue share", // Oct 12 2026: guarantees + Success Bonus removed
   "Implementation (covered by the Setup Fee", // Oct 18 2026: $32,000 setup fee with itemized scope
-  "days after execution of this Agreement", // Oct 18 2026: recurring billing starts 30 days after signing
+  "invoiced when Provider completes the Phase 1 build", // Oct 18 2026: recurring billing starts at launch (Build complete)
 ];
 
 /**
@@ -110,7 +109,6 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const totalMonthly = fmt(TOTAL_MONTHLY_CENTS);
   const setupFee = fmt(DRS_PRICING.SETUP_FEE_CENTS);
   const annualUpfront = fmt(ANNUAL_UPFRONT_CENTS);
-  const startDays = `${numberWords(RECURRING_START_DAYS)} (${RECURRING_START_DAYS})`;
   // Section 1 Phase 1: every group/item from SETUP_SCOPE, lettered a) b) c)…
   let letterIndex = 0;
   const scopeText = SETUP_SCOPE.map((group) => {
@@ -133,14 +131,14 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
     plan === "annual"
       ? `${setupClause}
 
-${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11.
+${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, invoiced together as a single invoice, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11.
 
-c) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly, with the first monthly invoice due ${startDays} days after execution of this Agreement and each subsequent invoice monthly thereafter, and deployed by Provider on Client's behalf under Section 3(b). The advertising budget is intentionally not collected up front. Billed via ACH bank transfer or card through Stripe.
+c) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly, with the first month invoiced when Provider completes the Phase 1 build and launches the system and each subsequent invoice issued monthly thereafter, and deployed by Provider on Client's behalf under Section 3(b). The advertising budget is intentionally not collected up front; advertising begins once the first monthly invoice is paid. Billed via ACH bank transfer or card through Stripe.
 
 d) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 4(d).`
       : `${setupClause}
 
-${drsPlanLine("monthly")} — Comprising (i) a Platform Investment of ${monthly} USD/month, the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage; and (ii) a Managed Advertising Budget of ${adSpend} USD/month that Provider deploys on Client's behalf under Section 3(b). Billed as a single monthly invoice via ACH bank transfer or card through Stripe. The first Monthly Investment is due ${startDays} days after execution of this Agreement, and each subsequent Monthly Investment is due monthly thereafter.
+${drsPlanLine("monthly")} — Comprising (i) a Platform Investment of ${monthly} USD/month, the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage; and (ii) a Managed Advertising Budget of ${adSpend} USD/month that Provider deploys on Client's behalf under Section 3(b). Billed as a single monthly invoice via ACH bank transfer or card through Stripe. The first Monthly Investment is invoiced when Provider completes the Phase 1 build and launches the system, and monthly thereafter. Advertising and the ongoing services in Phase 2 begin once the first Monthly Investment is paid.
 
 c) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 4(d).`;
 
@@ -189,7 +187,7 @@ d) Initial Term and Renewal: This Agreement has an Initial Term of ${termWords(t
 
 5. PROJECT TIMELINE & CLIENT COOPERATION
 
-a) The setup phase (Phase 1) shall be completed within thirty (30) calendar days of this Agreement's execution, with launch targeted within ${launchDays} days of Provider's receipt of all required client materials (Section 1).
+a) The setup phase (Phase 1) shall be completed within thirty (30) calendar days of this Agreement's effective date, with launch targeted within ${launchDays} days of Provider's receipt of all required client materials (Section 1).
 
 b) Client agrees to provide timely cooperation, including but not limited to: DNS editor access, business information, brand assets, content materials, and responsiveness to Provider communications. Client shall submit all onboarding items requested on Provider's Launch Pad (including payment processing setup, DNS access, and the other items listed there) within five (5) days of receiving the Launch Pad link; the ${launchDays}-day launch timeline runs from Provider's receipt of all such items.
 

@@ -151,7 +151,7 @@ export async function triggerEnterprisePostSign(args: PostSignArgs) {
   try {
     await createNotification({
       userId: engagement.ownerId,
-      type: "invoice_paid", // closest existing type (same convention as DRS)
+      type: "invoice_sent",
       title: "Enterprise License Invoice Sent",
       message: `${info.label} tier invoice ${invoice.invoiceNumber} (${formatCurrency(amountCents, "usd")}, ACH/wire only) sent to ${primarySigner.name}`,
       metadata: {

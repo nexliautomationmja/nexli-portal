@@ -17,6 +17,7 @@ import {
 import { formatCurrency } from "@/lib/invoice-utils";
 import { syncPaymentToAccounting } from "@/lib/accounting-sync";
 import { createNotification } from "@/lib/notifications";
+import { onDrsInvoicePaid } from "@/lib/digital-rainmaker";
 import type Stripe from "stripe";
 
 /**
@@ -142,6 +143,16 @@ export async function handleCheckoutCompleted(
       .where(eq(invoices.id, invoice.id));
 
     await sendPaymentNotifications(invoice, amountCents, false);
+
+    // Digital Rainmaker: setup paid → onboarding opens; first monthly paid →
+    // clear to launch ads. Never throws, but guard anyway.
+    if (newStatus === "paid") {
+      try {
+        await onDrsInvoicePaid(invoice.id);
+      } catch (err) {
+        console.error("DRS paid hook failed:", err);
+      }
+    }
   } else if (session.payment_status === "unpaid") {
     // ACH initiated — pending settlement
     await db
@@ -181,6 +192,20 @@ export async function handleAsyncPaymentSucceeded(
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, invoiceId));
+
+  // Funds settled — run the DRS paid hook now (never on ACH initiation).
+  const [settled] = await db
+    .select({ status: invoices.status })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId))
+    .limit(1);
+  if (settled?.status === "paid") {
+    try {
+      await onDrsInvoicePaid(invoiceId);
+    } catch (err) {
+      console.error("DRS paid hook failed:", err);
+    }
+  }
 }
 
 // ── checkout.session.async_payment_failed ──
@@ -233,7 +258,13 @@ export async function handleAsyncPaymentFailed(
 }
 
 // ── Shared notification logic ──
-async function sendPaymentNotifications(
+/**
+ * Owner email + client receipt + in-app notification + accounting sync for a
+ * payment of `paymentAmountCents`. `invoice` is the row as it was BEFORE the
+ * payment was applied (paid/balance are recomputed from it). Also used by
+ * the manual "mark paid" action (api/dashboard/invoices/[invoiceId]).
+ */
+export async function sendPaymentNotifications(
   invoice: typeof invoices.$inferSelect,
   paymentAmountCents: number,
   isACH: boolean

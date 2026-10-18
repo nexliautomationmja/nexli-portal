@@ -8,6 +8,16 @@ import {
   calculateLineAmount,
   calculateInvoiceTotals,
 } from "@/lib/invoice-utils";
+import { sendPaymentNotifications } from "@/lib/payments-webhook-handlers";
+import { onDrsInvoicePaid } from "@/lib/digital-rainmaker";
+
+const MANUAL_METHODS = {
+  wire: "Wire transfer",
+  ach: "ACH",
+  check: "Check",
+  other: "Other",
+} as const;
+type ManualMethod = keyof typeof MANUAL_METHODS;
 
 export async function GET(
   _req: NextRequest,
@@ -53,6 +63,20 @@ export async function GET(
   });
 }
 
+/**
+ * PATCH — { action, ... } on an owned invoice.
+ *   - { action: "void" }   sent/viewed/overdue → void
+ *   - { action: "cancel" } draft → canceled
+ *   - { action: "mark_paid", method: "wire"|"ach"|"check"|"other", note?: string (≤500) }
+ *       Records a payment received outside Stripe (wire/ACH/check). Allowed
+ *       for sent/viewed/overdue/partial. Sets status "paid", amountPaid =
+ *       total, balanceDue 0, paidAt now, paymentMethod = method, appends a
+ *       line to notes, sends the same owner email / client receipt /
+ *       notification as a Stripe payment, then runs the Digital Rainmaker
+ *       paid hook (setup paid → onboarding opens; first monthly → ads).
+ *       → 200 { invoice } | 400 { error } | 404 { error }
+ *   - otherwise: content update (drafts only) → 200 { invoice }
+ */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ invoiceId: string }> }
@@ -76,8 +100,70 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
   const { action } = body;
+
+  if (action === "mark_paid") {
+    if (!["sent", "viewed", "overdue", "partial"].includes(invoice.status)) {
+      return NextResponse.json(
+        { error: "Only sent/viewed/overdue/partial invoices can be marked paid" },
+        { status: 400 }
+      );
+    }
+    const method = body.method;
+    if (typeof method !== "string" || !(method in MANUAL_METHODS)) {
+      return NextResponse.json(
+        { error: "method must be one of wire, ach, check, other" },
+        { status: 400 }
+      );
+    }
+    if (body.note !== undefined && typeof body.note !== "string") {
+      return NextResponse.json({ error: "note must be a string" }, { status: 400 });
+    }
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    if (note.length > 500) {
+      return NextResponse.json({ error: "Note too long (max 500)" }, { status: 400 });
+    }
+
+    const now = new Date();
+    const dateLabel = now.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const line = `Payment recorded manually: ${MANUAL_METHODS[method as ManualMethod]} on ${dateLabel}${note ? ` — ${note}` : ""}`;
+    const notes = invoice.notes ? `${invoice.notes}\n\n${line}` : line;
+    const paymentCents = Math.max(0, invoice.total - invoice.amountPaid);
+
+    const [updated] = await db
+      .update(invoices)
+      .set({
+        status: "paid",
+        amountPaid: invoice.total,
+        balanceDue: 0,
+        paidAt: now,
+        paymentMethod: method,
+        achSettlementStatus: null,
+        notes,
+        updatedAt: now,
+      })
+      .where(eq(invoices.id, invoiceId))
+      .returning();
+
+    // Same owner email / client receipt / notification as a Stripe payment
+    // (takes the pre-payment row).
+    try {
+      await sendPaymentNotifications(invoice, paymentCents, false);
+    } catch (err) {
+      console.error("Manual payment notifications failed:", err);
+    }
+    await onDrsInvoicePaid(invoiceId);
+
+    return NextResponse.json({ invoice: updated });
+  }
 
   // Status change actions
   if (action === "void") {

@@ -694,7 +694,8 @@ export const invoices = pgTable(
 
     // Generic metadata bag — used for things like the Digital Rainmaker
     // System auto-invoicing flow:
-    //   { engagementId, drsRole: "initial_setup" | "final_setup" | "monthly_subscription" }
+    //   { engagementId, drsRole: "setup_fee" | "setup_annual" | "platform_monthly"
+    //     | "ad_spend_monthly" | "platform_annual" (legacy), adSpendCents, termMonths? }
     metadata: jsonb("metadata"),
 
     // Lifecycle timestamps

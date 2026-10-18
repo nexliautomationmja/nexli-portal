@@ -17,6 +17,9 @@ interface NotificationToastsProps {
 
 const TYPE_ICONS: Record<string, string> = {
   invoice_paid: "\u{1F4B0}",
+  invoice_sent: "\u{1F4E8}",
+  setup_paid: "\u2705",
+  monthly_paid: "\u{1F680}",
   document_uploaded: "\u{1F4C4}",
   engagement_signed: "\u270D\uFE0F",
   esign_completed: "\u2705",

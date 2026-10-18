@@ -38,6 +38,7 @@ export function EngageClient({
   const [signing, setSigning] = useState(false);
   const [signed, setSigned] = useState(false);
   const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null);
+  const [allSigned, setAllSigned] = useState(false);
   const [declined, setDeclined] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
@@ -62,6 +63,7 @@ export function EngageClient({
       setError(result.error);
     } else {
       if (result.onboardingUrl) setOnboardingUrl(result.onboardingUrl);
+      setAllSigned(result.allSigned);
       setSigned(true);
       setStep(3);
     }
@@ -171,6 +173,11 @@ export function EngageClient({
                   Launch Pad. A link is also in your inbox.
                 </p>
               </div>
+            )}
+            {!onboardingUrl && allSigned && (
+              <p className="pt-2" style={{ color: "#6b7280", fontSize: "13px", margin: 0 }}>
+                Next: watch your inbox for your invoice — your onboarding opens once it&apos;s paid.
+              </p>
             )}
           </div>
         </div>
