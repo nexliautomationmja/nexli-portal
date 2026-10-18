@@ -9,7 +9,7 @@ import {
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { type BillingPlan, TERM_MONTHS } from "@/lib/drs-pricing";
-import { ENTERPRISE, isEnterpriseTier } from "@/lib/enterprise-pricing";
+import { ENTERPRISE, isEnterpriseTier, isEnterpriseTemplateName } from "@/lib/enterprise-pricing";
 import { createEngagement } from "@/lib/engagements";
 import { fillClientPlaceholder } from "@/lib/engagement-defaults";
 
@@ -146,16 +146,44 @@ export async function POST(req: NextRequest) {
   // exactly what the signed contract says. Enterprise letters carry their
   // tier (no billingPlan key — DRS-only logic keys on billingPlan); DRS
   // letters carry the flat billing plan.
+  // The template decides the offer — a tier value alone never makes a letter
+  // Enterprise (the compose UI used to send its default "core" tier with every
+  // letter, which mis-saved annual DRS letters and under-billed them).
+  let selectedTemplateName = "";
+  if (templateId) {
+    try {
+      const [tpl] = await db
+        .select({ name: engagementTemplates.name })
+        .from(engagementTemplates)
+        .where(eq(engagementTemplates.id, templateId))
+        .limit(1);
+      selectedTemplateName = tpl?.name ?? "";
+    } catch (err) {
+      console.error("Engagement POST: template lookup failed:", err);
+    }
+  }
+  const isEnterpriseLetter = isEnterpriseTemplateName(selectedTemplateName);
+  const isDrsLetter = selectedTemplateName.toLowerCase().includes("digital rainmaker");
+
   let engagementMetadata: Record<string, unknown>;
-  if (isEnterpriseTier(enterpriseTier)) {
+  if (isEnterpriseLetter) {
     engagementMetadata = {
       offer: "enterprise",
-      enterpriseTier,
+      enterpriseTier: isEnterpriseTier(enterpriseTier) ? enterpriseTier : "core",
       termMonths: ENTERPRISE.LICENSE_MONTHS,
       clientCompany,
     };
   } else {
-    const plan: BillingPlan = billingPlan === "annual" ? "annual" : "monthly";
+    // Prefer the explicit choice; fall back to the DRS template's name
+    // ("… — Annual") or the letter text so annual can never silently become
+    // monthly.
+    const plan: BillingPlan =
+      billingPlan === "annual" || billingPlan === "monthly"
+        ? billingPlan
+        : (isDrsLetter && selectedTemplateName.toLowerCase().includes("annual")) ||
+            (typeof content === "string" && content.includes("Annual Investment (Paid in Full)"))
+          ? "annual"
+          : "monthly";
     engagementMetadata = {
       billingPlan: plan,
       termMonths: TERM_MONTHS[plan],

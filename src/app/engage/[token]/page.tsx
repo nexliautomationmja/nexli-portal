@@ -44,13 +44,19 @@ function classifyLetter(row: LetterRow, nexliAdminId: string | null): LetterView
   const content = row.content.trimStart();
   const templateName = (row.templateName ?? "").toLowerCase();
 
-  if (isEnterpriseTemplateName(row.templateName) || meta.offer === "enterprise") {
+  const isDrsTemplate = templateName.includes("digital rainmaker");
+  if (isEnterpriseTemplateName(row.templateName) || (meta.offer === "enterprise" && !isDrsTemplate)) {
     const tier: EnterpriseTier = isEnterpriseTier(meta.enterpriseTier) ? meta.enterpriseTier : "core";
     return { kind: "enterprise", tier, showSummaries: isCurrentEnterpriseRevision(row.content, tier) };
   }
 
-  if (templateName.includes("digital rainmaker") && content.startsWith("DIGITAL RAINMAKER SYSTEM")) {
-    const plan: BillingPlan = meta.billingPlan === "annual" ? "annual" : "monthly";
+  if (isDrsTemplate && content.startsWith("DIGITAL RAINMAKER SYSTEM")) {
+    const plan: BillingPlan =
+      meta.billingPlan === "annual" || meta.billingPlan === "monthly"
+        ? meta.billingPlan
+        : row.content.includes("Annual Investment (Paid in Full)")
+          ? "annual"
+          : "monthly";
     return { kind: "drs", plan, showSummaries: isCurrentDrsRevision(row.content, plan) };
   }
 

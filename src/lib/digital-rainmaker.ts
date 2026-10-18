@@ -125,9 +125,16 @@ interface EngagementMeta {
   terminatedAt?: string;
 }
 
-function planOf(engagement: { metadata: unknown }): BillingPlan {
+/**
+ * The engagement's billing plan. Uses metadata.billingPlan; if it's missing
+ * (letters saved before the Oct 18 2026 fix were mis-tagged as Enterprise
+ * and lost it), falls back to the signed letter text, which only contains
+ * "Annual Investment (Paid in Full)" on the annual plan.
+ */
+function planOf(engagement: { metadata: unknown; content?: string | null }): BillingPlan {
   const meta = (engagement.metadata ?? {}) as EngagementMeta;
-  return meta.billingPlan === "annual" ? "annual" : "monthly";
+  if (meta.billingPlan === "annual" || meta.billingPlan === "monthly") return meta.billingPlan;
+  return engagement.content?.includes("Annual Investment (Paid in Full)") ? "annual" : "monthly";
 }
 
 const PORTAL_URL = () =>
@@ -827,7 +834,7 @@ export async function getDrsBillingStatus(
   engagementId: string
 ): Promise<DrsBillingStatus> {
   const [engagement] = await db
-    .select({ templateId: engagements.templateId, metadata: engagements.metadata })
+    .select({ templateId: engagements.templateId, metadata: engagements.metadata, content: engagements.content })
     .from(engagements)
     .where(eq(engagements.id, engagementId))
     .limit(1);

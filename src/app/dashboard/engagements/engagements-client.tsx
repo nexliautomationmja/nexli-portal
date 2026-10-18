@@ -191,8 +191,13 @@ export function EngagementsClient() {
           expiresInDays,
           saveAsTemplate,
           templateName: saveAsTemplate ? templateName : undefined,
+          // Only Enterprise letters carry a tier. (Sending the default "core"
+          // with every letter made DRS letters save as Enterprise, which
+          // dropped billingPlan and billed annual clients the setup fee only.)
           billingPlan,
-          enterpriseTier,
+          enterpriseTier: isEnterpriseTemplate(templates.find((t) => t.id === selectedTemplate))
+            ? enterpriseTier
+            : undefined,
         }),
       });
       const data = await res.json();
