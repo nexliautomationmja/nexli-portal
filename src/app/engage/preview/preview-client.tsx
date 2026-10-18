@@ -30,6 +30,18 @@ import {
   type Accent,
 } from "@/components/launch-pad";
 
+// Readability (Oct 2026 review): Syne's stylised numerals read oddly, so
+// figures use Plus Jakarta Sans with lining, evenly spaced digits, and the
+// long-form contract text uses it too. Syne stays on word headings only.
+const READ_FONT: React.CSSProperties = {
+  fontFamily: "var(--font-plus-jakarta), system-ui, sans-serif",
+};
+const NUM_FONT: React.CSSProperties = {
+  fontFamily: "var(--font-plus-jakarta), system-ui, sans-serif",
+  fontVariantNumeric: "lining-nums tabular-nums",
+  letterSpacing: "-0.01em",
+};
+
 // ══════════════════════════════════════════════════════════
 // /engage/preview — DESIGN PREVIEW of a redesigned engagement-letter
 // signing page on the Launch Pad visual system. Nothing is saved or sent.
@@ -355,7 +367,7 @@ function LetterBadge({ letter }: { letter: string }) {
 
 function ClauseText({ c }: { c: Clause }) {
   return (
-    <p className="text-[13px] sm:text-sm leading-relaxed text-neutral-300 whitespace-pre-line">
+    <p className="text-[15px] leading-7 text-neutral-200 whitespace-pre-line" style={READ_FONT}>
       {c.label && (
         <strong className="font-bold text-white">
           {c.label}
@@ -434,7 +446,7 @@ function FeeBody({ paragraphs }: { paragraphs: string[] }) {
             </div>
             {amount && (
               <div className="sm:text-right shrink-0 pl-9 sm:pl-0">
-                <div className="text-2xl sm:text-3xl font-black text-white tracking-tight" style={SYNE}>
+                <div className="text-2xl sm:text-3xl font-extrabold text-white" style={NUM_FONT}>
                   {amount.replace(/\.00$/, "")}
                 </div>
                 {unit && (
@@ -509,7 +521,7 @@ function ScopeBody({ paragraphs }: { paragraphs: string[] }) {
                 {g.clauses.map((c) => (
                   <li key={c.letter} className="flex items-start gap-2">
                     <Icon d={PATHS.check} size={14} className={`mt-1 shrink-0 ${ACCENT[meta.accent].check}`} />
-                    <p className="text-[13px] leading-relaxed text-neutral-400 min-w-0">
+                    <p className="text-sm leading-6 text-neutral-300 min-w-0" style={READ_FONT}>
                       <span className="text-[10px] font-black text-neutral-600 mr-1">{c.letter})</span>
                       {c.label ? (
                         <>
@@ -599,9 +611,9 @@ function SectionCard({
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300 mb-1">
                 In plain English
               </p>
-              <p className="text-sm leading-relaxed text-white">{summary}</p>
+              <p className="text-[15px] leading-relaxed text-white" style={READ_FONT}>{summary}</p>
             </div>
-            <p className="mt-1.5 text-[11px] text-neutral-500">
+            <p className="mt-1.5 text-xs text-neutral-400">
               Summary for convenience — the full text below is what you&apos;re agreeing to.
             </p>
           </div>
@@ -649,10 +661,10 @@ function StatTile({
   return (
     <div className={`rounded-xl p-4 ${ACCENT[accent].noteStrip}`}>
       <p className={labelCls}>{label}</p>
-      <p className="text-2xl font-black text-white tracking-tight leading-none" style={SYNE}>
+      <p className="text-2xl font-extrabold text-white leading-none" style={NUM_FONT}>
         {value}
       </p>
-      <p className="mt-2 text-[11px] leading-snug text-neutral-400">{sub}</p>
+      <p className="mt-2 text-xs leading-snug text-neutral-300">{sub}</p>
     </div>
   );
 }
@@ -719,7 +731,7 @@ function AtAGlance({ plan }: { plan: BillingPlan }) {
                 </span>
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-white leading-tight">{s.title}</p>
-                  <p className="text-[11px] text-neutral-400 leading-snug">{s.sub}</p>
+                  <p className="text-xs text-neutral-300 leading-snug">{s.sub}</p>
                 </div>
               </div>
               {i < steps.length - 1 && (
@@ -980,7 +992,7 @@ export function EngagePreviewClient() {
                     <Pill tone="neutral">Required</Pill>
                   )}
                 </div>
-                <p className="text-xs sm:text-[13px] mt-1 leading-relaxed text-neutral-400">
+                <p className="text-sm mt-1 leading-relaxed text-neutral-300">
                   Type your full legal name. Your typed name is your electronic signature (Section 15).
                 </p>
               </div>
