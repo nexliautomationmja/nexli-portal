@@ -48,6 +48,21 @@ function termWords(months: number): string {
   return `${numberWords(months)} (${months})`;
 }
 
+// ── Client placeholder ──────────────────────────────────
+
+/** The parties-block placeholder every generated letter (DRS + Enterprise) carries. */
+export const CLIENT_PLACEHOLDER = "[CLIENT NAME / COMPANY]";
+
+/**
+ * Replaces every client placeholder in a letter with the client's firm name
+ * (or the primary recipient's name). Blank labels leave the content as-is.
+ */
+export function fillClientPlaceholder(content: string, label: string | null | undefined): string {
+  const name = (label ?? "").trim();
+  if (!name) return content;
+  return content.split(CLIENT_PLACEHOLDER).join(name);
+}
+
 // ── Digital Rainmaker System Template ───────────────────
 
 export const DRS_TEMPLATE_NAME = "Digital Rainmaker System";
@@ -87,18 +102,26 @@ const CURRENT_REVISION_MARKERS = [
   "invoiced when Provider completes the Phase 1 build", // Oct 18 2026: recurring billing starts at launch (Build complete)
 ];
 
+// Same as CURRENT_REVISION_MARKERS, but only for phrases that exist in the
+// annual letter alone (checked only when plan === "annual").
+const ANNUAL_ONLY_MARKERS = [
+  "invoiced thirty (30) days before the anniversary", // Oct 18 2026: automated $42,000 annual renewal (Section 2(b))
+];
+
 /**
  * True when a stored DRS letter matches the currently shipped revision for
  * its plan: same fee line (so any price change is detected), the current
- * Section 3 heading, and every CURRENT_REVISION_MARKERS phrase (so clause
- * rewrites are detected).
+ * Section 3 heading, and every CURRENT_REVISION_MARKERS phrase — plus, for
+ * the annual plan, every ANNUAL_ONLY_MARKERS phrase (so clause rewrites are
+ * detected).
  */
 export function isCurrentDrsRevision(content: string, plan: BillingPlan): boolean {
   return (
     content.includes(drsFeeLine(plan)) &&
     content.includes(drsPlanLine(plan)) &&
     content.includes(AD_SECTION_HEADING) &&
-    CURRENT_REVISION_MARKERS.every((m) => content.includes(m))
+    CURRENT_REVISION_MARKERS.every((m) => content.includes(m)) &&
+    (plan !== "annual" || ANNUAL_ONLY_MARKERS.every((m) => content.includes(m)))
   );
 }
 
@@ -131,7 +154,7 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
     plan === "annual"
       ? `${setupClause}
 
-${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, invoiced together as a single invoice, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11.
+${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, invoiced together as a single invoice, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11. Each renewal Annual Investment of ${annual} USD is invoiced thirty (30) days before the anniversary of the effective date and is due on the anniversary.
 
 c) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly, with the first month invoiced when Provider completes the Phase 1 build and launches the system and each subsequent invoice issued monthly thereafter, and deployed by Provider on Client's behalf under Section 3(b). The advertising budget is intentionally not collected up front; advertising begins once the first monthly invoice is paid. Billed via ACH bank transfer or card through Stripe.
 

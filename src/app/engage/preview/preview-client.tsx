@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildDrsTemplate } from "@/lib/engagement-defaults";
+import { buildDrsTemplate, fillClientPlaceholder } from "@/lib/engagement-defaults";
 import { type BillingPlan } from "@/lib/drs-pricing";
 import {
   ACCENT,
@@ -31,10 +31,13 @@ import {
 // ══════════════════════════════════════════════════════════
 // /engage/preview — DESIGN PREVIEW of the engagement-letter signing page on
 // the Launch Pad visual system. Nothing is saved or sent. The legal text is
-// the real, unmodified output of buildDrsTemplate(plan); only the
+// the real output of buildDrsTemplate(plan) (with a sample client firm filled in); only the
 // presentation changes. The real page for Nexli-issued letters
 // (/engage/[token] → engage-launch-pad-client.tsx) uses the same pieces.
 // ══════════════════════════════════════════════════════════
+
+/** Sample client firm shown in the parties block of the preview letter. */
+const SAMPLE_FIRM = "Snack CPA, LLC";
 
 export function EngagePreviewClient() {
   // /engage/layout.tsx forces LIGHT mode in its own effect, which runs after
@@ -47,7 +50,10 @@ export function EngagePreviewClient() {
   }, []);
 
   const [plan, setPlan] = useState<BillingPlan>("monthly");
-  const letter = useMemo(() => buildDrsTemplate(plan), [plan]);
+  const letter = useMemo(
+    () => fillClientPlaceholder(buildDrsTemplate(plan), SAMPLE_FIRM),
+    [plan]
+  );
   const { sections } = useMemo(() => parseLetter(letter), [letter]);
   const esignNum = findSectionNum(sections, "ELECTRONIC SIGNATURES");
   const [readPct, setReadPct] = useState(0);
@@ -118,7 +124,7 @@ export function EngagePreviewClient() {
               </span>
             </h1>
             <p className="text-sm mt-3 leading-relaxed text-neutral-300">
-              Prepared for <span className="font-semibold text-white">Sample Client</span> · Nexli Automation LLC
+              Prepared for <span className="font-semibold text-white">Sample Client</span>, {SAMPLE_FIRM} · Nexli Automation LLC
             </p>
             <p className="text-xs mt-2 text-neutral-500">
               {sections.length} sections · each one starts with a plain-English summary. Sign at the bottom.

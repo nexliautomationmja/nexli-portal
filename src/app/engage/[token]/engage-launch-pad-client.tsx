@@ -309,7 +309,8 @@ export function EngageLaunchPadClient({
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">{eyebrow}</p>
             <HeroTitle text={subjectGist(data.subject, eyebrow)} />
             <p className="text-sm mt-3 leading-relaxed text-neutral-300">
-              Prepared for <span className="font-semibold text-white">{data.clientName}</span> ·{" "}
+              Prepared for <span className="font-semibold text-white">{data.clientName}</span>
+              {data.clientCompany ? `, ${data.clientCompany}` : ""} ·{" "}
               {company || "Nexli Automation LLC"}
             </p>
             <p className="text-xs mt-2 text-neutral-500">

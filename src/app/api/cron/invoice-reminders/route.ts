@@ -12,6 +12,7 @@ import {
   generateInvoiceNumber,
   generateInvoiceToken,
 } from "@/lib/invoice-utils";
+import { runAnnualRenewals } from "@/lib/digital-rainmaker";
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -23,6 +24,7 @@ export async function GET(req: NextRequest) {
   let overdueCount = 0;
   let reminderCount = 0;
   let recurredCount = 0;
+  let renewalsCreated = 0;
 
   // 1. Mark overdue invoices
   try {
@@ -249,10 +251,19 @@ export async function GET(req: NextRequest) {
     console.error("Failed to process recurring invoices:", err);
   }
 
+  // 4. Annual DRS renewals — $42,000 invoiced 30 days before each anniversary
+  try {
+    const result = await runAnnualRenewals(now);
+    renewalsCreated = result.created;
+  } catch (err) {
+    console.error("Failed to process annual DRS renewals:", err);
+  }
+
   return NextResponse.json({
     ok: true,
     overdueMarked: overdueCount,
     remindersSent: reminderCount,
     recurringGenerated: recurredCount,
+    renewalsCreated,
   });
 }

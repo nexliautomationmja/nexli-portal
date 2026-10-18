@@ -63,7 +63,7 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
     body: "fee",
     summary: ({ plan }) =>
       plan === "annual"
-        ? `${annualUpfront} is due at signing on one invoice (${setup} one-time Setup Fee + ${annualPrepaid} for a prepaid year of platform operation). Separately, the ${adBudget}/month ad budget is billed monthly starting at launch, when Nexli finishes the build; ads go live once that first invoice is paid. Initial term: ${TERM_MONTHS.annual} months.`
+        ? `${annualUpfront} is due at signing on one invoice (${setup} one-time Setup Fee + ${annualPrepaid} for a prepaid year of platform operation). Separately, the ${adBudget}/month ad budget is billed monthly starting at launch, when Nexli finishes the build; ads go live once that first invoice is paid. Initial term: ${TERM_MONTHS.annual} months; the platform then renews at ${annualPrepaid}/yr, invoiced 30 days before each anniversary.`
         : `A one-time ${setup} Setup Fee is due at signing. Then ${totalMonthly}/month (${upkeep} platform + ${adBudget} ad budget) on one invoice, starting at launch, when Nexli finishes the build; ads and ongoing services start once that first monthly invoice is paid. Initial term: ${TERM_MONTHS.monthly} months.`,
   },
   "AD MANAGEMENT": {

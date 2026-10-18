@@ -11,6 +11,7 @@ import { eq, desc } from "drizzle-orm";
 import { type BillingPlan, TERM_MONTHS } from "@/lib/drs-pricing";
 import { ENTERPRISE, isEnterpriseTier } from "@/lib/enterprise-pricing";
 import { createEngagement } from "@/lib/engagements";
+import { fillClientPlaceholder } from "@/lib/engagement-defaults";
 
 export async function GET() {
   const session = await auth();
@@ -93,6 +94,7 @@ export async function POST(req: NextRequest) {
     templateName,
     billingPlan,
     enterpriseTier,
+    clientCompany: rawClientCompany,
   } = body;
 
   if (
@@ -123,7 +125,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Optionally save as template
+  // The client's firm name fills the letter's parties block ("Client: …");
+  // falls back to the primary recipient's name.
+  const clientCompany =
+    typeof rawClientCompany === "string"
+      ? rawClientCompany.trim().slice(0, 200) || null
+      : null;
+  const clientLabel = clientCompany || String(recipients[0].name).trim();
+
+  // Optionally save as template (the raw letter, placeholder intact)
   if (saveAsTemplate && templateName) {
     await db.insert(engagementTemplates).values({
       ownerId: session.user.id,
@@ -142,10 +152,15 @@ export async function POST(req: NextRequest) {
       offer: "enterprise",
       enterpriseTier,
       termMonths: ENTERPRISE.LICENSE_MONTHS,
+      clientCompany,
     };
   } else {
     const plan: BillingPlan = billingPlan === "annual" ? "annual" : "monthly";
-    engagementMetadata = { billingPlan: plan, termMonths: TERM_MONTHS[plan] };
+    engagementMetadata = {
+      billingPlan: plan,
+      termMonths: TERM_MONTHS[plan],
+      clientCompany,
+    };
   }
 
   const senderName =
@@ -170,7 +185,7 @@ export async function POST(req: NextRequest) {
     senderEmail: cpaEmail,
     senderCompanyName: ownerInfo?.companyName || "",
     subject,
-    content,
+    content: fillClientPlaceholder(content, clientLabel),
     templateId: templateId || null,
     expiresInDays,
     recipients: recipients.map((r: { name: string; email: string }) => ({

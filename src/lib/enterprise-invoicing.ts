@@ -50,6 +50,7 @@ export interface EnterpriseInvoiceMetadata {
 interface EnterpriseEngagementMeta {
   offer?: string;
   enterpriseTier?: string;
+  clientCompany?: string | null;
 }
 
 /** True if the engagement's template is the Enterprise License letter (by name). */
@@ -118,6 +119,7 @@ export async function triggerEnterprisePostSign(args: PostSignArgs) {
       ownerId: engagement.ownerId,
       clientName: primarySigner.name,
       clientEmail: primarySigner.email,
+      clientCompany: meta.clientCompany || null,
       invoiceNumber,
       token,
       currency: "usd",

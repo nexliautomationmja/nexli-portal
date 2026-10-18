@@ -10,6 +10,7 @@ import { createElement, useEffect, useState } from "react";
 
 export interface EngageData {
   clientName: string;
+  clientCompany: string | null;
   subject: string;
   content: string;
   expiresAt: string;

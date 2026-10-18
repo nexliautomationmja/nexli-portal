@@ -23,6 +23,11 @@
  *      metadata.billingStartedAt is stamped on the engagement. When that first
  *      recurring invoice is paid, the admin is told it's clear to launch ads.
  *
+ *   4. ANNUAL RENEWAL (runAnnualRenewals, daily cron) — annual plan only: a
+ *      one-time $42,000 "platform_annual_renewal" invoice is sent thirty days
+ *      before each anniversary of the paid setup_annual invoice (the
+ *      effective date), due on the anniversary (contract Section 2(b)).
+ *
  * Ad management is included in the platform price; the ad budget is
  * pass-through (deployed on the client's ad accounts, no markup). There is no
  * performance fee, bonus, or revenue share. The billing plan and initial term
@@ -85,7 +90,8 @@ export type DrsRole =
   | "setup_annual"
   | "platform_monthly"
   | "platform_annual" // legacy (pre-Oct 18 2026 annual flow)
-  | "ad_spend_monthly";
+  | "ad_spend_monthly"
+  | "platform_annual_renewal"; // annual plan: $42,000 each anniversary (runAnnualRenewals)
 
 /** Up-front invoice roles (sent at signing; paying one opens onboarding). */
 const SETUP_ROLES: DrsRole[] = ["setup_fee", "setup_annual"];
@@ -99,6 +105,11 @@ interface DrsMetadata {
   adSpendCents: number;
   /** Initial contract term snapshotted from the engagement, when known. */
   termMonths?: number;
+  /** platform_annual_renewal only: 1 = first renewal (year 2), 2 = year 3, … */
+  renewalYear?: number;
+  /** platform_annual_renewal only: ISO start (the anniversary) / exclusive end of the renewed year. */
+  periodStart?: string;
+  periodEnd?: string;
 }
 
 interface EngagementMeta {
@@ -108,6 +119,10 @@ interface EngagementMeta {
   billingStartedAt?: string;
   /** ISO timestamp the first recurring invoice was paid (idempotency marker). */
   firstMonthlyPaidAt?: string;
+  /** Client firm name captured at compose time (fills the letter's parties block). */
+  clientCompany?: string | null;
+  /** ISO timestamp the engagement was terminated (stops annual renewals). */
+  terminatedAt?: string;
 }
 
 function planOf(engagement: { metadata: unknown }): BillingPlan {
@@ -150,16 +165,22 @@ export async function isDigitalRainmakerEngagement(
 
 // ── Idempotency Helper ────────────────────────────────────
 
-/** True if a DRS invoice with this role already exists for the engagement. */
+/**
+ * True if a DRS invoice with this role already exists for the engagement
+ * (and, for renewals, for this renewal year).
+ */
 async function drsInvoiceExists(
   engagementId: string,
-  drsRole: DrsRole
+  drsRole: DrsRole,
+  renewalYear?: number
 ): Promise<boolean> {
+  const match: Record<string, unknown> = { engagementId, drsRole };
+  if (renewalYear !== undefined) match.renewalYear = renewalYear;
   const rows = await db
     .select({ id: invoices.id })
     .from(invoices)
     .where(
-      sql`${invoices.metadata} @> ${JSON.stringify({ engagementId, drsRole })}::jsonb`
+      sql`${invoices.metadata} @> ${JSON.stringify(match)}::jsonb`
     )
     .limit(1);
   return rows.length > 0;
@@ -221,6 +242,12 @@ interface DrsInvoiceSpec {
   label: string;
   notes: string;
   lines: { description: string; amountCents: number; billingType: "one_time" | "monthly" | "yearly" }[];
+  /** Explicit due date (default: due now). */
+  dueDate?: Date;
+  /** Renewal tags written into the invoice metadata (and part of the idempotency key). */
+  renewal?: { renewalYear: number; periodStart: string; periodEnd: string };
+  /** Owner notification title (default "Invoice sent"). */
+  notificationTitle?: string;
 }
 
 const SETUP_LINE = {
@@ -341,9 +368,9 @@ export async function createDrsInvoices(args: {
   const created: (typeof invoices.$inferSelect)[] = [];
 
   for (const spec of specs) {
-    if (await drsInvoiceExists(engagement.id, spec.role)) continue;
+    if (await drsInvoiceExists(engagement.id, spec.role, spec.renewal?.renewalYear)) continue;
 
-    const dueDate = new Date();
+    const dueDate = spec.dueDate ? new Date(spec.dueDate) : new Date();
 
     // Next recurrence: one interval after the first due date, so the cron
     // generates the next invoice when this billing cycle ends.
@@ -361,6 +388,7 @@ export async function createDrsInvoices(args: {
       drsRole: spec.role,
       adSpendCents: spec.adSpendCents,
       ...(termMonths ? { termMonths } : {}),
+      ...(spec.renewal ?? {}),
     };
 
     const [invoice] = await db
@@ -369,6 +397,7 @@ export async function createDrsInvoices(args: {
         ownerId: engagement.ownerId,
         clientName: signer.name,
         clientEmail: signer.email,
+        clientCompany: engMeta.clientCompany || null,
         invoiceNumber,
         token,
         currency: "usd",
@@ -407,13 +436,14 @@ export async function createDrsInvoices(args: {
       await createNotification({
         userId: engagement.ownerId,
         type: "invoice_sent",
-        title: "Invoice sent",
+        title: spec.notificationTitle ?? "Invoice sent",
         message: `${spec.label} invoice ${invoice.invoiceNumber} (${formatCurrency(spec.totalCents, "usd")}) sent to ${signer.name} — awaiting payment`,
         metadata: {
           invoiceId: invoice.id,
           invoiceNumber: invoice.invoiceNumber,
           engagementId: engagement.id,
           drsRole: spec.role,
+          ...(spec.renewal ? { renewalYear: spec.renewal.renewalYear } : {}),
         },
       });
     } catch (err) {
@@ -598,6 +628,172 @@ export async function triggerDrsLaunchBilling(
   }
 
   return { ok: true, invoiceId: created[0].id, billingStartedAt };
+}
+
+// ── Step 4: Annual renewals (daily cron) ──────────────────
+
+/** Renewal invoices go out this many days before each anniversary. */
+export const ANNUAL_RENEWAL_NOTICE_DAYS = 30;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * `anchor` + `months` calendar months in UTC, clamped to the last day of the
+ * target month (a Feb 29 anchor lands on Feb 28 in non-leap years, Jan 31 + 1
+ * month → Feb 28/29). Always computed from the original anchor, so the
+ * anniversary never drifts year over year.
+ */
+export function addMonthsClampedUtc(anchor: Date, months: number): Date {
+  const y = anchor.getUTCFullYear();
+  const m = anchor.getUTCMonth() + months;
+  const targetY = y + Math.floor(m / 12);
+  const targetM = ((m % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetY, targetM + 1, 0)).getUTCDate();
+  return new Date(
+    Date.UTC(
+      targetY,
+      targetM,
+      Math.min(anchor.getUTCDate(), lastDay),
+      anchor.getUTCHours(),
+      anchor.getUTCMinutes(),
+      anchor.getUTCSeconds(),
+      anchor.getUTCMilliseconds()
+    )
+  );
+}
+
+const fmtDay = (d: Date) =>
+  d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+/** The renewal invoice spec for renewal year N (N = 1 → the second platform year). */
+export function drsAnnualRenewalSpec(
+  renewalYear: number,
+  periodStart: Date,
+  periodEnd: Date
+): DrsInvoiceSpec {
+  const adBudget = formatCurrency(DRS_PRICING.AD_SPEND_MONTHLY_CENTS, "usd");
+  const lastDay = new Date(periodEnd.getTime() - DAY_MS);
+  return {
+    role: "platform_annual_renewal",
+    recurring: false,
+    interval: "yearly",
+    totalCents: DRS_PRICING.ANNUAL_CENTS,
+    adSpendCents: 0,
+    label: `Annual renewal (Year ${renewalYear + 1})`,
+    notes: `Annual renewal of your Digital Rainmaker platform for ${fmtDay(periodStart)} – ${fmtDay(lastDay)}, due ${fmtDay(periodStart)}. Your ${adBudget}/mo ad budget continues to bill monthly.`,
+    lines: [
+      {
+        description: `Digital Rainmaker System — Annual Platform Renewal (Year ${renewalYear + 1})`,
+        amountCents: DRS_PRICING.ANNUAL_CENTS,
+        billingType: "yearly",
+      },
+    ],
+    dueDate: periodStart,
+    renewal: {
+      renewalYear,
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+    },
+    notificationTitle: "Annual renewal invoice sent",
+  };
+}
+
+/**
+ * Daily cron: sends the annual plan's renewal invoice ($42,000) thirty days
+ * before each anniversary of the effective date (paidAt of the setup_annual
+ * invoice), due on the anniversary — contract Section 2(b).
+ *
+ * For each paid setup_annual invoice, renewal year N (1, 2, …) is the first
+ * year without a platform_annual_renewal invoice (any status — a voided one
+ * still counts, so the admin can cancel a renewal by voiding it). Its due
+ * date is anchor + 12·N months; it's created once now >= due − 30 days. At
+ * most one renewal per engagement per run (a backlog catches up a year per
+ * day). Skips engagements that aren't "signed" or carry metadata.terminatedAt.
+ * Never throws per engagement.
+ */
+export async function runAnnualRenewals(
+  now: Date = new Date()
+): Promise<{ created: number; skipped: number }> {
+  let created = 0;
+  let skipped = 0;
+
+  const anchors = await db
+    .select({ metadata: invoices.metadata, paidAt: invoices.paidAt })
+    .from(invoices)
+    .where(
+      and(
+        sql`${invoices.metadata}->>'drsRole' = 'setup_annual'`,
+        eq(invoices.status, "paid"),
+        sql`${invoices.paidAt} IS NOT NULL`
+      )
+    )
+    .orderBy(asc(invoices.paidAt));
+
+  const seen = new Set<string>();
+  for (const row of anchors) {
+    try {
+      const meta = (row.metadata ?? {}) as Partial<DrsMetadata>;
+      const engagementId = typeof meta.engagementId === "string" ? meta.engagementId : null;
+      // One anchor per engagement (the earliest payment).
+      if (!engagementId || !row.paidAt || seen.has(engagementId)) {
+        skipped++;
+        continue;
+      }
+      seen.add(engagementId);
+
+      const [engagement] = await db
+        .select()
+        .from(engagements)
+        .where(eq(engagements.id, engagementId))
+        .limit(1);
+      const engMeta = (engagement?.metadata ?? {}) as EngagementMeta;
+      if (!engagement || engagement.status !== "signed" || engMeta.terminatedAt) {
+        skipped++;
+        continue;
+      }
+
+      const existing = await db
+        .select({ metadata: invoices.metadata })
+        .from(invoices)
+        .where(
+          sql`${invoices.metadata} @> ${JSON.stringify({ engagementId, drsRole: "platform_annual_renewal" })}::jsonb`
+        );
+      const invoicedYears = new Set(
+        existing
+          .map((e) => (e.metadata as Partial<DrsMetadata> | null)?.renewalYear)
+          .filter((y): y is number => typeof y === "number")
+      );
+      let year = 1;
+      while (invoicedYears.has(year)) year++;
+
+      const anchor = new Date(row.paidAt);
+      const due = addMonthsClampedUtc(anchor, 12 * year);
+      if (now.getTime() < due.getTime() - ANNUAL_RENEWAL_NOTICE_DAYS * DAY_MS) {
+        skipped++;
+        continue;
+      }
+
+      const signer = await getPrimaryClientSigner(engagementId);
+      if (!signer) {
+        skipped++;
+        continue;
+      }
+
+      const periodEnd = addMonthsClampedUtc(anchor, 12 * (year + 1));
+      const made = await createDrsInvoices({
+        engagement,
+        signer,
+        specs: [drsAnnualRenewalSpec(year, due, periodEnd)],
+      });
+      if (made.length > 0) created++;
+      else skipped++;
+    } catch (err) {
+      console.error("DRS: annual renewal failed:", err);
+      skipped++;
+    }
+  }
+
+  return { created, skipped };
 }
 
 // ── Status (admin onboarding view) ────────────────────────

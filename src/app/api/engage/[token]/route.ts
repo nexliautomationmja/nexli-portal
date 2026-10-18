@@ -97,6 +97,7 @@ export async function GET(
 
   return NextResponse.json({
     clientName: signer.name,
+    clientCompany: clientCompanyOf(engagement.metadata),
     subject: engagement.subject,
     content: engagement.content,
     expiresAt: engagement.expiresAt,
@@ -115,6 +116,11 @@ export async function GET(
         }
       : null,
   });
+}
+
+function clientCompanyOf(metadata: unknown): string | null {
+  const v = (metadata as { clientCompany?: unknown } | null)?.clientCompany;
+  return typeof v === "string" && v.trim() ? v : null;
 }
 
 // POST — submit signature for this signer

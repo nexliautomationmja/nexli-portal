@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
-import { generateDrsContent } from "@/lib/engagement-defaults";
+import { generateDrsContent, fillClientPlaceholder } from "@/lib/engagement-defaults";
 import { DRS_PRICING, SETUP_SCOPE, TOTAL_MONTHLY_CENTS, TERM_MONTHS, ANNUAL_UPFRONT_CENTS, type BillingPlan } from "@/lib/drs-pricing";
 import { generateEnterpriseContent } from "@/lib/enterprise-engagement";
 import {
@@ -68,6 +68,8 @@ export function EngagementsClient() {
 
   // Compose form
   const [recipients, setRecipients] = useState([{ name: "", email: "" }]);
+  // Client firm name — fills the letter's "Client: [CLIENT NAME / COMPANY]" line.
+  const [clientCompany, setClientCompany] = useState("");
   const [subject, setSubject] = useState("");
   const [content, setContent] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -169,6 +171,9 @@ export function EngagementsClient() {
   }
 
   const allRecipientsValid = recipients.every((r) => r.name.trim() && r.email.trim());
+  // What the server will put in the parties block: firm name, else primary recipient.
+  const clientLabel = clientCompany.trim() || recipients[0]?.name.trim() || "";
+  const previewContent = fillClientPlaceholder(content, clientLabel);
 
   async function handleSend() {
     if (!allRecipientsValid || !subject || !content) return;
@@ -179,6 +184,7 @@ export function EngagementsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           recipients: recipients.map((r) => ({ name: r.name.trim(), email: r.email.trim() })),
+          clientCompany: clientCompany.trim().slice(0, 200) || undefined,
           subject,
           content,
           templateId: selectedTemplate || undefined,
@@ -240,6 +246,7 @@ export function EngagementsClient() {
 
   function resetForm() {
     setRecipients([{ name: "", email: "" }]);
+    setClientCompany("");
     setSubject("");
     setContent("");
     setSelectedTemplate("");
@@ -497,7 +504,7 @@ export function EngagementsClient() {
               {showPreview && (
                 <div style={{ padding: "8px 0" }}>
                   <DocumentPreview
-                    content={content}
+                    content={previewContent}
                     subject={subject}
                     clientName={recipients[0]?.name || "Client Name"}
                     fromName={firmInfo.name}
@@ -517,6 +524,7 @@ export function EngagementsClient() {
                 </div>
                 <ClientPicker
                   onSelect={(c) => {
+                    if (c.company && !clientCompany.trim()) setClientCompany(c.company);
                     const emptyIdx = recipients.findIndex((r) => !r.name && !r.email);
                     if (emptyIdx >= 0) {
                       setRecipients((prev) =>
@@ -574,6 +582,25 @@ export function EngagementsClient() {
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* Client firm name — fills the letter's parties block */}
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
+                  Client firm / company name
+                </label>
+                <input
+                  type="text"
+                  value={clientCompany}
+                  onChange={(e) => setClientCompany(e.target.value)}
+                  maxLength={200}
+                  placeholder="e.g. Snack CPA, LLC"
+                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
+                />
+                <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                  Replaces [CLIENT NAME / COMPANY] in the letter. Left blank, the first recipient&apos;s name is used.
+                </p>
               </div>
 
               {/* Subject */}

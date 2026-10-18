@@ -19,6 +19,9 @@ import { DRS_PRICING } from "@/lib/drs-pricing";
  * setup + $42,000 prepaid platform year). The whole amount counts as revenue
  * when paid, and while the prepaid year runs (paidAt + 12 months) the
  * platform portion contributes ANNUAL_CENTS / 12 to that client's MRR.
+ * Each paid `platform_annual_renewal` invoice ($42,000, sent by the cron 30
+ * days before the anniversary) does the same for its own renewed year
+ * (metadata.periodStart → periodEnd).
  */
 
 export interface BookRow {
@@ -215,6 +218,17 @@ export async function getBookOfBusiness(
     if (drsRole === "setup_annual" && r.status === "paid" && r.paidAt) {
       const prepaidEnd = addMonths(new Date(r.paidAt), 12).getTime();
       if (now < prepaidEnd) {
+        roll.mrr += Math.round(DRS_PRICING.ANNUAL_CENTS / 12);
+      }
+    }
+    // Annual DRS renewal: a paid platform_annual_renewal covers its own
+    // platform year (metadata.periodStart → periodEnd). An unpaid (sent)
+    // renewal adds nothing.
+    if (drsRole === "platform_annual_renewal" && r.status === "paid") {
+      const period = r.metadata as { periodStart?: unknown; periodEnd?: unknown } | null;
+      const start = typeof period?.periodStart === "string" ? Date.parse(period.periodStart) : NaN;
+      const end = typeof period?.periodEnd === "string" ? Date.parse(period.periodEnd) : NaN;
+      if (Number.isFinite(start) && Number.isFinite(end) && now >= start && now < end) {
         roll.mrr += Math.round(DRS_PRICING.ANNUAL_CENTS / 12);
       }
     }
