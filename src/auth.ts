@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { ensureCoreSchema } from "@/lib/schema-bootstrap";
 import {
   isSubscriptionActive,
   normalizeTier,
@@ -67,6 +68,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!credentials?.email || !credentials?.password) return null;
 
           const normalizedEmail = (credentials.email as string).toLowerCase().trim();
+
+          // Production DB may be missing hand-written migrations (no migration
+          // pipeline). Idempotent; runs once per lambda. Never block sign-in
+          // on it — if it fails the select below surfaces the real error.
+          try {
+            await ensureCoreSchema();
+          } catch (err) {
+            console.error("[AUTH] schema bootstrap failed:", err);
+          }
 
           const result = await db
             .select()

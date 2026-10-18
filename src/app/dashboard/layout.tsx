@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { ensureCoreSchema } from "@/lib/schema-bootstrap";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { NotificationProvider } from "@/components/dashboard/notification-provider";
 import { UpgradeBanner } from "@/components/dashboard/upgrade-banner";
@@ -43,6 +44,7 @@ export default async function DashboardLayout({
     | undefined;
   let accountLookupFailed = false;
   try {
+    await ensureCoreSchema();
     [account] = await db
       .select({
         role: users.role,
