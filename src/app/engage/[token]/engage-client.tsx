@@ -1,29 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { DocumentPreview } from "@/components/engagement-document";
 import { NEXLI_BRANDING, type OwnerBranding } from "@/lib/branding";
+import {
+  useEngagement,
+  signEngagement,
+  declineEngagement,
+  agreementText,
+  buildPreviewSignatureSvg,
+  SignatureCanvas,
+} from "./use-engagement";
 
 const NEXLI_LOGO = "/logos/nexli-logo-white-wordmark@2x.png";
-
-interface EngageData {
-  clientName: string;
-  subject: string;
-  content: string;
-  expiresAt: string;
-  status: string;
-  role?: string | null;
-  from?: {
-    name: string;
-    company: string;
-  };
-  sender?: {
-    name: string;
-    role: string | null;
-    signedAt: string | null;
-    signatureData: string | null;
-  } | null;
-}
 
 export function EngageClient({
   token,
@@ -32,9 +21,13 @@ export function EngageClient({
   token: string;
   branding?: OwnerBranding;
 }) {
-  const [data, setData] = useState<EngageData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const engagement = useEngagement(token);
+  const data = engagement.data;
+  const loading = engagement.status === "loading";
+  // Sign / decline failures replace the page with the error state, exactly
+  // like a load failure.
+  const [actionError, setError] = useState<string | null>(null);
+  const error = engagement.error ?? actionError;
 
   // Step flow: 1=Review, 2=Sign, 3=Complete
   const [step, setStep] = useState(1);
@@ -53,26 +46,6 @@ export function EngageClient({
   const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
   const signSectionRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/engage/${token}`);
-        if (!res.ok) {
-          const body = await res.json();
-          setError(body.error || "Invalid or expired link");
-          return;
-        }
-        const d = await res.json();
-        setData(d);
-      } catch {
-        setError("Failed to load engagement letter");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [token]);
-
   function handleStart() {
     setStep(2);
     setTimeout(() => {
@@ -80,89 +53,29 @@ export function EngageClient({
     }, 100);
   }
 
-  // Render the typed name into the hidden canvas using the cursive font.
-  // Returns a PNG data URL we can ship to the existing API.
-  async function renderTypedSignatureToPng(name: string): Promise<string | null> {
-    const canvas = hiddenCanvasRef.current;
-    if (!canvas) return null;
-
-    // Wait for the cursive font to be loaded so it actually renders correctly.
-    if (typeof document !== "undefined" && document.fonts) {
-      try {
-        await document.fonts.load('48px "Dancing Script"');
-        await document.fonts.ready;
-      } catch {
-        /* ignore — fall back to whatever the system has */
-      }
-    }
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#1e293b";
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "center";
-
-    // Auto-shrink font so long names fit
-    let fontSize = 72;
-    const maxWidth = canvas.width - 40;
-    do {
-      ctx.font = `${fontSize}px "Dancing Script", "Snell Roundhand", "Brush Script MT", cursive`;
-      if (ctx.measureText(name).width <= maxWidth) break;
-      fontSize -= 4;
-    } while (fontSize > 24);
-
-    ctx.fillText(name, canvas.width / 2, canvas.height / 2);
-    return canvas.toDataURL("image/png");
-  }
-
   async function handleSign() {
     if (!data || !agreed || !typedName.trim()) return;
 
     setSigning(true);
-    try {
-      const signatureData = await renderTypedSignatureToPng(typedName.trim());
-      if (!signatureData) {
-        setError("Signing failed. Please try again.");
-        return;
-      }
-      const res = await fetch(`/api/engage/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signatureData, typedName: typedName.trim() }),
-      });
-      // Parse defensively: the signature is already recorded server-side on a
-      // 2xx, so a malformed body must not surface as a signing failure.
-      const body: { error?: string; onboardingUrl?: string } = await res
-        .json()
-        .catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error || "Signing failed");
-        return;
-      }
-      if (body.onboardingUrl) setOnboardingUrl(body.onboardingUrl);
+    const result = await signEngagement(token, typedName, hiddenCanvasRef.current);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      if (result.onboardingUrl) setOnboardingUrl(result.onboardingUrl);
       setSigned(true);
       setStep(3);
-    } catch {
-      setError("Signing failed. Please try again.");
-    } finally {
-      setSigning(false);
     }
+    setSigning(false);
   }
 
   async function handleDecline() {
-    try {
-      await fetch(`/api/engage/${token}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: declineReason }),
-      });
-      setDeclined(true);
-      setShowDeclineModal(false);
-    } catch {
-      setError("Failed to decline");
+    const result = await declineEngagement(token, declineReason);
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
+    setDeclined(true);
+    setShowDeclineModal(false);
   }
 
   const canSign = agreed && typedName.trim().length > 0;
@@ -460,22 +373,7 @@ export function EngageClient({
                   className="mt-0.5 w-5 h-5 rounded border-gray-300 accent-blue-600"
                 />
                 <span className="text-xs text-gray-600 leading-relaxed group-hover:text-gray-900 transition-colors">
-                  {data?.role ? (
-                    <>
-                      I have read the engagement letter above and, as {data.role}, agree to sign electronically
-                      on behalf of the organization.
-                      By signing, I acknowledge that my electronic signature is the legal equivalent
-                      of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
-                      My signature, role, IP address, and timestamp will be recorded.
-                    </>
-                  ) : (
-                    <>
-                      I have read the engagement letter above and agree to sign electronically.
-                      By signing, I acknowledge that my electronic signature is the legal equivalent
-                      of my handwritten signature under the ESIGN Act (15 U.S.C. &sect; 7001) and UETA.
-                      My signature, IP address, and timestamp will be recorded.
-                    </>
-                  )}
+                  {agreementText(data?.role)}
                 </span>
               </label>
 
@@ -504,13 +402,7 @@ export function EngageClient({
       <Footer />
 
       {/* Hidden canvas used to render typed signature into PNG for the API */}
-      <canvas
-        ref={hiddenCanvasRef}
-        width={600}
-        height={180}
-        style={{ position: "absolute", left: "-10000px", top: "-10000px" }}
-        aria-hidden="true"
-      />
+      <SignatureCanvas ref={hiddenCanvasRef} />
 
       {/* ═══ Sticky Floating Action Button ═══ */}
       {step < 3 && (
@@ -665,34 +557,6 @@ function Footer() {
       </div>
     </footer>
   );
-}
-
-// Cursive SVG preview of typed name — used for the live document preview only.
-// The actual saved signature is rendered to PNG via a hidden canvas in
-// `renderTypedSignatureToPng` so it matches what the recipient sees on submit.
-function buildPreviewSignatureSvg(name: string): string {
-  const escaped = name.replace(/[<>&'"]/g, (c) => {
-    switch (c) {
-      case "<": return "&lt;";
-      case ">": return "&gt;";
-      case "&": return "&amp;";
-      case "'": return "&apos;";
-      case '"': return "&quot;";
-      default: return c;
-    }
-  });
-  const length = name.length;
-  let fontSize = 84;
-  if (length > 12) fontSize = 72;
-  if (length > 18) fontSize = 60;
-  if (length > 26) fontSize = 48;
-  if (length > 36) fontSize = 38;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="600" height="180"><text x="300" y="105" font-family="'Brush Script MT','Snell Roundhand','Lucida Handwriting','Apple Chancery',cursive" font-size="${fontSize}" font-style="italic" font-weight="500" fill="#1e293b" text-anchor="middle" dominant-baseline="middle">${escaped}</text></svg>`;
-  const base64 =
-    typeof btoa !== "undefined"
-      ? btoa(unescape(encodeURIComponent(svg)))
-      : "";
-  return `data:image/svg+xml;base64,${base64}`;
 }
 
 function StepBadge({ num, label, active, current }: { num: number; label: string; active: boolean; current: boolean }) {
