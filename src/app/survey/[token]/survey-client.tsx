@@ -88,7 +88,24 @@ export function SurveyClient({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // /survey/preview renders the real page with sample data and never saves —
+  // so Marcel (and prospects on a call) can see exactly what clients get.
+  const isPreview = token === "preview";
+
   useEffect(() => {
+    if (isPreview) {
+      const d = new Date();
+      const dow = d.getUTCDay();
+      d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+      setMeta({
+        clientName: "Sample Client",
+        weekStart: d.toISOString().slice(0, 10),
+        submitted: false,
+        results: null,
+      });
+      setLoading(false);
+      return;
+    }
     fetch(`/api/survey/${token}`)
       .then(async (r) => {
         if (r.status === 404) {
@@ -104,10 +121,14 @@ export function SurveyClient({
       })
       .catch(() => setStatus("not_found"))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, isPreview]);
 
   async function submit() {
     if (!score || !valueAnswer) return;
+    if (isPreview) {
+      setDone(true);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -156,7 +177,7 @@ export function SurveyClient({
     return (
       <Centered
         title="This one's closed"
-        body="This week's pulse check has expired — no worries. A fresh one lands in your inbox every Monday, and you can always reply to any of our emails to reach Marcel directly."
+        body="This pulse check has expired — no worries. A fresh one lands in your inbox every other Monday, and you can always reply to any of our emails to reach Marcel directly."
       />
     );
   }
@@ -187,6 +208,11 @@ export function SurveyClient({
   return (
     <Shell>
       <div className="text-center mb-8">
+        {isPreview && (
+          <p className="mb-4 inline-block rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-amber-300">
+            Preview — nothing you enter here is saved
+          </p>
+        )}
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">
           Week of {weekLabel(meta.weekStart)}
         </p>

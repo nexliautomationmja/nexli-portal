@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { clientSurveys, clientWeeklyUpdates, users } from "@/db/schema";
 import { and, desc, eq, inArray, isNotNull, isNull, gt } from "drizzle-orm";
-import { ensureClientSuccessTables, weekStartOf } from "@/lib/client-success-tables";
+import { ensureClientSuccessTables } from "@/lib/client-success-tables";
 import { generateInvoiceToken } from "@/lib/invoice-utils";
 import { getBookOfBusiness, type BookRow } from "@/lib/book-of-business";
 import { getNexliAdminId } from "@/lib/foundation-project";
@@ -14,7 +14,25 @@ import { ensureClientAccount } from "@/lib/client-accounts";
  */
 
 /** A survey link stays usable this many days after it's created. */
-export const SURVEY_EXPIRES_DAYS = 21;
+/** Open window per survey. Surveys go out every other Monday, so 13 days keeps at most one open at a time. */
+export const SURVEY_EXPIRES_DAYS = 13;
+
+/** Cadence: a survey goes out on even ISO weeks (every other Monday). */
+export const SURVEY_EVERY_N_WEEKS = 2;
+
+/** ISO-8601 week number of a YYYY-MM-DD date. */
+export function isoWeekNumber(dateOnly: string): number {
+  const d = new Date(`${dateOnly}T00:00:00Z`);
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+  return Math.ceil(((d.getTime() - yearStart) / 86_400_000 + 1) / 7);
+}
+
+/** True when the week starting `weekStart` (a Monday) is a survey week. */
+export function isSurveyWeek(weekStart: string): boolean {
+  return isoWeekNumber(weekStart) % SURVEY_EVERY_N_WEEKS === 0;
+}
 /** Scores at or below this (out of 5) alert Marcel. */
 export const LOW_SCORE_MAX = 2;
 
@@ -136,12 +154,12 @@ export async function getPendingSurvey(
     .where(
       and(
         eq(clientSurveys.clientUserId, clientUserId),
-        eq(clientSurveys.weekStart, weekStartOf(now)),
         isNotNull(clientSurveys.sentAt),
         isNull(clientSurveys.submittedAt),
         gt(clientSurveys.expiresAt, now)
       )
     )
+    .orderBy(desc(clientSurveys.weekStart))
     .limit(1);
   return row ?? null;
 }

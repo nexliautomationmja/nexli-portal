@@ -6,7 +6,7 @@ import { sendEmailWithLog } from "@/lib/email";
 import { buildWeeklySurveyEmail, FOUNDATION_SENDER_NAME } from "@/lib/email-foundation";
 import { getPortalUrl } from "@/lib/foundation-config";
 import { ensureClientSuccessTables, weekStartOf } from "@/lib/client-success-tables";
-import { activeDrsClients, getOrCreateWeeklySurvey } from "@/lib/client-success";
+import { activeDrsClients, getOrCreateWeeklySurvey, isSurveyWeek } from "@/lib/client-success";
 
 /**
  * Monday 14:00 UTC (vercel.json): email every active DRS client this week's
@@ -20,6 +20,11 @@ export async function GET(req: NextRequest) {
   }
 
   const weekStart = weekStartOf(new Date());
+  // Biweekly cadence (Marcel, Oct 18 2026): the cron fires every Monday but
+  // only sends on even ISO weeks. Odd weeks are a no-op.
+  if (!isSurveyWeek(weekStart)) {
+    return NextResponse.json({ ok: true, weekStart, offWeek: true, sent: 0 });
+  }
   const portalUrl = getPortalUrl();
   let sent = 0;
   let skipped = 0;

@@ -876,7 +876,18 @@ function CustomerSuccessPanel({ surveys }: { surveys: SurveyItem[] }) {
   return (
     <div className="glass-card overflow-hidden">
       <div className="p-4 border-b border-[var(--card-border)] flex items-center justify-between gap-3">
-        <p className="section-header mb-0">Customer Success</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="section-header mb-0">Customer Success</p>
+          <a
+            href="/survey/preview"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold text-cyan-400 hover:underline"
+            title="Opens the exact page clients see (nothing is saved)"
+          >
+            Preview the survey ↗
+          </a>
+        </div>
         {latest && latest.score != null && (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--text-main)" }}>
             <span className="w-2 h-2 rounded-full" style={{ background: pulseColor(latest.score) }} />
@@ -886,7 +897,7 @@ function CustomerSuccessPanel({ surveys }: { surveys: SurveyItem[] }) {
       </div>
       {surveys.length === 0 ? (
         <p className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>
-          No responses yet — surveys go out Mondays.
+          No responses yet — surveys go out every other Monday.
         </p>
       ) : (
         <div className="divide-y divide-[var(--card-border)]">

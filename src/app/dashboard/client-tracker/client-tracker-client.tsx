@@ -371,7 +371,7 @@ export function ClientTrackerClient() {
                             <span
                               className="text-sm"
                               style={{ color: "var(--text-muted)" }}
-                              title="No pulse-check response yet — surveys go out Mondays"
+                              title="No pulse-check response yet — surveys go out every other Monday"
                             >
                               —
                             </span>
