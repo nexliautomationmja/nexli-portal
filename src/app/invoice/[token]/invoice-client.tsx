@@ -944,6 +944,12 @@ function PayButton({
           );
           return;
         }
+        if (data.error === "payment_processing") {
+          setPayError(
+            "A payment for this invoice is already processing, so there's nothing to pay right now. You'll get a receipt by email when it clears."
+          );
+          return;
+        }
         setPayError(data.error || "Failed to create payment session.");
         return;
       }

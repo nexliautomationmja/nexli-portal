@@ -20,7 +20,9 @@ export type NotificationType =
   | "onboarding_overdue"
   | "survey_submitted"
   | "survey_low_score"
-  | "weekly_update_due";
+  | "weekly_update_due"
+  | "autopay_failed"
+  | "autopay_canceled";
 
 interface CreateNotificationParams {
   userId: string;
@@ -55,6 +57,8 @@ const TYPE_CONFIG: Record<
   survey_submitted: { emoji: "\u{1F4DD}", color: "#2563EB" },
   survey_low_score: { emoji: "\u{1F6A8}", color: "#F43F5E" },
   weekly_update_due: { emoji: "\u{1F4EC}", color: "#F59E0B" },
+  autopay_failed: { emoji: "\u26A0\uFE0F", color: "#F43F5E" },
+  autopay_canceled: { emoji: "\u26D4", color: "#F43F5E" },
 };
 
 export async function createNotification({

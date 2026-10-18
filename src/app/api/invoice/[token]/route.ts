@@ -2,6 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { invoices, invoiceLineItems, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getAutopayInfo } from "@/lib/autopay";
+
+/** What the invoice is for — drives the pay page's "what happens next" copy. */
+type InvoiceKind =
+  | "setup"
+  | "annual"
+  | "monthly"
+  | "ad_budget"
+  | "renewal"
+  | "enterprise"
+  | "other";
+
+function invoiceKind(meta: Record<string, unknown> | null): InvoiceKind {
+  switch (meta?.drsRole) {
+    case "setup_fee":
+      return "setup";
+    case "setup_annual":
+      return "annual";
+    case "platform_monthly":
+      return "monthly";
+    case "ad_spend_monthly":
+      return "ad_budget";
+    case "platform_annual_renewal":
+      return "renewal";
+  }
+  if (meta?.offer === "enterprise") return "enterprise";
+  return "other";
+}
 
 export async function GET(
   _req: NextRequest,
@@ -39,6 +67,9 @@ export async function GET(
     .from(invoiceLineItems)
     .where(eq(invoiceLineItems.invoiceId, invoice.id));
 
+  const meta = (invoice.metadata ?? null) as Record<string, unknown> | null;
+  const autopay = getAutopayInfo(invoice, lineItems);
+
   const [owner] = await db
     .select({ name: users.name, email: users.email, companyName: users.companyName })
     .from(users)
@@ -48,7 +79,10 @@ export async function GET(
   return NextResponse.json({
     invoice: {
       invoiceNumber: invoice.invoiceNumber,
-      status: invoice.viewedAt ? invoice.status : "viewed",
+      // The first view of a "sent" invoice flips it to "viewed" above, after
+      // `invoice` was read — report that. Every other status (paid, partial,
+      // overdue, …) is reported as stored.
+      status: invoice.status === "sent" && !invoice.viewedAt ? "viewed" : invoice.status,
       currency: invoice.currency,
       subtotal: invoice.subtotal,
       taxRate: invoice.taxRate,
@@ -65,9 +99,11 @@ export async function GET(
       clientCompany: invoice.clientCompany,
       paymentUrl: invoice.paymentUrl,
       paidAt: invoice.paidAt,
-      achOnly: Boolean(
-        (invoice.metadata as { achOnly?: unknown } | null)?.achOnly
-      ),
+      achOnly: Boolean(meta?.achOnly),
+      paymentMethod: invoice.paymentMethod,
+      achSettlementStatus: invoice.achSettlementStatus,
+      kind: invoiceKind(meta),
+      autopay,
     },
     lineItems: lineItems.sort((a, b) => a.order - b.order),
     from: {

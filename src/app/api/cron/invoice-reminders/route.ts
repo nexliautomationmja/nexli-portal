@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { invoices, invoiceReminders, invoiceLineItems, users } from "@/db/schema";
-import { eq, and, lte, isNull, inArray, not } from "drizzle-orm";
+import { eq, and, lte, isNull, inArray, not, sql } from "drizzle-orm";
 import {
   sendEmailWithLog,
   buildInvoiceReminderEmail,
@@ -71,6 +71,10 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      // A bank transfer is settling (3–5 business days) — don't nag the
+      // client meanwhile; retry this reminder on a later run.
+      if (invoice.achSettlementStatus === "pending") continue;
+
       try {
         // Get the CPA name
         const [owner] = await db
@@ -125,7 +129,11 @@ export async function GET(req: NextRequest) {
         and(
           eq(invoices.isRecurring, true),
           lte(invoices.nextRecurrenceDate, now),
-          not(inArray(invoices.status, ["canceled", "void"]))
+          not(inArray(invoices.status, ["canceled", "void"])),
+          // Digital Rainmaker autopay: Stripe charges these monthly and the
+          // webhook records each charge as a paid invoice — no draft copies.
+          // (The parent stays isRecurring so book-of-business counts its MRR.)
+          sql`(${invoices.metadata} IS NULL OR ${invoices.metadata}->'autopay'->>'subscriptionId' IS NULL)`
         )
       );
 

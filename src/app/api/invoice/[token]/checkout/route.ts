@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { invoices } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { invoices, invoiceLineItems } from "@/db/schema";
+import { asc, eq } from "drizzle-orm";
 import {
   createCheckoutSession,
   resolveStripeAccountForOwner,
 } from "@/lib/stripe";
 import { cardPriceCents } from "@/lib/drs-pricing";
+import {
+  createAutopayCheckout,
+  hasLiveAutopay,
+  isAutopayEligible,
+} from "@/lib/autopay";
 
 export async function POST(
   req: NextRequest,
@@ -43,6 +48,12 @@ export async function POST(
     );
   }
 
+  // A bank transfer (one-time or autopay) is already in flight — don't let
+  // the client pay twice while it settles (3–5 business days).
+  if (invoice.achSettlementStatus === "pending" || hasLiveAutopay(invoice)) {
+    return NextResponse.json({ error: "payment_processing" }, { status: 409 });
+  }
+
   // ACH-only invoices (e.g. the Enterprise License fee) never accept card —
   // the pay page hides the option, and this is the server-side guarantee.
   const achOnly = Boolean(
@@ -76,6 +87,47 @@ export async function POST(
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.net";
   const invoicePageUrl = `${portalUrl}/invoice/${token}`;
+
+  // Digital Rainmaker monthly invoice → autopay subscription. The client
+  // pays this one invoice once; the chosen method is saved and charged
+  // automatically every month at that method's price.
+  if (await isAutopayEligible(invoice)) {
+    try {
+      const lineItems = await db
+        .select({
+          description: invoiceLineItems.description,
+          amount: invoiceLineItems.amount,
+        })
+        .from(invoiceLineItems)
+        .where(eq(invoiceLineItems.invoiceId, invoice.id))
+        .orderBy(asc(invoiceLineItems.order));
+
+      const { sessionId, checkoutUrl } = await createAutopayCheckout({
+        invoice,
+        lineItems,
+        method,
+        successUrl: `${invoicePageUrl}?payment=success`,
+        cancelUrl: `${invoicePageUrl}?payment=canceled`,
+      });
+
+      await db
+        .update(invoices)
+        .set({
+          stripeCheckoutSessionId: sessionId,
+          stripeAccountId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, invoice.id));
+
+      return NextResponse.json({ checkoutUrl });
+    } catch (err) {
+      console.error("Failed to create Stripe autopay checkout session:", err);
+      return NextResponse.json(
+        { error: "Failed to create payment session" },
+        { status: 500 }
+      );
+    }
+  }
 
   // Dual pricing: the invoice balance is the discounted ACH price; card
   // payments are charged at the card price. Computed server-side — the

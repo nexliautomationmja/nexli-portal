@@ -38,6 +38,8 @@ const TYPE_ICONS: Record<string, string> = {
   survey_submitted: "\u{1F4DD}",
   survey_low_score: "\u{1F6A8}",
   weekly_update_due: "\u{1F4EC}",
+  autopay_failed: "\u26A0\uFE0F",
+  autopay_canceled: "\u26D4",
   portal_message: "\u{1F4AC}",
 };
 

@@ -22,6 +22,12 @@
  *        - Annual plan  → $5,000/month ad budget (drsRole "ad_spend_monthly")
  *      metadata.billingStartedAt is stamped on the engagement. When that first
  *      recurring invoice is paid, the admin is told it's clear to launch ads.
+ *      AUTOPAY (lib/autopay.ts): the client pays that invoice once through a
+ *      subscription-mode Stripe Checkout (bank or card, locked to that
+ *      method, each at its own price — dual pricing). Stripe then charges the
+ *      saved method every month; the webhook records each charge as a new,
+ *      already-paid invoice (a receipt) and the recurring cron skips parents
+ *      on autopay. State: invoices/engagements metadata.autopay.
  *
  *   4. ANNUAL RENEWAL (runAnnualRenewals, daily cron) — annual plan only: a
  *      one-time $42,000 "platform_annual_renewal" invoice is sent thirty days
@@ -38,7 +44,8 @@
  * adSpendCents, termMonths? } where adSpendCents is the pass-through portion
  * of that invoice's total (book-of-business.ts splits it out of revenue). The
  * recurring cron (api/cron/invoice-reminders) rolls each recurring parent
- * forward by its interval and copies the metadata. Legacy engagements may
+ * forward by its interval and copies the metadata — except parents on
+ * autopay (metadata.autopay.subscriptionId), which Stripe bills directly. Legacy engagements may
  * still carry "platform_annual" invoices from the previous flow.
  *
  * Template detection is by name (case-insensitive contains "digital rainmaker").
@@ -326,7 +333,7 @@ export function drsLaunchInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
         totalCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
         adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
         label: "Monthly ad budget",
-        notes: `Managed Advertising Budget (${adBudget}/month) for the Digital Rainmaker System — deployed on your behalf on the advertising platforms at no markup. Your build is complete; ads launch once this invoice is paid. Billed automatically each month.`,
+        notes: `Managed Advertising Budget (${adBudget}/month) for the Digital Rainmaker System — deployed on your behalf on the advertising platforms at no markup. Your build is complete; ads launch once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).`,
         lines: [adLine],
       },
     ];
@@ -339,7 +346,7 @@ export function drsLaunchInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
       totalCents: TOTAL_MONTHLY_CENTS,
       adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
       label: "Monthly",
-      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (hosting, maintenance, ad management, support, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Billed automatically each month.`,
+      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (hosting, maintenance, ad management, support, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).`,
       lines: [
         {
           description: "Digital Rainmaker System — Monthly Platform",
@@ -824,6 +831,8 @@ export interface DrsBillingStatus {
     createdAt: string;
   } | null;
   billingStartedAt: string | null;
+  /** Monthly autopay on the first monthly invoice (null = not set up). */
+  autopay: { active: boolean; method: "ach" | "card" | null; status: string | null } | null;
 }
 
 const isoOrNull = (d: Date | string | null | undefined) =>
@@ -843,7 +852,7 @@ export async function getDrsBillingStatus(
     ? await isDigitalRainmakerEngagement(engagement.templateId)
     : false;
   if (!engagement || !isDrs) {
-    return { isDrs: false, plan, setup: null, firstMonthly: null, billingStartedAt: null };
+    return { isDrs: false, plan, setup: null, firstMonthly: null, billingStartedAt: null, autopay: null };
   }
 
   const cols = {
@@ -853,6 +862,7 @@ export async function getDrsBillingStatus(
     total: invoices.total,
     paidAt: invoices.paidAt,
     createdAt: invoices.createdAt,
+    metadata: invoices.metadata,
   };
   const [setup] = await db
     .select(cols)
@@ -891,6 +901,18 @@ export async function getDrsBillingStatus(
         }
       : null,
     billingStartedAt: typeof meta.billingStartedAt === "string" ? meta.billingStartedAt : null,
+    autopay: autopayStatusOf(first?.metadata),
+  };
+}
+
+function autopayStatusOf(metadata: unknown): DrsBillingStatus["autopay"] {
+  const a = (metadata as { autopay?: Record<string, unknown> } | null)?.autopay;
+  if (!a || typeof a !== "object" || typeof a.subscriptionId !== "string") return null;
+  const status = typeof a.status === "string" ? a.status : null;
+  return {
+    active: status !== "canceled" && status !== "incomplete_expired",
+    method: a.method === "card" || a.method === "ach" ? a.method : null,
+    status,
   };
 }
 

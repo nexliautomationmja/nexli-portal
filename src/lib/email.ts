@@ -1134,3 +1134,51 @@ export function buildPaymentReceiptEmail(params: {
 
   return { subject, html };
 }
+
+/**
+ * Digital Rainmaker autopay: the monthly charge failed (or the bank / card
+ * needs the client to confirm it). Links to Stripe's hosted invoice page,
+ * where the client can update the payment method or pay now. Stripe keeps
+ * retrying automatically (Smart Retries) in the meantime.
+ */
+export function buildAutopayFailedEmail(params: {
+  clientName: string;
+  amount: string;
+  /** Stripe hosted_invoice_url — update payment / pay now. */
+  payUrl: string | null;
+  /** "failed" = the charge was declined; "action_required" = needs confirmation. */
+  reason: "failed" | "action_required";
+  branding?: OwnerBranding;
+}): { subject: string; html: string } {
+  const { clientName, amount, payUrl, reason } = params;
+  const lead =
+    reason === "action_required"
+      ? `Your bank or card issuer needs you to confirm this month's Digital Rainmaker autopay payment of <strong style="color:#fff;">${amount}</strong> before it can go through.`
+      : `We weren't able to collect this month's Digital Rainmaker autopay payment of <strong style="color:#fff;">${amount}</strong>. We'll retry automatically over the next few days.`;
+
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">${
+      reason === "action_required" ? "Please confirm your payment" : "Your autopay payment didn't go through"
+    }</h1>
+    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;line-height:1.6;">
+      Hi ${escapeHtml(clientName)}, ${lead}
+    </p>
+    ${
+      payUrl
+        ? `<div style="text-align:center;margin:28px 0;">
+      <a href="${payUrl}" style="${buttonStyleFor(params.branding)}">Update payment / pay now</a>
+    </div>`
+        : ""
+    }
+    <p style="margin:0;color:#666675;font-size:12px;text-align:center;line-height:1.6;">
+      Questions? Just reply to this email.
+    </p>
+  `, params.branding);
+
+  const subject =
+    reason === "action_required"
+      ? `Action needed — confirm your ${amount} autopay payment`
+      : `Autopay payment of ${amount} didn't go through`;
+
+  return { subject, html };
+}

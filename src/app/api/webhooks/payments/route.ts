@@ -4,6 +4,10 @@ import {
   handleCheckoutCompleted,
   handleAsyncPaymentSucceeded,
   handleAsyncPaymentFailed,
+  handleStripeInvoicePaid,
+  handleStripeInvoicePaymentFailed,
+  handleStripeInvoicePaymentActionRequired,
+  handleAutopaySubscriptionChanged,
 } from "@/lib/payments-webhook-handlers";
 import type Stripe from "stripe";
 
@@ -13,6 +17,11 @@ export const dynamic = "force-dynamic";
 /**
  * Platform-account Stripe webhook (Nexli's own invoices).
  * Connected-account events are delivered to /api/webhooks/connect.
+ *
+ * Events (enable all on the Stripe endpoint — see docs/stripe-autopay-setup.md):
+ *   checkout.session.completed / async_payment_succeeded / async_payment_failed,
+ *   invoice.paid / payment_failed / payment_action_required (DRS autopay),
+ *   customer.subscription.updated / deleted (DRS autopay).
  */
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -48,6 +57,32 @@ export async function POST(req: NextRequest) {
       case "checkout.session.async_payment_failed":
         await handleAsyncPaymentFailed(
           event.data.object as Stripe.Checkout.Session
+        );
+        break;
+      // Digital Rainmaker autopay (subscription-mode checkout)
+      case "invoice.paid":
+        await handleStripeInvoicePaid(event.data.object as Stripe.Invoice);
+        break;
+      case "invoice.payment_failed":
+        await handleStripeInvoicePaymentFailed(
+          event.data.object as Stripe.Invoice
+        );
+        break;
+      case "invoice.payment_action_required":
+        await handleStripeInvoicePaymentActionRequired(
+          event.data.object as Stripe.Invoice
+        );
+        break;
+      case "customer.subscription.updated":
+        await handleAutopaySubscriptionChanged(
+          event.data.object as Stripe.Subscription,
+          false
+        );
+        break;
+      case "customer.subscription.deleted":
+        await handleAutopaySubscriptionChanged(
+          event.data.object as Stripe.Subscription,
+          true
         );
         break;
       default:
