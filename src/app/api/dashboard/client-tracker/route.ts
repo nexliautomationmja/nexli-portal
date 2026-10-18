@@ -4,7 +4,12 @@ import { db } from "@/db";
 import { invoices, users } from "@/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getBookOfBusiness } from "@/lib/book-of-business";
-import { latestSurveyScores } from "@/lib/client-success";
+import {
+  latestSurveyStatus,
+  latestUpdateStatus,
+  type SurveyStatus,
+  type UpdateStatus,
+} from "@/lib/client-success";
 
 /**
  * Client Tracker — internal book of business, built entirely from the owner's
@@ -29,7 +34,8 @@ export async function GET() {
   const isAdmin = session.user.role === "admin";
   const linkByEmail = new Map<string, { id: string; websiteUrl: string | null }>();
   const theirRevenueByOwner = new Map<string, number>();
-  let pulseByAccount = new Map<string, { score: number; submittedAt: Date }>();
+  let npsByAccount = new Map<string, SurveyStatus>();
+  let updateByAccount = new Map<string, UpdateStatus>();
 
   if (isAdmin && book.length > 0) {
     // Client accounts are few; match in JS so the email join is
@@ -59,34 +65,74 @@ export async function GET() {
         .groupBy(invoices.ownerId);
       for (const r of revenueRows) theirRevenueByOwner.set(r.ownerId, r.totalPaid);
 
-      // Latest weekly pulse-check score per linked client. Never fatal —
-      // the roster must render even if the survey tables aren't there yet.
+      // Latest pulse-check survey + weekly-update status per linked client.
+      // Never fatal — the roster must render even if the success tables
+      // aren't there yet.
       try {
-        pulseByAccount = await latestSurveyScores(accounts.map((a) => a.id));
+        const ids = accounts.map((a) => a.id);
+        // "Client since" lets a brand-new client show "New client" instead
+        // of "Never sent" until their first week is up.
+        const clientSince = new Map<string, Date | null>();
+        for (const c of book) {
+          const account = linkByEmail.get(c.email.toLowerCase());
+          if (account) clientSince.set(account.id, c.startDate ? new Date(c.startDate) : null);
+        }
+        [npsByAccount, updateByAccount] = await Promise.all([
+          latestSurveyStatus(ids),
+          latestUpdateStatus(ids, { clientSince }),
+        ]);
       } catch (err) {
-        console.error("Client tracker: pulse scores unavailable:", err);
+        console.error("Client tracker: customer-success status unavailable:", err);
       }
     }
   }
 
+  const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
+
   const clients = book.map((c) => {
     const account = linkByEmail.get(c.email.toLowerCase()) || null;
-    const pulse = account ? pulseByAccount.get(account.id) : undefined;
+    const survey = account ? npsByAccount.get(account.id) : undefined;
+    const update = account ? updateByAccount.get(account.id) : undefined;
     return {
       ...c,
       clientUserId: account?.id ?? null,
       websiteUrl: account?.websiteUrl ?? null,
       theirRevenue: account ? theirRevenueByOwner.get(account.id) || 0 : null,
-      latestScore: pulse?.score ?? null,
-      latestScoreAt: pulse ? pulse.submittedAt.toISOString() : null,
+      // Biweekly NPS survey: the newest one SENT and what came of it. Linked
+      // accounts with no sent survey yet are "not_sent"; unlinked rows null.
+      nps: account
+        ? {
+            score: survey?.npsScore ?? null,
+            legacyScore: survey?.legacyScore ?? null,
+            sentAt: iso(survey?.sentAt),
+            answeredAt: iso(survey?.submittedAt),
+            expiresAt: iso(survey?.expiresAt),
+            state: survey?.state ?? ("not_sent" as const),
+          }
+        : null,
+      // Weekly update: when the last one went out and whether one is due.
+      update: account && update
+        ? {
+            lastSentAt: iso(update.lastSentAt),
+            lastViewedAt: iso(update.lastViewedAt),
+            daysSinceSent: update.daysSinceSent,
+            state: update.state,
+          }
+        : null,
     };
   });
+
+  const dueClients = clients
+    .filter((c) => c.update && (c.update.state === "due" || c.update.state === "overdue" || c.update.state === "never"))
+    .map((c) => ({ name: c.company || c.name || c.email, clientUserId: c.clientUserId as string }));
 
   return NextResponse.json({
     kpis: {
       ...kpis,
       totalClientRevenue: clients.reduce((s, c) => s + (c.theirRevenue || 0), 0),
+      updatesDue: dueClients.length,
     },
+    dueClients,
     clients,
     isAdmin,
   });

@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { clientWeeklyUpdates } from "@/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
 import { createNotification } from "@/lib/notifications";
 import { ensureClientSuccessTables, weekStartOf } from "@/lib/client-success-tables";
-import { activeDrsClients } from "@/lib/client-success";
+import { activeDrsClients, latestUpdateStatus } from "@/lib/client-success";
 
 /**
  * Friday 14:00 UTC (vercel.json): nudge Marcel about every active DRS client
- * who hasn't been sent this week's update yet. One notification listing them
- * all (also emailed to mail@nexli.net by createNotification).
+ * whose weekly update is due, overdue or has never been sent (same rule as
+ * the Client Tracker's "Update" column and the sidebar pill). One
+ * notification listing them all (also emailed to mail@nexli.net by
+ * createNotification). Brand-new clients ("pending") are skipped.
  */
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -26,21 +25,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, weekStart, clients: 0, pending: 0, notified: false });
     }
 
-    const sentRows = await db
-      .select({ clientUserId: clientWeeklyUpdates.clientUserId })
-      .from(clientWeeklyUpdates)
-      .where(
-        and(
-          inArray(
-            clientWeeklyUpdates.clientUserId,
-            clients.map((c) => c.clientUserId)
-          ),
-          eq(clientWeeklyUpdates.weekStart, weekStart),
-          eq(clientWeeklyUpdates.status, "sent")
-        )
-      );
-    const sentIds = new Set(sentRows.map((r) => r.clientUserId));
-    const pending = clients.filter((c) => !sentIds.has(c.clientUserId));
+    const clientSince = new Map<string, Date | null>(
+      clients.map((c) => [c.clientUserId, c.startDate ? new Date(c.startDate) : null])
+    );
+    const statuses = await latestUpdateStatus(
+      clients.map((c) => c.clientUserId),
+      { clientSince }
+    );
+    const pending = clients.filter((c) => {
+      const state = statuses.get(c.clientUserId)?.state;
+      return state === "due" || state === "overdue" || state === "never";
+    });
 
     if (pending.length === 0) {
       return NextResponse.json({
@@ -61,7 +56,13 @@ export async function GET(req: NextRequest) {
       message: `${n} client${n === 1 ? "" : "s"} still need${n === 1 ? "s" : ""} this week's update: ${names.join(", ")}`,
       metadata: {
         weekStart,
-        clients: pending.map((c) => ({ clientUserId: c.clientUserId, name: c.name, email: c.email })),
+        clients: pending.map((c) => ({
+          clientUserId: c.clientUserId,
+          name: c.name,
+          email: c.email,
+          state: statuses.get(c.clientUserId)?.state ?? null,
+          daysSinceSent: statuses.get(c.clientUserId)?.daysSinceSent ?? null,
+        })),
       },
     });
 

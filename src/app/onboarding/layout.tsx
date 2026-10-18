@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useForceDark } from "@/components/launch-pad";
 
 export default function OnboardingLayout({
   children,
@@ -9,16 +9,7 @@ export default function OnboardingLayout({
 }) {
   // The Launch Pad is dark-first like the rest of the Nexli brand —
   // force dark regardless of the dashboard theme preference.
-  useEffect(() => {
-    const hadDark = document.documentElement.classList.contains("dark");
-    document.documentElement.classList.add("dark");
-    return () => {
-      const stored = localStorage.getItem("nexli-dashboard-theme");
-      if (stored === "light" && !hadDark) {
-        document.documentElement.classList.remove("dark");
-      }
-    };
-  }, []);
+  useForceDark();
 
   return <>{children}</>;
 }

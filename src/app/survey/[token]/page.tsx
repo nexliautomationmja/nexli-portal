@@ -1,22 +1,32 @@
 import type { Metadata } from "next";
+import type { SurveyAnswers } from "@/lib/survey-questions";
 import { SurveyClient } from "./survey-client";
 
 export const metadata: Metadata = {
-  title: "Weekly Pulse Check | Nexli",
+  title: "Pulse Check | Nexli",
   robots: { index: false, follow: false },
 };
+
+function parseScale(raw: string | undefined): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
+}
 
 export default async function SurveyPage({
   params,
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ s?: string }>;
+  searchParams: Promise<{ overall?: string; s?: string }>;
 }) {
   const { token } = await params;
-  const { s } = await searchParams;
-  const preset = Number(s);
-  const initialScore = Number.isInteger(preset) && preset >= 1 && preset <= 5 ? preset : null;
+  const { overall, s } = await searchParams;
 
-  return <SurveyClient token={token} initialScore={initialScore} />;
+  // The Monday email's 1–5 buttons pre-fill Q1 (`?overall=`); `?s=` is the
+  // legacy single-score link and maps to the same question.
+  const preset = parseScale(overall) ?? parseScale(s);
+  const initialAnswers: Partial<SurveyAnswers> = preset != null ? { overall: preset } : {};
+
+  return <SurveyClient token={token} initialAnswers={initialAnswers} />;
 }

@@ -6,6 +6,7 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { ensureCoreSchema } from "@/lib/schema-bootstrap";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { activeDrsClients, latestUpdateStatus } from "@/lib/client-success";
 import { NotificationProvider } from "@/components/dashboard/notification-provider";
 import { UpgradeBanner } from "@/components/dashboard/upgrade-banner";
 import {
@@ -64,6 +65,31 @@ export default async function DashboardLayout({
   const tier = normalizeTier(account?.tier ?? session.user.tier);
   const isFoundationClient = !isAdmin && tier === "foundation";
 
+  // Admin only: how many active DRS clients are waiting on a weekly update
+  // (due / overdue / never sent) — shown as a pill on the Client Tracker nav
+  // item. Same defensive rule as above: a layout must never throw.
+  let updatesDue = 0;
+  if (isAdmin) {
+    try {
+      const { clients } = await activeDrsClients();
+      if (clients.length > 0) {
+        const clientSince = new Map<string, Date | null>(
+          clients.map((c) => [c.clientUserId, c.startDate ? new Date(c.startDate) : null])
+        );
+        const statuses = await latestUpdateStatus(
+          clients.map((c) => c.clientUserId),
+          { clientSince }
+        );
+        for (const st of statuses.values()) {
+          if (st.state === "due" || st.state === "overdue" || st.state === "never") updatesDue++;
+        }
+      }
+    } catch (err) {
+      console.error("[dashboard layout] updates-due count failed:", err);
+      updatesDue = 0;
+    }
+  }
+
   // Current pathname is forwarded by middleware as a request header.
   const pathname = (await headers()).get("x-pathname") ?? "";
   const onBillingPausedPage = pathname === BILLING_PAUSED_PATH;
@@ -94,7 +120,12 @@ export default async function DashboardLayout({
       style={{ backgroundColor: "var(--bg-main)" }}
     >
       <NotificationProvider>
-        <Sidebar isAdmin={isAdmin} tier={tier} userName={session.user.name} />
+        <Sidebar
+          isAdmin={isAdmin}
+          tier={tier}
+          userName={session.user.name}
+          badges={{ "/dashboard/client-tracker": updatesDue }}
+        />
         <main className="sidebar-content px-4 md:px-6 lg:px-8 py-6 pt-16 md:pt-6 relative z-10">
           {isFoundationClient && <UpgradeBanner />}
           {children}

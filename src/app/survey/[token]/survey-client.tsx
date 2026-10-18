@@ -1,31 +1,78 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  SURVEY_QUESTIONS,
+  VALUE_OPTIONS,
+  SURVEY_REQUIRED_COUNT,
+  SURVEY_ESTIMATED_SECONDS,
+  SCALE_QUESTION_IDS,
+  surveyComplete,
+  isValueAnswer,
+  npsColor,
+  valueAnswerLabel,
+  type SurveyAnswers,
+  type SurveyQuestion,
+  type ScaleQuestionId,
+  type ValueAnswer,
+} from "@/lib/survey-questions";
+import {
+  ACCENT,
+  SYNE,
+  CTA_CLASSES,
+  Icon,
+  PATHS,
+  ProgressRing,
+  LpCard,
+  IconChip,
+  Pill,
+  LpSpinner,
+  LpMessage,
+  ShimmerCard,
+  LaunchPadShell,
+} from "@/components/launch-pad";
 
-type ValueAnswer = "yes" | "somewhat" | "no";
+// ══════════════════════════════════════════════════════════
+// Pulse check — the biweekly client survey, built on the Launch
+// Pad visual system (same shell, cards, icon chips, pills, confetti).
+// Questions come from src/lib/survey-questions.ts — never hardcode them here.
+// ══════════════════════════════════════════════════════════
 
 interface SurveyMeta {
   clientName: string;
   weekStart: string;
   submitted: boolean;
-  results: { score: number | null; valueAnswer: string | null; comment: string | null } | null;
+  results: {
+    answers: SurveyAnswers | null;
+    valueAnswer: string | null;
+    npsScore: number | null;
+    comment: string | null;
+    /** Single 1–5 "confidence" score from surveys before the seven-question revision. */
+    legacyScore: number | null;
+  } | null;
 }
 
-const SCORE_LABELS: Record<number, string> = {
-  1: "Not at all",
-  2: "Slightly",
-  3: "Somewhat",
-  4: "Mostly",
-  5: "Very",
+const QUESTION_ICON: Record<SurveyQuestion["id"], React.ReactNode> = {
+  overall: PATHS.rocket,
+  lead_quality: PATHS.star,
+  communication: PATHS.monitor,
+  responsiveness: PATHS.zap,
+  value: PATHS.circleDollar,
+  nps: PATHS.heart,
+  comment: PATHS.messageSquare,
 };
 
-const VALUE_OPTIONS: { value: ValueAnswer; label: string }[] = [
-  { value: "yes", label: "Yes" },
-  { value: "somewhat", label: "Somewhat" },
-  { value: "no", label: "No" },
-];
+const CHOICE_BASE =
+  "font-black transition-all disabled:cursor-default";
+const CHOICE_IDLE =
+  "bg-white/5 border border-white/10 text-neutral-300 hover:bg-white/10 hover:scale-[1.04] active:scale-[0.96]";
+const CHOICE_IDLE_LOCKED = "bg-white/5 border border-white/10 text-neutral-500 opacity-50";
+const CHOICE_ACTIVE = "bg-blue-600 text-white shadow-xl shadow-blue-600/30 scale-105";
 
-const GRADIENT = "linear-gradient(135deg, #2563EB, #06B6D4)";
+function choiceCls(active: boolean, locked: boolean): string {
+  if (active) return `${CHOICE_BASE} ${CHOICE_ACTIVE}`;
+  return `${CHOICE_BASE} ${locked ? CHOICE_IDLE_LOCKED : CHOICE_IDLE}`;
+}
 
 function weekLabel(weekStart: string): string {
   return new Date(`${weekStart}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -35,58 +82,192 @@ function weekLabel(weekStart: string): string {
   });
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+// ─── Question card ─────────────────────────────────────────
+
+function QuestionCard({
+  q,
+  index,
+  answered,
+  children,
+}: {
+  q: SurveyQuestion;
+  index: number;
+  answered: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white">
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse at 50% 0%, rgba(37,99,235,0.08) 0%, transparent 60%)",
-        }}
-      />
-      <div className="relative max-w-xl mx-auto px-4 py-12">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
+    <LpCard className="lp-card" style={{ animationDelay: `${0.1 + 0.05 * index}s` }}>
+      <div className="flex items-start gap-3">
+        <IconChip accent={q.accent} delay={`${index * 0.35}s`}>
+          <Icon d={QUESTION_ICON[q.id]} size={22} className={ACCENT[q.accent].icon} />
+        </IconChip>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm sm:text-base font-bold text-white flex-1 min-w-0">
+              {q.number}. {q.prompt}
+            </h3>
+            {answered ? (
+              <Pill tone="done" accent={q.accent}>
+                Answered ✓
+              </Pill>
+            ) : (
+              <Pill tone="neutral">{q.required ? "Required" : "Optional"}</Pill>
+            )}
           </div>
-          <span className="text-lg font-black tracking-tight">NEXLI</span>
+          {q.help && (
+            <p className="text-xs sm:text-[13px] mt-1 leading-relaxed text-neutral-400">
+              {q.help}
+            </p>
+          )}
         </div>
-        {children}
+      </div>
+      <div className="mt-4">{children}</div>
+    </LpCard>
+  );
+}
+
+// ─── Answer controls ───────────────────────────────────────
+
+function ScaleControl({
+  q,
+  value,
+  locked,
+  onChange,
+}: {
+  q: SurveyQuestion;
+  value: number | null;
+  locked: boolean;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="max-w-[340px] mx-auto sm:mx-0">
+      <div className="flex items-center justify-between gap-2">
+        {[1, 2, 3, 4, 5].map((n) => {
+          const active = value === n;
+          return (
+            <button
+              key={n}
+              type="button"
+              disabled={locked}
+              onClick={() => onChange(n)}
+              aria-pressed={active}
+              aria-label={`${n} of 5`}
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full ${choiceCls(active, locked)}`}
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex justify-between mt-2 text-[11px] text-neutral-500">
+        <span>{q.lowLabel}</span>
+        <span>{q.highLabel}</span>
       </div>
     </div>
   );
 }
 
-function Centered({ title, body }: { title: string; body: string }) {
+function ValueControl({
+  value,
+  locked,
+  onChange,
+}: {
+  value: ValueAnswer | null;
+  locked: boolean;
+  onChange: (v: ValueAnswer) => void;
+}) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f] px-4">
-      <div className="max-w-md w-full text-center">
-        <h1 className="text-xl font-black text-white mb-2">{title}</h1>
-        <p className="text-sm text-gray-400">{body}</p>
+    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      {VALUE_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            disabled={locked}
+            onClick={() => onChange(opt.value)}
+            aria-pressed={active}
+            className={`h-12 rounded-full text-sm ${choiceCls(active, locked)}`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function NpsControl({
+  q,
+  value,
+  locked,
+  onChange,
+}: {
+  q: SurveyQuestion;
+  value: number | null;
+  locked: boolean;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
+        {Array.from({ length: 11 }, (_, n) => {
+          const active = value === n;
+          const color = npsColor(n);
+          return (
+            <button
+              key={n}
+              type="button"
+              disabled={locked}
+              onClick={() => onChange(n)}
+              aria-pressed={active}
+              aria-label={`${n} of 10`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm ${CHOICE_BASE} ${
+                active
+                  ? "text-white shadow-xl scale-105"
+                  : locked
+                    ? CHOICE_IDLE_LOCKED
+                    : CHOICE_IDLE
+              }`}
+              style={
+                active
+                  ? { background: color, boxShadow: `0 12px 24px -8px ${color}99` }
+                  : undefined
+              }
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex justify-between mt-2 text-[11px] text-neutral-500">
+        <span>{q.lowLabel}</span>
+        <span>{q.highLabel}</span>
       </div>
     </div>
   );
 }
+
+// ─── Main component ────────────────────────────────────────
 
 export function SurveyClient({
   token,
-  initialScore,
+  initialAnswers,
 }: {
   token: string;
-  initialScore: number | null;
+  initialAnswers: Partial<SurveyAnswers>;
 }) {
   const [meta, setMeta] = useState<SurveyMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<"ok" | "not_found" | "expired">("ok");
-  const [score, setScore] = useState<number | null>(initialScore);
+  const [answers, setAnswers] = useState<SurveyAnswers>(initialAnswers);
   const [valueAnswer, setValueAnswer] = useState<ValueAnswer | null>(null);
+  const [npsScore, setNpsScore] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [burst, setBurst] = useState(0);
 
   // /survey/preview renders the real page with sample data and never saves —
   // so Marcel (and prospects on a call) can see exactly what clients get.
@@ -123,10 +304,18 @@ export function SurveyClient({
       .finally(() => setLoading(false));
   }, [token, isPreview]);
 
+  const complete = surveyComplete(answers, valueAnswer, npsScore);
+
+  function finish() {
+    setDone(true);
+    setBurst((b) => b + 1);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function submit() {
-    if (!score || !valueAnswer) return;
+    if (!complete || valueAnswer == null || npsScore == null) return;
     if (isPreview) {
-      setDone(true);
+      finish();
       return;
     }
     setSubmitting(true);
@@ -135,10 +324,15 @@ export function SurveyClient({
       const res = await fetch(`/api/survey/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resultsScore: score, valueAnswer, comment: comment.trim() || undefined }),
+        body: JSON.stringify({
+          answers,
+          valueAnswer,
+          npsScore,
+          comment: comment.trim() || undefined,
+        }),
       });
       if (res.status === 409) {
-        setDone(true);
+        finish();
         return;
       }
       if (res.status === 410) {
@@ -150,7 +344,7 @@ export function SurveyClient({
         setError(body.error || "Something went wrong. Please try again.");
         return;
       }
-      setDone(true);
+      finish();
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -158,177 +352,214 @@ export function SurveyClient({
     }
   }
 
-  if (loading) {
+  const badgeIcon = <Icon d={PATHS.star} size={14} className="text-amber-400" />;
+
+  // ─── Loading / error states ───
+  if (status === "not_found") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
-        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-  if (status === "not_found" || !meta) {
-    return (
-      <Centered
+      <LpMessage
+        emoji="🔍"
         title="Link Unavailable"
-        body="This survey link isn't valid. If you think that's a mistake, just reply to the email it came from."
+        body="Double-check the link from your email, or reply to any of our emails and we'll send a fresh one."
       />
     );
   }
   if (status === "expired") {
     return (
-      <Centered
+      <LpMessage
+        emoji="⏳"
         title="This one's closed"
         body="This pulse check has expired — no worries. A fresh one lands in your inbox every other Monday, and you can always reply to any of our emails to reach Marcel directly."
       />
     );
   }
-
-  if (done) {
+  if (loading || !meta) {
     return (
-      <Shell>
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-black tracking-tight mb-2">Thanks — Marcel reads every one of these.</h1>
-          <p className="text-sm text-gray-400">
-            If anything needs attention, you&rsquo;ll hear from us this week.
-          </p>
-        </div>
-      </Shell>
+      <LaunchPadShell maxWidth="xl" badge="Pulse Check" badgeIcon={badgeIcon} burst={burst}>
+        <LpSpinner />
+      </LaunchPadShell>
     );
   }
 
-  const readOnly = meta.submitted && meta.results;
-  const shownScore = readOnly ? meta.results?.score ?? null : score;
-  const shownValue = readOnly ? (meta.results?.valueAnswer as ValueAnswer | null) : valueAnswer;
-  const shownComment = readOnly ? meta.results?.comment || "" : comment;
+  // ─── Derived view state ───
+  const saved = meta.submitted && meta.results ? meta.results : null;
+  const readOnly = done || saved !== null;
+  const isLegacy = saved !== null && saved.answers == null && saved.legacyScore != null;
+
+  const shownAnswers: SurveyAnswers = saved ? saved.answers ?? {} : answers;
+  const shownValue: ValueAnswer | null = saved
+    ? isValueAnswer(saved.valueAnswer)
+      ? saved.valueAnswer
+      : null
+    : valueAnswer;
+  const shownNps: number | null = saved ? saved.npsScore : npsScore;
+  const shownComment = saved ? saved.comment ?? "" : comment;
+
+  const answeredRequired = readOnly
+    ? SURVEY_REQUIRED_COUNT
+    : SCALE_QUESTION_IDS.filter((id) => answers[id] != null).length +
+      (valueAnswer != null ? 1 : 0) +
+      (npsScore != null ? 1 : 0);
+  const percent = Math.round((answeredRequired / SURVEY_REQUIRED_COUNT) * 100);
+  const firstName = (meta.clientName || "there").split(" ")[0];
+
+  function isAnswered(q: SurveyQuestion): boolean {
+    switch (q.kind) {
+      case "scale5":
+        return shownAnswers[q.id as ScaleQuestionId] != null;
+      case "value":
+        return shownValue != null;
+      case "nps":
+        return shownNps != null;
+      case "comment":
+        return shownComment.trim().length > 0;
+    }
+  }
 
   return (
-    <Shell>
-      <div className="text-center mb-8">
-        {isPreview && (
-          <p className="mb-4 inline-block rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-amber-300">
-            Preview — nothing you enter here is saved
+    <LaunchPadShell maxWidth="xl" badge="Pulse Check" badgeIcon={badgeIcon} burst={burst}>
+      {/* ─── Thank-you banner ─── */}
+      {done && (
+        <ShimmerCard className="lp-card">
+          <div className="text-3xl mb-1">🎉</div>
+          <h2 className="text-xl font-black text-white" style={SYNE}>
+            Thanks — Marcel reads every one of these.
+          </h2>
+          <p className="text-sm mt-1 text-neutral-300">
+            You&apos;ll get the next one in two weeks.
           </p>
-        )}
-        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">
-          Week of {weekLabel(meta.weekStart)}
-        </p>
-        <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-2">60-second pulse check</h1>
-        <p className="text-gray-400 text-sm">
-          {readOnly ? (
-            <>You already answered this one — here&rsquo;s what you told us.</>
-          ) : (
-            <>
-              Hi <span className="text-white font-medium">{meta.clientName}</span> — three quick taps so we
-              catch anything early.
-            </>
-          )}
-        </p>
-      </div>
+        </ShimmerCard>
+      )}
 
-      <div className="space-y-6">
-        {/* Q1 */}
-        <section className="p-5 rounded-2xl bg-white/5 border border-white/10">
-          <p className="text-sm font-bold mb-4">
-            1. How confident are you in the results you&rsquo;re seeing this week?
-          </p>
-          <div className="grid grid-cols-5 gap-2">
-            {[1, 2, 3, 4, 5].map((n) => {
-              const active = shownScore === n;
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  disabled={Boolean(readOnly)}
-                  onClick={() => setScore(n)}
-                  className={`h-14 rounded-xl text-xl font-black transition-all border ${
-                    active
-                      ? "border-transparent text-white shadow-lg shadow-blue-500/20"
-                      : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
-                  } disabled:cursor-default`}
-                  style={active ? { background: GRADIENT } : undefined}
-                  aria-pressed={active}
-                  aria-label={`${n} — ${SCORE_LABELS[n]}`}
-                >
-                  {n}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex justify-between mt-2 text-[11px] text-gray-500">
-            <span>Not at all</span>
-            <span>Very</span>
-          </div>
-          {shownScore && (
-            <p className="mt-2 text-xs text-cyan-400 font-semibold text-center">{SCORE_LABELS[shownScore]}</p>
-          )}
-        </section>
-
-        {/* Q2 */}
-        <section className="p-5 rounded-2xl bg-white/5 border border-white/10">
-          <p className="text-sm font-bold mb-4">2. Are you getting what you&rsquo;re paying for?</p>
-          <div className="grid grid-cols-3 gap-2">
-            {VALUE_OPTIONS.map((opt) => {
-              const active = shownValue === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  disabled={Boolean(readOnly)}
-                  onClick={() => setValueAnswer(opt.value)}
-                  className={`h-12 rounded-xl text-sm font-bold transition-all border ${
-                    active
-                      ? "border-transparent text-white"
-                      : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
-                  } disabled:cursor-default`}
-                  style={active ? { background: GRADIENT } : undefined}
-                  aria-pressed={active}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Q3 */}
-        <section className="p-5 rounded-2xl bg-white/5 border border-white/10">
-          <p className="text-sm font-bold mb-1">3. Anything we should address this week?</p>
-          <p className="text-xs text-gray-500 mb-3">Optional — goes straight to Marcel.</p>
-          {readOnly ? (
-            <p className="text-sm text-gray-300 whitespace-pre-wrap">
-              {shownComment || <span className="text-gray-500">No comment left.</span>}
+      {/* ─── Hero ─── */}
+      <section className="lp-card" style={{ animationDelay: "0.05s" }}>
+        <div className="flex flex-col sm:flex-row items-center gap-8">
+          <div className="flex-1 text-center sm:text-left">
+            {isPreview && (
+              <p className="mb-3 inline-block rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-amber-300">
+                Preview — nothing you enter here is saved
+              </p>
+            )}
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+              Week of {weekLabel(meta.weekStart)}
             </p>
-          ) : (
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value.slice(0, 2000))}
-              placeholder="A lead that went cold, a question about the ads, anything on your mind…"
-              rows={4}
-              className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-sm text-white placeholder:text-gray-600 outline-none focus:border-blue-500 resize-none transition-colors"
-            />
-          )}
-        </section>
+            <h1
+              className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white mt-1"
+              style={SYNE}
+            >
+              Quick pulse check,{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
+                {firstName}.
+              </span>
+            </h1>
+            <p className="text-sm mt-3 leading-relaxed text-neutral-300">
+              {readOnly
+                ? "Here's what you sent us."
+                : `About ${SURVEY_ESTIMATED_SECONDS} seconds. Honest answers help us fix things early.`}
+            </p>
+          </div>
+          <ProgressRing percent={percent} />
+        </div>
+      </section>
 
-        {!readOnly && (
-          <div className="text-center space-y-3">
-            {error && <p className="text-sm text-red-400">{error}</p>}
+      {/* ─── Questions ─── */}
+      {isLegacy && saved ? (
+        <LpCard className="lp-card" style={{ animationDelay: "0.1s" }}>
+          <div className="flex items-start gap-3">
+            <IconChip accent="blue">
+              <Icon d={PATHS.rocket} size={22} className={ACCENT.blue.icon} />
+            </IconChip>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm sm:text-base font-bold text-white">
+                You rated that week {saved.legacyScore}/5
+              </h3>
+              {saved.valueAnswer && (
+                <p className="text-xs sm:text-[13px] mt-1 leading-relaxed text-neutral-400">
+                  Getting what you pay for:{" "}
+                  <span className="text-white font-semibold">
+                    {valueAnswerLabel(saved.valueAnswer)}
+                  </span>
+                </p>
+              )}
+              {saved.comment && (
+                <p className="text-xs sm:text-[13px] mt-2 leading-relaxed text-neutral-300 whitespace-pre-wrap">
+                  {saved.comment}
+                </p>
+              )}
+            </div>
+          </div>
+        </LpCard>
+      ) : (
+        <div className="space-y-4">
+          {SURVEY_QUESTIONS.map((q, i) => (
+            <QuestionCard key={q.id} q={q} index={i} answered={isAnswered(q)}>
+              {q.kind === "scale5" && (
+                <ScaleControl
+                  q={q}
+                  value={shownAnswers[q.id as ScaleQuestionId] ?? null}
+                  locked={readOnly}
+                  onChange={(n) =>
+                    setAnswers((prev) => ({ ...prev, [q.id as ScaleQuestionId]: n }))
+                  }
+                />
+              )}
+              {q.kind === "value" && (
+                <ValueControl value={shownValue} locked={readOnly} onChange={setValueAnswer} />
+              )}
+              {q.kind === "nps" && (
+                <NpsControl q={q} value={shownNps} locked={readOnly} onChange={setNpsScore} />
+              )}
+              {q.kind === "comment" && (
+                <textarea
+                  value={shownComment}
+                  onChange={(e) => setComment(e.target.value)}
+                  disabled={readOnly}
+                  rows={4}
+                  maxLength={2000}
+                  placeholder={
+                    readOnly
+                      ? "No comment left."
+                      : "A lead that went cold, a question about the ads, anything on your mind…"
+                  }
+                  className="lp-input resize-none disabled:opacity-70"
+                />
+              )}
+            </QuestionCard>
+          ))}
+        </div>
+      )}
+
+      {/* ─── Submit ─── */}
+      {!readOnly && (
+        <LpCard
+          className="lp-card"
+          style={{ animationDelay: `${0.1 + 0.05 * SURVEY_QUESTIONS.length}s` }}
+        >
+          {error && <p className="text-xs font-semibold text-rose-400 mb-3">{error}</p>}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <button
               type="button"
               onClick={submit}
-              disabled={!score || !valueAnswer || submitting}
-              className="px-8 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
-              style={{ background: GRADIENT }}
+              disabled={!complete || submitting}
+              className={CTA_CLASSES}
             >
-              {submitting ? "Sending…" : "Send to Marcel"}
+              {submitting ? "Sending…" : "Send to Marcel →"}
             </button>
-            <p className="text-[11px] text-gray-600">Private to you and the Nexli team.</p>
+            <div className="flex items-center gap-1.5">
+              <Icon d={PATHS.lock} size={14} className="text-emerald-400 shrink-0" />
+              <span className="text-[11px] text-neutral-500">
+                Private to you and the Nexli team.
+              </span>
+            </div>
           </div>
-        )}
-      </div>
-    </Shell>
+          {!complete && (
+            <p className="mt-3 text-[11px] text-neutral-500">
+              {answeredRequired} of {SURVEY_REQUIRED_COUNT} required answers in — finish the
+              rest to send.
+            </p>
+          )}
+        </LpCard>
+      )}
+    </LaunchPadShell>
   );
 }

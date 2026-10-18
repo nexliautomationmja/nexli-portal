@@ -14,7 +14,14 @@ import {
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getBookOfBusiness } from "@/lib/book-of-business";
-import { listClientSurveys, listClientWeeklyUpdates } from "@/lib/client-success";
+import {
+  listClientSurveys,
+  listClientWeeklyUpdates,
+  latestSurveyStatus,
+  latestUpdateStatus,
+  type SurveyStatus,
+  type UpdateStatus,
+} from "@/lib/client-success";
 import { getCampaignProgress, type CampaignProgress } from "@/lib/campaign-progress";
 
 /**
@@ -257,14 +264,27 @@ export async function GET(
   // missing on a fresh database.
   let surveys: Awaited<ReturnType<typeof listClientSurveys>> = [];
   let weeklyUpdates: Awaited<ReturnType<typeof listClientWeeklyUpdates>> = [];
+  let updateStatus: UpdateStatus | null = null;
+  let surveyStatus: SurveyStatus | null = null;
   try {
-    [surveys, weeklyUpdates] = await Promise.all([
+    const clientSince = new Map<string, Date | null>([
+      [client.id, myRow?.startDate ? new Date(myRow.startDate) : null],
+    ]);
+    const [surveyRows, updateRows, updateMap, surveyMap] = await Promise.all([
       listClientSurveys(client.id, 8),
       listClientWeeklyUpdates(client.id, 6),
+      latestUpdateStatus([client.id], { clientSince }),
+      latestSurveyStatus([client.id]),
     ]);
+    surveys = surveyRows;
+    weeklyUpdates = updateRows;
+    updateStatus = updateMap.get(client.id) ?? null;
+    surveyStatus = surveyMap.get(client.id) ?? null;
   } catch (err) {
     console.error("Client detail: customer-success data unavailable:", err);
   }
+
+  const iso = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString() : null);
 
   return NextResponse.json({
     client: {
@@ -298,13 +318,41 @@ export async function GET(
     surveys: surveys.map((s) => ({
       id: s.id,
       weekStart: s.weekStart,
-      score: s.score,
+      npsScore: s.npsScore,
+      legacyScore: s.legacyScore,
+      answers: s.answers ?? null,
       valueAnswer: s.valueAnswer,
       comment: s.comment,
-      sentAt: s.sentAt,
-      submittedAt: s.submittedAt,
+      sentAt: iso(s.sentAt),
+      viewedAt: iso(s.viewedAt),
+      submittedAt: iso(s.submittedAt),
+      expiresAt: iso(s.expiresAt),
     })),
     weeklyUpdates,
+    // Where things stand right now: is a weekly update due, and did the
+    // latest NPS survey go out / get answered.
+    status: {
+      update: updateStatus
+        ? {
+            lastSentAt: iso(updateStatus.lastSentAt),
+            lastViewedAt: iso(updateStatus.lastViewedAt),
+            thisWeekStatus: updateStatus.thisWeekStatus,
+            daysSinceSent: updateStatus.daysSinceSent,
+            state: updateStatus.state,
+          }
+        : null,
+      nps: surveyStatus
+        ? {
+            score: surveyStatus.npsScore,
+            legacyScore: surveyStatus.legacyScore,
+            sentAt: iso(surveyStatus.sentAt),
+            viewedAt: iso(surveyStatus.viewedAt),
+            answeredAt: iso(surveyStatus.submittedAt),
+            expiresAt: iso(surveyStatus.expiresAt),
+            state: surveyStatus.state,
+          }
+        : null,
+    },
   });
 }
 

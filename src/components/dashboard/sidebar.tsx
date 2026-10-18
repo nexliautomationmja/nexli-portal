@@ -37,6 +37,8 @@ interface SidebarProps {
   /** Commercial tier; Foundation firms only see the firm-facing nav. */
   tier?: Tier;
   userName?: string | null;
+  /** Count pills per nav href, e.g. weekly updates due on the Client Tracker. */
+  badges?: Partial<Record<string, number>>;
 }
 
 function ChevronLeftIcon({ className }: { className?: string }) {
@@ -69,6 +71,8 @@ interface NavItem {
   label: string;
   icon: typeof LayoutIcon;
   accent: NavAccent;
+  /** Attention count shown next to the label (hidden when 0/undefined). */
+  badge?: number;
 }
 
 // Icon chips follow the Digital Rainmaker color language:
@@ -134,18 +138,22 @@ const fullNav: NavItem[] = fullNavOrder
 
 const adminNav: NavItem[] = [];
 
-export function Sidebar({ isAdmin, tier = "drs", userName }: SidebarProps) {
+export function Sidebar({ isAdmin, tier = "drs", userName, badges }: SidebarProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Admin → everything; Foundation → firm tools only; DRS → the full list.
-  const navItems = isAdmin
+  const baseNav = isAdmin
     ? [...fullNav, ...adminNav]
     : tier === "foundation"
       ? firmNav
       : fullNav;
+  const navItems: NavItem[] = baseNav.map((item) => {
+    const count = badges?.[item.href];
+    return count && count > 0 ? { ...item, badge: count } : item;
+  });
 
   const initials = userName
     ? userName
@@ -257,16 +265,39 @@ export function Sidebar({ isAdmin, tier = "drs", userName }: SidebarProps) {
               style={{
                 color: isActive ? undefined : "var(--text-muted)",
               }}
-              title={collapsed ? item.label : undefined}
+              title={
+                collapsed
+                  ? item.badge
+                    ? `${item.label} · ${item.badge} due`
+                    : item.label
+                  : undefined
+              }
             >
               <span
-                className={cn("icon-chip icon-chip-float w-8 h-8", `icon-chip-${item.accent}`)}
+                className={cn("relative icon-chip icon-chip-float w-8 h-8", `icon-chip-${item.accent}`)}
                 style={{ animationDelay: `${(index % 8) * 0.4}s` }}
               >
                 <item.icon className="w-4 h-4" />
+                {collapsed && item.badge ? (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-[var(--bg-main)]"
+                    style={{ background: "#f59e0b" }}
+                    aria-label={`${item.badge} due`}
+                  />
+                ) : null}
               </span>
               {!collapsed && (
-                <span>{item.label}</span>
+                <>
+                  <span className="flex-1 min-w-0 truncate">{item.label}</span>
+                  {item.badge ? (
+                    <span
+                      className="badge badge-amber shrink-0 px-1.5 text-[10px] leading-4"
+                      title={`${item.badge} due`}
+                    >
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </>
               )}
             </Link>
           );

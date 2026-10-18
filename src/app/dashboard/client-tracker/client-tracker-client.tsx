@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { UsersIcon } from "@/components/ui/icons";
+import { npsColor } from "@/lib/survey-questions";
+import { relativeDay, weekdayDate } from "@/lib/format";
 import { UtmBuilder } from "@/components/dashboard/utm-builder";
 import { AdAnalyticsSection } from "./ad-analytics-section";
 
@@ -14,6 +17,26 @@ interface Kpis {
   totalOutstanding: number;
   totalClientRevenue?: number;
   totalAdSpend?: number;
+  /** Admin only: linked clients whose weekly update is due, overdue or never sent. */
+  updatesDue?: number;
+}
+
+/** Newest SENT biweekly NPS survey for a linked client (null when unlinked). */
+interface NpsStatus {
+  score: number | null;
+  legacyScore: number | null;
+  sentAt: string | null;
+  answeredAt: string | null;
+  expiresAt: string | null;
+  state: "not_sent" | "awaiting" | "answered" | "expired";
+}
+
+/** Weekly update cadence for a linked client (null when unlinked). */
+interface UpdateStatus {
+  lastSentAt: string | null;
+  lastViewedAt: string | null;
+  daysSinceSent: number | null;
+  state: "sent" | "due" | "overdue" | "never" | "pending";
 }
 
 interface ClientRow {
@@ -34,15 +57,123 @@ interface ClientRow {
   clientUserId?: string | null;
   websiteUrl?: string | null;
   theirRevenue?: number | null;
-  latestScore?: number | null;
-  latestScoreAt?: string | null;
+  nps?: NpsStatus | null;
+  update?: UpdateStatus | null;
 }
 
-// Weekly pulse-check score → traffic light (matches LOW_SCORE_MAX = 2).
-function pulseColor(score: number): string {
-  if (score <= 2) return "#f43f5e";
-  if (score === 3) return "#f59e0b";
-  return "#10b981";
+const AMBER = "#f59e0b";
+const ROSE = "#f43f5e";
+const EMERALD = "#10b981";
+
+function NpsCell({ nps }: { nps: NpsStatus | null | undefined }) {
+  const muted = { color: "var(--text-muted)" };
+  if (!nps || nps.state === "not_sent") {
+    return (
+      <span className="text-sm" style={muted} title="No survey sent yet — surveys go out every other Monday">
+        —
+      </span>
+    );
+  }
+  if (nps.state === "answered") {
+    const when = nps.answeredAt ? `answered ${relativeDay(nps.answeredAt)}` : "answered";
+    if (nps.score != null) {
+      return (
+        <span
+          className="inline-flex items-center gap-1.5 text-sm font-semibold"
+          style={{ color: "var(--text-main)" }}
+          title={`NPS ${nps.score}/10 · ${when}`}
+        >
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: npsColor(nps.score) }} />
+          {nps.score}
+        </span>
+      );
+    }
+    if (nps.legacyScore != null) {
+      return (
+        <span className="text-sm" style={muted} title={`Legacy 1–5 score · ${when}`}>
+          {nps.legacyScore}/5
+        </span>
+      );
+    }
+    return (
+      <span className="text-sm" style={muted} title={when}>
+        Answered
+      </span>
+    );
+  }
+  if (nps.state === "expired") {
+    return (
+      <span
+        className="text-xs font-medium"
+        style={{ color: AMBER }}
+        title={nps.sentAt ? `Sent ${weekdayDate(nps.sentAt)} · link expired without a response` : "Link expired without a response"}
+      >
+        Expired · no answer
+      </span>
+    );
+  }
+  // awaiting
+  return (
+    <span
+      className="text-xs"
+      style={muted}
+      title={nps.expiresAt ? `Link open until ${weekdayDate(nps.expiresAt)}` : "Waiting for a response"}
+    >
+      {nps.sentAt ? `Sent ${weekdayDate(nps.sentAt).split(" ")[0]}` : "Sent"} · awaiting
+    </span>
+  );
+}
+
+function UpdateCell({ update }: { update: UpdateStatus | null | undefined }) {
+  const muted = { color: "var(--text-muted)" };
+  if (!update) {
+    return (
+      <span className="text-sm" style={muted}>
+        —
+      </span>
+    );
+  }
+  switch (update.state) {
+    case "sent":
+      return (
+        <span
+          className="text-xs font-medium"
+          style={{ color: EMERALD }}
+          title={update.lastSentAt ? `Last update sent ${weekdayDate(update.lastSentAt)}` : undefined}
+        >
+          {update.lastSentAt ? `Sent ${relativeDay(update.lastSentAt)}` : "Sent"}
+          {update.lastViewedAt && (
+            <span className="ml-1 font-normal" style={muted} title={`Opened ${relativeDay(update.lastViewedAt)}`}>
+              · opened
+            </span>
+          )}
+        </span>
+      );
+    case "due":
+      return (
+        <span className="text-xs font-semibold" style={{ color: AMBER }} title="It's been a week — send this week's update">
+          Due · {update.daysSinceSent ?? 7}d since last
+        </span>
+      );
+    case "overdue":
+      return (
+        <span className="text-xs font-semibold" style={{ color: ROSE }} title="More than 10 days since the last update">
+          Overdue · {update.daysSinceSent ?? "10+"}d
+        </span>
+      );
+    case "never":
+      return (
+        <span className="text-xs font-semibold" style={{ color: ROSE }} title="This client has never received a weekly update">
+          Never sent
+        </span>
+      );
+    case "pending":
+      return (
+        <span className="text-xs" style={muted} title="Started less than a week ago — first update isn't due yet">
+          New client
+        </span>
+      );
+  }
 }
 
 function money(cents: number): string {
@@ -70,6 +201,7 @@ export function ClientTrackerClient() {
     totalClientRevenue: 0,
   });
   const [clients, setClients] = useState<ClientRow[]>([]);
+  const [dueClients, setDueClients] = useState<{ name: string; clientUserId: string }[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasDemo, setHasDemo] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
@@ -82,6 +214,7 @@ export function ClientTrackerClient() {
         .then((data) => {
           if (data.kpis) setKpis(data.kpis);
           setClients(data.clients || []);
+          setDueClients(data.dueClients || []);
           setIsAdmin(Boolean(data.isAdmin));
         })
         .catch(() => setClients([])),
@@ -170,9 +303,11 @@ export function ClientTrackerClient() {
     "Ad Spend",
     "Your MRR",
     "Outstanding",
-    ...(isAdmin ? ["Pulse"] : []),
+    ...(isAdmin ? ["NPS", "Update"] : []),
     "Status",
   ];
+
+  const updatesDue = kpis.updatesDue || 0;
 
   return (
     <div className="space-y-8">
@@ -225,6 +360,39 @@ export function ClientTrackerClient() {
           </div>
         ))}
       </div>
+
+      {/* Weekly updates due — admin only, never dismissable */}
+      {isAdmin && !loading && updatesDue > 0 && (
+        <div
+          className="rounded-xl border px-4 py-3 text-sm flex items-start gap-3"
+          style={{ borderColor: "rgba(245, 158, 11, 0.4)", background: "rgba(245, 158, 11, 0.08)" }}
+          role="status"
+        >
+          <span className="mt-1.5 w-2 h-2 rounded-full shrink-0" style={{ background: AMBER }} />
+          <p style={{ color: "var(--text-main)" }}>
+            <span className="font-semibold" style={{ color: AMBER }}>
+              {updatesDue} weekly update{updatesDue === 1 ? "" : "s"} due
+            </span>
+            {dueClients.length > 0 && (
+              <>
+                {" — "}
+                {dueClients.map((d, i) => (
+                  <span key={d.clientUserId}>
+                    {i > 0 && ", "}
+                    <Link
+                      href={`/dashboard/client-tracker/${d.clientUserId}`}
+                      className="font-medium underline-offset-2 hover:underline"
+                      style={{ color: "var(--text-main)" }}
+                    >
+                      {d.name}
+                    </Link>
+                  </span>
+                ))}
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Client roster */}
       <div className="glass-card overflow-hidden">
@@ -354,28 +522,13 @@ export function ClientTrackerClient() {
                         {c.outstanding > 0 ? money(c.outstanding) : "—"}
                       </td>
                       {isAdmin && (
-                        <td className="px-4 py-3">
-                          {c.latestScore != null ? (
-                            <span
-                              className="inline-flex items-center gap-1.5 text-sm font-semibold"
-                              style={{ color: "var(--text-main)" }}
-                              title={`Latest pulse check: ${c.latestScore}/5 on ${formatDate(c.latestScoreAt ?? null)}`}
-                            >
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{ background: pulseColor(c.latestScore) }}
-                              />
-                              {c.latestScore}/5
-                            </span>
-                          ) : (
-                            <span
-                              className="text-sm"
-                              style={{ color: "var(--text-muted)" }}
-                              title="No pulse-check response yet — surveys go out every other Monday"
-                            >
-                              —
-                            </span>
-                          )}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <NpsCell nps={linked ? c.nps : null} />
+                        </td>
+                      )}
+                      {isAdmin && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <UpdateCell update={linked ? c.update : null} />
                         </td>
                       )}
                       <td className="px-4 py-3">

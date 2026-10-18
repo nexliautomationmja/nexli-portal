@@ -11,12 +11,16 @@ CREATE TABLE IF NOT EXISTS client_surveys (
   viewed_at      TIMESTAMP,
   submitted_at   TIMESTAMP,
   expires_at     TIMESTAMP NOT NULL,
-  results_score  INTEGER,            -- 1..5
+  results_score  INTEGER,            -- LEGACY 1..5 confidence (pre Oct 18 2026)
+  answers        JSONB,              -- { overall, lead_quality, communication, responsiveness } each 1..5
+  nps_score      INTEGER,            -- 0..10
   value_answer   TEXT,               -- 'yes' | 'somewhat' | 'no'
   comment        TEXT,
   alerted_at     TIMESTAMP,          -- low-score alert sent
   created_at     TIMESTAMP NOT NULL DEFAULT NOW()
 );
+ALTER TABLE client_surveys ADD COLUMN IF NOT EXISTS answers JSONB;
+ALTER TABLE client_surveys ADD COLUMN IF NOT EXISTS nps_score INTEGER;
 CREATE UNIQUE INDEX IF NOT EXISTS client_surveys_client_week_idx ON client_surveys (client_user_id, week_start);
 CREATE INDEX IF NOT EXISTS client_surveys_client_created_idx ON client_surveys (client_user_id, created_at);
 CREATE INDEX IF NOT EXISTS client_surveys_submitted_idx ON client_surveys (submitted_at);

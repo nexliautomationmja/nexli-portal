@@ -3,6 +3,15 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { buildTrackingSnippet } from "@/lib/tracking-snippet";
+import {
+  SCALE_QUESTION_IDS,
+  npsColor,
+  scaleColor,
+  scaleQuestionLabel,
+  valueAnswerLabel,
+  type SurveyAnswers,
+} from "@/lib/survey-questions";
+import { relativeDay, weekdayDate } from "@/lib/format";
 
 interface DetailData {
   client: {
@@ -60,16 +69,53 @@ interface DetailData {
   }[];
   surveys?: SurveyItem[];
   weeklyUpdates?: WeeklyUpdateItem[];
+  /** Where things stand right now; null members when the success tables are unavailable. */
+  status?: {
+    update: UpdateStatusItem | null;
+    nps: NpsStatusItem | null;
+  };
 }
 
 interface SurveyItem {
   id: string;
   weekStart: string;
-  score: number | null;
+  /** NPS 0–10; null for legacy (pre-NPS) submissions and unanswered surveys. */
+  npsScore: number | null;
+  /** Legacy 1–5 confidence score from the old single-question survey. */
+  legacyScore: number | null;
+  /** 1–5 answers to the four rated questions. */
+  answers: SurveyAnswers | null;
   valueAnswer: string | null;
   comment: string | null;
   sentAt: string | null;
+  viewedAt: string | null;
   submittedAt: string | null;
+  expiresAt: string | null;
+}
+
+interface UpdateStatusItem {
+  lastSentAt: string | null;
+  lastViewedAt: string | null;
+  thisWeekStatus: "sent" | "draft" | null;
+  daysSinceSent: number | null;
+  state: "sent" | "due" | "overdue" | "never" | "pending";
+}
+
+interface NpsStatusItem {
+  score: number | null;
+  legacyScore: number | null;
+  sentAt: string | null;
+  viewedAt: string | null;
+  answeredAt: string | null;
+  expiresAt: string | null;
+  state: "not_sent" | "awaiting" | "answered" | "expired";
+}
+
+const AMBER = "#f59e0b";
+
+/** Survey link lapsed without an answer (helper keeps the clock out of render). */
+function surveyExpired(expiresAt: string | null): boolean {
+  return Boolean(expiresAt) && new Date(expiresAt as string).getTime() < Date.now();
 }
 
 interface WeeklyUpdateItem {
@@ -106,17 +152,9 @@ function shortDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function pulseColor(score: number): string {
-  if (score <= 2) return "#f43f5e";
-  if (score === 3) return "#f59e0b";
-  return "#10b981";
-}
-
-function valueLabel(v: string | null): string {
-  if (v === "yes") return "Yes";
-  if (v === "somewhat") return "Somewhat";
-  if (v === "no") return "No";
-  return "—";
+/** Legacy 1–5 confidence score → traffic light (old single-question survey). */
+function legacyColor(score: number): string {
+  return scaleColor(score);
 }
 
 function money(cents: number): string {
@@ -627,9 +665,10 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
           clientId={client.id}
           clientLabel={displayName}
           updates={data.weeklyUpdates || []}
+          status={data.status?.update ?? null}
           onChange={(updates) => setData((prev) => (prev ? { ...prev, weeklyUpdates: updates } : prev))}
         />
-        <CustomerSuccessPanel surveys={data.surveys || []} />
+        <CustomerSuccessPanel surveys={data.surveys || []} status={data.status?.nps ?? null} />
       </div>
     </div>
   );
@@ -637,15 +676,59 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
 
 // ── Weekly Update composer ───────────────────────────────
 
+/**
+ * Status line + badge for the Weekly Update panel header. Once Marcel sends
+ * this week's update from the composer the server status is stale, so the
+ * local `updates` list wins when it has a sent row for the current week.
+ */
+function updateHeaderStatus(
+  status: UpdateStatusItem | null,
+  updates: WeeklyUpdateItem[]
+): { line: string | null; badge: { label: string; cls: string } } {
+  const thisWeek = mondayOf();
+  const sentThisWeek = updates.find((u) => u.weekStart === thisWeek && u.status === "sent" && u.sentAt);
+  const lastSent =
+    sentThisWeek ??
+    updates
+      .filter((u) => u.status === "sent" && u.sentAt)
+      .sort((a, b) => (b.sentAt as string).localeCompare(a.sentAt as string))[0] ??
+    null;
+  const lastSentAt = lastSent?.sentAt ?? status?.lastSentAt ?? null;
+  const lastViewedAt = lastSent ? lastSent.viewedAt : status?.lastViewedAt ?? null;
+
+  const line = lastSentAt
+    ? `Last sent ${weekdayDate(lastSentAt)} · ${relativeDay(lastSentAt)}${lastViewedAt ? " · opened" : " · not opened yet"}`
+    : null;
+
+  let state = status?.state ?? null;
+  if (sentThisWeek) state = "sent";
+  if (!state) return { line, badge: { label: "", cls: "" } };
+
+  switch (state) {
+    case "sent":
+      return { line, badge: { label: "Sent this week ✓", cls: "badge-emerald" } };
+    case "due":
+      return { line, badge: { label: "Due now", cls: "badge-amber" } };
+    case "overdue":
+      return { line, badge: { label: "Overdue", cls: "badge-rose" } };
+    case "never":
+      return { line: line ?? "No weekly update has gone out yet", badge: { label: "Never sent", cls: "badge-rose" } };
+    case "pending":
+      return { line: line ?? "New client — first update isn't due yet", badge: { label: "New client", cls: "badge-gray" } };
+  }
+}
+
 function WeeklyUpdatePanel({
   clientId,
   clientLabel,
   updates,
+  status,
   onChange,
 }: {
   clientId: string;
   clientLabel: string;
   updates: WeeklyUpdateItem[];
+  status: UpdateStatusItem | null;
   onChange: (updates: WeeklyUpdateItem[]) => void;
 }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf());
@@ -723,13 +806,20 @@ function WeeklyUpdatePanel({
   const textareaCls =
     "w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 resize-none transition-colors";
 
+  const header = updateHeaderStatus(status, updates);
+
   return (
     <div className="glass-card overflow-hidden">
-      <div className="p-4 border-b border-[var(--card-border)] flex items-center justify-between gap-3">
-        <p className="section-header mb-0">Weekly Update</p>
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Emailed + shown on their Overview
-        </span>
+      <div className="p-4 border-b border-[var(--card-border)] flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="section-header mb-0">Weekly Update</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+            {header.line ?? "Emailed + shown on their Overview"}
+          </p>
+        </div>
+        {header.badge.label && (
+          <span className={`badge shrink-0 ${header.badge.cls}`}>{header.badge.label}</span>
+        )}
       </div>
 
       <div className="p-4 space-y-3">
@@ -869,31 +959,55 @@ function WeeklyUpdatePanel({
 
 // ── Customer Success (pulse-check history) ──────────────
 
-function CustomerSuccessPanel({ surveys }: { surveys: SurveyItem[] }) {
-  const answered = surveys.filter((s) => s.submittedAt && s.score != null);
-  const latest = answered[0] || null;
+function npsHeader(status: NpsStatusItem | null): { text: string; color: string; dot: string | null } {
+  const muted = "var(--text-muted)";
+  if (!status || status.state === "not_sent") return { text: "Not sent yet", color: muted, dot: null };
+  if (status.state === "answered") {
+    const when = status.answeredAt ? ` · answered ${relativeDay(status.answeredAt)}` : "";
+    if (status.score != null) {
+      const c = npsColor(status.score);
+      return { text: `NPS ${status.score}${when}`, color: c, dot: c };
+    }
+    if (status.legacyScore != null) {
+      return { text: `${status.legacyScore}/5 (legacy)${when}`, color: muted, dot: legacyColor(status.legacyScore) };
+    }
+    return { text: `Answered${when}`, color: muted, dot: null };
+  }
+  if (status.state === "expired") return { text: "Expired, no answer", color: AMBER, dot: AMBER };
+  return {
+    text: `Sent ${status.sentAt ? weekdayDate(status.sentAt) : ""} · not answered yet`.replace("  ", " "),
+    color: muted,
+    dot: null,
+  };
+}
+
+function CustomerSuccessPanel({ surveys, status }: { surveys: SurveyItem[]; status: NpsStatusItem | null }) {
+  const header = npsHeader(status);
 
   return (
     <div className="glass-card overflow-hidden">
-      <div className="p-4 border-b border-[var(--card-border)] flex items-center justify-between gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="section-header mb-0">Customer Success</p>
-          <a
-            href="/survey/preview"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-semibold text-cyan-400 hover:underline"
-            title="Opens the exact page clients see (nothing is saved)"
-          >
-            Preview the survey ↗
-          </a>
+      <div className="p-4 border-b border-[var(--card-border)] flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <p className="section-header mb-0">Customer Success</p>
+            <a
+              href="/survey/preview"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-semibold text-cyan-400 hover:underline"
+              title="Opens the exact page clients see (nothing is saved)"
+            >
+              Preview the survey ↗
+            </a>
+          </div>
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold mt-0.5" style={{ color: header.color }}>
+            {header.dot && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: header.dot }} />}
+            {header.text}
+          </p>
         </div>
-        {latest && latest.score != null && (
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--text-main)" }}>
-            <span className="w-2 h-2 rounded-full" style={{ background: pulseColor(latest.score) }} />
-            Latest {latest.score}/5
-          </span>
-        )}
+        <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
+          Every other Monday
+        </span>
       </div>
       {surveys.length === 0 ? (
         <p className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -902,22 +1016,76 @@ function CustomerSuccessPanel({ surveys }: { surveys: SurveyItem[] }) {
       ) : (
         <div className="divide-y divide-[var(--card-border)]">
           {surveys.map((s) => {
-            const scored = s.submittedAt && s.score != null;
+            const answered = Boolean(s.submittedAt);
+            const isNps = answered && s.npsScore != null;
+            const isLegacy = answered && !isNps && s.legacyScore != null;
+            const dot = isNps
+              ? npsColor(s.npsScore as number)
+              : isLegacy
+                ? legacyColor(s.legacyScore as number)
+                : "var(--card-border)";
+            const expired = !answered && surveyExpired(s.expiresAt);
+            const rated = SCALE_QUESTION_IDS.filter((id) => typeof s.answers?.[id] === "number");
+
+            let headline: React.ReactNode;
+            if (isNps) {
+              headline = (
+                <>
+                  <span style={{ color: npsColor(s.npsScore as number) }}>NPS {s.npsScore}</span>
+                  {s.valueAnswer && (
+                    <span style={{ color: "var(--text-main)" }}> · Getting value: {valueAnswerLabel(s.valueAnswer)}</span>
+                  )}
+                </>
+              );
+            } else if (isLegacy) {
+              headline = (
+                <>
+                  {s.legacyScore}/5 <span style={{ color: "var(--text-muted)" }}>(legacy)</span>
+                  {s.valueAnswer && ` · Getting value: ${valueAnswerLabel(s.valueAnswer)}`}
+                </>
+              );
+            } else if (answered) {
+              headline = "Answered";
+            } else if (!s.sentAt) {
+              headline = "Not sent";
+            } else {
+              headline = expired ? "Expired · no answer" : "Awaiting answer";
+            }
+
+            const when = answered
+              ? `answered ${shortDate(s.submittedAt)}`
+              : s.sentAt
+                ? `sent ${shortDate(s.sentAt)}${s.viewedAt ? " · opened" : ""}`
+                : "not sent";
+
             return (
               <div key={s.id} className="px-4 py-3 flex items-start gap-3">
-                <span
-                  className="mt-1.5 w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ background: scored ? pulseColor(s.score as number) : "var(--card-border)" }}
-                />
+                <span className="mt-1.5 w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dot }} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                      {scored ? `${s.score}/5 · Getting value: ${valueLabel(s.valueAnswer)}` : "No response"}
+                    <p
+                      className="text-sm font-medium"
+                      style={{ color: answered ? "var(--text-main)" : expired ? AMBER : "var(--text-muted)" }}
+                    >
+                      {headline}
                     </p>
                     <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
-                      {scored ? shortDate(s.submittedAt) : s.sentAt ? `sent ${shortDate(s.sentAt)}` : "not sent"}
+                      {when}
                     </span>
                   </div>
+                  {rated.length > 0 && (
+                    <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      {rated.map((id, i) => (
+                        <span key={id}>
+                          {i > 0 && " · "}
+                          {scaleQuestionLabel(id)}{" "}
+                          <span className="font-semibold" style={{ color: scaleColor(s.answers?.[id] as number) }}>
+                            {s.answers?.[id]}
+                          </span>
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     Week of {weekLabel(s.weekStart)}
                   </p>

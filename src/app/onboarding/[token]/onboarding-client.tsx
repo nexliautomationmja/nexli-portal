@@ -1,7 +1,28 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { NexliLogo } from "@/components/ui/nexli-logo";
+import {
+  type Accent,
+  ACCENT,
+  SYNE,
+  SHIMMER_CONIC,
+  CTA_CLASSES,
+  SECONDARY_BTN,
+  labelCls,
+  Icon,
+  PATHS,
+  FacebookLogo,
+  StripeLogo,
+  GoogleGLogo,
+  ProgressRing,
+  SubmittedNote,
+  LpCard,
+  IconChip,
+  LpSpinner,
+  LpMessage,
+  ShimmerCard,
+  LaunchPadShell,
+} from "@/components/launch-pad";
 
 // ══════════════════════════════════════════════════════════
 // Launch Pad — client-facing onboarding page, styled to match
@@ -153,87 +174,7 @@ const REGISTRARS = [
   "Other",
 ];
 
-const SYNE = { fontFamily: "var(--font-syne), sans-serif" };
-
-// ─── Color system (literal Tailwind classes per accent) ────
-
-type Accent = "blue" | "violet" | "cyan" | "amber" | "emerald" | "stripe";
-
-const ACCENT = {
-  blue: {
-    chip: "bg-blue-500/20 border border-blue-500/30",
-    chipGlow: "drop-shadow(0 4px 8px rgba(37, 99, 235, 0.3))",
-    icon: "text-blue-400",
-    headerTile: "bg-blue-500/10 border border-blue-500/20",
-    headerIcon: "text-blue-500",
-    check: "text-blue-500",
-    badgeDone: "bg-blue-500/20 text-blue-300 border border-blue-500/30",
-    noteStrip: "bg-blue-500/10 border border-blue-500/20",
-    successStrip: "bg-blue-500/10 border border-blue-500/30",
-    dotBg: "#3B82F6",
-  },
-  violet: {
-    chip: "bg-violet-500/20 border border-violet-500/30",
-    chipGlow: "drop-shadow(0 4px 8px rgba(139, 92, 246, 0.3))",
-    icon: "text-violet-400",
-    headerTile: "bg-violet-500/10 border border-violet-500/20",
-    headerIcon: "text-violet-500",
-    check: "text-violet-500",
-    badgeDone: "bg-violet-500/20 text-violet-300 border border-violet-500/30",
-    noteStrip: "bg-violet-500/10 border border-violet-500/20",
-    successStrip: "bg-violet-500/10 border border-violet-500/30",
-    dotBg: "#8B5CF6",
-  },
-  cyan: {
-    chip: "bg-cyan-500/20 border border-cyan-500/30",
-    chipGlow: "drop-shadow(0 4px 8px rgba(6, 182, 212, 0.3))",
-    icon: "text-cyan-400",
-    headerTile: "bg-cyan-500/10 border border-cyan-500/20",
-    headerIcon: "text-cyan-500",
-    check: "text-cyan-500",
-    badgeDone: "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30",
-    noteStrip: "bg-cyan-500/10 border border-cyan-500/20",
-    successStrip: "bg-cyan-500/10 border border-cyan-500/30",
-    dotBg: "#06B6D4",
-  },
-  stripe: {
-    // White-outlined tile (per Marcel) with Stripe-blurple accents elsewhere
-    chip: "bg-white/10 border border-white/30",
-    chipGlow: "drop-shadow(0 4px 8px rgba(255, 255, 255, 0.18))",
-    icon: "text-white",
-    headerTile: "bg-white/10 border border-white/20",
-    headerIcon: "text-white",
-    check: "text-[#8f88ff]",
-    badgeDone: "bg-[#635BFF]/20 text-[#b5b0ff] border border-[#635BFF]/40",
-    noteStrip: "bg-[#635BFF]/10 border border-[#635BFF]/30",
-    successStrip: "bg-[#635BFF]/10 border border-[#635BFF]/40",
-    dotBg: "#635BFF",
-  },
-  emerald: {
-    chip: "bg-emerald-500/20 border border-emerald-500/30",
-    chipGlow: "drop-shadow(0 4px 8px rgba(16, 185, 129, 0.3))",
-    icon: "text-emerald-400",
-    headerTile: "bg-emerald-500/10 border border-emerald-500/20",
-    headerIcon: "text-emerald-500",
-    check: "text-emerald-500",
-    badgeDone: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
-    noteStrip: "bg-emerald-500/10 border border-emerald-500/20",
-    successStrip: "bg-emerald-500/10 border border-emerald-500/30",
-    dotBg: "#10B981",
-  },
-  amber: {
-    chip: "bg-amber-500/20 border border-amber-500/30",
-    chipGlow: "drop-shadow(0 4px 8px rgba(245, 158, 11, 0.3))",
-    icon: "text-amber-400",
-    headerTile: "bg-yellow-500/10 border border-yellow-500/20",
-    headerIcon: "text-yellow-500",
-    check: "text-yellow-500",
-    badgeDone: "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30",
-    noteStrip: "bg-yellow-500/10 border border-yellow-500/20",
-    successStrip: "bg-yellow-500/10 border border-yellow-500/30",
-    dotBg: "#F59E0B",
-  },
-} satisfies Record<Accent, Record<string, string>>;
+// ─── Color system (shared ACCENT in @/components/launch-pad) ────
 
 const PHASE_ACCENT: Record<string, Accent> = {
   website: "blue",
@@ -248,111 +189,6 @@ const TASK_ACCENT: Record<string, Accent> = {
   drivers_license: "amber",
 };
 
-const SHIMMER_CONIC =
-  "conic-gradient(from 0deg at 50% 50%, #06B6D4, #3B82F6, #8B5CF6, #06B6D4, #3B82F6, #06B6D4)";
-const SHIMMER_CONIC_WARM =
-  "conic-gradient(from 0deg at 50% 50%, #3B82F6, #8B5CF6, #06B6D4, #F59E0B, #3B82F6)";
-
-// ─── Inline icons (lucide paths, matching the Rainmaker page) ──
-
-function Icon({
-  d,
-  className,
-  size = 24,
-  style,
-}: {
-  d: React.ReactNode;
-  className?: string;
-  size?: number;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      style={style}
-      aria-hidden="true"
-    >
-      {d}
-    </svg>
-  );
-}
-
-const PATHS = {
-  monitor: (
-    <>
-      <rect width="20" height="14" x="2" y="3" rx="2" />
-      <line x1="8" x2="16" y1="21" y2="21" />
-      <line x1="12" x2="12" y1="17" y2="21" />
-    </>
-  ),
-  bot: (
-    <>
-      <path d="M12 8V4H8" />
-      <rect width="16" height="12" x="4" y="8" rx="2" />
-      <path d="M2 14h2" />
-      <path d="M20 14h2" />
-      <path d="M15 13v2" />
-      <path d="M9 13v2" />
-    </>
-  ),
-  layoutDashboard: (
-    <>
-      <rect width="7" height="9" x="3" y="3" rx="1" />
-      <rect width="7" height="5" x="14" y="3" rx="1" />
-      <rect width="7" height="9" x="14" y="12" rx="1" />
-      <rect width="7" height="5" x="3" y="16" rx="1" />
-    </>
-  ),
-  globe: (
-    <>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-      <path d="M2 12h20" />
-    </>
-  ),
-  circleCheck: (
-    <>
-      <path d="M21.801 10A10 10 0 1 1 17 3.335" />
-      <path d="m9 11 3 3L22 4" />
-    </>
-  ),
-  star: (
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  ),
-  idCard: (
-    <>
-      <rect width="20" height="14" x="2" y="5" rx="2" />
-      <path d="M16 10h2" />
-      <path d="M16 14h2" />
-      <path d="M6.17 15a3 3 0 0 1 5.66 0" />
-      <circle cx="9" cy="11" r="2" />
-    </>
-  ),
-  lock: (
-    <>
-      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </>
-  ),
-  rocket: (
-    <>
-      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
-      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
-      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
-      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
-    </>
-  ),
-  check: <path d="M20 6 9 17l-5-5" />,
-};
-
 const PHASE_ICON: Record<string, React.ReactNode> = {
   website: PATHS.globe,
   automations: PATHS.bot,
@@ -363,177 +199,6 @@ const TASK_ICON: Record<string, React.ReactNode> = {
   dns_access: PATHS.globe,
   drivers_license: PATHS.idCard,
 };
-
-// ─── Brand logos (fill-based, full color) ──────────────────
-
-function FacebookLogo({ size = 24 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="#1877F2"
-        d="M24 12.073C24 5.446 18.627.073 12 .073S0 5.446 0 12.073c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.313 0 2.686.235 2.686.235v2.953h-1.514c-1.49 0-1.955.925-1.955 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
-      />
-      <path
-        fill="#FFFFFF"
-        d="M16.671 15.542l.532-3.469h-3.328v-2.25c0-.949.465-1.874 1.955-1.874h1.514V4.996s-1.373-.235-2.686-.235c-2.741 0-4.533 1.662-4.533 4.669v2.644H7.078v3.469h3.047v8.385a12.13 12.13 0 0 0 3.75 0v-8.385h2.796z"
-      />
-    </svg>
-  );
-}
-
-function StripeLogo({ size = 24 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="#635BFF"
-        d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305z"
-      />
-    </svg>
-  );
-}
-
-function GoogleGLogo({ size = 24 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-      />
-    </svg>
-  );
-}
-
-// ─── Shimmer-border pill (Rainmaker badge) ─────────────────
-
-function ShimmerPill({
-  children,
-  conic = SHIMMER_CONIC_WARM,
-}: {
-  children: React.ReactNode;
-  conic?: string;
-}) {
-  return (
-    <div className="relative inline-flex items-center rounded-full overflow-hidden p-[1.5px]">
-      <span
-        className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-80"
-        style={{ background: conic }}
-      />
-      <span
-        className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] blur-md opacity-40"
-        style={{ background: conic }}
-      />
-      <span className="relative z-10 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#020617]">
-        {children}
-      </span>
-    </div>
-  );
-}
-
-// ─── Confetti ──────────────────────────────────────────────
-
-const CONFETTI_COLORS = ["#2563EB", "#06B6D4", "#8B5CF6", "#F59E0B", "#10B981"];
-
-function ConfettiBurst({ burst }: { burst: number }) {
-  if (!burst) return null;
-  return (
-    <div
-      key={burst}
-      className="pointer-events-none fixed inset-0 z-50 overflow-hidden"
-      aria-hidden="true"
-    >
-      {Array.from({ length: 36 }).map((_, i) => {
-        const left = 10 + Math.random() * 80;
-        const size = 6 + Math.random() * 8;
-        const delay = Math.random() * 0.25;
-        const duration = 1.6 + Math.random() * 1.2;
-        const drift = -120 + Math.random() * 240;
-        const spin = 360 + Math.random() * 720;
-        const color = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
-        return (
-          <span
-            key={i}
-            style={
-              {
-                position: "absolute",
-                top: "-20px",
-                left: `${left}%`,
-                width: `${size}px`,
-                height: `${size * (Math.random() > 0.5 ? 1 : 0.4)}px`,
-                background: color,
-                borderRadius: Math.random() > 0.6 ? "50%" : "2px",
-                animation: `lp-confetti-fall ${duration}s cubic-bezier(0.25, 0.4, 0.45, 1) ${delay}s forwards`,
-                "--lp-drift": `${drift}px`,
-                "--lp-spin": `${spin}deg`,
-                opacity: 0,
-              } as React.CSSProperties
-            }
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Progress Ring (kept — with gradient stroke) ───────────
-
-function ProgressRing({ percent }: { percent: number }) {
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  const offset = C - (percent / 100) * C;
-  return (
-    <div className="relative w-[132px] h-[132px] shrink-0">
-      <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
-        <defs>
-          <linearGradient id="lp-ring" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#3B82F6" />
-            <stop offset="50%" stopColor="#8B5CF6" />
-            <stop offset="100%" stopColor="#06B6D4" />
-          </linearGradient>
-        </defs>
-        <circle
-          cx="60"
-          cy="60"
-          r={R}
-          fill="none"
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth="10"
-        />
-        <circle
-          cx="60"
-          cy="60"
-          r={R}
-          fill="none"
-          stroke="url(#lp-ring)"
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={C}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1)" }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-black text-white" style={{ letterSpacing: "-0.03em" }}>
-          {percent}%
-        </span>
-        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500">
-          Complete
-        </span>
-      </div>
-    </div>
-  );
-}
 
 // ─── Status pills ──────────────────────────────────────────
 
@@ -657,32 +322,25 @@ export function OnboardingClient({ token }: { token: string }) {
 
   // ─── Loading / error states ───
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#020617]">
-        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <LpSpinner fullScreen />;
   }
 
   if (errorKind || !data) {
     const notStarted = errorKind === "not_started";
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-[#020617]">
-        <NexliLogo size="md" />
-        <div className="max-w-md w-full p-8 mt-8 space-y-3 rounded-2xl bg-white/5 border border-white/10">
-          <div className="text-4xl">{notStarted ? "🚧" : "🔍"}</div>
-          <h1 className="text-lg font-bold text-white">
-            {notStarted
-              ? "Your Launch Pad isn't live yet"
-              : "This link isn't active"}
-          </h1>
-          <p className="text-sm text-neutral-400">
-            {notStarted
-              ? "We're getting things ready behind the scenes. Check back soon, or reach out to your Nexli team."
-              : "Double-check the link from your email, or contact your Nexli team for a fresh one."}
-          </p>
-        </div>
-      </div>
+      <LpMessage
+        emoji={notStarted ? "🚧" : "🔍"}
+        title={
+          notStarted
+            ? "Your Launch Pad isn't live yet"
+            : "This link isn't active"
+        }
+        body={
+          notStarted
+            ? "We're getting things ready behind the scenes. Check back soon, or reach out to your Nexli team."
+            : "Double-check the link from your email, or contact your Nexli team for a fresh one."
+        }
+      />
     );
   }
 
@@ -694,334 +352,267 @@ export function OnboardingClient({ token }: { token: string }) {
   const allDone = ob.progressPercent === 100;
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden bg-[#020617] text-white">
-      <style>{`
-        @keyframes lp-confetti-fall {
-          0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
-          100% { transform: translate3d(var(--lp-drift), 105vh, 0) rotate(var(--lp-spin)); opacity: 0.9; }
-        }
-        @keyframes lp-fade-up {
-          from { opacity: 0; transform: translateY(14px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes lp-check-bounce {
-          0% { transform: scale(0); opacity: 0; }
-          50% { transform: scale(1.25); opacity: 1; }
-          70% { transform: scale(0.9); }
-          100% { transform: scale(1); opacity: 1; }
-        }
-        @keyframes lp-float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
-        }
-        .lp-card { animation: lp-fade-up 0.5s ease-out both; }
-        .lp-input {
-          width: 100%;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 0.5rem;
-          padding: 0.75rem 1rem;
-          color: #fff;
-          font-size: 0.875rem;
-          outline: none;
-          transition: border-color 0.15s ease;
-        }
-        .lp-input::placeholder { color: rgba(255, 255, 255, 0.3); }
-        .lp-input:focus { border-color: #3B82F6; }
-        .lp-input option { background: #020617; color: #fff; }
-      `}</style>
-
-      {/* Ambient brand glows */}
-      <div
-        className="pointer-events-none fixed -top-40 -right-32 w-[560px] h-[560px] rounded-full"
-        style={{ background: "radial-gradient(circle, rgba(59, 130, 246, 0.10) 0%, transparent 70%)" }}
-      />
-      <div
-        className="pointer-events-none fixed top-1/3 -left-40 w-[480px] h-[480px] rounded-full"
-        style={{ background: "radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%)" }}
-      />
-      <div
-        className="pointer-events-none fixed -bottom-32 -right-24 w-[480px] h-[480px] rounded-full"
-        style={{ background: "radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 70%)" }}
-      />
-
-      <ConfettiBurst burst={burst} />
-
-      <div className="relative max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-10">
-        {/* ─── Header ─── */}
-        <header className="flex items-center justify-between lp-card">
-          <NexliLogo size="md" />
-          <ShimmerPill>
-            <Icon d={PATHS.rocket} size={14} className="text-blue-400" />
-            <span className="text-white text-[10px] md:text-xs font-black tracking-[0.2em] uppercase">
-              Launch Pad
-            </span>
-          </ShimmerPill>
-        </header>
-
-        {/* ─── Celebration banner ─── */}
-        {allDone && (
-          <div className="lp-card relative rounded-2xl overflow-hidden p-[1.5px]">
-            <span
-              className="absolute inset-[-200%] animate-[shimmer_6s_linear_infinite] opacity-90"
-              style={{ background: SHIMMER_CONIC }}
-            />
-            <div className="relative z-10 rounded-[14px] p-6 text-center bg-gradient-to-br from-slate-950 via-cyan-950/40 to-slate-950">
-              <div className="text-3xl mb-1">🎉</div>
-              <h2 className="text-xl font-black text-white" style={SYNE}>
-                Everything&apos;s done — you&apos;re cleared for launch!
-              </h2>
-              <p className="text-sm mt-1 text-neutral-300">
-                Your Nexli team will be in touch with go-live details.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Hero ─── */}
-        <section className="lp-card" style={{ animationDelay: "0.05s" }}>
-          <div className="flex flex-col sm:flex-row items-center gap-8">
-            <div className="flex-1 text-center sm:text-left">
-              <h1
-                className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white"
-                style={SYNE}
-              >
-                Welcome aboard,{" "}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
-                  {firstName}.
-                </span>
-              </h1>
-              <p className="text-sm mt-3 leading-relaxed text-neutral-300">
-                We&apos;re already building. This page updates in real time, so
-                you always know exactly where everything stands — no guessing,
-                no waiting on hold.
-              </p>
-              <p className="text-sm mt-2 leading-relaxed">
-                <span className="text-white font-semibold">
-                  The faster we get what we need from you, the faster we can
-                  build this out for you.
-                </span>{" "}
-                ⚡
-              </p>
-
-              {/* Floating icon chips — website / automations / portal / reviews / ads */}
-              <div className="flex flex-wrap gap-3 mt-5 justify-center sm:justify-start">
-                {(
-                  [
-                    ["blue", <Icon key="b" d={PATHS.monitor} size={28} className={ACCENT.blue.icon} />],
-                    ["violet", <Icon key="v" d={PATHS.bot} size={28} className={ACCENT.violet.icon} />],
-                    ["cyan", <Icon key="c" d={PATHS.layoutDashboard} size={28} className={ACCENT.cyan.icon} />],
-                    ["amber", <GoogleGLogo key="g" size={26} />],
-                    ["emerald", <FacebookLogo key="f" size={26} />],
-                    ["stripe", <StripeLogo key="s" size={26} />],
-                  ] as [Accent, React.ReactNode][]
-                ).map(([accent, icon], i) => (
-                  <div
-                    key={accent}
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center ${ACCENT[accent].chip}`}
-                    style={{
-                      filter: ACCENT[accent].chipGlow,
-                      animation: `lp-float 3s ease-in-out ${i * 0.35}s infinite`,
-                    }}
-                  >
-                    {icon}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-x-8 gap-y-4">
-                <div className="inline-flex flex-col items-center sm:items-start">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
-                    Estimated Launch
-                  </span>
-                  <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
-                    {ob.targetLaunchDate
-                      ? formatDate(ob.targetLaunchDate)
-                      : "Being scheduled"}
-                  </span>
-                </div>
-                <div className="inline-flex flex-col items-center sm:items-start">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
-                    Your items due
-                  </span>
-                  <span
-                    className={`text-lg font-bold ${
-                      ob.clientItemsComplete
-                        ? "text-emerald-300"
-                        : ob.isOverdue
-                          ? "text-rose-400"
-                          : ob.daysUntilDue !== null && ob.daysUntilDue <= 2
-                            ? "text-amber-300"
-                            : "text-white"
-                    }`}
-                  >
-                    {ob.clientDueAt ? formatDate(ob.clientDueAt) : "—"}
-                  </span>
-                </div>
-              </div>
-              {ob.campaignLaunchedAt && (
-                <p className="mt-4 text-xs text-center sm:text-left text-neutral-400">
-                  <span className="text-emerald-300 font-semibold">
-                    Campaigns live since {formatDate(ob.campaignLaunchedAt)}
-                  </span>
-                </p>
-              )}
-            </div>
-            <ProgressRing percent={ob.progressPercent} />
-          </div>
-        </section>
-
-        {/* ─── Build phases — Step timeline ─── */}
-        <section className="lp-card" style={{ animationDelay: "0.1s" }}>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-white" style={SYNE}>
-              What we&apos;re building for you
-            </h2>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-              {ob.phases.filter((p) => p.status === "done").length} of{" "}
-              {ob.phases.length} done
-            </span>
-          </div>
-
-          <div className="relative">
-            {/* Vertical timeline line */}
-            <div
-              className="absolute left-[19px] top-3 bottom-3 w-[2px]"
-              style={{
-                background:
-                  "linear-gradient(to bottom, transparent 0%, #334155 12%, #334155 88%, transparent 100%)",
-              }}
-            />
-
-            <div className="space-y-10">
-              {ob.phases.map((phase, i) => {
-                const accent = PHASE_ACCENT[phase.id] || "blue";
-                const isCenterpiece = phase.id === "portal";
-                return (
-                  <div key={phase.id} className="relative flex gap-4 sm:gap-6">
-                    {/* Timeline dot */}
-                    <div className="relative z-10 shrink-0">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black border border-white/10">
-                        {phase.status === "done" ? (
-                          <div
-                            className="h-5 w-5 rounded-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-cyan-500"
-                            style={{ animation: "lp-check-bounce 0.5s ease-out" }}
-                          >
-                            <Icon d={PATHS.check} size={12} className="text-white" />
-                          </div>
-                        ) : (
-                          <div
-                            className={`h-4 w-4 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 border border-blue-600 ${
-                              phase.status === "in_progress" ? "animate-pulse" : "opacity-60"
-                            }`}
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Step content */}
-                    <div className="flex-1 min-w-0">
-                      <h3
-                        className="text-xl font-bold text-neutral-500 mb-3"
-                        style={SYNE}
-                      >
-                        Step {i + 1}
-                      </h3>
-
-                      {isCenterpiece ? (
-                        <CenterpiecePhaseCard phase={phase} />
-                      ) : (
-                        <PhaseCard phase={phase} accent={accent} />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* ─── Client tasks ─── */}
-        <section className="lp-card" style={{ animationDelay: "0.15s" }}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl sm:text-2xl font-bold text-white" style={SYNE}>
-              What we need from you
-            </h2>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                {tasksDone} of {ob.tasks.length} done
-              </span>
-              <DuePill ob={ob} />
-            </div>
-          </div>
-          <div className="space-y-4">
-            {ob.tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                token={token}
-                onSubmitted={() => {
-                  celebrate();
-                  load(false);
-                }}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* ─── Mission log ─── */}
-        <section
-          className="lp-card rounded-2xl p-6 sm:p-8 bg-white/5 border border-white/10"
-          style={{ animationDelay: "0.2s" }}
-        >
-          <h2 className="text-lg font-bold text-white mb-4" style={SYNE}>
-            Mission log 📡
+    <LaunchPadShell
+      badge="Launch Pad"
+      badgeIcon={<Icon d={PATHS.rocket} size={14} className="text-blue-400" />}
+      burst={burst}
+    >
+      {/* ─── Celebration banner ─── */}
+      {allDone && (
+        <ShimmerCard className="lp-card">
+          <div className="text-3xl mb-1">🎉</div>
+          <h2 className="text-xl font-black text-white" style={SYNE}>
+            Everything&apos;s done — you&apos;re cleared for launch!
           </h2>
-          {ob.activity.length === 0 ? (
-            <p className="text-sm text-neutral-400">
-              Updates from your build will appear here.
+          <p className="text-sm mt-1 text-neutral-300">
+            Your Nexli team will be in touch with go-live details.
+          </p>
+        </ShimmerCard>
+      )}
+
+      {/* ─── Hero ─── */}
+      <section className="lp-card" style={{ animationDelay: "0.05s" }}>
+        <div className="flex flex-col sm:flex-row items-center gap-8">
+          <div className="flex-1 text-center sm:text-left">
+            <h1
+              className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white"
+              style={SYNE}
+            >
+              Welcome aboard,{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
+                {firstName}.
+              </span>
+            </h1>
+            <p className="text-sm mt-3 leading-relaxed text-neutral-300">
+              We&apos;re already building. This page updates in real time, so
+              you always know exactly where everything stands — no guessing,
+              no waiting on hold.
             </p>
-          ) : (
-            <div className="space-y-3">
-              {[...ob.activity].reverse().map((entry, i) => (
-                <div key={`${entry.at}-${i}`} className="flex gap-3 items-start">
-                  <div
-                    className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-                    style={{
-                      background:
-                        entry.actor === "client"
-                          ? "#06B6D4"
-                          : entry.actor === "agency"
-                          ? "#3B82F6"
-                          : "#8B5CF6",
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-snug text-neutral-300">
-                      {entry.message}
-                    </p>
-                    <span className="text-[11px] text-neutral-500">
-                      {timeAgo(entry.at)}
-                    </span>
-                  </div>
+            <p className="text-sm mt-2 leading-relaxed">
+              <span className="text-white font-semibold">
+                The faster we get what we need from you, the faster we can
+                build this out for you.
+              </span>{" "}
+              ⚡
+            </p>
+
+            {/* Floating icon chips — website / automations / portal / reviews / ads */}
+            <div className="flex flex-wrap gap-3 mt-5 justify-center sm:justify-start">
+              {(
+                [
+                  ["blue", <Icon key="b" d={PATHS.monitor} size={28} className={ACCENT.blue.icon} />],
+                  ["violet", <Icon key="v" d={PATHS.bot} size={28} className={ACCENT.violet.icon} />],
+                  ["cyan", <Icon key="c" d={PATHS.layoutDashboard} size={28} className={ACCENT.cyan.icon} />],
+                  ["amber", <GoogleGLogo key="g" size={26} />],
+                  ["emerald", <FacebookLogo key="f" size={26} />],
+                  ["stripe", <StripeLogo key="s" size={26} />],
+                ] as [Accent, React.ReactNode][]
+              ).map(([accent, icon], i) => (
+                <div
+                  key={accent}
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center ${ACCENT[accent].chip}`}
+                  style={{
+                    filter: ACCENT[accent].chipGlow,
+                    animation: `lp-float 3s ease-in-out ${i * 0.35}s infinite`,
+                  }}
+                >
+                  {icon}
                 </div>
               ))}
             </div>
-          )}
-        </section>
 
-        {/* ─── Footer ─── */}
-        <footer className="text-center pb-6 space-y-2">
-          <p className="text-[11px] text-neutral-500">
-            Questions? Your Nexli team is one message away.
+            <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-x-8 gap-y-4">
+              <div className="inline-flex flex-col items-center sm:items-start">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+                  Estimated Launch
+                </span>
+                <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500">
+                  {ob.targetLaunchDate
+                    ? formatDate(ob.targetLaunchDate)
+                    : "Being scheduled"}
+                </span>
+              </div>
+              <div className="inline-flex flex-col items-center sm:items-start">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+                  Your items due
+                </span>
+                <span
+                  className={`text-lg font-bold ${
+                    ob.clientItemsComplete
+                      ? "text-emerald-300"
+                      : ob.isOverdue
+                        ? "text-rose-400"
+                        : ob.daysUntilDue !== null && ob.daysUntilDue <= 2
+                          ? "text-amber-300"
+                          : "text-white"
+                  }`}
+                >
+                  {ob.clientDueAt ? formatDate(ob.clientDueAt) : "—"}
+                </span>
+              </div>
+            </div>
+            {ob.campaignLaunchedAt && (
+              <p className="mt-4 text-xs text-center sm:text-left text-neutral-400">
+                <span className="text-emerald-300 font-semibold">
+                  Campaigns live since {formatDate(ob.campaignLaunchedAt)}
+                </span>
+              </p>
+            )}
+          </div>
+          <ProgressRing percent={ob.progressPercent} />
+        </div>
+      </section>
+
+      {/* ─── Build phases — Step timeline ─── */}
+      <section className="lp-card" style={{ animationDelay: "0.1s" }}>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-white" style={SYNE}>
+            What we&apos;re building for you
+          </h2>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            {ob.phases.filter((p) => p.status === "done").length} of{" "}
+            {ob.phases.length} done
+          </span>
+        </div>
+
+        <div className="relative">
+          {/* Vertical timeline line */}
+          <div
+            className="absolute left-[19px] top-3 bottom-3 w-[2px]"
+            style={{
+              background:
+                "linear-gradient(to bottom, transparent 0%, #334155 12%, #334155 88%, transparent 100%)",
+            }}
+          />
+
+          <div className="space-y-10">
+            {ob.phases.map((phase, i) => {
+              const accent = PHASE_ACCENT[phase.id] || "blue";
+              const isCenterpiece = phase.id === "portal";
+              return (
+                <div key={phase.id} className="relative flex gap-4 sm:gap-6">
+                  {/* Timeline dot */}
+                  <div className="relative z-10 shrink-0">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black border border-white/10">
+                      {phase.status === "done" ? (
+                        <div
+                          className="h-5 w-5 rounded-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-cyan-500"
+                          style={{ animation: "lp-check-bounce 0.5s ease-out" }}
+                        >
+                          <Icon d={PATHS.check} size={12} className="text-white" />
+                        </div>
+                      ) : (
+                        <div
+                          className={`h-4 w-4 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 border border-blue-600 ${
+                            phase.status === "in_progress" ? "animate-pulse" : "opacity-60"
+                          }`}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step content */}
+                  <div className="flex-1 min-w-0">
+                    <h3
+                      className="text-xl font-bold text-neutral-500 mb-3"
+                      style={SYNE}
+                    >
+                      Step {i + 1}
+                    </h3>
+
+                    {isCenterpiece ? (
+                      <CenterpiecePhaseCard phase={phase} />
+                    ) : (
+                      <PhaseCard phase={phase} accent={accent} />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Client tasks ─── */}
+      <section className="lp-card" style={{ animationDelay: "0.15s" }}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-white" style={SYNE}>
+            What we need from you
+          </h2>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              {tasksDone} of {ob.tasks.length} done
+            </span>
+            <DuePill ob={ob} />
+          </div>
+        </div>
+        <div className="space-y-4">
+          {ob.tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              token={token}
+              onSubmitted={() => {
+                celebrate();
+                load(false);
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* ─── Mission log ─── */}
+      <section
+        className="lp-card rounded-2xl p-6 sm:p-8 bg-white/5 border border-white/10"
+        style={{ animationDelay: "0.2s" }}
+      >
+        <h2 className="text-lg font-bold text-white mb-4" style={SYNE}>
+          Mission log 📡
+        </h2>
+        {ob.activity.length === 0 ? (
+          <p className="text-sm text-neutral-400">
+            Updates from your build will appear here.
           </p>
-          <p className="text-[10px] text-neutral-600">
-            {data.from.company || data.from.name} • Powered by the Digital
-            Rainmaker System
-          </p>
-        </footer>
-      </div>
-    </div>
+        ) : (
+          <div className="space-y-3">
+            {[...ob.activity].reverse().map((entry, i) => (
+              <div key={`${entry.at}-${i}`} className="flex gap-3 items-start">
+                <div
+                  className="w-2 h-2 rounded-full mt-1.5 shrink-0"
+                  style={{
+                    background:
+                      entry.actor === "client"
+                        ? "#06B6D4"
+                        : entry.actor === "agency"
+                        ? "#3B82F6"
+                        : "#8B5CF6",
+                  }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm leading-snug text-neutral-300">
+                    {entry.message}
+                  </p>
+                  <span className="text-[11px] text-neutral-500">
+                    {timeAgo(entry.at)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ─── Footer ─── */}
+      <footer className="text-center pb-6 space-y-2">
+        <p className="text-[11px] text-neutral-500">
+          Questions? Your Nexli team is one message away.
+        </p>
+        <p className="text-[10px] text-neutral-600">
+          {data.from.company || data.from.name} • Powered by the Digital
+          Rainmaker System
+        </p>
+      </footer>
+    </LaunchPadShell>
   );
 }
 
@@ -1068,7 +659,7 @@ function FeatureGrid({ features, accent }: { features: string[]; accent: Accent 
 function PhaseCard({ phase, accent }: { phase: PhaseData; accent: Accent }) {
   const a = ACCENT[accent];
   return (
-    <div className="rounded-2xl p-5 sm:p-6 bg-white/5 border border-white/10">
+    <LpCard>
       <div className="flex items-center gap-3 flex-wrap">
         <div className={`p-2 rounded-xl ${a.headerTile}`}>
           <Icon d={PHASE_ICON[phase.id] || PATHS.globe} size={24} className={a.headerIcon} />
@@ -1107,7 +698,7 @@ function PhaseCard({ phase, accent }: { phase: PhaseData; accent: Accent }) {
           </div>
         </div>
       )}
-    </div>
+    </LpCard>
   );
 }
 
@@ -1196,12 +787,9 @@ function TaskCard({
   const accent = TASK_ACCENT[task.id] || "blue";
   const a = ACCENT[accent];
   return (
-    <div className="rounded-2xl p-5 sm:p-6 bg-white/5 border border-white/10">
+    <LpCard>
       <div className="flex items-start gap-3">
-        <div
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${a.chip}`}
-          style={{ filter: a.chipGlow, animation: "lp-float 3.5s ease-in-out infinite" }}
-        >
+        <IconChip accent={accent}>
           {task.id === "fb_ads_invite" ? (
             <FacebookLogo size={24} />
           ) : task.id === "stripe_setup" ? (
@@ -1209,7 +797,7 @@ function TaskCard({
           ) : (
             <Icon d={TASK_ICON[task.id] || PATHS.globe} size={24} className={a.icon} />
           )}
-        </div>
+        </IconChip>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm sm:text-base font-bold text-white">{task.title}</h3>
@@ -1241,33 +829,9 @@ function TaskCard({
           <LicenseUpload task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
       </div>
-    </div>
+    </LpCard>
   );
 }
-
-function SubmittedNote({
-  children,
-  accent,
-}: {
-  children: React.ReactNode;
-  accent: Accent;
-}) {
-  const a = ACCENT[accent];
-  return (
-    <div className={`flex items-center gap-2 px-4 py-3 rounded-xl ${a.successStrip}`}>
-      <div
-        className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-gradient-to-br from-blue-500 to-cyan-500"
-        style={{ animation: "lp-check-bounce 0.5s ease-out" }}
-      >
-        <Icon d={PATHS.check} size={14} className="text-white" />
-      </div>
-      <span className="text-xs font-semibold text-white">{children}</span>
-    </div>
-  );
-}
-
-const CTA_CLASSES =
-  "flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:hover:scale-100";
 
 // ── DNS / registrar credentials form ──
 
@@ -1335,9 +899,6 @@ function DnsForm({
       setSubmitting(false);
     }
   }
-
-  const labelCls =
-    "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-neutral-500";
 
   return (
     <div className="space-y-3">
@@ -1500,9 +1061,6 @@ function StripeSetup({
   }
 
   const a = ACCENT[accent];
-  const labelCls =
-    "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-neutral-500";
-
   return (
     <div className="space-y-4">
       {/* Ground rules — have these ready */}
@@ -1726,7 +1284,7 @@ function FbConfirm({
         <button
           onClick={() => submit(true)}
           disabled={submitting}
-          className="px-5 py-3 rounded-full text-sm font-semibold text-neutral-400 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-all active:scale-[0.98] disabled:opacity-50"
+          className={SECONDARY_BTN}
         >
           I don&apos;t run Facebook Ads
         </button>

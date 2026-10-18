@@ -37,6 +37,10 @@ export function ensureClientSuccessTables(): Promise<void> {
           "created_at" timestamp NOT NULL DEFAULT now()
         )
       `);
+      // Oct 18 2026: seven-question survey with NPS — new columns on an
+      // existing table must be ALTERed in (CREATE TABLE IF NOT EXISTS is a no-op).
+      await db.execute(sql`ALTER TABLE "client_surveys" ADD COLUMN IF NOT EXISTS "answers" jsonb`);
+      await db.execute(sql`ALTER TABLE "client_surveys" ADD COLUMN IF NOT EXISTS "nps_score" integer`);
       await db.execute(
         sql`CREATE UNIQUE INDEX IF NOT EXISTS "client_surveys_client_week_idx" ON "client_surveys" ("client_user_id", "week_start")`
       );

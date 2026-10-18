@@ -5,6 +5,7 @@
  */
 
 import { emailWrapper } from "@/lib/email";
+import { SURVEY_QUESTIONS, SURVEY_QUESTION_COUNT, SURVEY_ESTIMATED_SECONDS } from "@/lib/survey-questions";
 import { getPortalUrl } from "@/lib/foundation-config";
 
 const buttonStyle = `display:inline-block;background-color:#2563EB;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
@@ -183,8 +184,11 @@ function formatWeekOf(weekStart: string): string {
 }
 
 /**
- * Monday pulse check. Five 1-click score buttons each land on the survey page
- * with that score pre-selected; the client can still adjust before submitting.
+ * Biweekly pulse check (every other Monday). The email asks question 1
+ * ("Overall, how are things going?") inline — five 1-click buttons that land
+ * on the survey page with that answer pre-selected (`?overall=N`); the page
+ * then asks the remaining six questions (NPS sits sixth). Question copy comes
+ * from src/lib/survey-questions.ts so it can't drift from the page.
  */
 export function buildWeeklySurveyEmail(params: {
   clientName?: string | null;
@@ -196,16 +200,17 @@ export function buildWeeklySurveyEmail(params: {
   const firstName = (clientName || "").trim().split(/\s+/)[0];
   const greeting = firstName ? `Hi ${escapeHtml(firstName)}` : "Hi there";
 
+  const q1 = SURVEY_QUESTIONS[0];
   const scoreButton = (n: number) =>
     `<td align="center" style="padding:0 4px;">
-      <a href="${surveyUrl}?s=${n}" style="display:block;width:44px;height:44px;line-height:44px;border-radius:12px;background-color:#1e1e2a;border:1px solid #2a2a3a;color:#ffffff;font-size:18px;font-weight:800;text-decoration:none;text-align:center;">${n}</a>
+      <a href="${surveyUrl}?overall=${n}" style="display:block;width:44px;height:44px;line-height:44px;border-radius:12px;background-color:#1e1e2a;border:1px solid #2a2a3a;color:#ffffff;font-size:18px;font-weight:800;text-decoration:none;text-align:center;">${n}</a>
     </td>`;
 
   const html = emailWrapper(`
     <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Week of ${formatWeekOf(weekStart)}</p>
-    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">60-second pulse check</h1>
+    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Quick pulse check</h1>
     <p style="margin:0 0 24px;color:#9999a8;font-size:14px;line-height:1.6;">
-      ${greeting}, Marcel here. One quick question so we catch anything early: <strong style="color:#fff;">how confident are you in the results you&rsquo;re seeing this week?</strong>
+      ${greeting}, Marcel here. Every two weeks I ask a few quick questions so we catch anything early. Start with this one: <strong style="color:#fff;">${escapeHtml(q1.prompt)}</strong>
     </p>
     <div style="margin:20px 0;padding:20px 16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
@@ -213,16 +218,16 @@ export function buildWeeklySurveyEmail(params: {
       </table>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:10px;">
         <tr>
-          <td style="color:#808090;font-size:11px;text-align:left;">Not at all</td>
-          <td style="color:#808090;font-size:11px;text-align:right;">Very</td>
+          <td style="color:#808090;font-size:11px;text-align:left;">${escapeHtml(q1.lowLabel ?? "")}</td>
+          <td style="color:#808090;font-size:11px;text-align:right;">${escapeHtml(q1.highLabel ?? "")}</td>
         </tr>
       </table>
     </div>
     <p style="margin:0 0 20px;color:#9999a8;font-size:13px;line-height:1.6;text-align:center;">
-      Tap a number and you&rsquo;re nearly done &mdash; two more taps on the next page. I read every one of these personally.
+      Tap a number and the rest takes about ${Math.round(SURVEY_ESTIMATED_SECONDS / 30) * 30} seconds &mdash; ${SURVEY_QUESTION_COUNT} short questions, including how likely you&rsquo;d be to recommend us. I read every one personally.
     </p>
     <div style="text-align:center;margin:20px 0 28px;">
-      <a href="${surveyUrl}" style="${secondaryButtonStyle}">Open the survey</a>
+      <a href="${surveyUrl}" style="${secondaryButtonStyle}">Open the full survey</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
@@ -235,7 +240,7 @@ export function buildWeeklySurveyEmail(params: {
   `);
 
   return {
-    subject: "Quick pulse check — how's this week going?",
+    subject: "Quick pulse check — how are things going with Nexli?",
     html,
   };
 }

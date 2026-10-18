@@ -51,3 +51,25 @@ export function formatDuration(minutes: number): string {
 export function formatConversionRate(rate: number): string {
   return `${rate.toFixed(1)}%`;
 }
+
+/** Whole days between `d` and now (0 = today). Negative when `d` is in the future. */
+export function daysSince(d: Date | string, now: Date = new Date()): number {
+  return Math.floor((now.getTime() - new Date(d).getTime()) / 86_400_000);
+}
+
+/**
+ * "today" / "yesterday" / "5 days ago" for the last two weeks, otherwise a
+ * short date like "Fri Oct 10". For status lines in the Client Tracker.
+ */
+export function relativeDay(d: Date | string, now: Date = new Date()): string {
+  const days = daysSince(d, now);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 14) return `${days} days ago`;
+  return new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+/** "Fri Oct 10" */
+export function weekdayDate(d: Date | string): string {
+  return new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}

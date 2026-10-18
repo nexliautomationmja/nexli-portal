@@ -13,6 +13,7 @@ import {
   date,
 } from "drizzle-orm/pg-core";
 import type { FirmSiteConfig } from "@/lib/firm-sites/types";
+import type { SurveyAnswers } from "@/lib/survey-questions";
 
 // ── Enums ──────────────────────────────────────────────
 export const userRoleEnum = pgEnum("user_role", ["admin", "client"]);
@@ -1082,8 +1083,10 @@ export const clientSurveys = pgTable(
     viewedAt: timestamp("viewed_at"),
     submittedAt: timestamp("submitted_at"),
     expiresAt: timestamp("expires_at").notNull(),
-    resultsScore: integer("results_score"), // 1..5
+    resultsScore: integer("results_score"), // LEGACY 1..5 "confidence" (surveys before Oct 18 2026)
+    answers: jsonb("answers").$type<SurveyAnswers>(), // { overall, lead_quality, communication, responsiveness } each 1..5
     valueAnswer: text("value_answer"), // 'yes' | 'somewhat' | 'no'
+    npsScore: integer("nps_score"), // 0..10
     comment: text("comment"),
     alertedAt: timestamp("alerted_at"), // low-score alert sent
     createdAt: timestamp("created_at").defaultNow().notNull(),
