@@ -16,6 +16,8 @@
 import {
   DRS_PRICING,
   SETUP_SCOPE,
+  RECURRING_START_DAYS,
+  ANNUAL_UPFRONT_CENTS,
   TOTAL_MONTHLY_CENTS,
   TERM_MONTHS,
   ADVERTISED_SERVICE,
@@ -83,6 +85,7 @@ const CURRENT_REVISION_MARKERS = [
   "Initial Term and Renewal", // Oct 5 2026: 6/12-month initial term (Section 4(d))
   "no performance fee, bonus, or revenue share", // Oct 12 2026: guarantees + Success Bonus removed
   "Implementation (covered by the Setup Fee", // Oct 18 2026: $32,000 setup fee with itemized scope
+  "days after execution of this Agreement", // Oct 18 2026: recurring billing starts 30 days after signing
 ];
 
 /**
@@ -106,6 +109,8 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const monthlyAnnualized = fmt(DRS_PRICING.MONTHLY_CENTS * 12);
   const totalMonthly = fmt(TOTAL_MONTHLY_CENTS);
   const setupFee = fmt(DRS_PRICING.SETUP_FEE_CENTS);
+  const annualUpfront = fmt(ANNUAL_UPFRONT_CENTS);
+  const startDays = `${numberWords(RECURRING_START_DAYS)} (${RECURRING_START_DAYS})`;
   // Section 1 Phase 1: every group/item from SETUP_SCOPE, lettered a) b) c)…
   let letterIndex = 0;
   const scopeText = SETUP_SCOPE.map((group) => {
@@ -128,14 +133,14 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
     plan === "annual"
       ? `${setupClause}
 
-${drsPlanLine("annual")} — Due upon execution of this Agreement. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11.
+${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11.
 
-c) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly beginning upon execution of this Agreement and deployed by Provider on Client's behalf under Section 3(b). Billed via ACH bank transfer or card through Stripe.
+c) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly, with the first monthly invoice due ${startDays} days after execution of this Agreement and each subsequent invoice monthly thereafter, and deployed by Provider on Client's behalf under Section 3(b). The advertising budget is intentionally not collected up front. Billed via ACH bank transfer or card through Stripe.
 
 d) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 4(d).`
       : `${setupClause}
 
-${drsPlanLine("monthly")} — Comprising (i) a Platform Investment of ${monthly} USD/month, the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage; and (ii) a Managed Advertising Budget of ${adSpend} USD/month that Provider deploys on Client's behalf under Section 3(b). Billed as a single monthly invoice via ACH bank transfer or card through Stripe. The first Monthly Investment is due upon execution of this Agreement together with the Setup Fee.
+${drsPlanLine("monthly")} — Comprising (i) a Platform Investment of ${monthly} USD/month, the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage; and (ii) a Managed Advertising Budget of ${adSpend} USD/month that Provider deploys on Client's behalf under Section 3(b). Billed as a single monthly invoice via ACH bank transfer or card through Stripe. The first Monthly Investment is due ${startDays} days after execution of this Agreement, and each subsequent Monthly Investment is due monthly thereafter.
 
 c) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 4(d).`;
 
@@ -178,7 +183,7 @@ a) ${PAYMENT_METHODS_CLAUSE}
 
 b) All fees are non-refundable and no refunds will be issued once payment is received.
 
-c) This Agreement does not become effective and Provider has no obligation to begin work until the Setup Fee (${setupFee}) and the ${plan === "annual" ? `Annual Investment (${annual})` : `first Monthly Investment (${totalMonthly})`} are received.
+c) This Agreement does not become effective and Provider has no obligation to begin work until ${plan === "annual" ? `the Setup Fee and the Annual Investment (together ${annualUpfront})` : `the Setup Fee (${setupFee})`} ${plan === "annual" ? "are" : "is"} received.
 
 d) Initial Term and Renewal: This Agreement has an Initial Term of ${termWords(term)} months from the effective date. Advertising systems typically need ninety (90) days or more to mature, and the Initial Term exists so the acquisition system has the time it needs to produce results for Client. Either party may give thirty (30) days' written notice of termination at any time, but termination takes effect no earlier than the end of the Initial Term, and billing under Section 2 continues through that date. After the Initial Term this Agreement continues ${plan === "annual" ? "for successive twelve (12) month renewal terms" : "month-to-month"} until terminated on thirty (30) days' written notice. No refunds or pro-rated credits will be issued for any billing period. Client retains access through the end of the paid billing cycle.
 

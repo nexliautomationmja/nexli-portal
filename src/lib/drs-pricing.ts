@@ -29,6 +29,18 @@ export const DRS_PRICING = {
   AD_SPEND_MONTHLY_CENTS: 500_000, // $5,000.00 / month Managed Advertising Budget (pass-through)
 } as const;
 
+/**
+ * Recurring billing starts this many days after signing: the Setup Fee (and
+ * the Annual Investment, for annual clients) is due at execution, while the
+ * first Monthly Investment / first monthly ad-budget invoice is due 30 days
+ * later, once Phase 1 is underway (Marcel, Oct 18 2026).
+ */
+export const RECURRING_START_DAYS = 30;
+
+/** What an annual client pays at signing: Setup Fee + Annual Investment ($74,000). */
+export const ANNUAL_UPFRONT_CENTS =
+  DRS_PRICING.SETUP_FEE_CENTS + DRS_PRICING.ANNUAL_CENTS;
+
 /** What a monthly-plan client pays each month: platform upkeep + ad budget. */
 export const TOTAL_MONTHLY_CENTS =
   DRS_PRICING.MONTHLY_CENTS + DRS_PRICING.AD_SPEND_MONTHLY_CENTS; // $9,997

@@ -6,11 +6,13 @@
  * platform invoice that mirrors the flat all-in-one fee structure:
  *
  *   - Both plans  → a one-time $32,000 Setup Fee invoice (Phase 1
- *                   implementation, see SETUP_SCOPE)
+ *                   implementation, see SETUP_SCOPE), due at signing
  *   - Monthly plan → ONE $9,997/month invoice (two lines: $4,997 platform
- *                    upkeep + $5,000 Managed Advertising Budget), recurring
- *   - Annual plan  → $42,000/year platform, recurring yearly, PLUS a separate
- *                    $5,000/month Managed Advertising Budget invoice
+ *                    upkeep + $5,000 Managed Advertising Budget), recurring,
+ *                    first one due 30 days after signing
+ *   - Annual plan  → $42,000/year platform due at signing ($74,000 total with
+ *                    the setup fee), PLUS a separate $5,000/month Managed
+ *                    Advertising Budget invoice starting 30 days after signing
  *
  * There are no setup fees. Ad management is included in the platform price;
  * the ad budget is pass-through (deployed on the client's ad accounts, no
@@ -49,7 +51,13 @@ import { createNotification } from "@/lib/notifications";
 
 // Pricing lives in drs-pricing.ts (client-safe module); re-exported here so
 // existing server-side imports keep working.
-import { DRS_PRICING, SETUP_SCOPE, TOTAL_MONTHLY_CENTS, type BillingPlan } from "./drs-pricing";
+import {
+  DRS_PRICING,
+  SETUP_SCOPE,
+  RECURRING_START_DAYS,
+  TOTAL_MONTHLY_CENTS,
+  type BillingPlan,
+} from "./drs-pricing";
 
 export { DRS_PRICING } from "./drs-pricing";
 export type { BillingPlan } from "./drs-pricing";
@@ -164,6 +172,8 @@ interface DrsInvoiceSpec {
   role: DrsRole;
   /** false = one-time invoice (the Setup Fee). */
   recurring: boolean;
+  /** Days after signing the first invoice is due (0 = at signing). */
+  dueOffsetDays: number;
   interval: "monthly" | "yearly";
   totalCents: number;
   adSpendCents: number;
@@ -184,6 +194,7 @@ export function drsInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
   const setup: DrsInvoiceSpec = {
     role: "setup_fee",
     recurring: false,
+    dueOffsetDays: 0,
     interval: "monthly",
     totalCents: DRS_PRICING.SETUP_FEE_CENTS,
     adSpendCents: 0,
@@ -203,6 +214,7 @@ export function drsInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
       {
         role: "platform_annual",
         recurring: true,
+        dueOffsetDays: 0, // paid up front together with the Setup Fee
         interval: "yearly",
         totalCents: DRS_PRICING.ANNUAL_CENTS,
         adSpendCents: 0,
@@ -220,6 +232,7 @@ export function drsInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
       {
         role: "ad_spend_monthly",
         recurring: true,
+        dueOffsetDays: RECURRING_START_DAYS, // not front-loaded
         interval: "monthly",
         totalCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
         adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
@@ -234,6 +247,7 @@ export function drsInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
     {
       role: "platform_monthly",
       recurring: true,
+      dueOffsetDays: RECURRING_START_DAYS,
       interval: "monthly",
       totalCents: TOTAL_MONTHLY_CENTS,
       adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
@@ -278,10 +292,13 @@ export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
   for (const spec of drsInvoiceSpecs(plan)) {
     if (await drsInvoiceExists(engagement.id, spec.role)) continue;
 
-    const dueDate = new Date(); // due immediately at signing
+    // Setup Fee (and the Annual Investment) are due at signing; the monthly
+    // platform / ad-budget invoices are due RECURRING_START_DAYS later.
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + spec.dueOffsetDays);
 
-    // Next recurrence: one interval out, so the cron generates the next
-    // invoice when this billing cycle ends.
+    // Next recurrence: one interval after the first due date, so the cron
+    // generates the next invoice when this billing cycle ends.
     const nextRecurrence = new Date(dueDate);
     if (spec.interval === "yearly") {
       nextRecurrence.setFullYear(nextRecurrence.getFullYear() + 1);
