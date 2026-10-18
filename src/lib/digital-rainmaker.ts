@@ -5,8 +5,10 @@
  * is fully signed by all parties, this module creates a single recurring
  * platform invoice that mirrors the flat all-in-one fee structure:
  *
- *   - Monthly plan → ONE $10,000/month invoice (two lines: $5,000 platform +
- *                    $5,000 Managed Advertising Budget), recurring monthly
+ *   - Both plans  → a one-time $32,000 Setup Fee invoice (Phase 1
+ *                   implementation, see SETUP_SCOPE)
+ *   - Monthly plan → ONE $9,997/month invoice (two lines: $4,997 platform
+ *                    upkeep + $5,000 Managed Advertising Budget), recurring
  *   - Annual plan  → $42,000/year platform, recurring yearly, PLUS a separate
  *                    $5,000/month Managed Advertising Budget invoice
  *
@@ -47,12 +49,12 @@ import { createNotification } from "@/lib/notifications";
 
 // Pricing lives in drs-pricing.ts (client-safe module); re-exported here so
 // existing server-side imports keep working.
-import { DRS_PRICING, TOTAL_MONTHLY_CENTS, type BillingPlan } from "./drs-pricing";
+import { DRS_PRICING, SETUP_SCOPE, TOTAL_MONTHLY_CENTS, type BillingPlan } from "./drs-pricing";
 
 export { DRS_PRICING } from "./drs-pricing";
 export type { BillingPlan } from "./drs-pricing";
 
-export type DrsRole = "platform_monthly" | "platform_annual" | "ad_spend_monthly";
+export type DrsRole = "setup_fee" | "platform_monthly" | "platform_annual" | "ad_spend_monthly";
 
 interface DrsMetadata {
   engagementId: string;
@@ -160,12 +162,14 @@ interface PostSignTriggerArgs {
 
 interface DrsInvoiceSpec {
   role: DrsRole;
+  /** false = one-time invoice (the Setup Fee). */
+  recurring: boolean;
   interval: "monthly" | "yearly";
   totalCents: number;
   adSpendCents: number;
   label: string;
   notes: string;
-  lines: { description: string; amountCents: number; billingType: "monthly" | "yearly" }[];
+  lines: { description: string; amountCents: number; billingType: "one_time" | "monthly" | "yearly" }[];
 }
 
 /** The invoices a freshly signed DRS engagement should produce for its plan. */
@@ -177,10 +181,28 @@ export function drsInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
     amountCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
     billingType: "monthly" as const,
   };
+  const setup: DrsInvoiceSpec = {
+    role: "setup_fee",
+    recurring: false,
+    interval: "monthly",
+    totalCents: DRS_PRICING.SETUP_FEE_CENTS,
+    adSpendCents: 0,
+    label: "Setup Fee",
+    notes: `One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System — ${SETUP_SCOPE.map((g) => g.title).join(", ")} — as itemized in Section 1 of your engagement letter. Due at signing; non-refundable once work begins.`,
+    lines: [
+      {
+        description: "Digital Rainmaker System — Setup Fee (Phase 1 Implementation)",
+        amountCents: DRS_PRICING.SETUP_FEE_CENTS,
+        billingType: "one_time",
+      },
+    ],
+  };
   if (plan === "annual") {
     return [
+      setup,
       {
         role: "platform_annual",
+        recurring: true,
         interval: "yearly",
         totalCents: DRS_PRICING.ANNUAL_CENTS,
         adSpendCents: 0,
@@ -197,6 +219,7 @@ export function drsInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
       },
       {
         role: "ad_spend_monthly",
+        recurring: true,
         interval: "monthly",
         totalCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
         adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
@@ -207,13 +230,15 @@ export function drsInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
     ];
   }
   return [
+    setup,
     {
       role: "platform_monthly",
+      recurring: true,
       interval: "monthly",
       totalCents: TOTAL_MONTHLY_CENTS,
       adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
       label: "Monthly",
-      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform (buildout, maintenance, ad management, support) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Billed automatically each month.`,
+      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (hosting, maintenance, ad management, support, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Billed automatically each month.`,
       lines: [
         {
           description: "Digital Rainmaker System — Monthly Platform",
@@ -288,9 +313,9 @@ export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
         total: spec.totalCents,
         amountPaid: 0,
         balanceDue: spec.totalCents,
-        isRecurring: true,
-        recurringInterval: spec.interval,
-        nextRecurrenceDate: nextRecurrence,
+        isRecurring: spec.recurring,
+        recurringInterval: spec.recurring ? spec.interval : null,
+        nextRecurrenceDate: spec.recurring ? nextRecurrence : null,
         dueDate,
         notes: spec.notes,
         status: "sent",

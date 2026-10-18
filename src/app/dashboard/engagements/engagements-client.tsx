@@ -6,7 +6,7 @@ import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/co
 import { ClientPicker } from "@/components/dashboard/client-picker";
 import { DocumentPreview } from "@/components/engagement-document";
 import { generateDrsContent } from "@/lib/engagement-defaults";
-import { DRS_PRICING, TOTAL_MONTHLY_CENTS, TERM_MONTHS, type BillingPlan } from "@/lib/drs-pricing";
+import { DRS_PRICING, SETUP_SCOPE, TOTAL_MONTHLY_CENTS, TERM_MONTHS, type BillingPlan } from "@/lib/drs-pricing";
 import { generateEnterpriseContent } from "@/lib/enterprise-engagement";
 import {
   ENTERPRISE_TIER_ORDER,
@@ -622,12 +622,12 @@ export function EngagementsClient() {
                   {([
                     {
                       value: "monthly" as BillingPlan,
-                      label: `Monthly — ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo`,
-                      sub: `${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} platform + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} managed ad budget, one invoice. ${TERM_MONTHS.monthly}-month initial term.`,
+                      label: `Monthly — ${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo`,
+                      sub: `${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} platform upkeep + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} managed ad budget each month, one invoice. ${TERM_MONTHS.monthly}-month initial term.`,
                     },
                     {
                       value: "annual" as BillingPlan,
-                      label: `Annual — ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)}/yr + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget`,
+                      label: `Annual — ${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)}/yr + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget`,
                       sub: `Platform paid in full (~${Math.round((1 - DRS_PRICING.ANNUAL_CENTS / (DRS_PRICING.MONTHLY_CENTS * 12)) * 100)}% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly); ad budget billed monthly. ${TERM_MONTHS.annual}-month initial term.`,
                     },
                   ]).map((opt) => (
@@ -658,7 +658,7 @@ export function EngagementsClient() {
                     </label>
                   ))}
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. No performance fees, bonuses, or guarantees — the client keeps all of the upside.
+                    <span className="font-semibold">Setup Fee covers:</span> {SETUP_SCOPE.map((g) => g.title).join(" · ")} — itemized in Section 1 of the letter and invoiced at signing alongside the first monthly (or annual) invoice. Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. No performance fees, bonuses, or guarantees — the client keeps all of the upside.
                   </p>
                 </div>
               )}

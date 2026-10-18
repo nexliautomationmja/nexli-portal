@@ -1,8 +1,10 @@
 /**
  * Default engagement letter template content for the Digital Rainmaker System.
  *
- * Platform price $5,000/mo or $42,000/yr prepaid, plus a $5,000/mo Managed
- * Advertising Budget that Nexli deploys on the client's behalf (pass-through).
+ * One-time $32,000 Setup Fee (Phase 1 implementation, itemized in Section 1
+ * from SETUP_SCOPE), then platform upkeep $4,997/mo or $42,000/yr prepaid,
+ * plus a $5,000/mo Managed Advertising Budget that Nexli deploys on the
+ * client's behalf (pass-through).
  * Ad management included; no revenue share, no performance fee, no bonus,
  * and no guarantees (Oct 12 2026 — the client keeps all the upside; Nexli's
  * upside is the Enterprise tier). Initial term 6 months (monthly) / 12
@@ -13,6 +15,7 @@
 
 import {
   DRS_PRICING,
+  SETUP_SCOPE,
   TOTAL_MONTHLY_CENTS,
   TERM_MONTHS,
   ADVERTISED_SERVICE,
@@ -58,11 +61,16 @@ export const DRS_TEMPLATE_NAME = "Digital Rainmaker System";
  * Section 4(d). Section numbering is identical for both plans.
  */
 
-/** The Section 2(a) fee line for a plan — also the revision anchor used by the template refresh. */
-export function drsFeeLine(plan: BillingPlan): string {
+/** The Section 2(a) Setup Fee line — a revision anchor used by the template refresh. */
+export function drsFeeLine(_plan: BillingPlan): string {
+  return `a) Setup Fee: ${fmt(DRS_PRICING.SETUP_FEE_CENTS)} USD (one-time)`;
+}
+
+/** The Section 2(b) recurring line per plan — the second revision anchor. */
+export function drsPlanLine(plan: BillingPlan): string {
   return plan === "annual"
-    ? `a) Annual Investment (Paid in Full): ${fmt(DRS_PRICING.ANNUAL_CENTS)} USD/year`
-    : `a) Monthly Investment: ${fmt(TOTAL_MONTHLY_CENTS)} USD/month`;
+    ? `b) Annual Investment (Paid in Full): ${fmt(DRS_PRICING.ANNUAL_CENTS)} USD/year`
+    : `b) Monthly Investment: ${fmt(TOTAL_MONTHLY_CENTS)} USD/month`;
 }
 
 const AD_SECTION_HEADING = "3. AD MANAGEMENT";
@@ -74,6 +82,7 @@ const CURRENT_REVISION_MARKERS = [
   "Managed Advertising Budget", // Oct 5 2026: $5,000/mo ad budget collected by Nexli (Sections 2, 3(b))
   "Initial Term and Renewal", // Oct 5 2026: 6/12-month initial term (Section 4(d))
   "no performance fee, bonus, or revenue share", // Oct 12 2026: guarantees + Success Bonus removed
+  "Implementation (covered by the Setup Fee", // Oct 18 2026: $32,000 setup fee with itemized scope
 ];
 
 /**
@@ -85,6 +94,7 @@ const CURRENT_REVISION_MARKERS = [
 export function isCurrentDrsRevision(content: string, plan: BillingPlan): boolean {
   return (
     content.includes(drsFeeLine(plan)) &&
+    content.includes(drsPlanLine(plan)) &&
     content.includes(AD_SECTION_HEADING) &&
     CURRENT_REVISION_MARKERS.every((m) => content.includes(m))
   );
@@ -95,23 +105,37 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const annual = fmt(DRS_PRICING.ANNUAL_CENTS);
   const monthlyAnnualized = fmt(DRS_PRICING.MONTHLY_CENTS * 12);
   const totalMonthly = fmt(TOTAL_MONTHLY_CENTS);
+  const setupFee = fmt(DRS_PRICING.SETUP_FEE_CENTS);
+  // Section 1 Phase 1: every group/item from SETUP_SCOPE, lettered a) b) c)…
+  let letterIndex = 0;
+  const scopeText = SETUP_SCOPE.map((group) => {
+    const items = group.items
+      .map((item) => {
+        const letter = String.fromCharCode(97 + letterIndex++);
+        return `${letter}) ${item.name} — ${item.detail}`;
+      })
+      .join("\n\n");
+    return `${group.title}\n\n${items}`;
+  }).join("\n\n");
   const adSpend = fmt(DRS_PRICING.AD_SPEND_MONTHLY_CENTS);
   const term = TERM_MONTHS[plan];
   const service = ADVERTISED_SERVICE;
   const launchDays = LAUNCH_TARGET_DAYS;
 
+  const setupClause = `${drsFeeLine(plan)} — Due upon execution of this Agreement. The Setup Fee covers the complete Phase 1 Implementation itemized in Section 1 — the platform build, automations, content front-load and advertising engineering — and is non-refundable once Provider begins work. Billed via ACH bank transfer or card through Stripe.`;
+
   const feeStructure =
     plan === "annual"
-      ? `${drsFeeLine("annual")} — Due upon execution of this Agreement. This all-in-one Platform Investment covers the buildout and ongoing maintenance of the complete Digital Rainmaker System — website, AI automations, dashboard access, ad management, and technical support — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11.
+      ? `${setupClause}
 
-b) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly beginning upon execution of this Agreement and deployed by Provider on Client's behalf under Section 3(b). Billed via ACH bank transfer or card through Stripe.
+${drsPlanLine("annual")} — Due upon execution of this Agreement. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11.
 
-c) There are no separate setup fees. The Annual Investment payment activates the Agreement and authorizes Provider to begin work.
+c) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly beginning upon execution of this Agreement and deployed by Provider on Client's behalf under Section 3(b). Billed via ACH bank transfer or card through Stripe.
 
 d) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 4(d).`
-      : `${drsFeeLine("monthly")} — Comprising (i) a Platform Investment of ${monthly} USD/month, the all-in-one recurring investment covering the buildout and ongoing maintenance of the complete Digital Rainmaker System, including the website, AI automations, dashboard access, ad management, and technical support; and (ii) a Managed Advertising Budget of ${adSpend} USD/month that Provider deploys on Client's behalf under Section 3(b). Billed as a single monthly invoice via ACH bank transfer or card through Stripe.
+      : `${setupClause}
 
-b) There are no separate setup fees. The first Monthly Investment is due upon execution of this Agreement and activates the Agreement, authorizing Provider to begin work.
+${drsPlanLine("monthly")} — Comprising (i) a Platform Investment of ${monthly} USD/month, the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage; and (ii) a Managed Advertising Budget of ${adSpend} USD/month that Provider deploys on Client's behalf under Section 3(b). Billed as a single monthly invoice via ACH bank transfer or card through Stripe. The first Monthly Investment is due upon execution of this Agreement together with the Setup Fee.
 
 c) Initial Term: ${termWords(term)} months from the effective date, as set out in Section 4(d).`;
 
@@ -126,19 +150,13 @@ Client: [CLIENT NAME / COMPANY] ("Client")
 
 1. SCOPE OF SERVICES
 
-Provider agrees to deliver the Digital Rainmaker System, a comprehensive digital infrastructure and automation platform, consisting of the following:
+Provider agrees to deliver the Digital Rainmaker System, a comprehensive digital infrastructure, automation and client-acquisition platform, in two phases:
 
-Phase 1 — Setup & Build (launched within ${launchDays} days of Provider receiving all required client materials; 30 days maximum)
+Phase 1 — Implementation (covered by the Setup Fee in Section 2). Launched within ${launchDays} days of Provider receiving all required client materials (30 days maximum). Provider will build and deliver the following:
 
-a) Website Development & Deployment — Design and build a professional website under Client's domain. Client must provide DNS editor access with their hosting provider to enable deployment.
+${scopeText}
 
-b) Nexli Whitelabel Dashboard Setup — Configure Client's dedicated whitelabel dashboard with automated workflows and client management capabilities.
-
-c) AI Automation Implementation — Deploy AI-powered automations including lead capture, follow-up sequences, appointment scheduling, and client communication workflows.
-
-d) A2P 10DLC Verification — Register and verify Client's business for compliant SMS/text messaging through the Campaign Registry.
-
-e) Payment Processing Integration — Create a Stripe account for Client or connect Client's existing payment processor via API to enable invoicing and payment collection through the dashboard.
+Phase 2 — Ongoing Operation (covered by the Monthly Investment in Section 2). Beginning at launch and for the term of this Agreement, Provider will host and maintain everything delivered in Phase 1; manage and optimize Client's advertising campaigns, including continued creative production; provide technical support; deliver weekly updates and performance reporting; and cover the AI usage required to operate the system.
 
 2. FEE STRUCTURE
 
@@ -150,7 +168,7 @@ a) Ad Management Included: Provider manages Client's advertising campaigns (the 
 
 b) Managed Advertising Budget: Client funds a Managed Advertising Budget of ${adSpend} USD per month, billed by Provider as set out in Section 2, which Provider deploys on Client's behalf to the advertising platforms (Meta, Google, etc.) at Provider's discretion to generate ${service} advisory leads for Client. The budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider reports the budget deployed to date in its weekly updates to Client. Any portion of the budget not deployed in a given month carries forward and is deployed in subsequent months. Upon termination or expiration of this Agreement, any undeployed balance is deployed on Client's campaigns through the end of the then-current term or notice period and is not refundable. The budget may be increased only upon Client's written authorization.
 
-c) Flat-Rate, No Revenue Share: The Platform Investment in Section 2 is Provider's only fee for its services; the Managed Advertising Budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider never takes a percentage of Client's revenue, never charges a fee per client the advertising brings in, and there is no performance fee, bonus, or revenue share of any kind under this Agreement. Every dollar of advisory revenue the acquisition system produces belongs to Client.
+c) Flat-Rate, No Revenue Share: The Setup Fee and the Platform Investment in Section 2 are Provider's only fees for its services; the Managed Advertising Budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider never takes a percentage of Client's revenue, never charges a fee per client the advertising brings in, and there is no performance fee, bonus, or revenue share of any kind under this Agreement. Every dollar of advisory revenue the acquisition system produces belongs to Client.
 
 d) Attribution & Reporting: Leads and advisory clients generated through the acquisition system are attributed using the Nexli tracking system (UTM tracking and conversion attribution). Provider will provide performance reporting, including weekly updates, so both parties can see which leads, clients, and revenue are attributable to the advertising.
 
@@ -160,7 +178,7 @@ a) ${PAYMENT_METHODS_CLAUSE}
 
 b) All fees are non-refundable and no refunds will be issued once payment is received.
 
-c) This Agreement does not become effective and Provider has no obligation to begin work until the ${plan === "annual" ? `Annual Investment (${annual})` : `first Monthly Investment (${totalMonthly})`} is received.
+c) This Agreement does not become effective and Provider has no obligation to begin work until the Setup Fee (${setupFee}) and the ${plan === "annual" ? `Annual Investment (${annual})` : `first Monthly Investment (${totalMonthly})`} are received.
 
 d) Initial Term and Renewal: This Agreement has an Initial Term of ${termWords(term)} months from the effective date. Advertising systems typically need ninety (90) days or more to mature, and the Initial Term exists so the acquisition system has the time it needs to produce results for Client. Either party may give thirty (30) days' written notice of termination at any time, but termination takes effect no earlier than the end of the Initial Term, and billing under Section 2 continues through that date. After the Initial Term this Agreement continues ${plan === "annual" ? "for successive twelve (12) month renewal terms" : "month-to-month"} until terminated on thirty (30) days' written notice. No refunds or pro-rated credits will be issued for any billing period. Client retains access through the end of the paid billing cycle.
 

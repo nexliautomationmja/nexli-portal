@@ -637,6 +637,53 @@ export async function POST() {
       }
     }
 
+    // 4a. One-time Setup Fee, paid at signing (both plans).
+    {
+      const created = daysAgo(c.signedDaysAgo);
+      const SETUP = DRS_PRICING.SETUP_FEE_CENTS;
+      const [setupInvoice] = await db
+        .insert(invoices)
+        .values({
+          ownerId,
+          clientName: c.name,
+          clientEmail: c.email,
+          clientCompany: c.company,
+          invoiceNumber: await generateInvoiceNumber(),
+          token: generateInvoiceToken(),
+          currency: "usd",
+          subtotal: SETUP,
+          taxRate: 0,
+          taxAmount: 0,
+          total: SETUP,
+          amountPaid: SETUP,
+          balanceDue: 0,
+          isRecurring: false,
+          dueDate: created,
+          paidAt: created,
+          paymentMethod: "ach",
+          status: "paid",
+          sentAt: created,
+          notes: "One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System.",
+          metadata: {
+            engagementId: engagement.id,
+            demo: true,
+            drsRole: "setup_fee",
+            adSpendCents: 0,
+            termMonths: isAnnual ? 12 : 6,
+          },
+        })
+        .returning();
+      await db.insert(invoiceLineItems).values({
+        invoiceId: setupInvoice.id,
+        description: "Digital Rainmaker System — Setup Fee (Phase 1 Implementation)",
+        quantity: 100,
+        unitPrice: SETUP,
+        amount: SETUP,
+        billingType: "one_time",
+        order: 0,
+      });
+    }
+
     // 4b. Annual clients also pay the ad budget monthly — one paid parent.
     if (isAnnual) {
       const created = daysAgo(c.signedDaysAgo);

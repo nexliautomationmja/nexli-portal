@@ -4,15 +4,15 @@
  * Client-safe: no server-only imports, so these constants can be used from
  * both API routes and client components (compose UI, invoice pay page).
  *
- * One flat all-in-one platform price — $5,000/mo or $42,000/yr prepaid — with
- * no setup fees, no ad-management tiers, no revenue share, no performance
- * fee, no bonus, and (since Oct 12 2026) no guarantees of any kind. Ad
- * management is included. On top of the platform price every client funds a
- * Managed Advertising Budget of $5,000/mo that Nexli collects and deploys on
- * the ad platforms on the client's behalf (pass-through, no markup — see
- * AD_SPEND_MONTHLY_CENTS and engagement letter Section 3(b)). Monthly plan
- * = one $10,000 invoice (two line items); annual = $42,000 yearly + a
- * $5,000 monthly ad-budget invoice.
+ * Oct 18 2026: a one-time $32,000 SETUP FEE covers the Phase 1 implementation
+ * (itemized in SETUP_SCOPE and Section 1 of the letter — Marcel: "no gray
+ * area"), then $9,997/mo = $4,997 platform upkeep + $5,000 Managed
+ * Advertising Budget that Nexli collects and deploys on the ad platforms on
+ * the client's behalf (pass-through, no markup — see AD_SPEND_MONTHLY_CENTS
+ * and Section 3(b)). Annual option: setup fee + $42,000 prepaid platform +
+ * the $5,000/mo ad budget. No ad-management tiers, no revenue share, no
+ * performance fee, no bonus, no guarantees. Monthly plan = one $9,997
+ * invoice (two line items) plus the setup invoice at signing.
  *
  * Marcel's stance: clients keep all of the upside ("the cherry on top");
  * Nexli's upside is graduating them to the Enterprise tier
@@ -23,14 +23,15 @@
  */
 
 export const DRS_PRICING = {
-  MONTHLY_CENTS: 500_000, // $5,000.00 / month — platform (all-in-one)
-  ANNUAL_CENTS: 4_200_000, // $42,000.00 / year prepaid (~30% off vs $60,000 at the monthly rate; covers processing fees)
+  SETUP_FEE_CENTS: 3_200_000, // $32,000.00 one-time — Phase 1 implementation (SETUP_SCOPE)
+  MONTHLY_CENTS: 499_700, // $4,997.00 / month — platform upkeep of everything in Phase 1
+  ANNUAL_CENTS: 4_200_000, // $42,000.00 / year prepaid platform upkeep (~30% off vs $59,964 at the monthly rate)
   AD_SPEND_MONTHLY_CENTS: 500_000, // $5,000.00 / month Managed Advertising Budget (pass-through)
 } as const;
 
-/** What a monthly-plan client pays each month: platform + ad budget. */
+/** What a monthly-plan client pays each month: platform upkeep + ad budget. */
 export const TOTAL_MONTHLY_CENTS =
-  DRS_PRICING.MONTHLY_CENTS + DRS_PRICING.AD_SPEND_MONTHLY_CENTS; // $10,000
+  DRS_PRICING.MONTHLY_CENTS + DRS_PRICING.AD_SPEND_MONTHLY_CENTS; // $9,997
 
 export type BillingPlan = "monthly" | "annual";
 
@@ -39,6 +40,112 @@ export const TERM_MONTHS: Record<BillingPlan, number> = {
   monthly: 6,
   annual: 12,
 };
+
+export interface SetupScopeItem {
+  name: string;
+  detail: string;
+}
+export interface SetupScopeGroup {
+  title: string;
+  items: SetupScopeItem[];
+}
+
+/**
+ * Everything the one-time Setup Fee delivers (Phase 1 — Implementation).
+ * Single source of truth for Section 1 of the engagement letter, the compose
+ * UI, and the setup invoice. Grouped the way Marcel described it.
+ */
+export const SETUP_SCOPE: readonly SetupScopeGroup[] = [
+  {
+    title: "Platform Build",
+    items: [
+      {
+        name: "Website Build",
+        detail:
+          "A professional website designed, built and deployed under Client's domain, with SEO and AEO (AI engine optimization) so the firm is found by both search engines and AI assistants. Client provides DNS editor access with its hosting provider for deployment.",
+      },
+      {
+        name: "Funnel Build for the Portal",
+        detail:
+          "The lead-capture funnel that moves a prospect from ad click to booked consultation and into Client's portal.",
+      },
+      {
+        name: "Client Portal Buildout",
+        detail:
+          "Client's branded client portal: secure document exchange, messaging, invoicing and tax-organizer intake for Client's own clients.",
+      },
+      {
+        name: "CRM Dashboard",
+        detail:
+          "Client's Nexli whitelabel dashboard with contacts, pipeline, calendar, messaging, client management and analytics.",
+      },
+      {
+        name: "Engagement Letter Setup",
+        detail: "E-signature engagement letter templates configured for Client's services.",
+      },
+      {
+        name: "Onboarding Setup",
+        detail:
+          "Client-facing onboarding (Launch Pad) and intake workflows configured for Client's new advisory clients.",
+      },
+      {
+        name: "Contract Analyzer",
+        detail: "AI contract-analysis tooling configured for Client's firm.",
+      },
+      {
+        name: "Invoice Setup",
+        detail:
+          "Invoicing and payment collection through the dashboard, including creating a Stripe account for Client or connecting Client's existing payment processor via API.",
+      },
+    ],
+  },
+  {
+    title: "Automations",
+    items: [
+      {
+        name: "Funnel Sequencing",
+        detail:
+          "AI-powered lead capture, follow-up sequences, appointment scheduling and client-communication workflows, including A2P 10DLC registration for compliant SMS/text messaging.",
+      },
+      {
+        name: "Google Review Automation",
+        detail: "Automated review requests to grow Client's Google review count.",
+      },
+      {
+        name: "Reputation Management",
+        detail: "Monitoring and response workflows for Client's online reviews and reputation.",
+      },
+    ],
+  },
+  {
+    title: "Content Front-Load",
+    items: [
+      {
+        name: "AI Ad Creative Front-Load",
+        detail:
+          "A large launch batch of AI-generated video and photo ad creatives produced up front, so Client's campaigns can test creative from day one.",
+      },
+    ],
+  },
+  {
+    title: "Advertising Engineering",
+    items: [
+      {
+        name: "AI Ads Management Engineering",
+        detail:
+          "Campaign architecture, audience targeting, tracking and attribution built for Client's advertising accounts.",
+      },
+      {
+        name: "Ads Support & Reporting",
+        detail: "Campaign support and performance reporting, including Client's weekly update.",
+      },
+      {
+        name: "AI Usage",
+        detail: "The AI tooling and usage required to build and operate the above.",
+      },
+    ],
+  },
+];
 
 /** The service the Provider-managed ads promote (used in attribution wording). */
 export const ADVERTISED_SERVICE = "tax planning";
@@ -71,13 +178,13 @@ export const LAUNCH_TARGET_DAYS = 21;
  * average ~18–20% annual churn (top shops 8–10%), typical client lifespan
  * 2–5 years — but ~25% of agencies see tenures under a year, and a new
  * agency should assume the conservative end. Marcel's own estimate is 6–8
- * months; 8 × $5,000 = $40,000 platform revenue, so every open lead ≈ $40K
- * expected value (the ad budget is pass-through and excluded). Editable per
- * lead.
+ * months; $32,000 setup + 8 × $4,997 = $71,976 of Nexli revenue, so every
+ * open lead ≈ $72K expected value (the ad budget is pass-through and
+ * excluded). Editable per lead.
  */
 export const PIPELINE = {
   EXPECTED_LIFETIME_MONTHS: 8,
-  DEFAULT_DEAL_VALUE_CENTS: 8 * DRS_PRICING.MONTHLY_CENTS, // $40,000
+  DEFAULT_DEAL_VALUE_CENTS: DRS_PRICING.SETUP_FEE_CENTS + 8 * DRS_PRICING.MONTHLY_CENTS, // $71,976
 } as const;
 
 /**

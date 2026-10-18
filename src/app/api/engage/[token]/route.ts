@@ -232,9 +232,10 @@ export async function POST(
       }
     } else {
       // Digital Rainmaker System auto-invoicing: if this engagement was built
-      // from a DRS template, create the recurring invoice(s) for its plan
-      // (monthly $10,000 incl. ad budget, or annual $42,000 + $5,000/mo ad
-      // budget) due at signing.
+      // from a DRS template, create the invoices for its plan — the one-time
+      // $32,000 Setup Fee plus the recurring platform/ad-budget invoice(s)
+      // (monthly $9,997 incl. ad budget, or annual $42,000 + $5,000/mo ad
+      // budget) — all due at signing.
       try {
         const primary = await getPrimaryClientSigner(engagement.id);
         if (primary) {
