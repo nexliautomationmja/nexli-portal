@@ -213,3 +213,20 @@ export function cardPriceCents(achPriceCents: number): number {
     (achPriceCents * (100 + CARD_PRICE_PERCENT_ABOVE_ACH)) / 100
   );
 }
+
+/**
+ * Invoices that must be paid by bank transfer (ACH) or wire — never card
+ * (Marcel, Oct 20 2026): both up-front setup invoices. The $9,997 monthly,
+ * the $5,000 monthly ad budget and annual renewals accept card too.
+ */
+export const ACH_ONLY_DRS_ROLES = ["setup_fee", "setup_annual"] as const;
+
+/** True when an invoice's metadata marks it bank-transfer/wire only (Enterprise, DRS setup). */
+export function isAchOnlyInvoiceMeta(metadata: unknown): boolean {
+  const meta = (metadata ?? {}) as { achOnly?: unknown; drsRole?: unknown };
+  if (meta.achOnly) return true;
+  return (
+    typeof meta.drsRole === "string" &&
+    (ACH_ONLY_DRS_ROLES as readonly string[]).includes(meta.drsRole)
+  );
+}

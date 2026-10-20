@@ -210,7 +210,7 @@ function NpsControl({
 }) {
   return (
     <div>
-      <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
+      <div className="flex flex-wrap justify-center gap-1 sm:gap-2">
         {Array.from({ length: 11 }, (_, n) => {
           const active = value === n;
           const color = npsColor(n);
@@ -222,7 +222,7 @@ function NpsControl({
               onClick={() => onChange(n)}
               aria-pressed={active}
               aria-label={`${n} of 10`}
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm ${CHOICE_BASE} ${
+              className={`w-11 h-11 sm:w-10 sm:h-10 rounded-full text-sm ${CHOICE_BASE} ${
                 active
                   ? "text-white shadow-xl scale-105"
                   : locked

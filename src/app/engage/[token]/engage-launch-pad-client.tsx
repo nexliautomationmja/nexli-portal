@@ -444,7 +444,7 @@ export function EngageLaunchPadClient({
                   <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
-                <span className="text-xs font-semibold text-blue-200">Signing as: {data.role}</span>
+                <span className="min-w-0 text-xs font-semibold text-blue-200 [overflow-wrap:anywhere]">Signing as: {data.role}</span>
               </div>
             )}
 
@@ -465,9 +465,9 @@ export function EngageLaunchPadClient({
 
             <div>
               <p className={labelCls}>Signature preview</p>
-              <div className="rounded-xl px-4 py-4 min-h-[76px] flex items-end bg-white/[0.03] border border-dashed border-white/15">
+              <div className="rounded-xl px-4 py-4 min-h-[76px] flex items-end min-w-0 bg-white/[0.03] border border-dashed border-white/15">
                 <span
-                  className={`text-3xl sm:text-4xl leading-none truncate ${typedName.trim() ? "text-white" : "text-white/20"}`}
+                  className={`text-3xl sm:text-4xl min-w-0 max-w-full leading-tight [overflow-wrap:anywhere] sm:leading-none sm:truncate ${typedName.trim() ? "text-white" : "text-white/20"}`}
                   style={{ fontFamily: "var(--font-signature), cursive" }}
                   aria-live="polite"
                 >
@@ -481,9 +481,9 @@ export function EngageLaunchPadClient({
                 type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
-                className="mt-0.5 w-4 h-4 accent-blue-600 shrink-0"
+                className="mt-0.5 w-5 h-5 sm:w-4 sm:h-4 accent-blue-600 shrink-0"
               />
-              <span className="text-xs leading-relaxed text-neutral-300">{agreementText(data.role)}</span>
+              <span className="min-w-0 text-xs leading-relaxed text-neutral-300">{agreementText(data.role)}</span>
             </label>
 
             {signError && (
@@ -528,7 +528,7 @@ export function EngageLaunchPadClient({
             role="dialog"
             aria-modal="true"
             aria-labelledby="decline-title"
-            className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-md mx-auto rounded-2xl bg-[#0b1224] shadow-2xl"
+            className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-md mx-auto max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-[#0b1224] shadow-2xl"
           >
             <LpCard>
               <h2 id="decline-title" className="text-lg font-bold text-white" style={SYNE}>
@@ -560,7 +560,7 @@ export function EngageLaunchPadClient({
                   type="button"
                   onClick={handleDecline}
                   disabled={declining}
-                  className="px-5 py-3 rounded-full text-sm font-bold text-white bg-red-600 hover:bg-red-500 transition-all active:scale-[0.98] disabled:opacity-50"
+                  className="min-h-11 px-5 py-3 rounded-full text-sm font-bold text-white bg-red-600 hover:bg-red-500 transition-all active:scale-[0.98] disabled:opacity-50"
                 >
                   {declining ? "Declining…" : "Decline"}
                 </button>

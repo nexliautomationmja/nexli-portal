@@ -25,7 +25,7 @@ export function LetterBadge({ letter }: { letter: string }) {
 
 export function ClauseText({ c }: { c: Clause }) {
   return (
-    <p className="text-[15px] leading-7 text-neutral-200 whitespace-pre-line" style={READ_FONT}>
+    <p className="text-[15px] leading-7 text-neutral-200 whitespace-pre-line [overflow-wrap:anywhere]" style={READ_FONT}>
       {c.label && (
         <strong className="font-bold text-white">
           {c.label}
@@ -51,7 +51,7 @@ export function ClauseRow({ c }: { c: Clause }) {
 
 export function Paragraph({ text }: { text: string }) {
   return (
-    <p className="text-[13px] sm:text-sm leading-relaxed text-neutral-300 whitespace-pre-line">
+    <p className="text-[13px] sm:text-sm leading-relaxed text-neutral-300 whitespace-pre-line [overflow-wrap:anywhere]">
       {text}
     </p>
   );
@@ -128,7 +128,7 @@ export function PhaseCallout({ text, accent }: { text: string; accent: Accent })
   const rest = cut > 0 ? text.slice(cut + 1) : "";
   return (
     <div className={`rounded-xl px-4 py-3 ${ACCENT[accent].noteStrip}`}>
-      <p className="text-[13px] sm:text-sm leading-relaxed text-neutral-300">
+      <p className="text-[13px] sm:text-sm leading-relaxed text-neutral-300 [overflow-wrap:anywhere]">
         <strong className="font-bold text-white">{lead}</strong>
         {rest}
       </p>
@@ -179,7 +179,7 @@ export function ScopeBody({ paragraphs }: { paragraphs: string[] }) {
                 {g.clauses.map((c) => (
                   <li key={c.letter} className="flex items-start gap-2">
                     <Icon d={PATHS.check} size={14} className={`mt-1 shrink-0 ${ACCENT[meta.accent].check}`} />
-                    <p className="text-sm leading-6 text-neutral-300 min-w-0" style={READ_FONT}>
+                    <p className="text-sm leading-6 text-neutral-300 min-w-0 [overflow-wrap:anywhere]" style={READ_FONT}>
                       <span className="text-[10px] font-black text-neutral-600 mr-1">{c.letter})</span>
                       {c.label ? (
                         <>

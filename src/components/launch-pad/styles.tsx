@@ -38,6 +38,10 @@ export function LaunchPadStyles() {
         .lp-input::placeholder { color: rgba(255, 255, 255, 0.3); }
         .lp-input:focus { border-color: #3B82F6; }
         .lp-input option { background: #020617; color: #fff; }
+        /* Phones: 16px inputs so iOS Safari doesn't zoom in on focus. */
+        @media (max-width: 640px) {
+          .lp-input { font-size: 16px; }
+        }
       `}</style>
   );
 }

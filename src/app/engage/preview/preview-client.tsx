@@ -97,7 +97,7 @@ export function EngagePreviewClient() {
               type="button"
               onClick={() => setPlan(p)}
               aria-pressed={plan === p}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-all ${
+              className={`min-h-11 sm:min-h-0 px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-all ${
                 plan === p ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "text-neutral-400 hover:text-white"
               }`}
             >
@@ -195,9 +195,9 @@ export function EngagePreviewClient() {
 
               <div>
                 <p className={labelCls}>Signature preview</p>
-                <div className="rounded-xl px-4 py-4 min-h-[76px] flex items-end bg-white/[0.03] border border-dashed border-white/15">
+                <div className="rounded-xl px-4 py-4 min-h-[76px] flex items-end min-w-0 bg-white/[0.03] border border-dashed border-white/15">
                   <span
-                    className={`text-3xl sm:text-4xl leading-none truncate ${name.trim() ? "text-white" : "text-white/20"}`}
+                    className={`text-3xl sm:text-4xl min-w-0 max-w-full leading-tight [overflow-wrap:anywhere] sm:leading-none sm:truncate ${name.trim() ? "text-white" : "text-white/20"}`}
                     style={{ fontFamily: "var(--font-signature), cursive" }}
                     aria-live="polite"
                   >
@@ -211,9 +211,9 @@ export function EngagePreviewClient() {
                   type="checkbox"
                   checked={agreed}
                   onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-blue-600 shrink-0"
+                  className="mt-0.5 w-5 h-5 sm:w-4 sm:h-4 accent-blue-600 shrink-0"
                 />
-                <span className="text-sm text-neutral-300">
+                <span className="min-w-0 text-sm text-neutral-300">
                   I&apos;ve read and agree to the agreement above.
                 </span>
               </label>

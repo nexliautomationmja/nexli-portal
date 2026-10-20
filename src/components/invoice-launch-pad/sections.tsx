@@ -124,7 +124,7 @@ export function InvoiceHero({
             </p>
           )}
         </div>
-        <div className="sm:text-right shrink-0">
+        <div className="sm:text-right sm:shrink-0 min-w-0">
           <p className={labelCls}>{amountLabel}</p>
           <p className="text-4xl sm:text-5xl font-extrabold text-white leading-none" style={NUM_FONT}>
             {money(amountCents, currency)}
@@ -248,7 +248,7 @@ export function CoversCard({
               className="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4"
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white leading-snug" style={READ_FONT}>
+                <p className="text-sm font-semibold text-white leading-snug [overflow-wrap:anywhere]" style={READ_FONT}>
                   {item.description}
                 </p>
                 <span className={`inline-flex mt-1.5 items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${pill.cls}`}>
@@ -287,7 +287,7 @@ export function CoversCard({
             onClick={() => setScopeOpen((o) => !o)}
             aria-expanded={scopeOpen}
             aria-controls="setup-scope"
-            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+            className="w-full min-h-11 flex items-center justify-between gap-3 px-4 py-3 text-left"
           >
             <span className="text-sm font-semibold text-white">Included in your setup</span>
             <span className="flex items-center gap-2 text-xs text-neutral-400">
@@ -375,7 +375,7 @@ export function TotalsCard({
         <TotalRow label="Total" value={money(totalCents, currency)} strong />
         <TotalRow label="Amount paid" value={money(amountPaidCents, currency)} />
       </dl>
-      <div className="mt-4 pt-4 border-t border-white/10 flex items-end justify-between gap-4">
+      <div className="mt-4 pt-4 border-t border-white/10 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div>
           <p className={labelCls}>Balance due</p>
           <p className="text-[11px] text-neutral-500">Bank transfer (ACH) price</p>
@@ -391,7 +391,7 @@ export function TotalsCard({
 function TotalRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <dt className={strong ? "font-semibold text-white" : "text-neutral-400"}>{label}</dt>
+      <dt className={`min-w-0 ${strong ? "font-semibold text-white" : "text-neutral-400"}`}>{label}</dt>
       <dd className={strong ? "font-bold text-white" : "text-neutral-300"} style={NUM_FONT}>
         {value}
       </dd>
@@ -445,9 +445,9 @@ export function PayCard({
       <div className={`mt-5 grid grid-cols-1 gap-3 ${achOnly ? "" : "sm:grid-cols-2"}`}>
         {/* Bank transfer */}
         <div className="rounded-xl p-4 sm:p-5 bg-emerald-500/[0.06] border border-emerald-500/30 flex flex-col">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
             <Icon d={P.bank} size={18} className="text-emerald-400 shrink-0" />
-            <p className="text-sm font-bold text-white flex-1">Bank transfer (ACH)</p>
+            <p className="text-sm font-bold text-white flex-auto sm:flex-1 min-w-0">Bank transfer (ACH)</p>
             {!achOnly && savings > 0 && (
               <Pill tone="done" accent="emerald">
                 Save&nbsp;<span style={NUM_FONT}>{money(savings, currency)}{perMo}</span>&nbsp;vs card
@@ -472,9 +472,12 @@ export function PayCard({
             ) : autopay ? (
               "Pay & turn on autopay"
             ) : (
-              <>
+              // One inline run: CTA_CLASSES is a flex row, so bare text +
+              // <span> siblings would become separate flex items and wrap
+              // as three columns on phones.
+              <span>
                 Pay <span style={NUM_FONT}>{money(achCents, currency)}</span> by bank transfer
-              </>
+              </span>
             )}
           </button>
         </div>
@@ -568,7 +571,7 @@ export function InlineNote({
       className={`mt-4 flex items-start gap-2 rounded-xl px-4 py-3 border ${cls}`}
     >
       <Icon d={P.info} size={16} className={`${iconCls} shrink-0 mt-0.5`} />
-      <p className={`text-xs font-semibold ${textCls}`}>{children}</p>
+      <p className={`text-xs font-semibold min-w-0 [overflow-wrap:anywhere] ${textCls}`}>{children}</p>
     </div>
   );
 }
@@ -648,7 +651,7 @@ export function AutopayOnCard({
           type="button"
           onClick={onManage}
           disabled={managing}
-          className={`${SECONDARY_BTN} shrink-0`}
+          className={`${SECONDARY_BTN} w-full sm:w-auto shrink-0`}
         >
           {managing ? "Opening…" : "Manage autopay"}
         </button>
@@ -744,12 +747,12 @@ export function NotesCard({ notes, terms }: { notes?: string | null; terms?: str
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Notes &amp; terms</p>
       </div>
       {notes && (
-        <p className="text-xs leading-relaxed text-neutral-400 whitespace-pre-line" style={READ_FONT}>
+        <p className="text-xs leading-relaxed text-neutral-400 whitespace-pre-line [overflow-wrap:anywhere]" style={READ_FONT}>
           {notes}
         </p>
       )}
       {terms && (
-        <p className={`text-xs leading-relaxed text-neutral-500 whitespace-pre-line ${notes ? "mt-2" : ""}`} style={READ_FONT}>
+        <p className={`text-xs leading-relaxed text-neutral-500 whitespace-pre-line [overflow-wrap:anywhere] ${notes ? "mt-2" : ""}`} style={READ_FONT}>
           <span className="font-semibold text-neutral-400">Terms:</span> {terms}
         </p>
       )}

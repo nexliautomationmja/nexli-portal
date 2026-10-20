@@ -125,10 +125,10 @@ export function ShimmerPill({
 // ─── Buttons / labels ──────────────────────────────────────
 
 export const CTA_CLASSES =
-  "flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:hover:scale-100";
+  "flex items-center justify-center gap-2 min-h-11 bg-blue-600 text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:hover:scale-100";
 
 export const SECONDARY_BTN =
-  "px-5 py-3 rounded-full text-sm font-semibold text-neutral-400 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-all active:scale-[0.98] disabled:opacity-50";
+  "min-h-11 px-5 py-3 rounded-full text-sm font-semibold text-neutral-400 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-all active:scale-[0.98] disabled:opacity-50";
 
 export const labelCls =
   "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-neutral-500";

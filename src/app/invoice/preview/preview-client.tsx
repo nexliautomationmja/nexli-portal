@@ -68,7 +68,7 @@ const SAMPLES: Record<SampleKind, Sample> = {
         amountCents: DRS_PRICING.SETUP_FEE_CENTS,
       },
     ],
-    achOnly: false,
+    achOnly: true, // setup invoices: bank transfer / wire only
     notes:
       "One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System, as itemized in Section 1 of your engagement letter. Due at signing; onboarding opens once it is paid. Non-refundable once work begins.",
     terms: "Due on receipt.",
@@ -88,7 +88,7 @@ const SAMPLES: Record<SampleKind, Sample> = {
         amountCents: DRS_PRICING.ANNUAL_CENTS,
       },
     ],
-    achOnly: false,
+    achOnly: true, // setup invoices: bank transfer / wire only
     notes:
       "Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System, as itemized in Section 1 of your engagement letter, plus the annual platform investment for your first 12 months, paid in full. Due at signing; onboarding opens once it is paid. The Managed Advertising Budget is billed monthly once your build is complete.",
     terms: "Due on receipt.",
@@ -357,7 +357,7 @@ function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
-          className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+          className={`min-h-11 sm:min-h-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
             value === o.value ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "text-neutral-400 hover:text-white"
           }`}
         >

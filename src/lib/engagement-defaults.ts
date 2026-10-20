@@ -31,7 +31,7 @@ function fmt(cents: number): string {
 }
 
 // Dual-pricing presentation (never "fee added at checkout") — see drs-pricing.ts.
-const PAYMENT_METHODS_CLAUSE = `Payments may be made via ACH bank transfer or credit/debit card, processed through Stripe. Amounts listed in this Agreement are the discounted bank transfer (ACH) prices. Credit/debit card payments are charged at the corresponding card price; the exact amount of each payment option is presented at checkout before payment. The card price applies to the full invoiced amount, including any Managed Advertising Budget.`;
+const PAYMENT_METHODS_CLAUSE = `Payments may be made via ACH bank transfer or credit/debit card, processed through Stripe. Amounts listed in this Agreement are the discounted bank transfer (ACH) prices. Credit/debit card payments are charged at the corresponding card price; the exact amount of each payment option is presented at checkout before payment. The card price applies to the full invoiced amount, including any Managed Advertising Budget. The Setup Fee (and, on the annual plan, the first Annual Investment invoiced with it) is payable by ACH bank transfer or wire only.`;
 
 /** English words for the small set of numbers the letter spells out. */
 function numberWords(n: number): string {
@@ -100,6 +100,7 @@ const CURRENT_REVISION_MARKERS = [
   "no performance fee, bonus, or revenue share", // Oct 12 2026: guarantees + Success Bonus removed
   "Implementation (covered by the Setup Fee", // Oct 18 2026: $32,000 setup fee with itemized scope
   "invoiced when Provider completes the Phase 1 build", // Oct 18 2026: recurring billing starts at launch (Build complete)
+  "payable by ACH bank transfer or wire only", // Oct 20 2026: setup invoices are bank/wire only
 ];
 
 // Same as CURRENT_REVISION_MARKERS, but only for phrases that exist in the
@@ -148,13 +149,13 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const service = ADVERTISED_SERVICE;
   const launchDays = LAUNCH_TARGET_DAYS;
 
-  const setupClause = `${drsFeeLine(plan)} — Due upon execution of this Agreement. The Setup Fee covers the complete Phase 1 Implementation itemized in Section 1 — the platform build, automations, content front-load and advertising engineering — and is non-refundable once Provider begins work. Billed via ACH bank transfer or card through Stripe.`;
+  const setupClause = `${drsFeeLine(plan)} — Due upon execution of this Agreement. The Setup Fee covers the complete Phase 1 Implementation itemized in Section 1 — the platform build, automations, content front-load and advertising engineering — and is non-refundable once Provider begins work. The Setup Fee is payable by ACH bank transfer or wire only; card payments are not accepted for the Setup Fee.`;
 
   const feeStructure =
     plan === "annual"
       ? `${setupClause}
 
-${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, invoiced together as a single invoice, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Billed via ACH bank transfer or card through Stripe, and renews annually unless terminated under Section 11. Each renewal Annual Investment of ${annual} USD is invoiced thirty (30) days before the anniversary of the effective date and is due on the anniversary.
+${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, invoiced together as a single invoice, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. Because it is invoiced together with the Setup Fee, the first Annual Investment is payable by ACH bank transfer or wire only; renewal Annual Investments may be paid by ACH bank transfer or card through Stripe. The Annual Investment renews annually unless terminated under Section 11. Each renewal Annual Investment of ${annual} USD is invoiced thirty (30) days before the anniversary of the effective date and is due on the anniversary.
 
 c) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly, with the first month invoiced when Provider completes the Phase 1 build and launches the system and each subsequent invoice issued monthly thereafter, and deployed by Provider on Client's behalf under Section 3(b). The advertising budget is intentionally not collected up front; advertising begins once the first monthly invoice is paid. Billed via ACH bank transfer or card through Stripe.
 

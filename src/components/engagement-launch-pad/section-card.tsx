@@ -66,7 +66,7 @@ export function SectionCard({
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300 mb-1">
                 In plain English
               </p>
-              <p className="text-[15px] leading-relaxed text-white" style={READ_FONT}>{summary}</p>
+              <p className="text-[15px] leading-relaxed text-white [overflow-wrap:anywhere]" style={READ_FONT}>{summary}</p>
             </div>
             <p className="mt-1.5 text-xs text-neutral-400">
               Summary for convenience — the full text below is what you&apos;re agreeing to.
@@ -80,7 +80,7 @@ export function SectionCard({
             onClick={onToggle}
             aria-expanded={expanded}
             aria-controls={bodyId}
-            className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
+            className="mt-4 min-h-11 sm:min-h-0 inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
           >
             {expanded ? "Hide full clause" : "Read full clause"}
             <Icon

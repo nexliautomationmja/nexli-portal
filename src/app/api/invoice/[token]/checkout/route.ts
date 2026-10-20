@@ -6,7 +6,7 @@ import {
   createCheckoutSession,
   resolveStripeAccountForOwner,
 } from "@/lib/stripe";
-import { cardPriceCents } from "@/lib/drs-pricing";
+import { cardPriceCents, isAchOnlyInvoiceMeta } from "@/lib/drs-pricing";
 import {
   createAutopayCheckout,
   hasLiveAutopay,
@@ -54,11 +54,10 @@ export async function POST(
     return NextResponse.json({ error: "payment_processing" }, { status: 409 });
   }
 
-  // ACH-only invoices (e.g. the Enterprise License fee) never accept card —
-  // the pay page hides the option, and this is the server-side guarantee.
-  const achOnly = Boolean(
-    (invoice.metadata as { achOnly?: unknown } | null)?.achOnly
-  );
+  // ACH-only invoices (the Enterprise License fee and the DRS setup
+  // invoices) never accept card — the pay page hides the option, and this is
+  // the server-side guarantee.
+  const achOnly = isAchOnlyInvoiceMeta(invoice.metadata);
   if (achOnly && method === "card") {
     return NextResponse.json({ error: "card_not_accepted" }, { status: 400 });
   }
