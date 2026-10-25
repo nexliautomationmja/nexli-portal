@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FacebookLogo, InstagramLogo } from "@/components/launch-pad/icons";
 import type { TopCreative, TopCreativesData } from "@/app/api/dashboard/ads-overview/top-creatives/route";
 
 /**
- * Admin Overview — top 3 Meta creatives by spend, rendered by Meta's own Ad
- * Previews iframe (plays like Ads Manager). Thumbnail + play overlay first;
- * the iframe loads on click so three video players never load at once.
+ * Admin Overview — top 3 Meta creatives by spend, shown the way the Ads
+ * Library shows an ad (page, copy, media, link bar) with the real video
+ * autoplaying muted on the card; click for full size with sound. Falls back
+ * to Meta's own preview iframe when the video file isn't readable.
  * Data: /api/dashboard/ads-overview/top-creatives.
  */
 
@@ -79,90 +80,187 @@ const FORMAT_LABEL: Record<string, string> = {
   INSTAGRAM_REELS: "Instagram Reels",
 };
 
-/** Phone-post-sized frame: full width on mobile, capped at 320×560 (same ratio) on wider screens. */
-const FRAME = "relative w-full aspect-[320/560] sm:max-w-[320px] mx-auto rounded-xl overflow-hidden";
+/** Fixed-height media window, like the Ads Library: nothing is cropped. */
+const MEDIA_BOX = "relative block w-full h-[360px] sm:h-[400px] overflow-hidden bg-black";
 
-function Preview({ c, platform }: { c: TopCreative; platform: Platform }) {
-  const [open, setOpen] = useState(false);
-  const isVideo = c.mediaType === "video";
+/** Meta's preview iframe (the full post as Meta renders it). */
+function MetaPreviewFrame({ c, className }: { c: TopCreative; className?: string }) {
+  if (!c.previewUrl) return null;
+  return (
+    <iframe
+      src={c.previewUrl}
+      title={`Meta preview of ${c.adName}`}
+      sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+      className={className ?? "absolute inset-0 w-full h-full border-0 bg-white"}
+    />
+  );
+}
 
-  if (open && c.previewUrl) {
+/** Pauses card videos that scroll out of view so three reels don't all decode at once. */
+function useInViewPlayback() {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) el.play().catch(() => {});
+        else el.pause();
+      },
+      { threshold: 0.25 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return ref;
+}
+
+function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
+  const [videoFailed, setVideoFailed] = useState(false);
+  const videoRef = useInViewPlayback();
+  const poster = c.posterUrl || c.thumbnailUrl;
+  const playVideo = Boolean(c.videoUrl) && !videoFailed;
+  const showImage = !playVideo && Boolean(poster) && c.mediaType !== "video";
+
+  // No playable file or still: show Meta's own rendering, live, no click needed.
+  if (!playVideo && !showImage && c.previewUrl) {
     return (
-      <div className={FRAME} style={{ background: "#fff", border: "1px solid var(--card-border)" }}>
-        <iframe
-          src={c.previewUrl}
-          title={`Meta preview of ${c.adName}`}
-          sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
-          allow="autoplay; encrypted-media; picture-in-picture"
-          loading="lazy"
-          className="absolute inset-0 w-full h-full border-0"
-        />
+      <div className={MEDIA_BOX} style={{ background: "#fff" }}>
+        <MetaPreviewFrame c={c} />
       </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => c.previewUrl && setOpen(true)}
-      disabled={!c.previewUrl}
-      className={`${FRAME} group block text-left disabled:cursor-not-allowed`}
-      style={{ background: "var(--input-bg)", border: "1px solid var(--card-border)" }}
-      aria-label={c.previewUrl ? `Play ${c.adName} as it appears on ${platform === "instagram" ? "Instagram" : "Facebook"}` : "Preview unavailable"}
-    >
-      {c.thumbnailUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL, signed and short-lived
-        <img
-          src={c.thumbnailUrl}
-          alt=""
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+    <button type="button" onClick={onOpen} aria-label={`Watch ${c.adName} full size`} className={`${MEDIA_BOX} group/media`}>
+      {poster && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 scale-125"
+          style={{
+            backgroundImage: `url(${poster})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: "blur(26px) brightness(0.6)",
+          }}
         />
-      ) : (
-        <span className="absolute inset-0 flex items-center justify-center opacity-60">
-          {platform === "instagram" ? <InstagramLogo size={40} /> : <FacebookLogo size={40} />}
-        </span>
       )}
-      <span className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" aria-hidden="true" />
-      {c.previewUrl ? (
-        <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
-          <span className="w-16 h-16 rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center ring-2 ring-white/70 transition-transform duration-200 group-hover:scale-110">
-            {isVideo ? (
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
-                <path d="M8 5.5v13a1 1 0 0 0 1.52.85l10.4-6.5a1 1 0 0 0 0-1.7L9.52 4.65A1 1 0 0 0 8 5.5Z" />
-              </svg>
-            ) : (
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            )}
-          </span>
+      <span className="relative flex h-full w-full items-center justify-center">
+        {playVideo ? (
+          <video
+            ref={videoRef}
+            src={c.videoUrl ?? undefined}
+            poster={poster ?? undefined}
+            muted
+            autoPlay
+            loop
+            playsInline
+            preload="metadata"
+            onError={() => setVideoFailed(true)}
+            className="h-full max-w-full object-contain pointer-events-none"
+          />
+        ) : poster ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL, signed and short-lived
+          <img src={poster} alt="" referrerPolicy="no-referrer" className="h-full max-w-full object-contain" />
+        ) : (
+          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/30">No preview</span>
+        )}
+      </span>
+
+      <span
+        className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-white/85 backdrop-blur-sm"
+        style={{ background: "rgba(0,0,0,0.55)" }}
+      >
+        {c.mediaType === "video" ? "Video" : c.mediaType === "carousel" ? "Carousel" : "Photo"}
+      </span>
+
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span
+          className="flex h-11 w-11 items-center justify-center rounded-full opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100"
+          style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.3)" }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+          </svg>
         </span>
-      ) : null}
-      <span className="absolute left-3 right-3 bottom-3 text-[11px] font-semibold text-white drop-shadow">
-        {c.previewUrl
-          ? isVideo
-            ? "Play as in Ads Manager"
-            : c.mediaType === "carousel"
-              ? "Open carousel preview"
-              : "Open live preview"
-          : c.previewError
-            ? `Preview unavailable: ${c.previewError}`
-            : "Preview unavailable"}
       </span>
     </button>
   );
 }
 
+/** Full-size view with sound and a scrub bar. */
+function Lightbox({ c, onClose }: { c: TopCreative; onClose: () => void }) {
+  const [videoFailed, setVideoFailed] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const poster = c.posterUrl || c.thumbnailUrl;
+  const useVideo = Boolean(c.videoUrl) && !videoFailed;
+  const useImage = !useVideo && Boolean(poster) && c.mediaType !== "video";
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(6px)" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Ad creative: ${c.adName}`}
+    >
+      <div
+        className="relative flex h-[min(85vh,calc(92vw*16/9))] max-w-[92vw] items-center"
+        style={{ aspectRatio: "9 / 16" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {useVideo ? (
+          <video
+            src={c.videoUrl ?? undefined}
+            poster={poster ?? undefined}
+            controls
+            autoPlay
+            loop
+            playsInline
+            onError={() => setVideoFailed(true)}
+            className="h-full w-full rounded-2xl object-contain bg-black"
+          />
+        ) : useImage ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL
+          <img src={poster ?? ""} alt={c.adName} referrerPolicy="no-referrer" className="h-full w-full rounded-2xl object-contain" />
+        ) : c.previewUrl ? (
+          <MetaPreviewFrame c={c} className="h-full w-full rounded-2xl border-0 bg-white" />
+        ) : (
+          <p className="text-sm text-white/70">This ad has no preview Meta will share.</p>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute -top-3 -right-3 flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:bg-white/20"
+          style={{ background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.25)" }}
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Metric({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
-    <div title={title}>
-      <dt className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+    <div className="px-1 py-2 text-center" title={title}>
+      <dt className="text-[9px] font-black uppercase tracking-[0.1em]" style={{ color: "var(--text-muted)" }}>
         {label}
       </dt>
-      <dd className="text-sm font-semibold tabular-nums" style={{ color: "var(--text-main)" }}>
+      <dd className="mt-0.5 text-sm font-bold tabular-nums" style={{ color: "var(--text-main)" }}>
         {value}
       </dd>
     </div>
@@ -182,43 +280,121 @@ function CreativeCard({
   currency: string | null | undefined;
   leadsError: string | null | undefined;
 }) {
+  const [open, setOpen] = useState(false);
   const noMatch = c.booked === null;
   const tip = leadsError || NO_UTM;
+  const pageName = c.pageName || "Nexli";
+
   return (
-    <article className="glass-card p-4 flex flex-col gap-3 min-w-0">
-      <div className="flex items-center justify-between gap-2">
+    <article className="glass-card overflow-hidden flex flex-col min-w-0 !p-0">
+      {/* Rank · ad name · status */}
+      <div className="flex items-center gap-2 px-3 pt-3">
         <RankBadge rank={c.rank} />
-        <StatusPill status={c.status} />
+        <span
+          className="truncate text-[10px] font-black uppercase tracking-[0.14em]"
+          style={{ color: "var(--text-muted)" }}
+          title={c.adName}
+        >
+          {c.adName}
+        </span>
+        <span className="ml-auto shrink-0">
+          <StatusPill status={c.status} />
+        </span>
       </div>
 
-      <Preview key={`${c.adId}:${platform}`} c={c} platform={platform} />
-      {c.previewFellBack && c.previewFormat && (
-        <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
-          Meta can’t render this ad for {platform === "instagram" ? "Instagram" : "Facebook"} — showing the{" "}
+      {/* Page row */}
+      <div className="flex items-center gap-2 px-3 pt-3">
+        {c.pagePictureUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL
+          <img src={c.pagePictureUrl} alt="" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white"
+            style={{ background: "linear-gradient(135deg,#3b82f6,#1d4ed8)" }}
+            aria-hidden="true"
+          >
+            {pageName.charAt(0)}
+          </span>
+        )}
+        <span className="min-w-0">
+          <span className="block truncate text-xs font-bold leading-tight" style={{ color: "var(--text-main)" }}>
+            {pageName}
+          </span>
+          <span className="block text-[10px] leading-tight" style={{ color: "var(--text-muted)" }}>
+            Sponsored
+          </span>
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 opacity-70" title="Runs on Facebook and Instagram">
+          <FacebookLogo size={13} />
+          <InstagramLogo size={13} />
+        </span>
+      </div>
+
+      {c.primaryText && (
+        <p
+          className="px-3 pt-2 text-xs leading-relaxed line-clamp-3 whitespace-pre-line"
+          style={{ color: "var(--text-main)", opacity: 0.8 }}
+          title={c.primaryText}
+        >
+          {c.primaryText}
+        </p>
+      )}
+
+      <div className="mt-2.5">
+        <CardMedia key={`${c.adId}:${platform}`} c={c} onOpen={() => setOpen(true)} />
+      </div>
+      {c.previewFellBack && c.previewFormat && !c.videoUrl && (
+        <p className="px-3 pt-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+          Meta can’t render this ad for {platform === "instagram" ? "Instagram" : "Facebook"}. Showing the{" "}
           {FORMAT_LABEL[c.previewFormat] ?? c.previewFormat} version.
         </p>
       )}
 
-      <div className="min-w-0">
-        <h4 className="text-sm font-bold truncate" style={{ color: "var(--text-main)" }} title={c.adName}>
-          {c.adName}
-        </h4>
-        <p className="text-xs truncate" style={{ color: "var(--text-muted)" }} title={[c.campaignName, c.adsetName].filter(Boolean).join(" › ")}>
-          {c.campaignName || DASH}
-          {c.adsetName ? ` › ${c.adsetName}` : ""}
-        </p>
-      </div>
+      {/* Link bar */}
+      {(c.headline || c.linkDomain || c.ctaLabel) && (
+        <div className="flex items-center gap-2 px-3 py-2.5" style={{ background: "var(--input-bg)" }}>
+          <span className="min-w-0 flex-1">
+            {c.linkDomain && (
+              <span className="block text-[9px] uppercase tracking-[0.1em]" style={{ color: "var(--text-muted)" }}>
+                {c.linkDomain}
+              </span>
+            )}
+            {c.headline && (
+              <span className="block truncate text-xs font-bold leading-tight" style={{ color: "var(--text-main)" }} title={c.headline}>
+                {c.headline}
+              </span>
+            )}
+          </span>
+          {c.ctaLabel && (
+            <span
+              className="shrink-0 rounded-md px-2 py-1 text-[10px] font-bold"
+              style={{ background: "var(--card-border)", color: "var(--text-main)" }}
+            >
+              {c.ctaLabel}
+            </span>
+          )}
+        </div>
+      )}
 
-      <dl className="grid grid-cols-3 gap-x-3 gap-y-2.5">
+      {/* Real numbers for the selected range */}
+      <dl className="grid grid-cols-3 border-t" style={{ borderColor: "var(--card-border)" }}>
         <Metric label="Spend" value={money(c.spendCents, currency)} />
         <Metric label="Leads" value={String(c.leads)} title="Lead actions Meta counted" />
-        <Metric label="CPL" value={money(c.cplCents, currency)} />
+        <Metric label="Per lead" value={money(c.cplCents, currency)} />
         <Metric label="Booked" value={noMatch ? DASH : String(c.booked)} title={noMatch ? tip : `${c.booked} of ${c.ghlLeads} GoHighLevel leads`} />
-        <Metric label="Cost/booked" value={noMatch ? DASH : money(c.costPerBookedCents, currency)} title={noMatch ? tip : undefined} />
+        <Metric label="Per booked" value={noMatch ? DASH : money(c.costPerBookedCents, currency)} title={noMatch ? tip : undefined} />
         <Metric label="CTR" value={pct(c.ctr)} />
       </dl>
 
-      <div className="mt-auto flex flex-wrap gap-2 pt-1">
+      <div className="mt-auto flex flex-wrap items-center gap-2 border-t px-3 py-2.5" style={{ borderColor: "var(--card-border)" }}>
+        <span
+          className="w-full truncate text-[11px]"
+          style={{ color: "var(--text-muted)" }}
+          title={[c.campaignName, c.adsetName].filter(Boolean).join(" › ")}
+        >
+          {c.campaignName || DASH}
+          {c.adsetName ? ` › ${c.adsetName}` : ""}
+        </span>
         <a
           href={c.adsManagerUrl}
           target="_blank"
@@ -238,18 +414,9 @@ function CreativeCard({
             View post ↗
           </a>
         )}
-        {c.previewUrl && (
-          <a
-            href={c.previewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
-            style={{ color: "var(--text-main)" }}
-          >
-            Open preview ↗
-          </a>
-        )}
       </div>
+
+      {open && <Lightbox c={c} onClose={() => setOpen(false)} />}
     </article>
   );
 }
@@ -332,7 +499,7 @@ export function TopCreatives({ range }: { range: Range }) {
           {[0, 1, 2].map((i) => (
             <div key={i} className="glass-card p-4 space-y-3">
               <div className="h-7 w-12 rounded-full" style={{ background: "var(--input-bg)" }} />
-              <div className={FRAME} style={{ background: "var(--input-bg)" }} />
+              <div className="h-[360px] w-full rounded-xl" style={{ background: "var(--input-bg)" }} />
               <div className="h-4 w-3/4 rounded" style={{ background: "var(--input-bg)" }} />
             </div>
           ))}

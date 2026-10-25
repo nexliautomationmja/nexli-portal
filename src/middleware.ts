@@ -29,7 +29,7 @@ const CSP_DIRECTIVES = [
   // Firm logos and documents live in Supabase storage; Mux thumbnails; GHL
   // contact avatars (leadconnector / msgsndr CDNs); Stripe assets.
   "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://image.mux.com https://*.mux.com https://*.stripe.com https://*.leadconnectorhq.com https://*.msgsndr.com https://storage.googleapis.com https://*.fbcdn.net https://scontent.cdninstagram.com https://*.cdninstagram.com",
-  "media-src 'self' blob: https://*.supabase.co https://*.supabase.in https://stream.mux.com https://*.mux.com",
+  "media-src 'self' blob: https://*.supabase.co https://*.supabase.in https://stream.mux.com https://*.mux.com https://*.fbcdn.net",
   // API calls the browser makes: Supabase, Stripe, Mux (incl. litix data
   // beacons), Vercel analytics, GHL (leadconnector) and Cal.com embeds.
   // Dev adds the local HMR websocket.

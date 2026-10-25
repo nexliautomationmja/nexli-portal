@@ -64,6 +64,7 @@ interface GraphError {
   message?: string;
   type?: string;
   code?: number;
+  error_subcode?: number;
 }
 
 interface GraphResponse {
@@ -153,7 +154,11 @@ async function graphGet<T extends { error?: GraphError }>(
     }
     if (!res.ok || body.error) {
       const msg = body.error?.message || `Meta API returned HTTP ${res.status}`;
-      console.error(`[meta-ads] ${label} request failed (HTTP ${res.status}, code ${body.error?.code ?? "?"})`);
+      console.error(
+        `[meta-ads] ${label} request failed (HTTP ${res.status}, code ${body.error?.code ?? "?"}, subcode ${
+          body.error?.error_subcode ?? "-"
+        }): ${scrub(msg, token)}`
+      );
       return { ok: false, error: scrub(msg, token) };
     }
     return { ok: true, body };
@@ -323,7 +328,38 @@ export interface AdCreativeMeta {
   permalinkUrl: string | null;
   instagramPermalinkUrl: string | null;
   facebookPostUrl: string | null;
+  /** Playable MP4 (Meta CDN, signed) for video ads, when readable. */
+  videoUrl: string | null;
+  /** Large still: video cover or full-size image. */
+  posterUrl: string | null;
+  /** Primary text above the media. */
+  primaryText: string | null;
+  /** Headline in the link bar under the media. */
+  headline: string | null;
+  /** Button label, e.g. "Learn more". */
+  ctaLabel: string | null;
+  /** Display domain of the destination, e.g. "nexli.net". */
+  linkDomain: string | null;
+  pageName: string | null;
+  pagePictureUrl: string | null;
 }
+
+export const BLANK_CREATIVE_META: AdCreativeMeta = {
+  status: null,
+  mediaType: "other",
+  thumbnailUrl: null,
+  permalinkUrl: null,
+  instagramPermalinkUrl: null,
+  facebookPostUrl: null,
+  videoUrl: null,
+  posterUrl: null,
+  primaryText: null,
+  headline: null,
+  ctaLabel: null,
+  linkDomain: null,
+  pageName: null,
+  pagePictureUrl: null,
+};
 
 export interface TopAd extends AdCreativeMeta {
   adId: string;
@@ -367,28 +403,73 @@ interface GraphAdInsightResponse {
   error?: GraphError;
 }
 
+interface GraphCta {
+  type?: string;
+  value?: { link?: string };
+}
+
 interface GraphCreative {
   id?: string;
+  body?: string;
+  title?: string;
+  call_to_action_type?: string;
+  link_url?: string;
+  object_url?: string;
   thumbnail_url?: string;
   image_url?: string;
   video_id?: string;
   object_type?: string;
   instagram_permalink_url?: string;
   effective_object_story_id?: string;
+  actor_id?: string;
   object_story_spec?: {
-    video_data?: unknown;
-    link_data?: { child_attachments?: unknown[] };
+    page_id?: string;
+    video_data?: { video_id?: string; message?: string; title?: string; image_url?: string; call_to_action?: GraphCta };
+    link_data?: {
+      message?: string;
+      name?: string;
+      link?: string;
+      picture?: string;
+      call_to_action?: GraphCta;
+      child_attachments?: { picture?: string; name?: string; link?: string }[];
+    };
+    photo_data?: { url?: string; caption?: string };
   };
-  asset_feed_spec?: { videos?: unknown[] };
+  asset_feed_spec?: {
+    videos?: { video_id?: string; thumbnail_url?: string }[];
+    images?: { url?: string }[];
+    bodies?: { text?: string }[];
+    titles?: { text?: string }[];
+    link_urls?: { website_url?: string; display_url?: string }[];
+    call_to_action_types?: string[];
+  };
 }
 
 interface GraphAdNode {
   id?: string;
   effective_status?: string;
   creative?: GraphCreative;
+  error?: GraphError;
 }
 
-type GraphIdsResponse = Record<string, GraphAdNode | undefined> & { error?: GraphError };
+interface GraphVideoNode {
+  id?: string;
+  source?: string;
+  picture?: string;
+  thumbnails?: { data?: { uri?: string; width?: number; is_preferred?: boolean }[] };
+  error?: GraphError;
+}
+
+interface GraphPageNode {
+  name?: string;
+  picture?: { data?: { url?: string } };
+  error?: GraphError;
+}
+
+const first = <T,>(...vals: (T | null | undefined | "")[]): T | null => {
+  for (const v of vals) if (v !== undefined && v !== null && v !== "") return v as T;
+  return null;
+};
 
 function mediaTypeOf(c: GraphCreative | undefined): AdMediaType {
   if (!c) return "other";
@@ -401,52 +482,206 @@ function mediaTypeOf(c: GraphCreative | undefined): AdMediaType {
   return "other";
 }
 
+function videoIdOf(c: GraphCreative | undefined): string | null {
+  return first(c?.video_id, c?.object_story_spec?.video_data?.video_id, c?.asset_feed_spec?.videos?.[0]?.video_id);
+}
+
+function pageIdOf(c: GraphCreative | undefined): string | null {
+  const story = c?.effective_object_story_id?.split("_")[0];
+  return first(c?.object_story_spec?.page_id, c?.actor_id, story && /^\d+$/.test(story) ? story : null);
+}
+
+function ctaLabelOf(type: string | null): string | null {
+  if (!type || type === "NO_BUTTON") return null;
+  const special: Record<string, string> = {
+    LEARN_MORE: "Learn more",
+    BOOK_TRAVEL: "Book now",
+    BOOK_NOW: "Book now",
+    SIGN_UP: "Sign up",
+    APPLY_NOW: "Apply now",
+    CONTACT_US: "Contact us",
+    GET_QUOTE: "Get quote",
+    GET_OFFER: "Get offer",
+    DOWNLOAD: "Download",
+    WATCH_MORE: "Watch more",
+    SCHEDULE: "Book now",
+    MESSAGE_PAGE: "Send message",
+    SUBSCRIBE: "Subscribe",
+  };
+  if (special[type]) return special[type];
+  const words = type.toLowerCase().split("_").filter(Boolean).join(" ");
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : null;
+}
+
+function domainOf(link: string | null): string | null {
+  if (!link) return null;
+  try {
+    return new URL(link).hostname.replace(/^www\./i, "");
+  } catch {
+    return null;
+  }
+}
+
 function creativeMetaOf(node: GraphAdNode | undefined): AdCreativeMeta {
   const c = node?.creative;
+  const oss = c?.object_story_spec;
+  const afs = c?.asset_feed_spec;
   const story = c?.effective_object_story_id?.trim();
   const fbPost = story && /^\d+_\d+$/.test(story) ? `https://www.facebook.com/${story}` : null;
   const ig = c?.instagram_permalink_url?.trim() || null;
+  const cta = oss?.video_data?.call_to_action ?? oss?.link_data?.call_to_action;
+  const link = first(
+    cta?.value?.link,
+    oss?.link_data?.link,
+    c?.link_url,
+    c?.object_url,
+    afs?.link_urls?.[0]?.website_url
+  );
+  const image = first(
+    c?.image_url,
+    oss?.video_data?.image_url,
+    oss?.link_data?.picture,
+    oss?.photo_data?.url,
+    oss?.link_data?.child_attachments?.[0]?.picture,
+    afs?.videos?.[0]?.thumbnail_url,
+    afs?.images?.[0]?.url
+  );
   return {
+    ...BLANK_CREATIVE_META,
     status: node?.effective_status ?? null,
     mediaType: mediaTypeOf(c),
-    thumbnailUrl: c?.image_url || c?.thumbnail_url || null,
+    thumbnailUrl: first(image, c?.thumbnail_url),
     permalinkUrl: ig || fbPost,
     instagramPermalinkUrl: ig,
     facebookPostUrl: fbPost,
+    posterUrl: image,
+    primaryText: first(oss?.video_data?.message, oss?.link_data?.message, oss?.photo_data?.caption, c?.body, afs?.bodies?.[0]?.text),
+    headline: first(oss?.video_data?.title, oss?.link_data?.name, c?.title, afs?.titles?.[0]?.text),
+    ctaLabel: ctaLabelOf(first(cta?.type, c?.call_to_action_type, afs?.call_to_action_types?.[0])),
+    linkDomain: first(afs?.link_urls?.[0]?.display_url, domainOf(link)),
   };
 }
 
-const CREATIVE_FIELDS =
-  "effective_status,creative{id,thumbnail_url,image_url,video_id,object_type,instagram_permalink_url,effective_object_story_id,object_story_spec,asset_feed_spec}";
+/**
+ * Field sets, richest first. Some creative fields aren't readable on every
+ * ad type or token, and one unreadable field fails the whole request, so
+ * each ad falls back to a leaner set rather than losing everything.
+ */
+const CREATIVE_FIELD_TIERS = [
+  "effective_status,creative{id,body,title,call_to_action_type,link_url,object_url,thumbnail_url,image_url,video_id,object_type,instagram_permalink_url,effective_object_story_id,actor_id,object_story_spec,asset_feed_spec}",
+  "effective_status,creative{id,body,title,thumbnail_url,image_url,video_id,object_type,effective_object_story_id,object_story_spec}",
+  "effective_status,creative{id,thumbnail_url,image_url,video_id,effective_object_story_id}",
+  "effective_status",
+];
 
-const CREATIVE_FIELDS_LEAN =
-  "effective_status,creative{id,thumbnail_url,image_url,video_id,object_type,instagram_permalink_url,effective_object_story_id}";
+async function fetchAdNode(creds: MetaCreds, adId: string): Promise<{ ok: true; node: GraphAdNode } | { ok: false; error: string }> {
+  let lastError = "Meta returned no ad details";
+  for (let i = 0; i < CREATIVE_FIELD_TIERS.length; i++) {
+    const r = await graphGet<GraphAdNode>(
+      graphUrl(creds, encodeURIComponent(adId), { fields: CREATIVE_FIELD_TIERS[i] }),
+      creds.token,
+      `ad ${adId} details (tier ${i + 1})`
+    );
+    if (r.ok) return { ok: true, node: r.body };
+    lastError = r.error;
+  }
+  return { ok: false, error: lastError };
+}
 
-/** Creative metadata for up to 50 ads in one Graph call (`?ids=`). */
+/** Playable source + large cover for a video. Needs access to the video's owner (ad account or Page). */
+async function fetchVideo(creds: MetaCreds, videoId: string): Promise<{ source: string | null; poster: string | null }> {
+  const pick = (v: GraphVideoNode) => {
+    const thumbs = v.thumbnails?.data ?? [];
+    const best =
+      thumbs.find((t) => t.is_preferred && t.uri) ??
+      [...thumbs].sort((a, b) => (b.width ?? 0) - (a.width ?? 0)).find((t) => t.uri);
+    return { source: v.source || null, poster: best?.uri || v.picture || null };
+  };
+  for (const fields of ["source,picture,thumbnails{uri,width,is_preferred}", "source,picture"]) {
+    const r = await graphGet<GraphVideoNode>(
+      graphUrl(creds, encodeURIComponent(videoId), { fields }),
+      creds.token,
+      `video ${videoId}`
+    );
+    if (r.ok && (r.body.source || r.body.picture)) return pick(r.body);
+  }
+  // Videos uploaded to the ad account itself are readable via its library.
+  const lib = await graphGet<{ data?: GraphVideoNode[]; error?: GraphError }>(
+    graphUrl(creds, `act_${encodeURIComponent(creds.account)}/advideos`, {
+      fields: "id,source,picture",
+      limit: "200",
+    }),
+    creds.token,
+    "ad account video library"
+  );
+  const hit = lib.ok ? lib.body.data?.find((v) => v.id === videoId) : undefined;
+  return hit ? pick(hit) : { source: null, poster: null };
+}
+
+async function fetchPage(creds: MetaCreds, pageId: string): Promise<{ name: string | null; picture: string | null }> {
+  for (const fields of ["name,picture.type(large){url}", "name"]) {
+    const r = await graphGet<GraphPageNode>(
+      graphUrl(creds, encodeURIComponent(pageId), { fields }),
+      creds.token,
+      `page ${pageId}`
+    );
+    if (r.ok) return { name: r.body.name || null, picture: r.body.picture?.data?.url || null };
+  }
+  return { name: null, picture: null };
+}
+
+/**
+ * Creative metadata for each ad: status, copy, media (playable video when
+ * readable), page identity, post links. One request per ad (plus video and
+ * page lookups) so one unreadable ad never blanks the others.
+ */
 export async function getAdCreativesMeta(
   adIds: string[]
-): Promise<{ ok: true; byId: Record<string, AdCreativeMeta> } | { ok: false; error: string }> {
+): Promise<{ ok: true; byId: Record<string, AdCreativeMeta>; errors: string[] } | { ok: false; error: string }> {
   const creds = metaCreds();
   if (!creds) return { ok: false, error: "Meta ads aren't configured" };
-  if (adIds.length === 0) return { ok: true, byId: {} };
-  const ids = adIds.slice(0, 50).join(",");
-  let r = await graphGet<GraphIdsResponse>(
-    graphUrl(creds, "", { ids, fields: CREATIVE_FIELDS }),
-    creds.token,
-    "ad creatives"
-  );
-  // Some creative fields aren't readable on every ad type; retry lean.
-  if (!r.ok) {
-    r = await graphGet<GraphIdsResponse>(
-      graphUrl(creds, "", { ids, fields: CREATIVE_FIELDS_LEAN }),
-      creds.token,
-      "ad creatives (lean)"
-    );
-  }
-  if (!r.ok) return r;
+  const ids = adIds.slice(0, 25);
+  if (ids.length === 0) return { ok: true, byId: {}, errors: [] };
+
+  const nodes = await Promise.all(ids.map((id) => fetchAdNode(creds, id)));
+  const errors = nodes.flatMap((n) => (n.ok ? [] : [n.error]));
+  if (errors.length === ids.length) return { ok: false, error: errors[0] };
+
+  const pageIds = [...new Set(nodes.flatMap((n) => (n.ok ? [pageIdOf(n.node.creative)] : [])).filter(Boolean))] as string[];
+  const pages = new Map<string, { name: string | null; picture: string | null }>();
+  const [videos] = await Promise.all([
+    Promise.all(
+      nodes.map((n) => {
+        const vid = n.ok ? videoIdOf(n.node.creative) : null;
+        return vid ? fetchVideo(creds, vid) : Promise.resolve({ source: null, poster: null });
+      })
+    ),
+    Promise.all(pageIds.map(async (pid) => pages.set(pid, await fetchPage(creds, pid)))),
+  ]);
+
   const byId: Record<string, AdCreativeMeta> = {};
-  for (const id of adIds) byId[id] = creativeMetaOf(r.body[id]);
-  return { ok: true, byId };
+  ids.forEach((id, i) => {
+    const n = nodes[i];
+    if (!n.ok) {
+      byId[id] = { ...BLANK_CREATIVE_META };
+      return;
+    }
+    const meta = creativeMetaOf(n.node);
+    const v = videos[i];
+    const page = pages.get(pageIdOf(n.node.creative) ?? "");
+    byId[id] = {
+      ...meta,
+      videoUrl: v.source,
+      posterUrl: first(v.poster, meta.posterUrl),
+      thumbnailUrl: first(v.poster, meta.thumbnailUrl),
+      pageName: page?.name ?? null,
+      pagePictureUrl: page?.picture ?? null,
+    };
+    if (meta.mediaType === "video" && !v.source) {
+      console.warn(`[meta-ads] ad ${id}: video source not readable with this token; card falls back to the Meta preview`);
+    }
+  });
+  return { ok: true, byId, errors };
 }
 
 /** Creative metadata for one ad. */
@@ -489,14 +724,7 @@ export async function fetchTopAds(opts: {
     .slice(0, limit);
 
   const meta = await getAdCreativesMeta(rows.map((row) => row.ad_id as string));
-  const blank: AdCreativeMeta = {
-    status: null,
-    mediaType: "other",
-    thumbnailUrl: null,
-    permalinkUrl: null,
-    instagramPermalinkUrl: null,
-    facebookPostUrl: null,
-  };
+  const blank: AdCreativeMeta = BLANK_CREATIVE_META;
 
   const ads: TopAd[] = rows.map((row) => {
     currency = currency ?? row.account_currency ?? null;
@@ -524,7 +752,7 @@ export async function fetchTopAds(opts: {
     accountId: creds.account,
     currency,
     ads,
-    creativeError: meta.ok ? null : meta.error,
+    creativeError: meta.ok ? (meta.errors.length ? meta.errors[0] : null) : meta.error,
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -546,7 +774,7 @@ export async function getTopAds(opts: {
   return withSnapshotCache<TopAdsResult>({
     userId: opts.userId,
     source: "meta-top-ads",
-    key: `${opts.rangeKey}:${limit}`,
+    key: `v2:${opts.rangeKey}:${limit}`,
     ttlMs: CACHE_TTL_MS,
     refresh: opts.refresh,
     periodStart: opts.since,

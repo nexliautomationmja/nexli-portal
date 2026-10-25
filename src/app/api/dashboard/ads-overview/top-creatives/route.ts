@@ -34,6 +34,15 @@ export interface TopCreative {
   status: string | null;
   mediaType: AdMediaType;
   thumbnailUrl: string | null;
+  /** Playable MP4 for video ads (autoplays muted on the card). */
+  videoUrl: string | null;
+  posterUrl: string | null;
+  primaryText: string | null;
+  headline: string | null;
+  ctaLabel: string | null;
+  linkDomain: string | null;
+  pageName: string | null;
+  pagePictureUrl: string | null;
   permalinkUrl: string | null;
   adsManagerUrl: string;
   spendCents: number;
@@ -154,6 +163,12 @@ export async function GET(req: NextRequest) {
 
   const [, previews] = await Promise.all([leadsTask, previewsTask]);
 
+  if (top.creativeError) console.warn(`[top-creatives] creative lookup: ${top.creativeError}`);
+  previews.forEach((p, i) => {
+    const host = p.url ? new URL(p.url).hostname : null;
+    console.info(`[top-creatives] ad ${top.ads[i].adId} preview=${host ?? "none"} video=${top.ads[i].videoUrl ? "yes" : "no"}${p.error ? ` err=${p.error}` : ""}`);
+  });
+
   const creatives: TopCreative[] = top.ads.map((ad, i) => {
     const c = counts.get(ad.adId);
     const p = previews[i];
@@ -167,6 +182,14 @@ export async function GET(req: NextRequest) {
       status: ad.status,
       mediaType: ad.mediaType,
       thumbnailUrl: ad.thumbnailUrl,
+      videoUrl: ad.videoUrl,
+      posterUrl: ad.posterUrl,
+      primaryText: ad.primaryText,
+      headline: ad.headline,
+      ctaLabel: ad.ctaLabel,
+      linkDomain: ad.linkDomain,
+      pageName: ad.pageName,
+      pagePictureUrl: ad.pagePictureUrl,
       permalinkUrl:
         format === "instagram"
           ? ad.instagramPermalinkUrl || ad.facebookPostUrl
