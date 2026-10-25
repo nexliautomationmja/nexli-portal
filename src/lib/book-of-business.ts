@@ -84,7 +84,7 @@ function monthlyEquivalent(total: number, interval: string | null): number {
 }
 
 /** Pass-through ad budget carried in an invoice's metadata, clamped to [0, total]. */
-function adSpendOf(metadata: unknown, total: number): number {
+export function adSpendOf(metadata: unknown, total: number): number {
   const raw = (metadata as { adSpendCents?: unknown } | null)?.adSpendCents;
   const n = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 0;

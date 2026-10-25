@@ -7,6 +7,7 @@ import { useGHLMetrics } from "@/lib/hooks/use-ghl-metrics";
 import { useInvoiceAnalytics } from "@/lib/hooks/use-invoice-analytics";
 import { usePortalActivity } from "@/lib/hooks/use-portal-activity";
 import { RevenueChart } from "@/components/dashboard/charts/revenue-chart";
+import { AdsOverview } from "@/components/dashboard/ads-overview";
 import {
   FileIcon,
   UsersIcon,
@@ -151,6 +152,12 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
             </p>
           </div>
         </div>
+        {/* Admin only: Meta ads (Facebook vs Instagram) → leads → booked → clients */}
+        {isAdmin && (
+          <div className="mt-6 mb-6">
+            <AdsOverview />
+          </div>
+        )}
         <div className="glass-card p-5">
           <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-main)" }}>
             Monthly Revenue

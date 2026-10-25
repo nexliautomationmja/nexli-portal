@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, pipelineLeads, analyticsSnapshots } from "@/db/schema";
-import { eq, and, desc, sql, isNotNull } from "drizzle-orm";
-import {
-  getContacts,
-  getCustomFields,
-  searchContactsAddedBetween,
-  type GHLContact,
-} from "@/lib/ghl-client";
-import {
-  extractUtm,
-  groupKey,
-  hasBookedTag,
-  type UtmAttribution,
-} from "@/lib/ghl-attribution";
-import { ensurePipelineTable } from "@/lib/pipeline-table";
+import { users, analyticsSnapshots } from "@/db/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { groupKey } from "@/lib/ghl-attribution";
+import { scanAdLeads } from "@/lib/ad-leads";
 
 /**
  * Ad Analytics — UTM attribution sourced from GoHighLevel contacts.
@@ -34,8 +23,6 @@ import { ensurePipelineTable } from "@/lib/pipeline-table";
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const SOURCE = "ad-analytics";
-const PAGE_LIMIT = 100;
-const MAX_PAGES = 10; // 1,000 contacts per scan
 const RECENT_LIMIT = 50;
 
 type Range = "7" | "30" | "90" | "all";
@@ -114,52 +101,6 @@ function empty(range: Range, connected: boolean, locationId: string | null): AdA
   };
 }
 
-/**
- * Contacts added in the window. Prefers POST /contacts/search (server-side
- * date filter, full objects). If that endpoint is unavailable (scope, API
- * change) it falls back to scanning GET /contacts/ pages and filtering by
- * dateAdded locally.
- */
-async function fetchContactsInWindow(
-  locationId: string,
-  since: Date,
-  until: Date
-): Promise<{ contacts: GHLContact[]; mode: "search" | "list"; truncated: boolean }> {
-  const byId = new Map<string, GHLContact>();
-  const inWindow = (c: GHLContact) => {
-    const d = new Date(c.dateAdded);
-    return !isNaN(d.getTime()) && d >= since && d <= until;
-  };
-
-  try {
-    let truncated = false;
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const res = await searchContactsAddedBetween(locationId, since, until, page, PAGE_LIMIT);
-      const contacts = res.contacts ?? [];
-      for (const c of contacts) if (inWindow(c)) byId.set(c.id, c);
-      if (contacts.length < PAGE_LIMIT) break;
-      if (page === MAX_PAGES) truncated = true;
-    }
-    return { contacts: [...byId.values()], mode: "search", truncated };
-  } catch (err) {
-    console.error("[ad-analytics] contacts/search failed, falling back to list scan:", err);
-  }
-
-  let cursor: string | undefined;
-  let truncated = false;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await getContacts(locationId, PAGE_LIMIT, cursor);
-    const contacts = res.contacts ?? [];
-    if (contacts.length === 0) break;
-    for (const c of contacts) if (inWindow(c)) byId.set(c.id, c);
-    const last = contacts[contacts.length - 1]?.id;
-    if (!last || last === cursor || contacts.length < PAGE_LIMIT) break;
-    cursor = last;
-    if (page === MAX_PAGES - 1) truncated = true;
-  }
-  return { contacts: [...byId.values()], mode: "list", truncated };
-}
-
 function bump(map: Map<string, Bucket>, raw: string | null, booked: boolean, won: boolean) {
   const key = groupKey(raw);
   if (!key || !raw) return;
@@ -215,46 +156,15 @@ export async function GET(req: NextRequest) {
   const { since, until } = windowFor(range);
 
   try {
-    await ensurePipelineTable();
-
-    const [fieldDefs, pipelineRows, fetched] = await Promise.all([
-      getCustomFields(locationId).catch((err) => {
-        console.error("[ad-analytics] custom fields lookup failed (continuing):", err);
-        return { customFields: [] };
-      }),
-      db
-        .select({
-          ghlContactId: pipelineLeads.ghlContactId,
-          stage: pipelineLeads.stage,
-          bookedAt: pipelineLeads.bookedAt,
-          source: pipelineLeads.source,
-        })
-        .from(pipelineLeads)
-        .where(and(eq(pipelineLeads.ownerId, ownerId), isNotNull(pipelineLeads.ghlContactId))),
-      fetchContactsInWindow(locationId, since, until),
-    ]);
-
-    const fieldNames = new Map<string, string>();
-    for (const f of fieldDefs.customFields ?? []) {
-      fieldNames.set(f.id, f.fieldKey || f.name || "");
-    }
-
-    const pipelineByContact = new Map(
-      pipelineRows.map((r) => [r.ghlContactId as string, r])
-    );
+    const fetched = await scanAdLeads({ ownerId, locationId, since, until });
 
     const campaigns = new Map<string, Bucket>();
     const creatives = new Map<string, Bucket>();
     const sources = new Map<string, Bucket>();
     const leads: RecentLead[] = [];
 
-    for (const c of fetched.contacts) {
-      const utm: UtmAttribution | null = extractUtm(c, fieldNames);
+    for (const { contact: c, utm, booked, won } of fetched.contacts) {
       if (!utm) continue;
-      const p = pipelineByContact.get(c.id);
-      const booked =
-        hasBookedTag(c.tags) || Boolean(p?.bookedAt) || p?.source === "booked_call";
-      const won = p?.stage === "won";
 
       bump(campaigns, utm.campaign, booked, won);
       bump(creatives, utm.content, booked, won);
@@ -290,7 +200,7 @@ export async function GET(req: NextRequest) {
       sources: sorted(sources),
       recentLeads: leads.slice(0, RECENT_LIMIT),
       diagnostics: {
-        scanned: fetched.contacts.length,
+        scanned: fetched.scanned,
         withUtm: leads.length,
         mode: fetched.mode,
         truncated: fetched.truncated,

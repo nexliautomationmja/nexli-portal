@@ -113,7 +113,7 @@ function fromCustomFields(
   return hasUtm(r) ? r : null;
 }
 
-function hasUtm(r: UtmAttribution): boolean {
+export function hasUtm(r: UtmAttribution): boolean {
   return Boolean(r.source || r.campaign || r.content);
 }
 
@@ -165,4 +165,93 @@ export function groupKey(v: string | null): string | null {
   if (!v) return null;
   const s = v.trim().toLowerCase();
   return s || null;
+}
+
+/**
+ * Which Meta placement a lead came from:
+ *  - "facebook" / "instagram" / "other" (Messenger, Audience Network, Threads)
+ *  - "unknown": clearly a Meta ad lead (paid_social medium, utm_source=meta,
+ *    an fbclid, an unresolved {{site_source_name}}…) but the platform can't
+ *    be told apart — counted in the Meta total, flagged as unattributed
+ *  - null: not a Meta lead (Google, email, direct…) — excluded
+ *
+ * utm_source wins; when it is missing or generic, GHL's session source and
+ * the attribution referrer/URL are used as a fallback. Ads should carry
+ * `utm_source={{site_source_name}}`, which Meta fills with fb / ig / msg / an.
+ */
+export type LeadPlatform = "facebook" | "instagram" | "other" | "unknown";
+
+const FACEBOOK_SOURCES = new Set(["fb", "facebook", "facebook.com", "m.facebook.com", "l.facebook.com", "lm.facebook.com", "web.facebook.com"]);
+const INSTAGRAM_SOURCES = new Set(["ig", "instagram", "instagram.com", "l.instagram.com", "www.instagram.com"]);
+const OTHER_META_SOURCES = new Set(["msg", "an", "messenger", "audience_network", "audiencenetwork", "threads", "th"]);
+const GENERIC_META_SOURCES = new Set(["meta", "meta_ads", "metaads", "meta-ads", "fb_ads", "facebook_ads", "paid_social", "site_source_name"]);
+
+function platformFromText(raw: string | null | undefined): LeadPlatform | null {
+  if (!raw) return null;
+  const s = raw.trim().toLowerCase();
+  if (!s) return null;
+  if (FACEBOOK_SOURCES.has(s)) return "facebook";
+  if (INSTAGRAM_SOURCES.has(s)) return "instagram";
+  if (OTHER_META_SOURCES.has(s)) return "other";
+  // Referrer URLs / free text ("https://l.instagram.com/…", "Instagram Ads").
+  if (s.includes("instagram")) return "instagram";
+  if (s.includes("facebook") || s.includes("fb.com") || s.includes("fb.me")) return "facebook";
+  if (s.includes("messenger")) return "other";
+  return null;
+}
+
+function looksMeta(v: string | null | undefined): boolean {
+  if (!v) return false;
+  const s = v.trim().toLowerCase();
+  return (
+    GENERIC_META_SOURCES.has(s) ||
+    s.includes("{{site_source_name}}") ||
+    /paid[\s_-]*social/.test(s) ||
+    /\bmeta\b/.test(s)
+  );
+}
+
+export function platformOf(
+  utm: UtmAttribution | null,
+  contact?: GHLContact
+): LeadPlatform | null {
+  const direct = platformFromText(utm?.source);
+  if (direct) return direct;
+  // An explicit non-Meta source (google, linkedin, newsletter…) is not a Meta lead.
+  if (utm?.source && !looksMeta(utm.source)) return null;
+
+  const records: (GHLAttribution | undefined)[] = contact
+    ? [
+        contact.attributions?.find((a) => a.isFirst),
+        ...(contact.attributions ?? []),
+        contact.attributionSource,
+        contact.lastAttributionSource,
+      ]
+    : [];
+
+  // Fallbacks: session source, then referrer, then landing URL host.
+  const fallbacks: (string | null | undefined)[] = [
+    utm?.sessionSource,
+    ...records.map((a) => a?.utmSessionSource ?? a?.sessionSource),
+    ...records.map((a) => a?.referrer),
+    contact?.source,
+  ];
+  for (const f of fallbacks) {
+    const p = platformFromText(f);
+    if (p) return p;
+  }
+
+  const hasFbclid =
+    records.some((a) => Boolean(a?.fbclid)) ||
+    [utm?.url, ...records.map((a) => a?.url)].some((u) => Boolean(u && /[?&]fbclid=/i.test(u)));
+
+  if (
+    hasFbclid ||
+    looksMeta(utm?.source) ||
+    looksMeta(utm?.medium) ||
+    records.some((a) => looksMeta(a?.utmMedium) || looksMeta(a?.medium) || looksMeta(a?.utmSource))
+  ) {
+    return "unknown";
+  }
+  return null;
 }

@@ -130,6 +130,33 @@ export function FacebookLogo({ size = 24 }: { size?: number }) {
   );
 }
 
+/** Instagram brand glyph: rounded-square camera on the signature gradient. */
+export function InstagramLogo({ size = 24 }: { size?: number }) {
+  const id = "ig-grad-" + size;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <radialGradient id={`${id}-a`} cx="6.5" cy="25.5" r="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFDD55" />
+          <stop offset="0.1" stopColor="#FFDD55" />
+          <stop offset="0.5" stopColor="#FF543E" />
+          <stop offset="1" stopColor="#C837AB" />
+        </radialGradient>
+        <linearGradient id={`${id}-b`} x1="-1" y1="1.5" x2="12" y2="-2" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#3771C8" />
+          <stop offset="0.13" stopColor="#3771C8" />
+          <stop offset="1" stopColor="#6600FF" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect width="24" height="24" rx="6" fill={`url(#${id}-a)`} />
+      <rect width="24" height="24" rx="6" fill={`url(#${id}-b)`} />
+      <rect x="5" y="5" width="14" height="14" rx="4" fill="none" stroke="#FFFFFF" strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="3.3" fill="none" stroke="#FFFFFF" strokeWidth="1.8" />
+      <circle cx="16.3" cy="7.7" r="1.05" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
 export function StripeLogo({ size = 24 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
