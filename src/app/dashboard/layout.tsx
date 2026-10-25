@@ -7,6 +7,8 @@ import { eq } from "drizzle-orm";
 import { ensureCoreSchema } from "@/lib/schema-bootstrap";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { activeDrsClients, latestUpdateStatus } from "@/lib/client-success";
+import { getNexliAdminId } from "@/lib/foundation-project";
+import { countUnread } from "@/lib/portal-messages";
 import { NotificationProvider } from "@/components/dashboard/notification-provider";
 import { UpgradeBanner } from "@/components/dashboard/upgrade-banner";
 import {
@@ -90,6 +92,24 @@ export default async function DashboardLayout({
     }
   }
 
+  // Clients only: unread messages from Nexli in their thread (sidebar pill
+  // on Messages). Same rule: never throw from the layout.
+  let nexliUnread = 0;
+  let isNexliClient = false;
+  if (!isAdmin) {
+    try {
+      const nexliAdminId = await getNexliAdminId();
+      const email = session.user.email?.toLowerCase().trim();
+      if (nexliAdminId) {
+        isNexliClient = true;
+        if (email) nexliUnread = await countUnread(nexliAdminId, email, "cpa");
+      }
+    } catch (err) {
+      console.error("[dashboard layout] nexli unread count failed:", err);
+      nexliUnread = 0;
+    }
+  }
+
   // Current pathname is forwarded by middleware as a request header.
   const pathname = (await headers()).get("x-pathname") ?? "";
   const onBillingPausedPage = pathname === BILLING_PAUSED_PATH;
@@ -124,7 +144,11 @@ export default async function DashboardLayout({
           isAdmin={isAdmin}
           tier={tier}
           userName={session.user.name}
-          badges={{ "/dashboard/client-tracker": updatesDue }}
+          badges={{
+            "/dashboard/client-tracker": updatesDue,
+            "/dashboard/nexli-messages": nexliUnread,
+          }}
+          showNexliMessages={isNexliClient}
         />
         <main className="sidebar-content px-4 md:px-6 lg:px-8 py-6 pt-16 md:pt-6 relative z-10">
           {isFoundationClient && <UpgradeBanner />}

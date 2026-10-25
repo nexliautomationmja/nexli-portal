@@ -2,80 +2,95 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { SendIcon } from "@/components/ui/icons";
+import type { ThreadMessage } from "@/lib/portal-messages-types";
+import { MessageBubble } from "@/components/messages/message-bubble";
+import { VoiceRecorder } from "@/components/messages/voice-recorder";
+import { voiceFormData } from "@/components/messages/message-thread";
 
-interface Message {
-  id: string;
-  senderType: "cpa" | "client";
-  message: string;
-  createdAt: string;
-}
-
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  const time = d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-
-  if (diffDays === 0) return time;
-  if (diffDays === 1) return `Yesterday ${time}`;
-  if (diffDays < 7)
-    return `${d.toLocaleDateString("en-US", { weekday: "short" })} ${time}`;
-  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${time}`;
-}
+const SLOW_POLL_MS = 20_000;
+const FAST_POLL_MS = 4_000;
+const FAST_POLL_WINDOW_MS = 60_000;
 
 export function PortalMessagesClient() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [recorderOpen, setRecorderOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pendingSinceRef = useRef<number | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
-
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (): Promise<ThreadMessage[] | null> => {
     try {
-      const res = await fetch("/api/portal/messages");
+      const res = await fetch("/api/portal/messages", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages);
+        const list: ThreadMessage[] = Array.isArray(data.messages) ? data.messages : [];
+        setMessages(list);
+        return list;
       }
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
+    return null;
   }, []);
 
-  useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+  // Poll every 20s; every 4s (for up to 60s) while a transcript is pending.
+  const schedule = useCallback(
+    (list: ThreadMessage[] | null) => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      let delay = SLOW_POLL_MS;
+      if (list?.some((m) => m.transcriptStatus === "pending")) {
+        if (pendingSinceRef.current == null) pendingSinceRef.current = Date.now();
+        if (Date.now() - pendingSinceRef.current < FAST_POLL_WINDOW_MS) delay = FAST_POLL_MS;
+      } else if (list) {
+        pendingSinceRef.current = null;
+      }
+      pollTimerRef.current = setTimeout(async () => {
+        const next = await fetchMessages();
+        schedule(next);
+      }, delay);
+    },
+    [fetchMessages]
+  );
 
-  // Poll for new messages every 20 seconds
   useEffect(() => {
-    const interval = setInterval(fetchMessages, 20000);
-    return () => clearInterval(interval);
-  }, [fetchMessages]);
+    let cancelled = false;
+    void fetchMessages().then((list) => {
+      if (!cancelled) schedule(list);
+    });
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, [fetchMessages, schedule]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when a new message arrives
+  const lastId = messages.length ? messages[messages.length - 1].id : "";
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lastId, loading]);
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
+  function autoGrow() {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
+  }
+
+  async function handleSend(e?: React.FormEvent) {
+    e?.preventDefault();
     const text = input.trim();
     if (!text || sending) return;
 
     setSending(true);
+    setError(null);
     try {
       const res = await fetch("/api/portal/messages", {
         method: "POST",
@@ -84,13 +99,31 @@ export function PortalMessagesClient() {
       });
       if (res.ok) {
         setInput("");
-        await fetchMessages();
+        requestAnimationFrame(autoGrow);
+        schedule(await fetchMessages());
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Message not sent. Please try again.");
       }
     } catch {
-      // ignore
+      setError("Message not sent. Please try again.");
     } finally {
       setSending(false);
     }
+  }
+
+  async function sendVoice(blob: Blob, mime: string, durationMs: number) {
+    setError(null);
+    const res = await fetch("/api/portal/messages/voice", {
+      method: "POST",
+      body: voiceFormData(blob, mime, durationMs),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Voice note not sent. Please try again.");
+    }
+    pendingSinceRef.current = null;
+    schedule(await fetchMessages());
   }
 
   if (loading) {
@@ -104,22 +137,30 @@ export function PortalMessagesClient() {
     );
   }
 
+  let lastMineIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].senderType === "client") {
+      lastMineIdx = i;
+      break;
+    }
+  }
+
   return (
-    <div className="max-w-3xl mx-auto flex flex-col" style={{ height: "calc(100vh - 140px)" }}>
+    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100dvh-100px)] md:h-[calc(100dvh-60px)]">
       {/* Header */}
-      <div className="mb-4">
+      <div className="mb-4 shrink-0">
         <h1 className="text-2xl font-bold" style={{ color: "var(--text-main)" }}>
           Messages
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Send messages to your CPA.
+          Send messages or voice notes to your CPA.
         </p>
       </div>
 
       {/* Messages area */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto glass-card p-4 space-y-3"
+        className="flex-1 overflow-y-auto overscroll-contain glass-card p-4 space-y-3"
         style={{ minHeight: 0 }}
       >
         {messages.length === 0 ? (
@@ -129,110 +170,92 @@ export function PortalMessagesClient() {
               <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
                 No messages yet
               </p>
-              <p className="text-xs mt-1">
-                Send a message to your CPA below.
-              </p>
+              <p className="text-xs mt-1">Type a message or record a voice note for your CPA below.</p>
             </div>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div
+          messages.map((msg, i) => (
+            <MessageBubble
               key={msg.id}
-              className={`flex ${msg.senderType === "client" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
-                  msg.senderType === "client"
-                    ? "text-white"
-                    : "glass-bg"
-                }`}
-                style={
-                  msg.senderType === "client"
-                    ? { background: "linear-gradient(135deg, #2563EB, #06B6D4)" }
-                    : { border: "1px solid var(--card-border)" }
-                }
-              >
-                <p
-                  className="text-sm whitespace-pre-wrap break-words"
-                  style={{
-                    color:
-                      msg.senderType === "client"
-                        ? "#fff"
-                        : "var(--text-main)",
-                  }}
-                >
-                  {msg.message}
-                </p>
-                <p
-                  className="text-[10px] mt-1"
-                  style={{
-                    color:
-                      msg.senderType === "client"
-                        ? "rgba(255,255,255,0.6)"
-                        : "var(--text-muted)",
-                  }}
-                >
-                  {msg.senderType === "cpa" ? "Your CPA" : "You"} &middot;{" "}
-                  {formatTime(msg.createdAt)}
-                </p>
-              </div>
-            </div>
+              msg={msg}
+              mine={msg.senderType === "client"}
+              senderLabel={msg.senderType === "cpa" ? "Your CPA" : "You"}
+              showRead={i === lastMineIdx && msg.read}
+            />
           ))
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Composer */}
       <form
         onSubmit={handleSend}
-        className="mt-3 glass-card p-3 flex items-end gap-2"
+        className="mt-3 glass-card p-3 shrink-0"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
-        <div className="flex-1 relative">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e);
-              }
-            }}
-            placeholder="Type a message..."
-            rows={1}
-            maxLength={2000}
-            className="w-full resize-none rounded-xl px-4 py-2.5 text-sm outline-none"
-            style={{
-              background: "var(--input-bg)",
-              border: "1px solid var(--card-border)",
-              color: "var(--text-main)",
-              maxHeight: "120px",
-            }}
+        {error && (
+          <p className="text-xs text-rose-400 mb-2" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="flex items-end gap-2">
+          {!recorderOpen && (
+            <div className="flex-1 relative min-w-0">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  autoGrow();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
+                placeholder="Type a message..."
+                rows={1}
+                maxLength={2000}
+                enterKeyHint="send"
+                className="block w-full resize-none rounded-xl px-4 py-2.5 text-base md:text-sm outline-none"
+                style={{
+                  background: "var(--input-bg)",
+                  border: "1px solid var(--card-border)",
+                  color: "var(--text-main)",
+                  maxHeight: "120px",
+                }}
+              />
+              {input.length > 1800 && (
+                <span
+                  className="absolute bottom-1 right-2 text-[10px]"
+                  style={{ color: input.length > 1950 ? "#EF4444" : "var(--text-muted)" }}
+                >
+                  {input.length}/2000
+                </span>
+              )}
+            </div>
+          )}
+          <VoiceRecorder
+            onSend={sendVoice}
+            onActiveChange={setRecorderOpen}
+            className={recorderOpen ? "flex-1" : ""}
           />
-          {input.length > 1800 && (
-            <span
-              className="absolute bottom-1 right-2 text-[10px]"
-              style={{
-                color: input.length > 1950 ? "#EF4444" : "var(--text-muted)",
-              }}
+          {!recorderOpen && (
+            <button
+              type="submit"
+              disabled={!input.trim() || sending}
+              aria-label="Send message"
+              className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center text-white disabled:opacity-40 transition-opacity"
+              style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
             >
-              {input.length}/2000
-            </span>
+              {sending ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <SendIcon className="w-4 h-4" />
+              )}
+            </button>
           )}
         </div>
-        <button
-          type="submit"
-          disabled={!input.trim() || sending}
-          className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white disabled:opacity-40 transition-opacity"
-          style={{
-            background: "linear-gradient(135deg, #2563EB, #06B6D4)",
-          }}
-        >
-          {sending ? (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <SendIcon className="w-4 h-4" />
-          )}
-        </button>
       </form>
     </div>
   );

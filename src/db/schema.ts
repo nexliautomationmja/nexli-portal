@@ -992,7 +992,18 @@ export const portalMessages = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     clientEmail: text("client_email").notNull(),
     senderType: text("sender_type").notNull(), // "cpa" | "client"
+    // Display text. For voice messages this is the transcript once ready.
     message: text("message").notNull(),
+    // Added at runtime by ensurePortalMessageColumns()
+    // (src/lib/portal-messages-table.ts) — keep the DDL there in sync.
+    kind: text("kind").default("text").notNull(), // "text" | "voice" | "weekly_update"
+    audioPath: text("audio_path"), // Supabase `documents` bucket path
+    audioMime: text("audio_mime"),
+    audioDurationMs: integer("audio_duration_ms"),
+    transcript: text("transcript"),
+    transcriptStatus: text("transcript_status"), // "pending" | "done" | "failed"
+    weeklyUpdateId: uuid("weekly_update_id"),
+    senderUserId: uuid("sender_user_id"),
     read: boolean("read").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

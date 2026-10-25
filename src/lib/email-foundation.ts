@@ -258,14 +258,33 @@ export function buildWeeklyUpdateEmail(params: {
   dashboardUrl: string;
   /** This week's unanswered survey link, if any. */
   surveyUrl?: string | null;
+  /** Recorded as a voice note: show a "Voice update" badge + transcript excerpt. */
+  voice?: { transcriptExcerpt: string | null } | null;
+  /** CTA label for dashboardUrl. */
+  ctaLabel?: string;
 }): { subject: string; html: string } {
-  const { clientName, weekStart, headline, body, adSpendCents, dashboardUrl, surveyUrl } = params;
+  const { clientName, weekStart, headline, body, adSpendCents, dashboardUrl, surveyUrl, voice } =
+    params;
+  const ctaLabel = params.ctaLabel || "Open your dashboard";
   const firstName = (clientName || "").trim().split(/\s+/)[0];
   const greeting = firstName ? `Hi ${escapeHtml(firstName)}` : "Hi there";
   const weekLabel = `Week of ${formatWeekOf(weekStart)}`;
   const title = headline?.trim() ? escapeHtml(headline.trim()) : "This week on your account";
 
-  const paragraphs = body
+  const voiceBlock = voice
+    ? `<div style="margin:0 0 16px;padding:14px 16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+        <p style="margin:0 0 6px;color:#06B6D4;font-size:12px;font-weight:700;">&#127897; Voice update</p>
+        <p style="margin:0;color:#ccccda;font-size:14px;line-height:1.7;">${
+          voice.transcriptExcerpt
+            ? `&ldquo;${escapeHtml(voice.transcriptExcerpt)}&rdquo;`
+            : "Tap below to listen to this week&rsquo;s update."
+        }</p>
+      </div>`
+    : "";
+
+  const paragraphs = voice
+    ? ""
+    : body
     .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean)
@@ -294,10 +313,11 @@ export function buildWeeklyUpdateEmail(params: {
     <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">${weekLabel} &middot; From your Nexli team</p>
     <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">${title}</h1>
     <p style="margin:0 0 20px;color:#9999a8;font-size:14px;">${greeting}, here&rsquo;s what we worked on for you this week.</p>
+    ${voiceBlock}
     <div style="margin:0 0 8px;">${paragraphs}</div>
     ${adSpendBlock}
     <div style="text-align:center;margin:28px 0;">
-      <a href="${dashboardUrl}" style="${buttonStyle}">Open your dashboard</a>
+      <a href="${dashboardUrl}" style="${buttonStyle}">${escapeHtml(ctaLabel)}</a>
     </div>
     ${surveyBlock}
     <div style="text-align:center;">

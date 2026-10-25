@@ -29,7 +29,7 @@ const CSP_DIRECTIVES = [
   // Firm logos and documents live in Supabase storage; Mux thumbnails; GHL
   // contact avatars (leadconnector / msgsndr CDNs); Stripe assets.
   "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://image.mux.com https://*.mux.com https://*.stripe.com https://*.leadconnectorhq.com https://*.msgsndr.com https://storage.googleapis.com",
-  "media-src 'self' blob: https://*.supabase.co https://stream.mux.com https://*.mux.com",
+  "media-src 'self' blob: https://*.supabase.co https://*.supabase.in https://stream.mux.com https://*.mux.com",
   // API calls the browser makes: Supabase, Stripe, Mux (incl. litix data
   // beacons), Vercel analytics, GHL (leadconnector) and Cal.com embeds.
   // Dev adds the local HMR websocket.
@@ -55,12 +55,13 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   );
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  // Camera / mic / geolocation are never used by the app. Screen-recording
-  // tools (Loom etc.) capture via the browser's own display-capture API and
-  // are unaffected by this policy, so it is safe to lock these down.
+  // Microphone is allowed for our own origin only (voice messages in client
+  // threads). Camera / geolocation are never used. Screen-recording tools
+  // (Loom etc.) capture via the browser's own display-capture API and are
+  // unaffected by this policy.
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()"
+    "camera=(), microphone=(self), geolocation=()"
   );
   // Framing is governed by CSP frame-ancestors (X-Frame-Options intentionally
   // omitted so www.nexli.net can embed the portal).

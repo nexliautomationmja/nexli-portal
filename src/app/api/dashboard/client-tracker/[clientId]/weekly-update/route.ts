@@ -1,52 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { clientWeeklyUpdates, users } from "@/db/schema";
+import { clientWeeklyUpdates } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { sendEmailWithLog } from "@/lib/email";
-import { buildWeeklyUpdateEmail, FOUNDATION_SENDER_NAME } from "@/lib/email-foundation";
-import { getPortalUrl } from "@/lib/foundation-config";
 import { ensureClientSuccessTables, weekStartOf } from "@/lib/client-success-tables";
-import { getPendingSurvey, listClientWeeklyUpdates } from "@/lib/client-success";
+import { listClientWeeklyUpdates } from "@/lib/client-success";
+import { ensurePortalMessageColumns } from "@/lib/portal-messages-table";
+import {
+  MAX_BODY,
+  emailWeeklyUpdate,
+  loadWeeklyUpdateClient as loadClient,
+  parseAdSpend,
+  parseHeadline,
+  parseWeekStart,
+  postTextWeeklyUpdateToThread,
+} from "@/lib/weekly-update-thread";
 
 /**
  * Admin composer for the weekly "here's what we did on your account" note.
  * One row per (client, week): save as draft, or send — which emails the
- * client and surfaces the note on their dashboard Overview.
+ * client, posts the note into their Nexli message thread, and surfaces it
+ * on their dashboard Overview. Voice updates: ./voice/route.ts.
  */
-
-const MAX_HEADLINE = 200;
-const MAX_BODY = 10_000;
 
 async function requireAdmin() {
   const session = await auth();
   if (!session?.user?.id || session.user.role !== "admin") return null;
   return session.user.id;
-}
-
-async function loadClient(clientId: string) {
-  const [client] = await db
-    .select({ id: users.id, email: users.email, name: users.name, role: users.role })
-    .from(users)
-    .where(eq(users.id, clientId))
-    .limit(1);
-  return client && client.role === "client" ? client : null;
-}
-
-function parseWeekStart(v: unknown): string | null {
-  if (v == null || v === "") return weekStartOf(new Date());
-  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
-  const d = new Date(`${v}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return null;
-  return weekStartOf(d); // snap to that week's Monday
-}
-
-function parseAdSpend(v: unknown): number | null | undefined {
-  if (v === undefined) return undefined;
-  if (v === null || v === "") return null;
-  const n = Number(v);
-  if (!Number.isFinite(n) || n < 0) return undefined;
-  return Math.round(n);
 }
 
 export async function GET(
@@ -98,8 +78,7 @@ export async function POST(
   if (!text) {
     return NextResponse.json({ error: "Write the update before saving." }, { status: 400 });
   }
-  const headline =
-    typeof body.headline === "string" ? body.headline.trim().slice(0, MAX_HEADLINE) || null : null;
+  const headline = parseHeadline(body.headline);
   const adSpendCents = parseAdSpend(body.adSpendCents);
   if (adSpendCents === undefined && body.adSpendCents !== undefined) {
     return NextResponse.json({ error: "Ad spend must be a positive number." }, { status: 400 });
@@ -143,33 +122,12 @@ export async function POST(
   let emailed = false;
   let emailError: string | null = null;
   if (sending) {
-    try {
-      const portalUrl = getPortalUrl();
-      const pending = await getPendingSurvey(clientId, now);
-      const { subject, html } = buildWeeklyUpdateEmail({
-        clientName: client.name,
-        weekStart,
-        headline,
-        body: text,
-        adSpendCents: adSpendCents ?? null,
-        dashboardUrl: `${portalUrl}/dashboard`,
-        surveyUrl: pending ? `${portalUrl}/survey/${pending.token}` : null,
-      });
-      await sendEmailWithLog({
-        to: client.email,
-        subject,
-        html,
-        fromName: FOUNDATION_SENDER_NAME,
-        recipientName: client.name || undefined,
-        emailType: "weekly_update",
-        relatedId: update.id,
-        sentBy: adminId,
-      });
-      emailed = true;
-    } catch (err) {
-      console.error("Weekly update email failed:", err);
-      emailError = "Saved and marked sent, but the email couldn't be delivered.";
-    }
+    await ensurePortalMessageColumns().catch((err) =>
+      console.error("[weekly-update] portal_messages columns:", err)
+    );
+    await postTextWeeklyUpdateToThread({ update, client, senderAdminId: adminId });
+    emailed = await emailWeeklyUpdate({ update, client, senderAdminId: adminId, now });
+    if (!emailed) emailError = "Saved and marked sent, but the email couldn't be delivered.";
   }
 
   return NextResponse.json({
@@ -219,8 +177,7 @@ export async function PATCH(
 
   const set: Partial<typeof clientWeeklyUpdates.$inferInsert> = { updatedAt: new Date() };
   if ("headline" in body) {
-    set.headline =
-      typeof body.headline === "string" ? body.headline.trim().slice(0, MAX_HEADLINE) || null : null;
+    set.headline = parseHeadline(body.headline);
   }
   if ("body" in body) {
     const text = typeof body.body === "string" ? body.body.trim().slice(0, MAX_BODY) : "";

@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { db } from "@/db";
-import { portalMessages } from "@/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { ensurePortalMessageColumns } from "@/lib/portal-messages-table";
+import {
+  MAX_MESSAGE_LENGTH,
+  createTextMessage,
+  loadThread,
+  markThreadRead,
+  notifyClientOfMessage,
+  serializeMessages,
+} from "@/lib/portal-messages";
+
+function threadEmail(raw: string): string {
+  return decodeURIComponent(raw).toLowerCase().trim();
+}
 
 export async function GET(
   _req: NextRequest,
@@ -12,42 +22,17 @@ export async function GET(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await ensurePortalMessageColumns();
 
-  const { clientEmail } = await params;
-  const email = decodeURIComponent(clientEmail).toLowerCase().trim();
+  const email = threadEmail((await params).clientEmail);
+  const rows = await loadThread(session.user.id, email);
 
-  const messages = await db
-    .select()
-    .from(portalMessages)
-    .where(
-      and(
-        eq(portalMessages.ownerId, session.user.id),
-        eq(portalMessages.clientEmail, email)
-      )
-    )
-    .orderBy(asc(portalMessages.createdAt));
-
-  // Auto-mark client messages as read
-  const unreadClientMessages = messages.filter(
-    (m) => m.senderType === "client" && !m.read
-  );
-  if (unreadClientMessages.length > 0) {
-    for (const m of unreadClientMessages) {
-      await db
-        .update(portalMessages)
-        .set({ read: true })
-        .where(eq(portalMessages.id, m.id));
-    }
+  // Auto-mark client messages as read (single UPDATE)
+  if (rows.some((m) => m.senderType === "client" && !m.read)) {
+    await markThreadRead(session.user.id, email, "client");
   }
 
-  return NextResponse.json({
-    messages: messages.map((m) => ({
-      id: m.id,
-      senderType: m.senderType,
-      message: m.message,
-      createdAt: m.createdAt,
-    })),
-  });
+  return NextResponse.json({ messages: await serializeMessages(rows) });
 }
 
 export async function POST(
@@ -58,9 +43,9 @@ export async function POST(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await ensurePortalMessageColumns();
 
-  const { clientEmail } = await params;
-  const email = decodeURIComponent(clientEmail).toLowerCase().trim();
+  const email = threadEmail((await params).clientEmail);
 
   let body: { message?: string };
   try {
@@ -69,27 +54,25 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const message = body.message?.trim();
-  if (!message || message.length === 0) {
+  const text = typeof body.message === "string" ? body.message.trim() : "";
+  if (!text) {
+    return NextResponse.json({ error: "Message is required" }, { status: 400 });
+  }
+  if (text.length > MAX_MESSAGE_LENGTH) {
     return NextResponse.json(
-      { error: "Message is required" },
+      { error: `Message too long (${MAX_MESSAGE_LENGTH} char max)` },
       { status: 400 }
     );
   }
 
-  if (message.length > 2000) {
-    return NextResponse.json(
-      { error: "Message too long (2000 char max)" },
-      { status: 400 }
-    );
-  }
-
-  await db.insert(portalMessages).values({
+  const message = await createTextMessage({
     ownerId: session.user.id,
     clientEmail: email,
     senderType: "cpa",
-    message,
+    senderUserId: session.user.id,
+    message: text,
   });
+  await notifyClientOfMessage({ ownerId: session.user.id, clientEmail: email, message });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ message });
 }

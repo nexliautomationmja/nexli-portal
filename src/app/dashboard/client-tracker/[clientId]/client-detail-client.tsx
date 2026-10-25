@@ -12,6 +12,8 @@ import {
   type SurveyAnswers,
 } from "@/lib/survey-questions";
 import { relativeDay, weekdayDate } from "@/lib/format";
+import { VoiceRecorder } from "@/components/messages/voice-recorder";
+import { voiceFormData } from "@/components/messages/message-thread";
 
 interface DetailData {
   client: {
@@ -664,6 +666,7 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
         <WeeklyUpdatePanel
           clientId={client.id}
           clientLabel={displayName}
+          clientEmail={client.email}
           updates={data.weeklyUpdates || []}
           status={data.status?.update ?? null}
           onChange={(updates) => setData((prev) => (prev ? { ...prev, weeklyUpdates: updates } : prev))}
@@ -721,12 +724,14 @@ function updateHeaderStatus(
 function WeeklyUpdatePanel({
   clientId,
   clientLabel,
+  clientEmail,
   updates,
   status,
   onChange,
 }: {
   clientId: string;
   clientLabel: string;
+  clientEmail: string;
   updates: WeeklyUpdateItem[];
   status: UpdateStatusItem | null;
   onChange: (updates: WeeklyUpdateItem[]) => void;
@@ -737,6 +742,7 @@ function WeeklyUpdatePanel({
   const [adSpend, setAdSpend] = useState("");
   const [busy, setBusy] = useState<"draft" | "send" | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
+  const [mode, setMode] = useState<"type" | "voice">("type");
 
   const existingForWeek = updates.find((u) => u.weekStart === weekStart) || null;
 
@@ -803,6 +809,40 @@ function WeeklyUpdatePanel({
     }
   }
 
+  function adSpendCents(): number | null {
+    const dollars = adSpend.trim() === "" ? null : Number(adSpend);
+    return dollars == null || Number.isNaN(dollars) ? null : Math.round(dollars * 100);
+  }
+
+  // Voice mode: the recording is the update — transcribed, posted to their
+  // Nexli Team thread and emailed by the voice route.
+  async function sendVoice(blob: Blob, mime: string, durationMs: number) {
+    setMessage(null);
+    const fd = voiceFormData(blob, mime, durationMs);
+    if (headline.trim()) fd.append("headline", headline.trim());
+    const cents = adSpendCents();
+    if (cents != null) fd.append("adSpendCents", String(cents));
+    fd.append("weekStart", weekStart);
+    const res = await fetch(`/api/dashboard/client-tracker/${clientId}/weekly-update/voice`, {
+      method: "POST",
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Couldn't send the voice update. Please try again.");
+    const saved = data.update as WeeklyUpdateItem | undefined;
+    if (saved?.id) {
+      const next = [saved, ...updates.filter((u) => u.id !== saved.id)].sort((a, b) =>
+        b.weekStart.localeCompare(a.weekStart)
+      );
+      onChange(next);
+    }
+    setMessage(
+      data.emailed === false
+        ? { kind: "warn", text: "Sent — appears in their Nexli Team thread (email didn't go out)." }
+        : { kind: "ok", text: "Sent — appears in their Nexli Team thread" }
+    );
+  }
+
   const textareaCls =
     "w-full px-4 py-3 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] text-sm outline-none focus:border-blue-500 resize-none transition-colors";
 
@@ -816,6 +856,12 @@ function WeeklyUpdatePanel({
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
             {header.line ?? "Emailed + shown on their Overview"}
           </p>
+          <Link
+            href={`/dashboard/portal-messages?client=${encodeURIComponent(clientEmail)}`}
+            className="inline-block mt-1 text-xs font-semibold text-cyan-400 hover:underline"
+          >
+            Open thread →
+          </Link>
         </div>
         {header.badge.label && (
           <span className={`badge shrink-0 ${header.badge.cls}`}>{header.badge.label}</span>
@@ -823,6 +869,36 @@ function WeeklyUpdatePanel({
       </div>
 
       <div className="p-4 space-y-3">
+        <div
+          role="tablist"
+          aria-label="Update format"
+          className="grid grid-cols-2 p-1 rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)]"
+        >
+          {(
+            [
+              ["type", "Type update"],
+              ["voice", "Record voice update"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              onClick={() => {
+                setMode(value);
+                setMessage(null);
+              }}
+              className={`min-h-[36px] rounded-md text-xs font-semibold transition-colors ${
+                mode === value ? "bg-[var(--card-bg)] shadow-sm" : "hover:bg-[var(--glass-bg)]"
+              }`}
+              style={{ color: mode === value ? "var(--text-main)" : "var(--text-muted)" }}
+            >
+              {value === "voice" ? "🎙 " : ""}
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "var(--text-muted)" }}>
@@ -866,6 +942,27 @@ function WeeklyUpdatePanel({
             className="glass-input"
           />
         </div>
+        {mode === "voice" ? (
+          <div className="space-y-2">
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Record what the team worked on. It&apos;s transcribed automatically, posted to {clientLabel}&apos;s
+              Nexli Team thread and emailed to them.
+            </p>
+            <VoiceRecorder onSend={sendVoice} sendLabel="Send to client" idleLabel="Start recording" className="w-full" />
+            {message && (
+              <p
+                className="text-xs font-medium"
+                style={{
+                  color:
+                    message.kind === "ok" ? "#10b981" : message.kind === "warn" ? "#f59e0b" : "#f43f5e",
+                }}
+              >
+                {message.text}
+              </p>
+            )}
+          </div>
+        ) : (
+        <>
         <div>
           <label className="block text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "var(--text-muted)" }}>
             What the team worked on
@@ -917,6 +1014,8 @@ function WeeklyUpdatePanel({
             </span>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {updates.length > 0 && (

@@ -2,15 +2,17 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { portalMessages } from "@/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
+import { ensurePortalMessageColumns } from "@/lib/portal-messages-table";
 
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await ensurePortalMessageColumns();
 
-  // Get distinct conversations with latest message and unread count
+  // Distinct conversations with latest message, its kind, and unread count
   const conversations = await db
     .select({
       clientEmail: portalMessages.clientEmail,
@@ -20,6 +22,12 @@ export async function GET() {
           AND pm2.client_email = ${portalMessages.clientEmail}
         ORDER BY pm2.created_at DESC LIMIT 1
       )`,
+      lastKind: sql<string>`(
+        SELECT kind FROM portal_messages pm3
+        WHERE pm3.owner_id = ${portalMessages.ownerId}
+          AND pm3.client_email = ${portalMessages.clientEmail}
+        ORDER BY pm3.created_at DESC LIMIT 1
+      )`,
       lastMessageAt: sql<string>`MAX(${portalMessages.createdAt})`,
       unreadCount: sql<number>`COUNT(*) FILTER (WHERE ${portalMessages.senderType} = 'client' AND ${portalMessages.read} = false)`,
     })
@@ -28,33 +36,16 @@ export async function GET() {
     .groupBy(portalMessages.clientEmail, portalMessages.ownerId)
     .orderBy(desc(sql`MAX(${portalMessages.createdAt})`));
 
-  // Look up client names from the messages themselves (latest CPA-addressed message)
-  const conversationsWithNames = await Promise.all(
-    conversations.map(async (conv) => {
-      // Try to get clientName from the most recent message metadata or documents
-      const [latestMsg] = await db
-        .select({ clientEmail: portalMessages.clientEmail })
-        .from(portalMessages)
-        .where(
-          and(
-            eq(portalMessages.ownerId, session.user.id),
-            eq(portalMessages.clientEmail, conv.clientEmail)
-          )
-        )
-        .orderBy(desc(portalMessages.createdAt))
-        .limit(1);
-
-      return {
-        clientEmail: conv.clientEmail,
-        lastMessage:
-          conv.lastMessage?.length > 100
-            ? conv.lastMessage.slice(0, 100) + "..."
-            : conv.lastMessage,
-        lastMessageAt: conv.lastMessageAt,
-        unreadCount: Number(conv.unreadCount),
-      };
-    })
-  );
-
-  return NextResponse.json({ conversations: conversationsWithNames });
+  return NextResponse.json({
+    conversations: conversations.map((conv) => ({
+      clientEmail: conv.clientEmail,
+      lastMessage:
+        conv.lastMessage?.length > 100
+          ? conv.lastMessage.slice(0, 100) + "..."
+          : conv.lastMessage,
+      lastKind: conv.lastKind || "text",
+      lastMessageAt: conv.lastMessageAt,
+      unreadCount: Number(conv.unreadCount),
+    })),
+  });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 
 export interface WeeklyUpdateCardData {
   id: string;
@@ -85,6 +86,15 @@ export function WeeklyUpdateCard({ update }: { update: WeeklyUpdateCardData }) {
           </span>
         </div>
       )}
+
+      <div className="mt-4 pt-3 border-t border-[var(--card-border)]">
+        <Link
+          href="/dashboard/nexli-messages"
+          className="text-sm font-semibold text-cyan-400 hover:underline no-underline"
+        >
+          Reply in messages →
+        </Link>
+      </div>
     </div>
   );
 }

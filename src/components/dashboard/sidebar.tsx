@@ -39,6 +39,8 @@ interface SidebarProps {
   userName?: string | null;
   /** Count pills per nav href, e.g. weekly updates due on the Client Tracker. */
   badges?: Partial<Record<string, number>>;
+  /** DRS/Foundation firms get a "Nexli Team" thread (weekly updates + messages with Nexli). */
+  showNexliMessages?: boolean;
 }
 
 function ChevronLeftIcon({ className }: { className?: string }) {
@@ -73,7 +75,18 @@ interface NavItem {
   accent: NavAccent;
   /** Attention count shown next to the label (hidden when 0/undefined). */
   badge?: number;
+  /** Word after the count in tooltips ("due", "unread"). */
+  badgeNoun?: string;
 }
+
+/** Firm-side thread with the Nexli team; inserted right after Overview. */
+const nexliMessagesItem: NavItem = {
+  href: "/dashboard/nexli-messages",
+  label: "Nexli Team",
+  icon: MessageIcon,
+  accent: "cyan",
+  badgeNoun: "unread",
+};
 
 // Icon chips follow the Digital Rainmaker color language:
 // blue = website/core, violet = AI/automation, cyan = portal/centerpiece,
@@ -138,7 +151,7 @@ const fullNav: NavItem[] = fullNavOrder
 
 const adminNav: NavItem[] = [];
 
-export function Sidebar({ isAdmin, tier = "drs", userName, badges }: SidebarProps) {
+export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMessages = false }: SidebarProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
@@ -150,7 +163,11 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges }: SidebarProp
     : tier === "foundation"
       ? firmNav
       : fullNav;
-  const navItems: NavItem[] = baseNav.map((item) => {
+  const withNexli =
+    showNexliMessages && !baseNav.some((n) => n.href === nexliMessagesItem.href)
+      ? [...baseNav.slice(0, 1), nexliMessagesItem, ...baseNav.slice(1)]
+      : baseNav;
+  const navItems: NavItem[] = withNexli.map((item) => {
     const count = badges?.[item.href];
     return count && count > 0 ? { ...item, badge: count } : item;
   });
@@ -268,7 +285,7 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges }: SidebarProp
               title={
                 collapsed
                   ? item.badge
-                    ? `${item.label} · ${item.badge} due`
+                    ? `${item.label} · ${item.badge} ${item.badgeNoun ?? "due"}`
                     : item.label
                   : undefined
               }
@@ -282,7 +299,7 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges }: SidebarProp
                   <span
                     className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-[var(--bg-main)]"
                     style={{ background: "#f59e0b" }}
-                    aria-label={`${item.badge} due`}
+                    aria-label={`${item.badge} ${item.badgeNoun ?? "due"}`}
                   />
                 ) : null}
               </span>
@@ -292,7 +309,7 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges }: SidebarProp
                   {item.badge ? (
                     <span
                       className="badge badge-amber shrink-0 px-1.5 text-[10px] leading-4"
-                      title={`${item.badge} due`}
+                      title={`${item.badge} ${item.badgeNoun ?? "due"}`}
                     >
                       {item.badge}
                     </span>
