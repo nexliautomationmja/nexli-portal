@@ -25,7 +25,55 @@ export * from "@/lib/portal-messages-types";
  * clientEmail). Callers must `await ensurePortalMessageColumns()` first.
  */
 
-const BUCKET = "documents";
+// Voice notes live in their own private bucket: the shared "documents"
+// bucket restricts uploads to document MIME types and rejects audio (415
+// "mime type audio/webm is not supported" — Oct 25 2026). The bucket is
+// created/updated automatically on first use, so no dashboard setup.
+const BUCKET = "voice-messages";
+const VOICE_BUCKET_MIME_TYPES = [
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/aac",
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+];
+
+let voiceBucketReady: Promise<void> | null = null;
+
+/** Make sure the private voice bucket exists and accepts audio. Memoized per lambda. */
+function ensureVoiceBucket(): Promise<void> {
+  if (!voiceBucketReady) {
+    voiceBucketReady = (async () => {
+      const storage = getSupabase().storage;
+      const options = {
+        public: false,
+        allowedMimeTypes: VOICE_BUCKET_MIME_TYPES,
+        fileSizeLimit: "5MB",
+      };
+      const { data, error } = await storage.getBucket(BUCKET);
+      if (error || !data) {
+        const created = await storage.createBucket(BUCKET, options);
+        if (created.error && !/already exists/i.test(created.error.message)) {
+          throw created.error;
+        }
+        return;
+      }
+      const allowed = (data.allowed_mime_types ?? []) as string[];
+      const missing = VOICE_BUCKET_MIME_TYPES.some((m) => allowed.length > 0 && !allowed.includes(m));
+      if (data.public || missing) {
+        const updated = await storage.updateBucket(BUCKET, options);
+        if (updated.error) throw updated.error;
+      }
+    })().catch((err) => {
+      voiceBucketReady = null;
+      throw err;
+    });
+  }
+  return voiceBucketReady;
+}
 const SIGNED_URL_SECONDS = 60 * 60;
 /** Placeholder body for a weekly update recorded as voice, until transcribed. */
 export const VOICE_UPDATE_PLACEHOLDER = "Voice update";
@@ -286,7 +334,14 @@ export async function storeVoice(params: {
   }
   if (file.size === 0) throw new VoiceInputError("The recording is empty.");
   if (file.size > MAX_VOICE_BYTES) {
-    throw new VoiceInputError("Recording too large (4MB max, about 4 minutes).");
+    throw new VoiceInputError("Recording too large (4MB max — about 15 minutes at our recording quality).");
+  }
+
+  try {
+    await ensureVoiceBucket();
+  } catch (err) {
+    console.error("[portal-messages] voice bucket setup failed:", err);
+    throw new VoiceStorageError("Couldn't save the recording. Please try again.");
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
