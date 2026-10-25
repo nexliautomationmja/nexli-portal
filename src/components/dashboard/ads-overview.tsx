@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FacebookLogo, InstagramLogo } from "@/components/launch-pad/icons";
+import { TopCreatives } from "@/components/dashboard/top-creatives";
 import type { AdsOverviewData, PlatformRow } from "@/app/api/dashboard/ads-overview/route";
 
 /**
@@ -373,6 +374,7 @@ export function AdsOverview() {
               Lead counts are capped at the first 1,000 GoHighLevel contacts in this period.
             </p>
           )}
+          <TopCreatives range={range} />
         </div>
       ) : null}
     </div>

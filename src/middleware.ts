@@ -28,7 +28,7 @@ const CSP_DIRECTIVES = [
   "font-src 'self' data: https://fonts.gstatic.com",
   // Firm logos and documents live in Supabase storage; Mux thumbnails; GHL
   // contact avatars (leadconnector / msgsndr CDNs); Stripe assets.
-  "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://image.mux.com https://*.mux.com https://*.stripe.com https://*.leadconnectorhq.com https://*.msgsndr.com https://storage.googleapis.com",
+  "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://image.mux.com https://*.mux.com https://*.stripe.com https://*.leadconnectorhq.com https://*.msgsndr.com https://storage.googleapis.com https://*.fbcdn.net https://scontent.cdninstagram.com https://*.cdninstagram.com",
   "media-src 'self' blob: https://*.supabase.co https://*.supabase.in https://stream.mux.com https://*.mux.com",
   // API calls the browser makes: Supabase, Stripe, Mux (incl. litix data
   // beacons), Vercel analytics, GHL (leadconnector) and Cal.com embeds.
@@ -38,7 +38,7 @@ const CSP_DIRECTIVES = [
   }`,
   // Embedded PDFs / documents (Supabase signed URLs), Stripe checkout/connect
   // frames, Mux player, Cal.com booking embed.
-  "frame-src 'self' blob: https://*.supabase.co https://*.supabase.in https://js.stripe.com https://checkout.stripe.com https://connect.stripe.com https://hooks.stripe.com https://*.mux.com https://cal.com https://*.cal.com https://vercel.live",
+  "frame-src 'self' blob: https://*.supabase.co https://*.supabase.in https://js.stripe.com https://checkout.stripe.com https://connect.stripe.com https://hooks.stripe.com https://*.mux.com https://cal.com https://*.cal.com https://vercel.live https://www.facebook.com",
   "worker-src 'self' blob:",
   // Allow the marketing site to embed the portal; nothing else may.
   "frame-ancestors 'self' https://www.nexli.net https://nexli.net",
