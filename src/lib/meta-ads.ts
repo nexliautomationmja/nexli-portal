@@ -605,17 +605,41 @@ async function fetchVideo(creds: MetaCreds, videoId: string): Promise<{ source: 
     );
     if (r.ok && (r.body.source || r.body.picture)) return pick(r.body);
   }
-  // Videos uploaded to the ad account itself are readable via its library.
-  const lib = await graphGet<{ data?: GraphVideoNode[]; error?: GraphError }>(
-    graphUrl(creds, `act_${encodeURIComponent(creds.account)}/advideos`, {
-      fields: "id,source,picture",
-      limit: "200",
-    }),
-    creds.token,
-    "ad account video library"
-  );
-  const hit = lib.ok ? lib.body.data?.find((v) => v.id === videoId) : undefined;
-  return hit ? pick(hit) : { source: null, poster: null };
+  return { source: null, poster: null };
+}
+
+/**
+ * Videos the Page owns aren't readable with an ads-only token, but the same
+ * files sit in the ad account's video library, which is. Small pages (big
+ * ones fail with "reduce the amount of data"), stopping once all are found.
+ */
+async function scanAccountVideos(
+  creds: MetaCreds,
+  wanted: string[]
+): Promise<Map<string, { source: string | null; poster: string | null }>> {
+  const found = new Map<string, { source: string | null; poster: string | null }>();
+  const need = new Set(wanted);
+  let url: string | null = graphUrl(creds, `act_${encodeURIComponent(creds.account)}/advideos`, {
+    fields: "id,source,picture",
+    limit: "25",
+  });
+  for (let page = 0; url && need.size > 0 && page < 12; page++) {
+    const r: GraphResult<{ data?: GraphVideoNode[]; paging?: { next?: string }; error?: GraphError }> = await graphGet(
+      url,
+      creds.token,
+      `ad account video library (page ${page + 1})`
+    );
+    if (!r.ok) break;
+    for (const v of r.body.data ?? []) {
+      if (v.id && need.has(v.id) && v.source) {
+        found.set(v.id, { source: v.source, poster: v.picture || null });
+        need.delete(v.id);
+      }
+    }
+    url = r.body.paging?.next ?? null;
+  }
+  if (need.size > 0) console.warn(`[meta-ads] ${need.size} ad video(s) not found in the ad account library`);
+  return found;
 }
 
 async function fetchPage(creds: MetaCreds, pageId: string): Promise<{ name: string | null; picture: string | null }> {
@@ -658,6 +682,20 @@ export async function getAdCreativesMeta(
     ),
     Promise.all(pageIds.map(async (pid) => pages.set(pid, await fetchPage(creds, pid)))),
   ]);
+
+  // Fill in what the direct lookups couldn't read from the ad account library.
+  const missing = nodes.flatMap((n, i) => {
+    const vid = n.ok ? videoIdOf(n.node.creative) : null;
+    return vid && !videos[i].source ? [vid] : [];
+  });
+  if (missing.length > 0) {
+    const lib = await scanAccountVideos(creds, missing);
+    nodes.forEach((n, i) => {
+      const vid = n.ok ? videoIdOf(n.node.creative) : null;
+      const hit = vid ? lib.get(vid) : undefined;
+      if (hit) videos[i] = { source: hit.source, poster: videos[i].poster || hit.poster };
+    });
+  }
 
   const byId: Record<string, AdCreativeMeta> = {};
   ids.forEach((id, i) => {

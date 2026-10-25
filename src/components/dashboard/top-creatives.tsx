@@ -120,11 +120,14 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
   const [videoFailed, setVideoFailed] = useState(false);
   const videoRef = useInViewPlayback();
   const poster = c.posterUrl || c.thumbnailUrl;
+  const isVideo = c.mediaType === "video";
   const playVideo = Boolean(c.videoUrl) && !videoFailed;
-  const showImage = !playVideo && Boolean(poster) && c.mediaType !== "video";
+  // A video Meta won't hand over: show its cover and send the click to the post.
+  const videoElsewhere = isVideo && !playVideo;
+  const externalHref = videoElsewhere ? c.permalinkUrl || c.adsManagerUrl : null;
 
-  // No playable file or still: show Meta's own rendering, live, no click needed.
-  if (!playVideo && !showImage && c.previewUrl) {
+  // Nothing at all to show (no file, no still): Meta's own rendering.
+  if (!playVideo && !poster && c.previewUrl) {
     return (
       <div className={MEDIA_BOX} style={{ background: "#fff" }}>
         <MetaPreviewFrame c={c} />
@@ -132,8 +135,49 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
     );
   }
 
-  return (
-    <button type="button" onClick={onOpen} aria-label={`Watch ${c.adName} full size`} className={`${MEDIA_BOX} group/media`}>
+  const badge = (
+    <span
+      className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-white/85 backdrop-blur-sm"
+      style={{ background: "rgba(0,0,0,0.55)" }}
+    >
+      {isVideo ? "Video" : c.mediaType === "carousel" ? "Carousel" : "Photo"}
+    </span>
+  );
+
+  const expandHint = (
+    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <span
+        className="flex h-11 w-11 items-center justify-center rounded-full opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100"
+        style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.3)" }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+        </svg>
+      </span>
+    </span>
+  );
+
+  // Photo: shown at its own size and shape, edge to edge.
+  if (!isVideo) {
+    return (
+      <button type="button" onClick={onOpen} aria-label={`View ${c.adName} full size`} className="group/media relative block w-full bg-black">
+        {poster ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL, signed and short-lived
+          <img src={poster} alt="" referrerPolicy="no-referrer" className="block w-full h-auto" />
+        ) : (
+          <span className="flex h-60 items-center justify-center text-[10px] font-bold uppercase tracking-[0.16em] text-white/30">
+            No preview
+          </span>
+        )}
+        {badge}
+        {expandHint}
+      </button>
+    );
+  }
+
+  // Video: a 9:16 reel frame, centred, with its own blurred cover either side.
+  const reel = (
+    <>
       {poster && (
         <span
           aria-hidden="true"
@@ -146,7 +190,7 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
           }}
         />
       )}
-      <span className="relative flex h-full w-full items-center justify-center">
+      <span className="relative mx-auto block h-[min(560px,70vh)] max-w-full overflow-hidden" style={{ aspectRatio: "9 / 16" }}>
         {playVideo ? (
           <video
             ref={videoRef}
@@ -158,33 +202,42 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
             playsInline
             preload="metadata"
             onError={() => setVideoFailed(true)}
-            className="h-full max-w-full object-contain pointer-events-none"
+            className="h-full w-full object-cover pointer-events-none"
           />
         ) : poster ? (
           // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL, signed and short-lived
-          <img src={poster} alt="" referrerPolicy="no-referrer" className="h-full max-w-full object-contain" />
-        ) : (
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/30">No preview</span>
-        )}
+          <img src={poster} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+        ) : null}
       </span>
-
-      <span
-        className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-white/85 backdrop-blur-sm"
-        style={{ background: "rgba(0,0,0,0.55)" }}
-      >
-        {c.mediaType === "video" ? "Video" : c.mediaType === "carousel" ? "Carousel" : "Photo"}
-      </span>
-
-      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <span
-          className="flex h-11 w-11 items-center justify-center rounded-full opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100"
-          style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.3)" }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-          </svg>
+      {badge}
+      {videoElsewhere ? (
+        <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <span
+            className="flex h-14 w-14 items-center justify-center rounded-full backdrop-blur-sm ring-2 ring-white/70 transition-transform duration-200 group-hover/media:scale-110"
+            style={{ background: "rgba(0,0,0,0.55)" }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+              <path d="M8 5.5v13a1 1 0 0 0 1.52.85l10.4-6.5a1 1 0 0 0 0-1.7L9.52 4.65A1 1 0 0 0 8 5.5Z" />
+            </svg>
+          </span>
+          <span className="rounded-md px-2 py-0.5 text-[10px] font-semibold text-white/90" style={{ background: "rgba(0,0,0,0.55)" }}>
+            Watch on Facebook ↗
+          </span>
         </span>
-      </span>
+      ) : (
+        expandHint
+      )}
+    </>
+  );
+
+  const reelBox = "group/media relative block w-full overflow-hidden bg-black";
+  return externalHref ? (
+    <a href={externalHref} target="_blank" rel="noopener noreferrer" aria-label={`Watch ${c.adName} on Facebook`} className={reelBox}>
+      {reel}
+    </a>
+  ) : (
+    <button type="button" onClick={onOpen} aria-label={`Watch ${c.adName} full size`} className={reelBox}>
+      {reel}
     </button>
   );
 }
@@ -217,8 +270,12 @@ function Lightbox({ c, onClose }: { c: TopCreative; onClose: () => void }) {
       aria-label={`Ad creative: ${c.adName}`}
     >
       <div
-        className="relative flex h-[min(85vh,calc(92vw*16/9))] max-w-[92vw] items-center"
-        style={{ aspectRatio: "9 / 16" }}
+        className={
+          c.mediaType === "video" || !(c.posterUrl || c.thumbnailUrl)
+            ? "relative flex h-[min(85vh,calc(92vw*16/9))] max-w-[92vw] items-center"
+            : "relative flex max-h-[88vh] max-w-[92vw] items-center"
+        }
+        style={c.mediaType === "video" || !(c.posterUrl || c.thumbnailUrl) ? { aspectRatio: "9 / 16" } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         {useVideo ? (
@@ -234,7 +291,7 @@ function Lightbox({ c, onClose }: { c: TopCreative; onClose: () => void }) {
           />
         ) : useImage ? (
           // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL
-          <img src={poster ?? ""} alt={c.adName} referrerPolicy="no-referrer" className="h-full w-full rounded-2xl object-contain" />
+          <img src={poster ?? ""} alt={c.adName} referrerPolicy="no-referrer" className="max-h-[88vh] max-w-[92vw] rounded-2xl object-contain" />
         ) : c.previewUrl ? (
           <MetaPreviewFrame c={c} className="h-full w-full rounded-2xl border-0 bg-white" />
         ) : (
@@ -304,18 +361,8 @@ function CreativeCard({
 
       {/* Page row */}
       <div className="flex items-center gap-2 px-3 pt-3">
-        {c.pagePictureUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL
-          <img src={c.pagePictureUrl} alt="" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-full object-cover" />
-        ) : (
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white"
-            style={{ background: "linear-gradient(135deg,#3b82f6,#1d4ed8)" }}
-            aria-hidden="true"
-          >
-            {pageName.charAt(0)}
-          </span>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element -- small static logo */}
+        <img src="/logos/nexli-avatar.png" alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/10" />
         <span className="min-w-0">
           <span className="block truncate text-xs font-bold leading-tight" style={{ color: "var(--text-main)" }}>
             {pageName}
