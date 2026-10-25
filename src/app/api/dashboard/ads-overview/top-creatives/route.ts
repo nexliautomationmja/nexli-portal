@@ -12,7 +12,7 @@ import {
 import { scanAdLeads } from "@/lib/ad-leads";
 
 /**
- * Admin Overview — top 3 Meta creatives by spend in the range, each with a
+ * Admin Overview — top 4 Meta creatives by spend in the range, each with a
  * Meta-rendered preview iframe (Ad Previews API) and booked calls joined
  * from GoHighLevel by utm_content = ad name (the ads' URL parameters use
  * {{ad.name}}; the ad id is accepted too).
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
   const refresh = req.nextUrl.searchParams.get("refresh") === "1";
   const { since, until } = windowFor(range);
 
-  const top = await getTopAds({ userId, rangeKey: range, since, until, limit: 3, refresh });
+  const top = await getTopAds({ userId, rangeKey: range, since, until, limit: 4, refresh });
   if (!top.configured) {
     return NextResponse.json({ configured: false, range, format } satisfies TopCreativesData);
   }

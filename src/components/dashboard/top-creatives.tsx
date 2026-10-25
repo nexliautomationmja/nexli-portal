@@ -5,7 +5,7 @@ import { FacebookLogo, InstagramLogo } from "@/components/launch-pad/icons";
 import type { TopCreative, TopCreativesData } from "@/app/api/dashboard/ads-overview/top-creatives/route";
 
 /**
- * Admin Overview — top 3 Meta creatives by spend, shown the way the Ads
+ * Admin Overview — top 4 Meta creatives by spend, shown the way the Ads
  * Library shows an ad (page, copy, media, link bar) with the real video
  * autoplaying muted on the card; click for full size with sound. Falls back
  * to Meta's own preview iframe when the video file isn't readable.
@@ -40,6 +40,7 @@ const RANK_STYLE: Record<number, { bg: string; fg: string; ring: string }> = {
   1: { bg: "linear-gradient(135deg,#fde68a,#f59e0b)", fg: "#422006", ring: "rgba(245,158,11,0.45)" },
   2: { bg: "linear-gradient(135deg,#f1f5f9,#94a3b8)", fg: "#0f172a", ring: "rgba(148,163,184,0.45)" },
   3: { bg: "linear-gradient(135deg,#fed7aa,#b45309)", fg: "#2a1405", ring: "rgba(180,83,9,0.45)" },
+  4: { bg: "linear-gradient(135deg,#bfdbfe,#3b82f6)", fg: "#0b1a33", ring: "rgba(59,130,246,0.4)" },
 };
 
 function RankBadge({ rank }: { rank: number }) {
@@ -311,6 +312,35 @@ function Lightbox({ c, onClose }: { c: TopCreative; onClose: () => void }) {
   );
 }
 
+/** Primary text, clamped like a feed post; click to read the whole copy. */
+function AdCopy({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = text.length > 140 || text.split("\n").length > 3;
+  if (!long) {
+    return (
+      <p className="px-3 pt-2 text-xs leading-relaxed whitespace-pre-line" style={{ color: "var(--text-main)", opacity: 0.85 }}>
+        {text}
+      </p>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      aria-expanded={expanded}
+      className="block w-full px-3 pt-2 text-left text-xs leading-relaxed"
+      style={{ color: "var(--text-main)" }}
+    >
+      <span className={`block whitespace-pre-line ${expanded ? "" : "line-clamp-3"}`} style={{ opacity: 0.85 }}>
+        {text}
+      </span>
+      <span className="mt-1 inline-block text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>
+        {expanded ? "See less" : "See more"}
+      </span>
+    </button>
+  );
+}
+
 function Metric({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
     <div className="px-1 py-2 text-center" title={title}>
@@ -377,15 +407,7 @@ function CreativeCard({
         </span>
       </div>
 
-      {c.primaryText && (
-        <p
-          className="px-3 pt-2 text-xs leading-relaxed line-clamp-3 whitespace-pre-line"
-          style={{ color: "var(--text-main)", opacity: 0.8 }}
-          title={c.primaryText}
-        >
-          {c.primaryText}
-        </p>
-      )}
+      {c.primaryText && <AdCopy text={c.primaryText} />}
 
       <div className="mt-2.5">
         <CardMedia key={`${c.adId}:${platform}`} c={c} onOpen={() => setOpen(true)} />
@@ -521,7 +543,7 @@ export function TopCreatives({ range }: { range: Range }) {
     <section className="pt-2" aria-labelledby="top-creatives-title">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <h3 id="top-creatives-title" className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>
-          Top 3 creatives by spend
+          Top 4 creatives by spend
         </h3>
         <div className="inline-flex rounded-xl border border-[var(--glass-border)] overflow-hidden" role="group" aria-label="Preview platform">
           {PLATFORMS.map(({ value, label, Icon }) => (
@@ -542,8 +564,8 @@ export function TopCreatives({ range }: { range: Range }) {
       </div>
 
       {loading && !data ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 animate-pulse" aria-busy="true" aria-label="Loading top creatives">
-          {[0, 1, 2].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-3 animate-pulse" aria-busy="true" aria-label="Loading top creatives">
+          {[0, 1, 2, 3].map((i) => (
             <div key={i} className="glass-card p-4 space-y-3">
               <div className="h-7 w-12 rounded-full" style={{ background: "var(--input-bg)" }} />
               <div className="h-[360px] w-full rounded-xl" style={{ background: "var(--input-bg)" }} />
@@ -570,7 +592,7 @@ export function TopCreatives({ range }: { range: Range }) {
               {data.leadsError}
             </div>
           )}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-3">
             {creatives.map((c) => (
               <CreativeCard key={c.adId} c={c} platform={platform} currency={data?.currency} leadsError={data?.leadsError} />
             ))}
