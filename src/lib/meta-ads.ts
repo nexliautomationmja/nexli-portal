@@ -419,6 +419,9 @@ function creativeMetaOf(node: GraphAdNode | undefined): AdCreativeMeta {
 const CREATIVE_FIELDS =
   "effective_status,creative{id,thumbnail_url,image_url,video_id,object_type,instagram_permalink_url,effective_object_story_id,object_story_spec,asset_feed_spec}";
 
+const CREATIVE_FIELDS_LEAN =
+  "effective_status,creative{id,thumbnail_url,image_url,video_id,object_type,instagram_permalink_url,effective_object_story_id}";
+
 /** Creative metadata for up to 50 ads in one Graph call (`?ids=`). */
 export async function getAdCreativesMeta(
   adIds: string[]
@@ -426,16 +429,20 @@ export async function getAdCreativesMeta(
   const creds = metaCreds();
   if (!creds) return { ok: false, error: "Meta ads aren't configured" };
   if (adIds.length === 0) return { ok: true, byId: {} };
-  const r = await graphGet<GraphIdsResponse>(
-    graphUrl(creds, "", {
-      ids: adIds.slice(0, 50).join(","),
-      fields: CREATIVE_FIELDS,
-      thumbnail_width: "640",
-      thumbnail_height: "640",
-    }),
+  const ids = adIds.slice(0, 50).join(",");
+  let r = await graphGet<GraphIdsResponse>(
+    graphUrl(creds, "", { ids, fields: CREATIVE_FIELDS }),
     creds.token,
     "ad creatives"
   );
+  // Some creative fields aren't readable on every ad type; retry lean.
+  if (!r.ok) {
+    r = await graphGet<GraphIdsResponse>(
+      graphUrl(creds, "", { ids, fields: CREATIVE_FIELDS_LEAN }),
+      creds.token,
+      "ad creatives (lean)"
+    );
+  }
   if (!r.ok) return r;
   const byId: Record<string, AdCreativeMeta> = {};
   for (const id of adIds) byId[id] = creativeMetaOf(r.body[id]);
@@ -603,6 +610,12 @@ export async function getAdPreview(
   );
   if (!r.ok) return r;
   const url = previewSrcFromBody(r.body.data?.[0]?.body);
+  if (url) {
+    const u = new URL(url);
+    console.info(`[meta-ads] preview ${format} served from ${u.hostname}${u.pathname}`);
+  } else {
+    console.warn(`[meta-ads] preview ${format}: no usable iframe src in body`);
+  }
   return url ? { ok: true, url } : { ok: false, error: `Meta returned no ${format} preview` };
 }
 

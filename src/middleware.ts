@@ -38,7 +38,7 @@ const CSP_DIRECTIVES = [
   }`,
   // Embedded PDFs / documents (Supabase signed URLs), Stripe checkout/connect
   // frames, Mux player, Cal.com booking embed.
-  "frame-src 'self' blob: https://*.supabase.co https://*.supabase.in https://js.stripe.com https://checkout.stripe.com https://connect.stripe.com https://hooks.stripe.com https://*.mux.com https://cal.com https://*.cal.com https://vercel.live https://www.facebook.com",
+  "frame-src 'self' blob: https://*.supabase.co https://*.supabase.in https://js.stripe.com https://checkout.stripe.com https://connect.stripe.com https://hooks.stripe.com https://*.mux.com https://cal.com https://*.cal.com https://vercel.live https://www.facebook.com https://facebook.com https://*.facebook.com",
   "worker-src 'self' blob:",
   // Allow the marketing site to embed the portal; nothing else may.
   "frame-ancestors 'self' https://www.nexli.net https://nexli.net",

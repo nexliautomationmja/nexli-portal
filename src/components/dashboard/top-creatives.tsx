@@ -238,6 +238,17 @@ function CreativeCard({
             View post ↗
           </a>
         )}
+        {c.previewUrl && (
+          <a
+            href={c.previewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors"
+            style={{ color: "var(--text-main)" }}
+          >
+            Open preview ↗
+          </a>
+        )}
       </div>
     </article>
   );
