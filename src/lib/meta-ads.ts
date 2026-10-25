@@ -603,9 +603,31 @@ async function fetchVideo(creds: MetaCreds, videoId: string): Promise<{ source: 
       creds.token,
       `video ${videoId}`
     );
-    if (r.ok && (r.body.source || r.body.picture)) return pick(r.body);
+    if (r.ok && r.body.source) return pick(r.body);
+    if (r.ok && r.body.picture) {
+      console.warn(`[meta-ads] video ${videoId}: readable but Meta sent no source with this token`);
+      return pick(r.body);
+    }
   }
   return { source: null, poster: null };
+}
+
+/**
+ * Page access token for a Page the system user is assigned to (needs
+ * pages_show_list + pages_read_engagement). Page-owned videos only expose a
+ * playable `source` to the Page's own token. Never logged or stored.
+ */
+async function fetchPageToken(creds: MetaCreds, pageId: string): Promise<string | null> {
+  const r = await graphGet<{ access_token?: string; error?: GraphError }>(
+    graphUrl(creds, encodeURIComponent(pageId), { fields: "access_token" }),
+    creds.token,
+    `page ${pageId} token`
+  );
+  if (!r.ok || !r.body.access_token) {
+    if (r.ok) console.warn(`[meta-ads] page ${pageId}: no page token returned (is the Page assigned to the system user?)`);
+    return null;
+  }
+  return r.body.access_token;
 }
 
 /**
@@ -673,15 +695,26 @@ export async function getAdCreativesMeta(
 
   const pageIds = [...new Set(nodes.flatMap((n) => (n.ok ? [pageIdOf(n.node.creative)] : [])).filter(Boolean))] as string[];
   const pages = new Map<string, { name: string | null; picture: string | null }>();
-  const [videos] = await Promise.all([
-    Promise.all(
-      nodes.map((n) => {
-        const vid = n.ok ? videoIdOf(n.node.creative) : null;
-        return vid ? fetchVideo(creds, vid) : Promise.resolve({ source: null, poster: null });
-      })
-    ),
-    Promise.all(pageIds.map(async (pid) => pages.set(pid, await fetchPage(creds, pid)))),
-  ]);
+  const pageTokens = new Map<string, string>();
+  await Promise.all(
+    pageIds.map(async (pid) => {
+      const [info, tok] = await Promise.all([fetchPage(creds, pid), fetchPageToken(creds, pid)]);
+      pages.set(pid, info);
+      if (tok) pageTokens.set(pid, tok);
+    })
+  );
+  const videos = await Promise.all(
+    nodes.map(async (n) => {
+      const vid = n.ok ? videoIdOf(n.node.creative) : null;
+      if (!vid || !n.ok) return { source: null as string | null, poster: null as string | null };
+      const pageTok = pageTokens.get(pageIdOf(n.node.creative) ?? "");
+      if (pageTok) {
+        const viaPage = await fetchVideo({ ...creds, token: pageTok }, vid);
+        if (viaPage.source) return viaPage;
+      }
+      return fetchVideo(creds, vid);
+    })
+  );
 
   // Fill in what the direct lookups couldn't read from the ad account library.
   const missing = nodes.flatMap((n, i) => {
@@ -812,7 +845,7 @@ export async function getTopAds(opts: {
   return withSnapshotCache<TopAdsResult>({
     userId: opts.userId,
     source: "meta-top-ads",
-    key: `v4:${opts.rangeKey}:${limit}`,
+    key: `v5:${opts.rangeKey}:${limit}`,
     ttlMs: CACHE_TTL_MS,
     refresh: opts.refresh,
     periodStart: opts.since,

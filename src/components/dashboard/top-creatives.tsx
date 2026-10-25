@@ -124,7 +124,7 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
   const playVideo = Boolean(c.videoUrl) && !videoFailed;
   // A video Meta won't hand over: show its cover and send the click to the post.
   const videoElsewhere = isVideo && !playVideo;
-  const externalHref = videoElsewhere ? c.permalinkUrl || c.adsManagerUrl : null;
+  const externalHref: string | null = null; // always play in the page, never send to Facebook
 
   // Nothing at all to show (no file, no still): Meta's own rendering.
   if (!playVideo && !poster && c.previewUrl) {
@@ -221,7 +221,7 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
             </svg>
           </span>
           <span className="rounded-md px-2 py-0.5 text-[10px] font-semibold text-white/90" style={{ background: "rgba(0,0,0,0.55)" }}>
-            Watch on Facebook ↗
+            Play
           </span>
         </span>
       ) : (
