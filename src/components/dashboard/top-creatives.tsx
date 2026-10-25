@@ -312,32 +312,50 @@ function Lightbox({ c, onClose }: { c: TopCreative; onClose: () => void }) {
   );
 }
 
-/** Primary text, clamped like a feed post; click to read the whole copy. */
+/** Primary text, clamped to 3 lines like a feed post; "See more" expands it. */
 function AdCopy({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
-  const long = text.length > 140 || text.split("\n").length > 3;
-  if (!long) {
-    return (
-      <p className="px-3 pt-2 text-xs leading-relaxed whitespace-pre-line" style={{ color: "var(--text-main)", opacity: 0.85 }}>
+  const [overflows, setOverflows] = useState(false);
+  const ref = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      if (!expanded) setOverflows(el.scrollHeight > el.clientHeight + 1);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, expanded]);
+
+  return (
+    <div className="px-3 pt-2 text-xs leading-relaxed" style={{ color: "var(--text-main)" }}>
+      <p
+        ref={ref}
+        className="whitespace-pre-line"
+        style={
+          expanded
+            ? { opacity: 0.85 }
+            : { opacity: 0.85, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }
+        }
+      >
         {text}
       </p>
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => setExpanded((v) => !v)}
-      aria-expanded={expanded}
-      className="block w-full px-3 pt-2 text-left text-xs leading-relaxed"
-      style={{ color: "var(--text-main)" }}
-    >
-      <span className={`block whitespace-pre-line ${expanded ? "" : "line-clamp-3"}`} style={{ opacity: 0.85 }}>
-        {text}
-      </span>
-      <span className="mt-1 inline-block text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>
-        {expanded ? "See less" : "See more"}
-      </span>
-    </button>
+      {(overflows || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="mt-1 text-[11px] font-semibold hover:underline"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {expanded ? "See less" : "See more"}
+        </button>
+      )}
+    </div>
   );
 }
 
