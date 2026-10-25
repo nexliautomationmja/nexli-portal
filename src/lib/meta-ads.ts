@@ -812,7 +812,7 @@ export async function getTopAds(opts: {
   return withSnapshotCache<TopAdsResult>({
     userId: opts.userId,
     source: "meta-top-ads",
-    key: `v2:${opts.rangeKey}:${limit}`,
+    key: `v3:${opts.rangeKey}:${limit}`,
     ttlMs: CACHE_TTL_MS,
     refresh: opts.refresh,
     periodStart: opts.since,
