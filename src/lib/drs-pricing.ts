@@ -215,11 +215,20 @@ export function cardPriceCents(achPriceCents: number): number {
 }
 
 /**
- * Invoices that must be paid by bank transfer (ACH) or wire — never card
- * (Marcel, Oct 20 2026): both up-front setup invoices. The $9,997 monthly,
- * the $5,000 monthly ad budget and annual renewals accept card too.
+ * DRS invoices that must be paid by bank transfer (ACH) or wire — never card.
+ * Empty since Oct 26 2026: setup invoices accept card again (card price),
+ * protected by the chargeback waiver in Section 2 of the letter. Enterprise
+ * invoices stay bank/wire only via metadata.achOnly.
  */
-export const ACH_ONLY_DRS_ROLES = ["setup_fee", "setup_annual"] as const;
+export const ACH_ONLY_DRS_ROLES: readonly string[] = [];
+
+/** DRS invoices covered by the letter's chargeback waiver (paid at signing). */
+export const CHARGEBACK_WAIVED_DRS_ROLES = ["setup_fee", "setup_annual"] as const;
+
+export function isChargebackWaivedInvoiceMeta(metadata: unknown): boolean {
+  const role = ((metadata ?? {}) as { drsRole?: unknown }).drsRole;
+  return typeof role === "string" && (CHARGEBACK_WAIVED_DRS_ROLES as readonly string[]).includes(role);
+}
 
 /** True when an invoice's metadata marks it bank-transfer/wire only (Enterprise, DRS setup). */
 export function isAchOnlyInvoiceMeta(metadata: unknown): boolean {
@@ -227,6 +236,6 @@ export function isAchOnlyInvoiceMeta(metadata: unknown): boolean {
   if (meta.achOnly) return true;
   return (
     typeof meta.drsRole === "string" &&
-    (ACH_ONLY_DRS_ROLES as readonly string[]).includes(meta.drsRole)
+    ACH_ONLY_DRS_ROLES.includes(meta.drsRole)
   );
 }

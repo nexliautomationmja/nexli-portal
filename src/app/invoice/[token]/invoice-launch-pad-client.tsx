@@ -76,6 +76,8 @@ interface InvoiceResponse {
     paymentUrl: string | null;
     paidAt: string | null;
     achOnly: boolean;
+    /** Paid at signing; the signed letter waives chargebacks on it. */
+    chargebackWaived?: boolean;
     paymentMethod: string | null;
     achSettlementStatus: string | null;
     kind: InvoiceKind;
@@ -399,6 +401,7 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
           achCents={achCents}
           cardCents={cardCents}
           achOnly={inv.achOnly}
+          chargebackWaived={Boolean(inv.chargebackWaived)}
           autopay={autopayEligible}
           currency={currency}
           paying={paying}

@@ -405,6 +405,7 @@ export function PayCard({
   achCents,
   cardCents,
   achOnly,
+  chargebackWaived = false,
   autopay,
   currency,
   paying,
@@ -416,6 +417,8 @@ export function PayCard({
   /** Card price — cardPriceCents(balance), or the monthly card amount for autopay. */
   cardCents: number;
   achOnly: boolean;
+  /** DRS invoice paid at signing: show the non-refundable / chargeback-waiver notice. */
+  chargebackWaived?: boolean;
   /** Autopay-eligible: amounts are per month and paying turns on autopay. */
   autopay: boolean;
   currency?: string;
@@ -442,6 +445,15 @@ export function PayCard({
               : "Choose how you'd like to pay."
         }
       />
+      {chargebackWaived && (
+        <p
+          className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100"
+          style={READ_FONT}
+        >
+          This payment is non-refundable. Under Section 2 of your signed agreement you waived the right to dispute
+          or charge it back with your bank or card issuer.
+        </p>
+      )}
       <div className={`mt-5 grid grid-cols-1 gap-3 ${achOnly ? "" : "sm:grid-cols-2"}`}>
         {/* Bank transfer */}
         <div className="rounded-xl p-4 sm:p-5 bg-emerald-500/[0.06] border border-emerald-500/30 flex flex-col">

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAchOnlyInvoiceMeta } from "@/lib/drs-pricing";
+import { isAchOnlyInvoiceMeta, isChargebackWaivedInvoiceMeta } from "@/lib/drs-pricing";
 import { db } from "@/db";
 import { invoices, invoiceLineItems, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -101,6 +101,7 @@ export async function GET(
       paymentUrl: invoice.paymentUrl,
       paidAt: invoice.paidAt,
       achOnly: isAchOnlyInvoiceMeta(meta),
+      chargebackWaived: isChargebackWaivedInvoiceMeta(meta),
       paymentMethod: invoice.paymentMethod,
       achSettlementStatus: invoice.achSettlementStatus,
       kind: invoiceKind(meta),

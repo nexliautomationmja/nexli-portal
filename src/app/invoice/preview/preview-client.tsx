@@ -46,6 +46,7 @@ interface Sample {
   number: string;
   items: InvoiceLine[];
   achOnly: boolean;
+  chargebackWaived?: boolean;
   notes: string;
   terms: string;
 }
@@ -68,7 +69,8 @@ const SAMPLES: Record<SampleKind, Sample> = {
         amountCents: DRS_PRICING.SETUP_FEE_CENTS,
       },
     ],
-    achOnly: true, // setup invoices: bank transfer / wire only
+    achOnly: false, // setup invoices accept ACH or card
+    chargebackWaived: true,
     notes:
       "One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System, as itemized in Section 1 of your engagement letter. Due at signing; onboarding opens once it is paid. Non-refundable once work begins.",
     terms: "Due on receipt.",
@@ -88,7 +90,8 @@ const SAMPLES: Record<SampleKind, Sample> = {
         amountCents: DRS_PRICING.ANNUAL_CENTS,
       },
     ],
-    achOnly: true, // setup invoices: bank transfer / wire only
+    achOnly: false, // setup invoices accept ACH or card
+    chargebackWaived: true,
     notes:
       "Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System, as itemized in Section 1 of your engagement letter, plus the annual platform investment for your first 12 months, paid in full. Due at signing; onboarding opens once it is paid. The Managed Advertising Budget is billed monthly once your build is complete.",
     terms: "Due on receipt.",
@@ -305,6 +308,7 @@ export function InvoicePreviewClient() {
           achCents={achPrice}
           cardCents={cardPrice}
           achOnly={sample.achOnly}
+          chargebackWaived={Boolean(sample.chargebackWaived)}
           autopay={autopayEligible}
           paying={null}
           onPay={setPayClicked}
