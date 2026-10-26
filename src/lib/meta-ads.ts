@@ -417,6 +417,7 @@ interface GraphCreative {
   object_url?: string;
   thumbnail_url?: string;
   image_url?: string;
+  image_hash?: string;
   video_id?: string;
   object_type?: string;
   instagram_permalink_url?: string;
@@ -430,14 +431,15 @@ interface GraphCreative {
       name?: string;
       link?: string;
       picture?: string;
+      image_hash?: string;
       call_to_action?: GraphCta;
       child_attachments?: { picture?: string; name?: string; link?: string }[];
     };
-    photo_data?: { url?: string; caption?: string };
+    photo_data?: { url?: string; caption?: string; image_hash?: string };
   };
   asset_feed_spec?: {
     videos?: { video_id?: string; thumbnail_url?: string }[];
-    images?: { url?: string }[];
+    images?: { url?: string; hash?: string }[];
     bodies?: { text?: string }[];
     titles?: { text?: string }[];
     link_urls?: { website_url?: string; display_url?: string }[];
@@ -480,6 +482,41 @@ function mediaTypeOf(c: GraphCreative | undefined): AdMediaType {
   }
   if (c.image_url || t === "PHOTO" || t === "SHARE" || c.thumbnail_url) return "image";
   return "other";
+}
+
+function imageHashOf(c: GraphCreative | undefined): string | null {
+  return first(
+    c?.image_hash,
+    c?.object_story_spec?.link_data?.image_hash,
+    c?.object_story_spec?.photo_data?.image_hash,
+    c?.asset_feed_spec?.images?.[0]?.hash
+  );
+}
+
+/** Full-resolution image URLs for image hashes, from the ad account's image library (ads_read). */
+async function fetchAdImages(creds: MetaCreds, hashes: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (hashes.length === 0) return out;
+  const r = await graphGet<{ data?: { hash?: string; url?: string; permalink_url?: string }[]; error?: GraphError }>(
+    graphUrl(creds, `act_${encodeURIComponent(creds.account)}/adimages`, {
+      hashes: JSON.stringify(hashes),
+      fields: "hash,url,permalink_url",
+    }),
+    creds.token,
+    "ad images"
+  );
+  if (r.ok) for (const img of r.body.data ?? []) if (img.hash && (img.url || img.permalink_url)) out.set(img.hash, (img.url || img.permalink_url) as string);
+  return out;
+}
+
+/** The post's full-size picture (needs the Page token). */
+async function fetchPostPicture(creds: MetaCreds, postId: string): Promise<string | null> {
+  const r = await graphGet<{ full_picture?: string; error?: GraphError }>(
+    graphUrl(creds, encodeURIComponent(postId), { fields: "full_picture" }),
+    creds.token,
+    `post ${postId} picture`
+  );
+  return r.ok ? r.body.full_picture || null : null;
 }
 
 function videoIdOf(c: GraphCreative | undefined): string | null {
@@ -568,9 +605,9 @@ function creativeMetaOf(node: GraphAdNode | undefined): AdCreativeMeta {
  * each ad falls back to a leaner set rather than losing everything.
  */
 const CREATIVE_FIELD_TIERS = [
-  "effective_status,creative{id,body,title,call_to_action_type,link_url,object_url,thumbnail_url,image_url,video_id,object_type,instagram_permalink_url,effective_object_story_id,actor_id,object_story_spec,asset_feed_spec}",
-  "effective_status,creative{id,body,title,thumbnail_url,image_url,video_id,object_type,effective_object_story_id,object_story_spec}",
-  "effective_status,creative{id,thumbnail_url,image_url,video_id,effective_object_story_id}",
+  "effective_status,creative{id,body,title,call_to_action_type,link_url,object_url,thumbnail_url,image_url,image_hash,video_id,object_type,instagram_permalink_url,effective_object_story_id,actor_id,object_story_spec,asset_feed_spec}",
+  "effective_status,creative{id,body,title,thumbnail_url,image_url,image_hash,video_id,object_type,effective_object_story_id,object_story_spec}",
+  "effective_status,creative{id,thumbnail_url,image_url,image_hash,video_id,effective_object_story_id}",
   "effective_status",
 ];
 
@@ -716,6 +753,22 @@ export async function getAdCreativesMeta(
     })
   );
 
+  // Photos: Meta's creative fields often only carry a small thumbnail. Use
+  // the original upload (image library by hash), else the post's full picture.
+  const hashes = [...new Set(nodes.flatMap((n) => (n.ok && mediaTypeOf(n.node.creative) !== "video" ? [imageHashOf(n.node.creative)] : [])).filter(Boolean))] as string[];
+  const fullImages = await fetchAdImages(creds, hashes);
+  const postPictures = await Promise.all(
+    nodes.map(async (n) => {
+      if (!n.ok || mediaTypeOf(n.node.creative) === "video") return null;
+      const h = imageHashOf(n.node.creative);
+      if (h && fullImages.has(h)) return null;
+      const story = n.node.creative?.effective_object_story_id;
+      const pageTok = pageTokens.get(pageIdOf(n.node.creative) ?? "");
+      if (!story || !pageTok) return null;
+      return fetchPostPicture({ ...creds, token: pageTok }, story);
+    })
+  );
+
   // Fill in what the direct lookups couldn't read from the ad account library.
   const missing = nodes.flatMap((n, i) => {
     const vid = n.ok ? videoIdOf(n.node.creative) : null;
@@ -740,11 +793,13 @@ export async function getAdCreativesMeta(
     const meta = creativeMetaOf(n.node);
     const v = videos[i];
     const page = pages.get(pageIdOf(n.node.creative) ?? "");
+    const h = imageHashOf(n.node.creative);
+    const fullImage = first(h ? fullImages.get(h) : null, postPictures[i]);
     byId[id] = {
       ...meta,
       videoUrl: v.source,
-      posterUrl: first(v.poster, meta.posterUrl),
-      thumbnailUrl: first(v.poster, meta.thumbnailUrl),
+      posterUrl: first(v.poster, fullImage, meta.posterUrl),
+      thumbnailUrl: first(v.poster, fullImage, meta.thumbnailUrl),
       pageName: page?.name ?? null,
       pagePictureUrl: page?.picture ?? null,
     };
@@ -845,7 +900,7 @@ export async function getTopAds(opts: {
   return withSnapshotCache<TopAdsResult>({
     userId: opts.userId,
     source: "meta-top-ads",
-    key: `v6:${opts.rangeKey}:${limit}`,
+    key: `v7:${opts.rangeKey}:${limit}`,
     ttlMs: CACHE_TTL_MS,
     refresh: opts.refresh,
     periodStart: opts.since,
