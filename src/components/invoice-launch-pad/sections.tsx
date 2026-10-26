@@ -505,7 +505,7 @@ export function PayCard({
               {money(cardCents, currency)}
               {autopay && <span className="text-sm font-semibold text-neutral-400">/mo</span>}
             </p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">{autopay ? "by card · autopay" : "Card price"}</p>
+            <p className="text-[11px] text-neutral-500 mt-0.5">{autopay ? "by card · autopay" : savings > 0 ? "Card price" : "Same price by card"}</p>
             <button
               type="button"
               onClick={() => onPay("card")}
@@ -550,7 +550,7 @@ export function PayCard({
             autopay. Your initial term and cancellation terms are in your agreement.
           </p>
         )}
-        {!achOnly && (
+        {!achOnly && savings > 0 && (
           <p className="text-[11px] text-neutral-500" style={READ_FONT}>
             Amounts shown are the bank transfer (ACH) price; card payments are charged at the card price.
           </p>

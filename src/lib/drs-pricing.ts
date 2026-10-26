@@ -199,14 +199,13 @@ export const PIPELINE = {
 } as const;
 
 /**
- * Dual pricing: amounts listed on invoices and in contracts are the
- * discounted bank transfer (ACH) price; credit/debit card payments are
- * charged at the card price. This is deliberately framed as two prices —
- * never as a fee added to a base price — which is the surcharge-law-safe
- * presentation in all US states. The card price is computed server-side;
- * the client only displays it.
+ * Card vs bank transfer pricing. Since Oct 26 2026 (Marcel) card payments
+ * cost the SAME as ACH: 0% difference. The dual-pricing plumbing stays (the
+ * card price is still computed server-side via cardPriceCents) so a gap can
+ * be reintroduced by changing this one number — if it ever is, keep framing
+ * it as two prices, never as a fee added to a base price.
  */
-export const CARD_PRICE_PERCENT_ABOVE_ACH = 3;
+export const CARD_PRICE_PERCENT_ABOVE_ACH = 0;
 
 export function cardPriceCents(achPriceCents: number): number {
   return Math.round(

@@ -1051,9 +1051,11 @@ function PayButton({
                 ? "Redirecting to payment..."
                 : `Pay ${formatCurrency(cardPrice, invoice.currency)} by credit/debit card`}
             </button>
-            <p style={{ margin: 0, color: "#999", fontSize: 12 }}>
-              Card price
-            </p>
+            {cardPrice !== balance && (
+              <p style={{ margin: 0, color: "#999", fontSize: 12 }}>
+                Card price
+              </p>
+            )}
           </>
         )}
       </div>
