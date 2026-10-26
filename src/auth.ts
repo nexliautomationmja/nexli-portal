@@ -2,7 +2,7 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { ensureCoreSchema } from "@/lib/schema-bootstrap";
 import {
@@ -15,6 +15,8 @@ declare module "next-auth" {
   interface User {
     role?: "admin" | "client";
     tier?: Tier;
+    /** Set when a team member signs in: their own users.id (id is the workspace owner's). */
+    memberId?: string;
   }
   interface Session {
     user: {
@@ -24,6 +26,11 @@ declare module "next-auth" {
       role: "admin" | "client";
       /** Tier at sign-in time; the dashboard layout re-reads the DB for gating. */
       tier: Tier;
+      /**
+       * Team member's own users.id. When set, `id` is the workspace owner's id
+       * (all data is scoped to it) and this is the person actually signed in.
+       */
+      memberId?: string;
     };
   }
 }
@@ -33,6 +40,7 @@ declare module "@auth/core/jwt" {
     role?: "admin" | "client";
     tier?: Tier;
     id?: string;
+    memberId?: string;
   }
 }
 
@@ -111,6 +119,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             .set({ lastLoginAt: new Date() })
             .where(eq(users.id, user.id));
 
+          // Team member → sign into the owner's workspace as themselves.
+          let ownerId: string | null = null;
+          try {
+            const r = await db.execute(
+              sql`SELECT workspace_owner_id FROM users WHERE id = ${user.id} LIMIT 1`
+            );
+            const rows = (Array.isArray(r) ? r : (r as { rows?: unknown[] }).rows ?? []) as {
+              workspace_owner_id?: string | null;
+            }[];
+            ownerId = rows[0]?.workspace_owner_id ?? null;
+          } catch (err) {
+            console.error("[AUTH] workspace owner lookup failed:", err);
+          }
+          if (ownerId) {
+            const [owner] = await db.select().from(users).where(eq(users.id, ownerId)).limit(1);
+            if (!owner) return null;
+            return {
+              id: owner.id,
+              email: user.email,
+              name: user.name,
+              role: owner.role,
+              tier: normalizeTier(owner.tier),
+              memberId: user.id,
+            };
+          }
+
           return {
             id: user.id,
             email: user.email,
@@ -133,6 +167,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role;
         token.tier = user.tier;
         token.id = user.id;
+        token.memberId = user.memberId;
       }
       return token;
     },
@@ -141,6 +176,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.role = token.role as "admin" | "client";
         session.user.tier = normalizeTier(token.tier);
         session.user.id = token.id as string;
+        session.user.memberId = token.memberId || undefined;
       }
       return session;
     },

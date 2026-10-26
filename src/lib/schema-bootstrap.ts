@@ -38,6 +38,8 @@ export function ensureCoreSchema(): Promise<void> {
         sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS foundation_agreement_sent_at TIMESTAMP`,
         sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_email_sent_at TIMESTAMP`,
         sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS provisioned_at TIMESTAMP`,
+        // Team members sign in with their own credentials and work in the owner's workspace.
+        sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS workspace_owner_id UUID REFERENCES users(id) ON DELETE CASCADE`,
         sql`CREATE UNIQUE INDEX IF NOT EXISTS users_stripe_customer_id_unique ON users (stripe_customer_id) WHERE stripe_customer_id IS NOT NULL`,
         sql`CREATE UNIQUE INDEX IF NOT EXISTS users_stripe_subscription_id_unique ON users (stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL`,
         sql`CREATE UNIQUE INDEX IF NOT EXISTS users_stripe_connect_account_id_unique ON users (stripe_connect_account_id) WHERE stripe_connect_account_id IS NOT NULL`,

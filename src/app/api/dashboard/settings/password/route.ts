@@ -11,6 +11,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Team members change their own password, never the workspace owner's.
+  const selfId = session.user.memberId ?? session.user.id;
   const { currentPassword, newPassword } = await req.json();
 
   if (!currentPassword || !newPassword) {
@@ -31,7 +33,7 @@ export async function PATCH(req: NextRequest) {
   const [user] = await db
     .select({ hashedPassword: users.hashedPassword })
     .from(users)
-    .where(eq(users.id, session.user.id));
+    .where(eq(users.id, selfId));
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -49,7 +51,7 @@ export async function PATCH(req: NextRequest) {
   await db
     .update(users)
     .set({ hashedPassword: newHash, updatedAt: new Date() })
-    .where(eq(users.id, session.user.id));
+    .where(eq(users.id, selfId));
 
   return NextResponse.json({ ok: true });
 }

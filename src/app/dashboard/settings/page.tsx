@@ -11,6 +11,7 @@ import { TrackingSnippet } from "@/components/dashboard/settings/tracking-snippe
 import { AccountingConnections } from "@/components/dashboard/settings/accounting-connections";
 import { EmailLog } from "@/components/dashboard/settings/email-log";
 import { StripeConnectCard } from "@/components/dashboard/settings/stripe-connect-card";
+import { TeamCard } from "@/components/dashboard/settings/team-card";
 
 export default async function SettingsPage({
   searchParams,
@@ -92,6 +93,19 @@ export default async function SettingsPage({
         </h3>
         <PasswordForm />
       </GlassCard>
+
+      {/* Team — only the workspace owner manages logins */}
+      {session.user.role === "admin" && !session.user.memberId && (
+        <GlassCard>
+          <h3
+            className="text-sm font-semibold mb-5"
+            style={{ color: "var(--text-main)" }}
+          >
+            Team
+          </h3>
+          <TeamCard />
+        </GlassCard>
+      )}
 
       {/* Client-facing branding (portal, documents, emails) */}
       <GlassCard>
