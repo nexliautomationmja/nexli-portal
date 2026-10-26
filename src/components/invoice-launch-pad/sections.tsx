@@ -510,16 +510,16 @@ export function PayCard({
               type="button"
               onClick={() => onPay("card")}
               disabled={busy}
-              className={`${SECONDARY_BTN} mt-4 w-full`}
+              className="mt-4 w-full flex items-center justify-center gap-2 min-h-11 bg-emerald-600 text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-emerald-500 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-emerald-600/20 disabled:opacity-50 disabled:hover:scale-100"
             >
               {paying === "card" ? (
                 "Opening secure checkout…"
               ) : autopay ? (
                 "Pay & turn on autopay"
               ) : (
-                <>
+                <span>
                   Pay <span style={NUM_FONT}>{money(cardCents, currency)}</span> by card
-                </>
+                </span>
               )}
             </button>
           </div>
