@@ -1051,7 +1051,7 @@ function PayButton({
                 ? "Redirecting to payment..."
                 : `Pay ${formatCurrency(cardPrice, invoice.currency)} by credit/debit card`}
             </button>
-            {cardPrice !== balance && (
+            {achSavings > 0 && (
               <p style={{ margin: 0, color: "#999", fontSize: 12 }}>
                 Card price
               </p>
