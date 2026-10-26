@@ -244,6 +244,21 @@ export function ClientTrackerClient() {
     }
   }
 
+  async function createAnnualTest() {
+    setDemoBusy(true);
+    try {
+      const res = await fetch("/api/dashboard/demo-data/annual-unpaid", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.invoiceUrl) {
+        alert(body.error || "Couldn't create the test client. Please try again.");
+        return;
+      }
+      window.location.href = body.invoiceUrl;
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
   async function removeDemo() {
     setDemoBusy(true);
     try {
@@ -324,6 +339,17 @@ export function ClientTrackerClient() {
             Your book of business — and what each client&apos;s own dashboard is producing. Click a connected client to see inside.
           </p>
         </div>
+        {!loading && isAdmin && (
+          <button
+            onClick={createAnnualTest}
+            disabled={demoBusy}
+            title="Signed $74,000 annual letter with the up-front invoice sent but unpaid. No emails are sent. Removed by Remove demo data."
+            className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)] disabled:opacity-50"
+            style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
+          >
+            {demoBusy ? "Working…" : "Test client: $74K annual, unpaid"}
+          </button>
+        )}
         {!loading &&
           (hasDemo ? (
             <button
