@@ -158,13 +158,25 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
     </span>
   );
 
-  // Photo: shown at its own size and shape, edge to edge.
+  // Photo: the shared 4:5 frame, nothing cropped (blurred fill behind).
   if (!isVideo) {
     return (
-      <button type="button" onClick={onOpen} aria-label={`View ${c.adName} full size`} className="group/media relative block w-full bg-black">
+      <button type="button" onClick={onOpen} aria-label={`View ${c.adName} full size`} className="group/media relative block w-full overflow-hidden bg-black" style={{ aspectRatio: "4 / 5" }}>
         {poster ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL, signed and short-lived
-          <img src={poster} alt="" referrerPolicy="no-referrer" className="block w-full h-auto" />
+          <>
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 scale-125"
+              style={{
+                backgroundImage: `url(${poster})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                filter: "blur(26px) brightness(0.6)",
+              }}
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL, signed and short-lived */}
+            <img src={poster} alt="" referrerPolicy="no-referrer" className="relative h-full w-full object-contain" />
+          </>
         ) : (
           <span className="flex h-60 items-center justify-center text-[10px] font-bold uppercase tracking-[0.16em] text-white/30">
             No preview
@@ -191,7 +203,7 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
           }}
         />
       )}
-      <span className="relative mx-auto block h-[min(560px,70vh)] max-w-full overflow-hidden" style={{ aspectRatio: "9 / 16" }}>
+      <span className="relative mx-auto block h-full max-w-full overflow-hidden" style={{ aspectRatio: "9 / 16" }}>
         {playVideo ? (
           <video
             ref={videoRef}
@@ -231,7 +243,8 @@ function CardMedia({ c, onOpen }: { c: TopCreative; onOpen: () => void }) {
     </>
   );
 
-  const reelBox = "group/media relative block w-full overflow-hidden bg-black";
+  // Same 4:5 frame as photos so every card's media is the same size.
+  const reelBox = "group/media relative block w-full overflow-hidden bg-black aspect-[4/5]";
   return externalHref ? (
     <a href={externalHref} target="_blank" rel="noopener noreferrer" aria-label={`Watch ${c.adName} on Facebook`} className={reelBox}>
       {reel}
