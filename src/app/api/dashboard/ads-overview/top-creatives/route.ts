@@ -52,6 +52,13 @@ export interface TopCreative {
   /** Lead actions Meta counted. */
   leads: number;
   cplCents: number | null;
+  linkClicks: number;
+  landingPageViews: number;
+  /** Spend ÷ link clicks, cents. */
+  cpcCents: number | null;
+  /** Meta leads ÷ landing page views (or link clicks when no page views), 0–1. */
+  lpConversion: number | null;
+  lpBasis: "landing_page_views" | "link_clicks" | null;
   /** GHL contacts matched by utm_content; null when none matched. */
   ghlLeads: number | null;
   /** Booked calls among matched GHL contacts; null when none matched. */
@@ -202,6 +209,16 @@ export async function GET(req: NextRequest) {
       ctr: ad.ctr,
       leads: ad.leads,
       cplCents: ad.cplCents,
+      linkClicks: ad.linkClicks,
+      landingPageViews: ad.landingPageViews,
+      cpcCents: ad.linkClicks > 0 ? Math.round(ad.spendCents / ad.linkClicks) : null,
+      lpConversion:
+        ad.landingPageViews > 0
+          ? ad.leads / ad.landingPageViews
+          : ad.linkClicks > 0
+            ? ad.leads / ad.linkClicks
+            : null,
+      lpBasis: ad.landingPageViews > 0 ? "landing_page_views" : ad.linkClicks > 0 ? "link_clicks" : null,
       ghlLeads: c ? c.leads : null,
       booked,
       costPerBookedCents: booked && booked > 0 ? Math.round(ad.spendCents / booked) : null,

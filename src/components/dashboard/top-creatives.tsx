@@ -386,6 +386,7 @@ function CreativeCard({
   leadsError: string | null | undefined;
 }) {
   const [open, setOpen] = useState(false);
+  const [extended, setExtended] = useState(false);
   const noMatch = c.booked === null;
   const tip = leadsError || NO_UTM;
   const pageName = c.pageName || "Nexli";
@@ -464,14 +465,47 @@ function CreativeCard({
       )}
 
       {/* Real numbers for the selected range */}
-      <dl className="grid grid-cols-3 border-t" style={{ borderColor: "var(--card-border)" }}>
-        <Metric label="Spend" value={money(c.spendCents, currency)} />
-        <Metric label="Leads" value={String(c.leads)} title="Lead actions Meta counted" />
-        <Metric label="Per lead" value={money(c.cplCents, currency)} />
-        <Metric label="Booked" value={noMatch ? DASH : String(c.booked)} title={noMatch ? tip : `${c.booked} of ${c.ghlLeads} GoHighLevel leads`} />
-        <Metric label="Per booked" value={noMatch ? DASH : money(c.costPerBookedCents, currency)} title={noMatch ? tip : undefined} />
-        <Metric label="CTR" value={pct(c.ctr)} />
+      {/* The four numbers the ads run on */}
+      <dl className="grid grid-cols-2 border-t" style={{ borderColor: "var(--card-border)" }}>
+        <Metric label="Cost per click" value={money(c.cpcCents, currency)} title="Spend ÷ link clicks" />
+        <Metric label="Cost per lead" value={money(c.cplCents, currency)} title="Spend ÷ leads Meta counted" />
+        <Metric
+          label="Landing page conv."
+          value={pct(c.lpConversion)}
+          title={c.lpBasis === "link_clicks" ? "Leads ÷ link clicks (no landing page views reported)" : "Leads ÷ landing page views"}
+        />
+        <Metric label="Cost per call" value={noMatch ? DASH : money(c.costPerBookedCents, currency)} title={noMatch ? tip : "Spend ÷ booked calls"} />
       </dl>
+
+      <button
+        type="button"
+        onClick={() => setExtended((v) => !v)}
+        aria-expanded={extended}
+        className="mx-3 mb-2 inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[var(--input-bg)]"
+        style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
+      >
+        {extended ? "Collapse the view" : "Extend the view"}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${extended ? "rotate-180" : ""}`} aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {extended && (
+        <dl className="grid grid-cols-3 border-t" style={{ borderColor: "var(--card-border)" }}>
+          <Metric label="Spend" value={money(c.spendCents, currency)} />
+          <Metric label="Impressions" value={c.impressions.toLocaleString("en-US")} />
+          <Metric label="Link clicks" value={c.linkClicks.toLocaleString("en-US")} />
+          <Metric label="CTR" value={pct(c.ctr)} />
+          <Metric label="Page views" value={c.landingPageViews.toLocaleString("en-US")} title="Landing page views" />
+          <Metric label="Leads" value={String(c.leads)} title="Lead actions Meta counted" />
+          <Metric label="Booked" value={noMatch ? DASH : String(c.booked)} title={noMatch ? tip : `${c.booked} of ${c.ghlLeads} GoHighLevel leads`} />
+          <Metric label="GHL leads" value={c.ghlLeads === null ? DASH : String(c.ghlLeads)} title={c.ghlLeads === null ? tip : "GoHighLevel leads matched to this ad"} />
+          <Metric
+            label="Lead → call"
+            value={c.ghlLeads && c.booked !== null ? pct(c.booked / c.ghlLeads) : DASH}
+            title={noMatch ? tip : "Booked calls ÷ GoHighLevel leads"}
+          />
+        </dl>
+      )}
 
       <div className="mt-auto flex flex-wrap items-center gap-2 border-t px-3 py-2.5" style={{ borderColor: "var(--card-border)" }}>
         <span

@@ -382,6 +382,9 @@ export interface TopAd extends AdCreativeMeta {
   spendCents: number;
   impressions: number;
   clicks: number;
+  /** Clicks on the ad's link. */
+  linkClicks: number;
+  landingPageViews: number;
   /** Click-through rate, 0–1 (Meta's `ctr` is a percentage). */
   ctr: number | null;
   /** Lead actions Meta counted for this ad. */
@@ -844,7 +847,7 @@ export async function fetchTopAds(opts: {
   const r = await graphGet<GraphAdInsightResponse>(
     graphUrl(creds, `act_${encodeURIComponent(creds.account)}/insights`, {
       level: "ad",
-      fields: "ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,ctr,actions,account_currency",
+      fields: "ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,inline_link_clicks,ctr,actions,account_currency",
       time_range: JSON.stringify({ since: opts.since, until: opts.until }),
       time_increment: "all_days",
       sort: "spend_descending",
@@ -880,6 +883,8 @@ export async function fetchTopAds(opts: {
       spendCents,
       impressions: toInt(row.impressions),
       clicks: toInt(row.clicks),
+      linkClicks: toInt(row.inline_link_clicks),
+      landingPageViews: actionCount(row.actions, "landing_page_view"),
       ctr: Number.isFinite(ctrPct) && row.ctr !== undefined ? ctrPct / 100 : null,
       leads,
       cplCents: leads > 0 ? Math.round(spendCents / leads) : null,
@@ -913,7 +918,7 @@ export async function getTopAds(opts: {
   return withSnapshotCache<TopAdsResult>({
     userId: opts.userId,
     source: "meta-top-ads",
-    key: `v7:${opts.rangeKey}:${limit}`,
+    key: `v8:${opts.rangeKey}:${limit}`,
     ttlMs: CACHE_TTL_MS,
     refresh: opts.refresh,
     periodStart: opts.since,
