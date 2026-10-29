@@ -22,6 +22,10 @@ export interface MetaPlatformInsights {
   spendCents: number;
   impressions: number;
   clicks: number;
+  /** Clicks on the ad's link (Meta's "Link clicks") — the basis for CPC. */
+  linkClicks: number;
+  /** Landing page views (pixel loaded after a link click). */
+  landingPageViews: number;
   /** Lead actions Meta counted (pixel / instant-form) — cross-check only. */
   metaLeads: number;
 }
@@ -55,6 +59,7 @@ interface GraphInsightRow {
   spend?: string;
   impressions?: string;
   clicks?: string;
+  inline_link_clicks?: string;
   actions?: GraphAction[];
   publisher_platform?: string;
   account_currency?: string;
@@ -74,7 +79,7 @@ interface GraphResponse {
 }
 
 function emptyPlatform(): MetaPlatformInsights {
-  return { spendCents: 0, impressions: 0, clicks: 0, metaLeads: 0 };
+  return { spendCents: 0, impressions: 0, clicks: 0, linkClicks: 0, landingPageViews: 0, metaLeads: 0 };
 }
 
 function platformKey(raw: string | undefined): MetaPlatformKey {
@@ -240,6 +245,12 @@ function leadsOf(actions: GraphAction[] | undefined): number {
   return n;
 }
 
+function actionCount(actions: GraphAction[] | undefined, type: string): number {
+  let n = 0;
+  for (const a of actions ?? []) if (a.action_type === type) n += toInt(a.value);
+  return n;
+}
+
 /** Live Graph API call (no cache). */
 export async function fetchMetaInsights(range: {
   since: string;
@@ -250,7 +261,7 @@ export async function fetchMetaInsights(range: {
 
   let url: string | undefined = graphUrl(creds, `act_${encodeURIComponent(creds.account)}/insights`, {
     level: "account",
-    fields: "spend,impressions,clicks,actions,account_currency",
+    fields: "spend,impressions,clicks,inline_link_clicks,actions,account_currency",
     breakdowns: "publisher_platform",
     time_range: JSON.stringify({ since: range.since, until: range.until }),
     time_increment: "all_days",
@@ -272,6 +283,8 @@ export async function fetchMetaInsights(range: {
       p.spendCents += toCents(row.spend);
       p.impressions += toInt(row.impressions);
       p.clicks += toInt(row.clicks);
+      p.linkClicks += toInt(row.inline_link_clicks);
+      p.landingPageViews += actionCount(row.actions, "landing_page_view");
       p.metaLeads += leadsOf(row.actions);
       currency = currency ?? row.account_currency ?? null;
     }
@@ -297,7 +310,7 @@ export async function getMetaInsights(opts: {
   return withSnapshotCache<MetaInsightsResult>({
     userId: opts.userId,
     source: SOURCE,
-    key: opts.rangeKey,
+    key: `v2:${opts.rangeKey}`, // v2: link clicks + landing page views
     ttlMs: CACHE_TTL_MS,
     refresh: opts.refresh,
     periodStart: opts.since,

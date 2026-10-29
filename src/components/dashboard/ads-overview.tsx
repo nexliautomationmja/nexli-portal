@@ -47,13 +47,13 @@ function multiple(v: number | null): string {
   return `${v >= 10 ? Math.round(v) : Math.round(v * 10) / 10}×`;
 }
 
-function PlatformIcon({ k }: { k: PlatformRow["key"] }) {
-  if (k === "facebook") return <FacebookLogo size={22} />;
-  if (k === "instagram") return <InstagramLogo size={22} />;
+function PlatformIcon({ k, size = 22 }: { k: PlatformRow["key"]; size?: number }) {
+  if (k === "facebook") return <FacebookLogo size={size} />;
+  if (k === "instagram") return <InstagramLogo size={size} />;
   return (
     <span
-      className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold"
-      style={{ background: "var(--input-bg)", color: "var(--text-muted)", border: "1px solid var(--card-border)" }}
+      className="rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+      style={{ width: size, height: size, background: "var(--input-bg)", color: "var(--text-muted)", border: "1px solid var(--card-border)" }}
       aria-hidden="true"
     >
       {k === "total" ? "Σ" : "M"}
@@ -61,97 +61,116 @@ function PlatformIcon({ k }: { k: PlatformRow["key"] }) {
   );
 }
 
-const COLUMNS: { label: string; get: (r: PlatformRow, cur: string | null) => string }[] = [
-  { label: "Spend", get: (r, c) => money(r.spendCents, c) },
-  { label: "Leads", get: (r) => String(r.leads) },
-  { label: "Cost per lead", get: (r, c) => money(r.cplCents, c) },
-  { label: "Booked calls", get: (r) => String(r.booked) },
-  { label: "Cost per booked call", get: (r, c) => money(r.costPerBookedCents, c) },
-  { label: "Lead → booked", get: (r) => pct(r.bookedRate) },
+function count(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+/** The four numbers Marcel runs the ads on, with the Facebook / Instagram split. */
+const HEADLINES: {
+  label: string;
+  help: string;
+  get: (r: PlatformRow, cur: string | null) => string;
+}[] = [
+  { label: "Cost per click", help: "Spend ÷ link clicks", get: (r, c) => money(r.cpcCents, c) },
+  { label: "Cost per lead", help: "Spend ÷ GoHighLevel leads", get: (r, c) => money(r.cplCents, c) },
+  { label: "Landing page conversion", help: "Leads ÷ landing page views", get: (r) => pct(r.lpConversion) },
+  { label: "Cost per call", help: "Spend ÷ booked calls", get: (r, c) => money(r.costPerBookedCents, c) },
 ];
 
-const GRID = "grid grid-cols-[minmax(140px,1.4fr)_repeat(6,minmax(0,1fr))] gap-3 items-center";
-
-function PlatformTable({ data }: { data: AdsOverviewData }) {
-  const rows = [...data.platforms, data.totals];
+function HeadlineTiles({ data }: { data: AdsOverviewData }) {
+  const split = data.platforms.filter((p) => p.key === "facebook" || p.key === "instagram");
+  const lpByClicks = data.totals.lpBasis === "link_clicks";
   return (
-    <>
-      {/* ≥640px: table */}
-      <div className="hidden sm:block glass-card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <div className="min-w-[720px]">
-            <div
-              className={`${GRID} px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.05em]`}
-              style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--card-border)" }}
-            >
-              <span>Platform</span>
-              {COLUMNS.map((c) => (
-                <span key={c.label} className="text-right">
-                  {c.label}
-                </span>
-              ))}
-            </div>
-            {rows.map((r) => {
-              const isTotal = r.key === "total";
-              return (
-                <div
-                  key={r.key}
-                  className={`${GRID} px-5 py-3.5 text-sm tabular-nums`}
-                  style={{
-                    color: "var(--text-main)",
-                    borderTop: isTotal ? "1px solid var(--card-border)" : undefined,
-                    background: isTotal ? "var(--input-bg)" : undefined,
-                    fontWeight: isTotal ? 700 : 500,
-                  }}
-                >
-                  <span className="flex items-center gap-2.5 min-w-0">
-                    <PlatformIcon k={r.key} />
-                    <span className="truncate">{r.label}</span>
-                  </span>
-                  {COLUMNS.map((c) => (
-                    <span key={c.label} className="text-right">
-                      {c.get(r, data.currency)}
-                    </span>
-                  ))}
-                </div>
-              );
-            })}
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {HEADLINES.map((h) => (
+        <div key={h.label} className="glass-card p-4 sm:p-5 flex flex-col">
+          <p className="stat-label">{h.label}</p>
+          <p className="stat-value mt-1 tabular-nums">{h.get(data.totals, data.currency)}</p>
+          <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
+            {h.label === "Landing page conversion" && lpByClicks ? "Leads ÷ link clicks (no page views reported)" : h.help}
+          </p>
+          <div className="mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t" style={{ borderColor: "var(--card-border)" }}>
+            {split.map((p) => (
+              <span key={p.key} className="inline-flex items-center gap-1.5 text-xs font-semibold tabular-nums" style={{ color: "var(--text-main)" }}>
+                <PlatformIcon k={p.key} size={14} />
+                {h.get(p, data.currency)}
+              </span>
+            ))}
           </div>
         </div>
-      </div>
-
-      {/* <640px: stacked cards */}
-      <div className="sm:hidden space-y-3">
-        {rows.map((r) => (
-          <div
-            key={r.key}
-            className="glass-card p-4"
-            style={r.key === "total" ? { background: "var(--input-bg)" } : undefined}
-          >
-            <div className="flex items-center gap-2.5 mb-3">
-              <PlatformIcon k={r.key} />
-              <span className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
-                {r.label}
-              </span>
-            </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-              {COLUMNS.map((c) => (
-                <div key={c.label}>
-                  <dt className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                    {c.label}
-                  </dt>
-                  <dd className="text-sm font-semibold tabular-nums" style={{ color: "var(--text-main)" }}>
-                    {c.get(r, data.currency)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        ))}
-      </div>
-    </>
+      ))}
+    </div>
   );
 }
+
+/** Every metric, as rows; platforms as columns (fits phones as well as desktops). */
+const DETAIL_ROWS: { label: string; get: (r: PlatformRow, cur: string | null) => string; strong?: boolean }[] = [
+  { label: "Spend", get: (r, c) => money(r.spendCents, c) },
+  { label: "Impressions", get: (r) => count(r.impressions) },
+  { label: "CPM (per 1,000 impressions)", get: (r, c) => money(r.cpmCents, c) },
+  { label: "Link clicks", get: (r) => count(r.linkClicks) },
+  { label: "Click-through rate", get: (r) => pct(r.ctr) },
+  { label: "Cost per click", get: (r, c) => money(r.cpcCents, c), strong: true },
+  { label: "Landing page views", get: (r) => count(r.landingPageViews) },
+  { label: "Landing page conversion", get: (r) => pct(r.lpConversion), strong: true },
+  { label: "Leads (GoHighLevel)", get: (r) => count(r.leads) },
+  { label: "Cost per lead", get: (r, c) => money(r.cplCents, c), strong: true },
+  { label: "Booked calls", get: (r) => count(r.booked) },
+  { label: "Cost per call", get: (r, c) => money(r.costPerBookedCents, c), strong: true },
+  { label: "Lead → booked call", get: (r) => pct(r.bookedRate) },
+  { label: "Leads Meta counted", get: (r) => count(r.metaLeads) },
+];
+
+function DetailTable({ data }: { data: AdsOverviewData }) {
+  const cols = [...data.platforms, data.totals];
+  return (
+    <div className="glass-card p-0 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-sm tabular-nums">
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
+              <th className="text-left px-4 sm:px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.05em]" style={{ color: "var(--text-muted)" }}>
+                Metric
+              </th>
+              {cols.map((c) => (
+                <th
+                  key={c.key}
+                  className="text-right px-4 sm:px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.05em]"
+                  style={{ color: "var(--text-muted)", background: c.key === "total" ? "var(--input-bg)" : undefined }}
+                >
+                  <span className="inline-flex items-center gap-1.5 justify-end">
+                    <PlatformIcon k={c.key} size={16} />
+                    {c.label}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DETAIL_ROWS.map((r) => (
+              <tr key={r.label} style={{ borderTop: "1px solid var(--card-border)" }}>
+                <td className={`px-4 sm:px-5 py-2.5 ${r.strong ? "font-bold" : ""}`} style={{ color: r.strong ? "var(--text-main)" : "var(--text-muted)" }}>
+                  {r.label}
+                </td>
+                {cols.map((c) => (
+                  <td
+                    key={c.key}
+                    className={`px-4 sm:px-5 py-2.5 text-right ${r.strong || c.key === "total" ? "font-bold" : "font-medium"}`}
+                    style={{ color: "var(--text-main)", background: c.key === "total" ? "var(--input-bg)" : undefined }}
+                  >
+                    {r.get(c, data.currency)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const EXTEND_KEY = "nexli.adsOverview.extended";
 
 function BusinessTiles({ data }: { data: AdsOverviewData }) {
   const b = data.business;
@@ -283,6 +302,23 @@ export function AdsOverview() {
   const [data, setData] = useState<Response | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Remember the reader's choice (per browser; harmless if storage is blocked).
+  // Only used once data has loaded, which never happens in the server render.
+  const [extended, setExtended] = useState(() => {
+    try {
+      return typeof window !== "undefined" && localStorage.getItem(EXTEND_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleExtended = () => {
+    setExtended((v) => {
+      try {
+        localStorage.setItem(EXTEND_KEY, v ? "0" : "1");
+      } catch {}
+      return !v;
+    });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -356,7 +392,32 @@ export function AdsOverview() {
             </Note>
           )}
           {full.leadsError && <Note tone="warn">{full.leadsError}</Note>}
-          <PlatformTable data={full} />
+          <HeadlineTiles data={full} />
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={toggleExtended}
+              aria-expanded={extended}
+              className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold transition-colors hover:bg-[var(--input-bg)]"
+              style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
+            >
+              {extended ? "Collapse the view" : "Extend the view"}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform ${extended ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+          </div>
           {full.unattributedLeads > 0 && (
             <Note tone="warn">
               {full.unattributedLeads} Meta lead{full.unattributedLeads === 1 ? "" : "s"} couldn’t be
@@ -368,7 +429,12 @@ export function AdsOverview() {
               .
             </Note>
           )}
-          <BusinessTiles data={full} />
+          {extended && (
+            <div className="space-y-3">
+              <DetailTable data={full} />
+              <BusinessTiles data={full} />
+            </div>
+          )}
           {full.truncated && (
             <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               Lead counts are capped at the first 1,000 GoHighLevel contacts in this period.

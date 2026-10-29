@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users, invoices, analyticsSnapshots } from "@/db/schema";
 import { and, desc, eq, gte, lte, gt, isNotNull, sql } from "drizzle-orm";
-import { getMetaInsights, type MetaPlatformKey } from "@/lib/meta-ads";
+import { getMetaInsights, type MetaPlatformInsights, type MetaPlatformKey } from "@/lib/meta-ads";
 import { scanAdLeads } from "@/lib/ad-leads";
 import { getBookOfBusiness, adSpendOf } from "@/lib/book-of-business";
 import { getNexliAdminId } from "@/lib/foundation-project";
@@ -25,7 +25,7 @@ import { DRS_PRICING } from "@/lib/drs-pricing";
  */
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const SOURCE = "ads-overview";
+const SOURCE = "ads-overview-v2"; // v2: CPC + landing page conversion
 
 type Range = "7" | "30" | "90";
 
@@ -43,6 +43,19 @@ export interface PlatformRow {
   bookedRate: number | null;
   /** Leads Meta itself counted (pixel / instant form) — cross-check. */
   metaLeads: number;
+  impressions: number;
+  linkClicks: number;
+  landingPageViews: number;
+  /** Cost per link click, cents; null when no link clicks. */
+  cpcCents: number | null;
+  /** Cost per 1,000 impressions, cents. */
+  cpmCents: number | null;
+  /** Link clicks ÷ impressions, 0–1. */
+  ctr: number | null;
+  /** Leads ÷ landing page views, 0–1 (falls back to link clicks when Meta reports no page views). */
+  lpConversion: number | null;
+  /** Which denominator lpConversion used. */
+  lpBasis: "landing_page_views" | "link_clicks" | null;
 }
 
 export interface AdsOverviewData {
@@ -88,26 +101,39 @@ function windowFor(range: Range): { since: Date; until: Date } {
 
 const div = (a: number, b: number): number | null => (b > 0 ? a / b : null);
 
+type MetaNumbers = Omit<MetaPlatformInsights, "clicks">;
+
+const ZERO_META: MetaNumbers = { spendCents: 0, impressions: 0, linkClicks: 0, landingPageViews: 0, metaLeads: 0 };
+
+const cents = (v: number | null) => (v === null ? null : Math.round(v));
+
 function row(
   key: PlatformRow["key"],
   label: string,
-  spendCents: number,
+  m: MetaNumbers,
   leads: number,
-  booked: number,
-  metaLeads: number
+  booked: number
 ): PlatformRow {
-  const cpl = div(spendCents, leads);
-  const cpb = div(spendCents, booked);
+  const lpBasis = m.landingPageViews > 0 ? "landing_page_views" : m.linkClicks > 0 ? "link_clicks" : null;
+  const lpDenominator = lpBasis === "landing_page_views" ? m.landingPageViews : m.linkClicks;
   return {
     key,
     label,
-    spendCents,
+    spendCents: m.spendCents,
     leads,
     booked,
-    cplCents: cpl === null ? null : Math.round(cpl),
-    costPerBookedCents: cpb === null ? null : Math.round(cpb),
+    cplCents: cents(div(m.spendCents, leads)),
+    costPerBookedCents: cents(div(m.spendCents, booked)),
     bookedRate: div(booked, leads),
-    metaLeads,
+    metaLeads: m.metaLeads,
+    impressions: m.impressions,
+    linkClicks: m.linkClicks,
+    landingPageViews: m.landingPageViews,
+    cpcCents: cents(div(m.spendCents, m.linkClicks)),
+    cpmCents: cents(div(m.spendCents * 1000, m.impressions)),
+    ctr: div(m.linkClicks, m.impressions),
+    lpConversion: lpBasis ? div(leads, lpDenominator) : null,
+    lpBasis,
   };
 }
 
@@ -252,29 +278,34 @@ export async function GET(req: NextRequest) {
   }
 
   const insights = "platforms" in meta ? meta : null;
-  const spend = (k: MetaPlatformKey) => insights?.platforms[k].spendCents ?? 0;
-  const metaLeads = (k: MetaPlatformKey) => insights?.platforms[k].metaLeads ?? 0;
+  const m = (k: MetaPlatformKey): MetaNumbers => insights?.platforms[k] ?? ZERO_META;
+  const spend = (k: MetaPlatformKey) => m(k).spendCents;
 
   const platforms: PlatformRow[] = [
-    row("facebook", "Facebook", spend("facebook"), leadCounts.facebook.leads, leadCounts.facebook.booked, metaLeads("facebook")),
-    row("instagram", "Instagram", spend("instagram"), leadCounts.instagram.leads, leadCounts.instagram.booked, metaLeads("instagram")),
+    row("facebook", "Facebook", m("facebook"), leadCounts.facebook.leads, leadCounts.facebook.booked),
+    row("instagram", "Instagram", m("instagram"), leadCounts.instagram.leads, leadCounts.instagram.booked),
   ];
   if (spend("other") > 0 || leadCounts.other.leads > 0) {
-    platforms.push(
-      row("other", "Other Meta", spend("other"), leadCounts.other.leads, leadCounts.other.booked, metaLeads("other"))
-    );
+    platforms.push(row("other", "Other Meta", m("other"), leadCounts.other.leads, leadCounts.other.booked));
   }
 
-  const totalSpend = spend("facebook") + spend("instagram") + spend("other");
+  const keys: MetaPlatformKey[] = ["facebook", "instagram", "other"];
+  const sum = (f: keyof MetaNumbers) => keys.reduce((t, k) => t + m(k)[f], 0);
+  const totalSpend = sum("spendCents");
   const totalLeads = Object.values(leadCounts).reduce((s, b) => s + b.leads, 0);
   const totalBooked = Object.values(leadCounts).reduce((s, b) => s + b.booked, 0);
   const totals = row(
     "total",
     "Total",
-    totalSpend,
+    {
+      spendCents: totalSpend,
+      impressions: sum("impressions"),
+      linkClicks: sum("linkClicks"),
+      landingPageViews: sum("landingPageViews"),
+      metaLeads: sum("metaLeads"),
+    },
     totalLeads,
-    totalBooked,
-    metaLeads("facebook") + metaLeads("instagram") + metaLeads("other")
+    totalBooked
   );
 
   const cac = div(totalSpend, newClients);
