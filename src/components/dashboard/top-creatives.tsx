@@ -644,7 +644,7 @@ export function TopCreatives({ range }: { range: Range }) {
               {data.leadsError}
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-3 items-start">
             {creatives.map((c) => (
               <CreativeCard key={c.adId} c={c} platform={platform} currency={data?.currency} leadsError={data?.leadsError} />
             ))}
