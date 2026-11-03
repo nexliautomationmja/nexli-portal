@@ -18,6 +18,9 @@
     "@fal-ai/client": "^1.9.4",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@neondatabase/serverless": "^1.0.2",
+    "@remotion/google-fonts": "4.0.540",
+    "@remotion/lambda": "4.0.540",
+    "@remotion/player": "4.0.540",
     "@supabase/supabase-js": "^2.93.3",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.1",
@@ -29,11 +32,13 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
+    "remotion": "4.0.540",
     "resend": "^6.9.3",
     "sharp": "^0.34.5",
     "stripe": "^21.0.1"
   },
   "devDependencies": {
+    "@remotion/cli": "4.0.540",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",

@@ -25,10 +25,12 @@ import { ScriptCard } from "@/components/creative-studio/script-card";
 import { ClipsCard } from "@/components/creative-studio/clips-card";
 import { FinalCutCard, uploadFinalCut } from "@/components/creative-studio/final-cut-card";
 import { CutCard } from "@/components/creative-studio/cut-card";
+import { EditCard } from "@/components/creative-studio/edit-card";
 
-type Stage = "direction" | "frame" | "write" | "review" | "locked" | "cut";
+type Stage = "direction" | "frame" | "write" | "review" | "locked" | "cut" | "edit";
 
 function stageOf(d: ProjectDetail): Stage {
+  if (d.edits.length > 0) return "edit";
   if (d.project.status === "clips_ready") return "cut";
   const locked = ["approved", "rendering"].includes(d.project.status);
   if (locked) return "locked";
@@ -62,6 +64,10 @@ const COMPOSER: Record<Stage, { placeholder: string; hint: string }> = {
   cut: {
     placeholder: "Tighter where she says “…” · looser after the hook · slow it to 1.1×",
     hint: "Enter → re-cut with your note · attach a video to upload your own cut",
+  },
+  edit: {
+    placeholder: "Change the edit, e.g. “shorter title” · “qualifier at 0:03” · “caption should say CALENDAR”",
+    hint: "Enter → Claude revises the edit · pick another style on the card · trim clips with ✂ on the auto-cut",
   },
 };
 
@@ -137,7 +143,8 @@ export function StudioThread({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!stage) return;
     if (lastStage.current && lastStage.current !== stage) {
-      const id = stage === "review" ? "stage-review" : stage === "locked" ? "stage-clips" : stage === "cut" ? "stage-cut" : "stage-frame";
+      const id =
+        stage === "review" ? "stage-review" : stage === "locked" ? "stage-clips" : stage === "cut" ? "stage-cut" : stage === "edit" ? "stage-edit" : "stage-frame";
       setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
     }
     lastStage.current = stage;
@@ -155,8 +162,8 @@ export function StudioThread({ projectId }: { projectId: string }) {
 
   const p = detail.project;
   const status = STATUS_PILL[p.status] ?? STATUS_PILL.draft;
-  // Approved, rendering, or rendered (auto-cut stage): the script is locked.
-  const locked = stage === "locked" || stage === "cut";
+  // Approved, rendering, rendered (auto-cut) or editing: the script is locked.
+  const locked = stage === "locked" || stage === "cut" || stage === "edit";
 
   async function changeFormat(f: CreativeFormat) {
     setFormat(f);
@@ -216,6 +223,14 @@ export function StudioThread({ projectId }: { projectId: string }) {
       if (st === "review") {
         setWorking({ label: "Claude is revising the script…", detail: `“${text}”`, accent: "violet" });
         const r = await send(api(`${p.id}/script/revise`), "POST", { note: text });
+        setWorking(null);
+        if (!r.ok) throw new Error(r.error);
+        apply(r.data);
+        return true;
+      }
+      if (st === "edit") {
+        setWorking({ label: "Claude is changing the edit…", detail: `“${text}”`, accent: "cyan" });
+        const r = await send(api(`${p.id}/edit/revise`), "POST", { note: text });
         setWorking(null);
         if (!r.ok) throw new Error(r.error);
         apply(r.data);
@@ -336,6 +351,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
           {locked && <ClipsCard detail={detail} klingNotice={klingNotice} onChange={apply} onError={fail} />}
           {locked && (stage === "cut" || detail.cuts.length > 0) && <CutCard detail={detail} summary={cutSummary} onChange={apply} onError={fail} />}
           {locked && <FinalCutCard detail={detail} onChange={apply} onError={fail} />}
+          {locked && detail.finalCuts.length > 0 && <EditCard detail={detail} onChange={apply} onError={fail} />}
 
           {working && <ThinkingCard accent={working.accent} label={working.label} detail={working.detail} />}
           {error && <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>}

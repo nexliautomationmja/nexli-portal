@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   // binary from @ffmpeg-installer with the cut routes.
   outputFileTracingIncludes: {
     "/api/dashboard/creative-studio/projects/[projectId]/cut/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
+    "/api/dashboard/creative-studio/projects/[projectId]/edit/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
   },
 };
 

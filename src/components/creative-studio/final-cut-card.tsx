@@ -105,7 +105,7 @@ export function FinalCutCard({
       </button>
       <input ref={input} type="file" accept="video/mp4,video/quicktime" hidden onChange={(e) => upload(e.target.files?.[0])} />
       <p className="mt-3 text-[11px] text-neutral-500">
-        Approving the auto-cut puts it here automatically. You can also drop your own edit. The Remotion edit (captions, title and graphics from your editing rulebook) runs on the final cut once Remotion is connected.
+        Approving the auto-cut puts it here automatically. You can also drop your own edit. The Remotion edit below (captions, title and graphics from your editing rulebook) runs on the newest one.
       </p>
     </AssistantCard>
   );

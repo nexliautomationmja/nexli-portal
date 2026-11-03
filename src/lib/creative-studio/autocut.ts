@@ -123,6 +123,25 @@ export async function probeDuration(file: string): Promise<number> {
   return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : 0;
 }
 
+/** Resolution, frame rate, duration and audio presence of a delivered file (ffmpeg header). */
+export async function probeSpecs(file: string): Promise<{ width: number | null; height: number | null; fps: number | null; durationS: number | null; hasAudio: boolean }> {
+  const bin = await ffmpegBinary();
+  const stderr: string = await new Promise((resolve) => {
+    execFile(bin, ["-hide_banner", "-i", file], { timeout: 30_000 }, (_err, _o, se) => resolve(String(se)));
+  });
+  const d = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  const video = stderr.split("\n").find((l) => /Stream #.*Video:/.test(l)) ?? "";
+  const size = video.match(/,\s*(\d{2,5})x(\d{2,5})/);
+  const fps = video.match(/,\s*(\d+(?:\.\d+)?)\s*fps/);
+  return {
+    width: size ? Number(size[1]) : null,
+    height: size ? Number(size[2]) : null,
+    fps: fps ? Number(fps[1]) : null,
+    durationS: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : null,
+    hasAudio: /Stream #.*Audio:/.test(stderr),
+  };
+}
+
 export async function tempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`));
 }

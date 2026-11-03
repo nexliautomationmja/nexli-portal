@@ -4,6 +4,7 @@ import {
   creativeAssets,
   creativeClips,
   creativeCuts,
+  creativeEdits,
   creativeProjects,
   type ClipFields,
   type ManusActivitySnapshot,
@@ -55,15 +56,16 @@ export async function clipsOf(projectId: string) {
 
 /** Everything the project page needs, with signed frame URLs. */
 export async function projectDetail(project: Project) {
-  const [frames, clips, extras, cuts] = await Promise.all([
+  const [frames, clips, extras, cuts, edits] = await Promise.all([
     framesOf(project.id),
     clipsOf(project.id),
     db
       .select()
       .from(creativeAssets)
-      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut"])))
+      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut", "render"])))
       .orderBy(asc(creativeAssets.createdAt)),
     db.select().from(creativeCuts).where(eq(creativeCuts.projectId, project.id)).orderBy(asc(creativeCuts.version)),
+    db.select().from(creativeEdits).where(eq(creativeEdits.projectId, project.id)).orderBy(asc(creativeEdits.version)),
   ]);
   const cutAssetIds = cuts.map((c) => c.assetId).filter((v): v is string => Boolean(v));
   const cutAssets = cutAssetIds.length ? await db.select().from(creativeAssets).where(inArray(creativeAssets.id, cutAssetIds)) : [];
@@ -71,16 +73,30 @@ export async function projectDetail(project: Project) {
   const options = extras.filter((a) => a.kind === "frame_option");
   const manusTasks = extras.filter((a) => a.kind === "manus_task");
   const finalCuts = extras.filter((a) => a.kind === "final_cut");
+  const renders = new Map(extras.filter((a) => a.kind === "render").map((a) => [a.id, a.storagePath]));
   const videoIds = clips.map((c) => c.videoAssetId).filter((v): v is string => Boolean(v));
   const videos = videoIds.length
     ? await db.select().from(creativeAssets).where(inArray(creativeAssets.id, videoIds))
     : [];
   const videoPath = new Map(videos.map((v) => [v.id, v.storagePath]));
   const signed = await signPaths(
-    [...frames, ...videos, ...options, ...finalCuts, ...cutAssets].map((a) => a.storagePath),
+    [...frames, ...videos, ...options, ...finalCuts, ...cutAssets, ...extras.filter((a) => a.kind === "render")].map((a) => a.storagePath),
     6 * 3600
   );
   const url = (path: string | null) => (path ? signed.get(path) ?? null : null);
+  // Renders too big to copy into storage stay in the Lambda bucket (signed there).
+  const s3Outputs = new Map<string, string>();
+  const onS3 = edits.filter((e) => e.status === "done" && !e.outputAssetId && e.outputKey && e.renderBucket);
+  if (onS3.length) {
+    const { presignOutput } = await import("@/lib/creative-studio/remotion");
+    await Promise.all(
+      onS3.map(async (e) => {
+        const u = await presignOutput(e.renderBucket!, e.outputKey!).catch(() => null);
+        if (u) s3Outputs.set(e.id, u);
+      })
+    );
+  }
+  const latestEditId = edits[edits.length - 1]?.id;
   return {
     project: {
       id: project.id,
@@ -149,6 +165,23 @@ export async function projectDetail(project: Project) {
       })),
       url: c.assetId ? url(cutPath.get(c.assetId) ?? null) : null,
       createdAt: c.createdAt.toISOString(),
+    })),
+    edits: edits.map((e) => ({
+      id: e.id,
+      version: e.version,
+      style: e.style,
+      status: e.status,
+      progress: e.progress,
+      finalCutId: e.finalCutAssetId,
+      durationS: e.props.durationS,
+      // The full layout only for the newest version (VSL word lists are long).
+      props: e.id === latestEditId ? e.props : null,
+      notes: e.notes,
+      note: e.note,
+      error: e.error,
+      specs: e.specs ?? null,
+      outputUrl: e.outputAssetId ? url(renders.get(e.outputAssetId) ?? null) : s3Outputs.get(e.id) ?? null,
+      createdAt: e.createdAt.toISOString(),
     })),
     clips: clips.map((c) => ({
       id: c.id,

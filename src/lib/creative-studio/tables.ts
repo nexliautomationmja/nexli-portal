@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { sql } from "drizzle-orm";
 import { integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "@/db/schema";
+import type { CaptionWord, EditOverlays, EditStyle } from "@/remotion/types";
 
 /**
  * Creative Studio tables (admin-only tab: frame → script → Kling clips →
@@ -106,7 +107,7 @@ export const creativeAssets = pgTable("creative_assets", {
   projectId: uuid("project_id").references(() => creativeProjects.id, { onDelete: "cascade" }),
   /** Set on workspace-wide assets. */
   ownerId: uuid("owner_id"),
-  /** frame | frame_option | manus_task | reference | clip | final_cut | render */
+  /** frame | frame_option | manus_task | reference | clip | cut_part | rough_cut | final_cut | render */
   kind: text("kind").notNull(),
   storagePath: text("storage_path"),
   mime: text("mime"),
@@ -241,6 +242,54 @@ export const creativeCuts = pgTable("creative_cuts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/** What one edit version renders (the Remotion props minus the signed video URL). */
+export interface EditPropsStored {
+  format: CreativeFormat;
+  durationS: number;
+  words: CaptionWord[];
+  overlays: EditOverlays;
+}
+
+/** Specs read off the delivered mp4 (rulebook § 7 gate 5). */
+export interface RenderSpecs {
+  width: number | null;
+  height: number | null;
+  fps: number | null;
+  durationS: number | null;
+  expectedS: number;
+  hasAudio: boolean;
+  ok: boolean;
+}
+
+/** One Remotion edit version: style + captions + overlays, and its Lambda render. */
+export const creativeEdits = pgTable("creative_edits", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => creativeProjects.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  style: text("style").$type<EditStyle>().notNull(),
+  /** The final_cut asset this edit sits on. */
+  finalCutAssetId: uuid("final_cut_asset_id").notNull(),
+  props: jsonb("props").$type<EditPropsStored>().notNull(),
+  /** Claude's notes for this version (judgment calls, what changed). */
+  notes: text("notes"),
+  /** The user's change request that produced this version (null for a fresh style). */
+  note: text("note"),
+  /** draft | rendering | done | failed */
+  status: text("status").notNull().default("draft"),
+  renderId: text("render_id"),
+  renderBucket: text("render_bucket"),
+  progress: integer("progress").notNull().default(0),
+  outputAssetId: uuid("output_asset_id"),
+  /** S3 key of the render when it was too big to copy into storage. */
+  outputKey: text("output_key"),
+  specs: jsonb("specs").$type<RenderSpecs | null>(),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 /**
  * The workspace's Kling connection: the portal is its own MCP client of
  * Kling's MCP server (OAuth 2.1 + PKCE, dynamic client registration), so
@@ -363,6 +412,31 @@ export function ensureCreativeStudioTables(): Promise<void> {
       `);
       await db.execute(
         sql`CREATE INDEX IF NOT EXISTS "creative_cuts_project_idx" ON "creative_cuts" ("project_id", "version")`
+      );
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_edits" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "project_id" uuid NOT NULL REFERENCES "creative_projects"("id") ON DELETE CASCADE,
+          "version" integer NOT NULL,
+          "style" text NOT NULL,
+          "final_cut_asset_id" uuid NOT NULL,
+          "props" jsonb NOT NULL,
+          "notes" text,
+          "note" text,
+          "status" text NOT NULL DEFAULT 'draft',
+          "render_id" text,
+          "render_bucket" text,
+          "progress" integer NOT NULL DEFAULT 0,
+          "output_asset_id" uuid,
+          "output_key" text,
+          "specs" jsonb,
+          "error" text,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(
+        sql`CREATE INDEX IF NOT EXISTS "creative_edits_project_idx" ON "creative_edits" ("project_id", "version")`
       );
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_kling_connections" (

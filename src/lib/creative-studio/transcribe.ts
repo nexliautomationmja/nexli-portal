@@ -7,15 +7,41 @@ import type { ClipTranscript, TranscriptWord } from "@/lib/creative-studio/table
  * builds its cut points from these.
  */
 export async function transcribeClip(video: Buffer, version: number): Promise<ClipTranscript> {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) throw new Error("ELEVENLABS_API_KEY isn't set, so clips can't be transcribed for the auto-cut.");
+  const form = scribeForm();
+  form.append("file", new Blob([new Uint8Array(video)], { type: "video/mp4" }), "clip.mp4");
+  return toTranscript(await scribe(form), version);
+}
+
+/**
+ * Word timings for a whole uploaded cut. Scribe fetches it straight from the
+ * signed URL (no download through the function); if it can't, the file is
+ * sent the same way as a clip.
+ */
+export async function transcribeUrl(url: string, fallback: () => Promise<Buffer>): Promise<ClipTranscript> {
+  const form = scribeForm();
+  form.append("cloud_storage_url", url);
+  try {
+    return toTranscript(await scribe(form), 1);
+  } catch (err) {
+    console.warn("[creative-studio] Scribe by URL failed, sending the file:", err instanceof Error ? err.message : err);
+    return transcribeClip(await fallback(), 1);
+  }
+}
+
+function scribeForm(): FormData {
   const form = new FormData();
   form.append("model_id", "scribe_v1");
   form.append("timestamps_granularity", "word");
   form.append("tag_audio_events", "false");
   form.append("language_code", "en");
-  form.append("file", new Blob([new Uint8Array(video)], { type: "video/mp4" }), "clip.mp4");
+  return form;
+}
 
+type ScribeResponse = { text?: string; words?: { text?: string; start?: number; end?: number; type?: string }[] };
+
+async function scribe(form: FormData): Promise<ScribeResponse> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw new Error("ELEVENLABS_API_KEY isn't set, so videos can't be transcribed.");
   const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
     method: "POST",
     headers: { "xi-api-key": apiKey },
@@ -25,10 +51,10 @@ export async function transcribeClip(video: Buffer, version: number): Promise<Cl
     const detail = await res.text().catch(() => "");
     throw new Error(`Speech-to-text failed (${res.status}): ${detail.slice(0, 200)}`);
   }
-  const data = (await res.json()) as {
-    text?: string;
-    words?: { text?: string; start?: number; end?: number; type?: string }[];
-  };
+  return (await res.json()) as ScribeResponse;
+}
+
+function toTranscript(data: ScribeResponse, version: number): ClipTranscript {
   const words: TranscriptWord[] = (data.words ?? [])
     .filter((w) => w.type === "word" && typeof w.start === "number" && typeof w.end === "number" && (w.text ?? "").trim())
     .map((w) => ({ text: (w.text ?? "").trim(), start: w.start!, end: Math.max(w.end!, w.start!) }));
