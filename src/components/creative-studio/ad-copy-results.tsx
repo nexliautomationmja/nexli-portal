@@ -65,7 +65,7 @@ export function AdCopyResults({
         e.stopPropagation();
         void copyText(k, value);
       }}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${copied === k ? "bg-emerald-500/20 text-emerald-200" : "bg-white/10 text-white hover:bg-violet-600"}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${copied === k ? "bg-emerald-500/20 text-emerald-200" : "bg-white/10 text-white hover:bg-lime-400 hover:text-[#0a0f1c]"}`}
     >
       {copied === k ? "✓ Copied" : (
         <>
@@ -142,7 +142,7 @@ export function AdCopyResults({
                   setExpanded(false);
                 }}
                 onKeyDown={(e) => e.key === "Enter" && setPick({ ...sel, text: i })}
-                className={`cursor-pointer rounded-xl border p-3 transition ${active ? "border-violet-400/60 bg-violet-500/10" : "border-white/10 bg-white/[0.03] hover:border-violet-400/30"}`}
+                className={`cursor-pointer rounded-xl border p-3 transition ${active ? "border-lime-300/60 bg-lime-400/10 shadow-lg shadow-lime-500/10" : "border-white/10 bg-white/[0.03] hover:border-lime-300/30"}`}
               >
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-white">Version {i + 1}</span>
@@ -181,7 +181,7 @@ export function AdCopyResults({
               tabIndex={0}
               onClick={() => setPick({ ...sel, headline: i })}
               onKeyDown={(e) => e.key === "Enter" && setPick({ ...sel, headline: i })}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 ${i === sel.headline ? "border-violet-400/60 bg-violet-500/10" : "border-white/10 bg-white/[0.03] hover:border-violet-400/30"}`}
+              className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 ${i === sel.headline ? "border-lime-300/60 bg-lime-400/10 shadow-lg shadow-lime-500/10" : "border-white/10 bg-white/[0.03] hover:border-lime-300/30"}`}
             >
               <span className="min-w-0 flex-1 text-[13px] font-semibold text-white">{h}</span>
               <span className="text-[10px] text-neutral-500" style={NUM_FONT}>
@@ -220,7 +220,7 @@ export function AdCopyResults({
               setNote("");
             }
           }}
-          className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-1.5 pl-3 focus-within:border-violet-400/50"
+          className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-1.5 pl-3 focus-within:border-lime-300/50"
         >
           <input
             value={note}
@@ -232,7 +232,7 @@ export function AdCopyResults({
           <button
             type="submit"
             disabled={!note.trim() || busy}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-lime-400 text-[#0a0f1c] hover:bg-lime-300 disabled:opacity-40"
             aria-label="Change the copy"
           >
             <SvgIcon d={SP.arrowUp} size={15} />

@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import { CTA_CLASSES } from "@/components/launch-pad";
 import { api, send } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, ThinkingCard, UserBubble } from "@/components/creative-studio/canvas";
 import { AdCopyResults } from "@/components/creative-studio/ad-copy-results";
+import { META_LIME, MetaLogo } from "@/components/creative-studio/meta";
 
 /**
  * Meta ad copy written from the finished video: 4 primary texts (mid-length,
@@ -53,13 +53,30 @@ export function AdCopyCard({
           <UserBubble key={c.id}>{c.note}</UserBubble>
         ))}
 
-      <AssistantCard id="stage-copy" accent="violet" icon={SP.script} title="Meta ad copy" right={copy ? <Chip>v{copy.version}</Chip> : null}>
+      <AssistantCard
+        id="stage-copy"
+        accent="lime"
+        icon={SP.script}
+        title="Meta Ad Copy"
+        right={
+          <span className="flex items-center gap-2">
+            <MetaLogo className="h-auto w-[18px]" />
+            {copy && <Chip>v{copy.version}</Chip>}
+          </span>
+        }
+      >
         {!copy ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-md text-sm text-neutral-300">
               Ad copy written from this video: 4 primary texts (mid-length, spaced out with emojis, each with a different hook) and 4 headlines, plus the description and button.
             </p>
-            <button type="button" onClick={() => void write({})} disabled={Boolean(busy)} className={`${CTA_CLASSES} disabled:opacity-50`}>
+            <button
+              type="button"
+              onClick={() => void write({})}
+              disabled={Boolean(busy)}
+              className="rounded-full px-5 py-2.5 text-sm font-bold text-[#0a0f1c] shadow-lg shadow-lime-500/30 transition hover:brightness-110 disabled:opacity-50"
+              style={{ background: META_LIME }}
+            >
               Write the ad copy
             </button>
           </div>
@@ -77,7 +94,7 @@ export function AdCopyCard({
         )}
       </AssistantCard>
 
-      {busy && <ThinkingCard accent="violet" label={busy} detail="Following your copy rules: no guarantees, “investment” never “price”, and only the numbers the video uses." />}
+      {busy && <ThinkingCard accent="lime" label={busy} detail="Following your copy rules: no guarantees, “investment” never “price”, and only the numbers the video uses." />}
     </div>
   );
 }

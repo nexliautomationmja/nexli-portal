@@ -9,6 +9,7 @@ import { uploadFrameFile } from "@/components/creative-studio/upload";
 import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { Composer, type ComposerSubmit } from "@/components/creative-studio/composer";
 import { BatchPlanCard, type BatchPlan } from "@/components/creative-studio/batch-plan-card";
+import { META_LIME, MetaChip, MetaLogo } from "@/components/creative-studio/meta";
 import { assignFrames, BATCH_MAX } from "@/lib/creative-studio/batch-shared";
 
 interface ProjectRow {
@@ -347,31 +348,32 @@ export function StudioHome() {
   );
 }
 
-/** The Ad copy tool, shown on the studio home so it's easy to find. */
+/** Meta Ad Copy, shown on the studio home so it's easy to find (lime, like the nexli.net Meta chip). */
 function AdCopyFeature() {
   return (
     <Link
       href="/dashboard/creative-studio/ad-copy"
-      className="lp-card group relative mt-12 block overflow-hidden rounded-3xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.12] via-[#0b1220] to-fuchsia-500/[0.07] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-400/50 hover:shadow-2xl hover:shadow-violet-600/20 sm:p-7"
+      className="lp-card group relative mt-12 block overflow-hidden rounded-3xl border border-lime-300/20 bg-gradient-to-br from-lime-400/[0.10] via-[#0b1220] to-emerald-500/[0.06] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-lime-300/50 hover:shadow-2xl hover:shadow-lime-500/15 sm:p-7"
       style={{ animationDelay: "0.2s" }}
     >
-      <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-64 w-64 rounded-full bg-violet-600/25 blur-3xl transition-opacity group-hover:opacity-100" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-32 h-56 w-56 rounded-full bg-fuchsia-500/15 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-64 w-64 rounded-full bg-lime-400/20 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-32 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
       <div className="relative grid items-center gap-6 sm:grid-cols-[1fr_auto]">
         <div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/40 bg-violet-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-violet-200">
-            <SvgIcon d={SP.pen} size={12} /> Ad copy
-            <span className="rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 px-1.5 py-px text-[8px] tracking-wider text-white">New</span>
-          </span>
-          <h3 className="mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl" style={SYNE}>
-            Drop in any video.{" "}
-            <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">Get the copy.</span>
+          <MetaChip>Meta Ad Copy</MetaChip>
+          <h3 className="mt-4 text-2xl font-bold tracking-tight text-white sm:text-3xl" style={SYNE}>
+            Drop in your creatives.{" "}
+            <span className="bg-gradient-to-r from-lime-200 via-lime-300 to-lime-400 bg-clip-text text-transparent">Get the copy.</span>
           </h3>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-neutral-400">
-            I listen to it, watch it, and write <b className="text-white">4 primary texts</b> and <b className="text-white">4 headlines</b> for Meta, in your style. Images work too.
+            One creative or <b className="text-white">up to 20 at once</b>. I listen to each video (or read each image) and write{" "}
+            <b className="text-white">4 primary texts</b> and <b className="text-white">4 headlines</b> for Meta, in your style.
           </p>
-          <span className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-600/30 transition-shadow group-hover:shadow-violet-500/50">
-            Open Ad copy <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
+          <span
+            className="mt-5 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-[#0a0f1c] shadow-lg shadow-lime-500/30 transition-shadow group-hover:shadow-lime-400/50"
+            style={{ background: META_LIME }}
+          >
+            Open Meta Ad Copy <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
           </span>
         </div>
         <AdCopyArt />
@@ -388,20 +390,23 @@ function AdCopyArt() {
         <MiniPost tone="from-blue-600/50 to-cyan-500/30" />
       </div>
       <div
-        className="absolute right-0 top-0 w-40 rotate-3 rounded-xl border border-violet-400/30 bg-[#111a2e] p-2 shadow-2xl shadow-violet-900/50"
+        className="absolute right-0 top-0 w-40 rotate-3 rounded-xl border border-lime-300/30 bg-[#111a2e] p-2 shadow-2xl shadow-lime-900/40"
         style={{ animation: "lp-float 5s ease-in-out 0.6s infinite" }}
       >
-        <MiniPost tone="from-violet-600/70 to-fuchsia-500/40" />
+        <MiniPost tone="from-lime-500/60 to-emerald-600/40" />
       </div>
       {["V1", "V2", "V3", "V4"].map((v, i) => (
         <span
           key={v}
-          className="absolute bottom-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-black text-white shadow-lg backdrop-blur"
+          className="absolute bottom-0 rounded-full border border-lime-300/30 bg-lime-400/15 px-2 py-0.5 text-[10px] font-black text-lime-200 shadow-lg backdrop-blur"
           style={{ left: `${6 + i * 24}%`, animation: `lp-float ${4 + i * 0.5}s ease-in-out ${i * 0.3}s infinite` }}
         >
           {v}
         </span>
       ))}
+      <span className="absolute -top-2 left-24 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-[#0a0f1c] shadow-lg" style={{ animation: "lp-float 4.5s ease-in-out 0.2s infinite" }}>
+        <MetaLogo className="h-auto w-[18px]" />
+      </span>
     </div>
   );
 }

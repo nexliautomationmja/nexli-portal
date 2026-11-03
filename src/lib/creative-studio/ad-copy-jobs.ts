@@ -21,6 +21,9 @@ type Asset = typeof creativeAssets.$inferSelect;
 
 export interface CopyJobMeta {
   filename?: string;
+  /** Set when the file was dropped in with others (up to 20 at once). */
+  group?: string;
+  groupIndex?: number;
   note?: string;
   transcript?: string;
   /** Stored stills of a video (JPEG), in order. */
@@ -73,6 +76,8 @@ export async function jobViews(jobs: Asset[]) {
       mediaUrl,
       thumbUrl: media === "image" ? mediaUrl : m.framePaths?.[0] ? signed.get(m.framePaths[0]) ?? null : null,
       note: m.note ?? "",
+      group: m.group ?? null,
+      groupIndex: m.groupIndex ?? 0,
       transcript: m.transcript ?? null,
       versions: (m.versions ?? []).map(normalizeCopy),
       createdAt: j.createdAt.toISOString(),
@@ -88,7 +93,7 @@ export async function listJobs(ownerId: string) {
     .from(creativeAssets)
     .where(and(eq(creativeAssets.ownerId, ownerId), eq(creativeAssets.kind, "copy_job"), isNull(creativeAssets.projectId)))
     .orderBy(desc(creativeAssets.createdAt))
-    .limit(30);
+    .limit(80);
   return jobViews(jobs);
 }
 

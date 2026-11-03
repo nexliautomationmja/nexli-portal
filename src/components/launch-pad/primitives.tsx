@@ -11,7 +11,7 @@ export const SYNE = { fontFamily: "var(--font-syne), sans-serif" };
 
 // ─── Color system (literal Tailwind classes per accent) ────
 
-export type Accent = "blue" | "violet" | "cyan" | "amber" | "emerald" | "stripe";
+export type Accent = "blue" | "violet" | "cyan" | "amber" | "emerald" | "stripe" | "lime";
 
 export const ACCENT = {
   blue: {
@@ -62,6 +62,19 @@ export const ACCENT = {
     noteStrip: "bg-[#635BFF]/10 border border-[#635BFF]/30",
     successStrip: "bg-[#635BFF]/10 border border-[#635BFF]/40",
     dotBg: "#635BFF",
+  },
+  lime: {
+    // Meta Ad Copy in Creative Studio: the lime of the "Campaigns built and run on Meta" chip (#A3E635).
+    chip: "bg-lime-400/15 border border-lime-400/35",
+    chipGlow: "drop-shadow(0 4px 10px rgba(163, 230, 53, 0.3))",
+    icon: "text-lime-300",
+    headerTile: "bg-lime-400/10 border border-lime-400/20",
+    headerIcon: "text-lime-400",
+    check: "text-lime-400",
+    badgeDone: "bg-lime-400/15 text-lime-200 border border-lime-400/30",
+    noteStrip: "bg-lime-400/10 border border-lime-400/20",
+    successStrip: "bg-lime-400/10 border border-lime-400/30",
+    dotBg: "#A3E635",
   },
   emerald: {
     chip: "bg-emerald-500/20 border border-emerald-500/30",

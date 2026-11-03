@@ -9,7 +9,8 @@ import { COPY_EXT, COPY_MEDIA, listJobs } from "@/lib/creative-studio/ad-copy-jo
 /**
  * The Ad copy tool. GET → recent jobs.
  * POST { action: "sign", mime } → one-time upload target (browser → storage).
- * POST { action: "register", path, mime, filename, note } → { id } of the new job.
+ * POST { action: "register", path, mime, filename, note, group?, groupIndex? } → { id } of the new job
+ * (group ties together creatives dropped in at once, up to 20).
  */
 export async function GET() {
   const access = await requireStudioAdmin();
@@ -41,6 +42,9 @@ export async function POST(req: NextRequest) {
         metadata: {
           filename: typeof body.filename === "string" ? body.filename.slice(0, 200) : "upload",
           note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "",
+          ...(typeof body.group === "string" && /^[0-9a-f-]{36}$/i.test(body.group)
+            ? { group: body.group, groupIndex: typeof body.groupIndex === "number" ? Math.max(0, Math.min(19, Math.round(body.groupIndex))) : 0 }
+            : {}),
           versions: [],
         },
       })
