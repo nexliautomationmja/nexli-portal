@@ -326,7 +326,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
 
   return (
     <StudioCanvas>
-      <div className="mx-auto flex min-h-[calc(100dvh-3rem)] max-w-3xl flex-col px-3 sm:px-6">
+      <div id="studio-column" className="mx-auto flex min-h-[calc(100dvh-3rem)] max-w-3xl flex-col px-3 sm:px-6">
         {/* Header */}
         <header className="sticky top-0 z-20 -mx-3 flex items-center gap-3 border-b border-white/5 bg-[#020617]/80 px-3 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6">
           <Link href="/dashboard/creative-studio" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label="Back to Creative Studio">
@@ -383,8 +383,12 @@ export function StudioThread({ projectId }: { projectId: string }) {
         </div>
 
         {/* Composer */}
-        <div className="sticky bottom-0 z-20 -mx-3 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent px-3 pb-4 pt-6 sm:-mx-6 sm:px-6" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
-          <ScrollJump />
+        <ScrollJump />
+        <div
+          id="studio-composer"
+          className="sticky bottom-0 z-20 -mx-3 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent px-3 pb-4 pt-6 sm:-mx-6 sm:px-6"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
           <Composer
             placeholder={composer.placeholder}
             hint={composer.hint}

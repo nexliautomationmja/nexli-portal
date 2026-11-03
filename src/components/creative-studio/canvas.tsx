@@ -291,11 +291,16 @@ export function ErrorStrip({ children, onClose }: { children: React.ReactNode; o
 /**
  * Floating ↓ / ↑ button: jumps to the bottom of a long thread (the editor and
  * the chat box), or back to the top once you're there. Hidden when the page
- * is short. The dashboard scrolls the window, so it watches the window.
- * Render it inside the sticky composer bar: it sits centred just above it.
+ * is short.
+ *
+ * Fixed to the window and centred on the studio column (#studio-column).
+ * position: sticky doesn't work in the dashboard (globals.css sets
+ * overflow-x: hidden on html and body, which makes body a scroll container),
+ * so the chat box (#studio-composer) only shows at the end of the page; when
+ * it's on screen the button sits just above it.
  */
 export function ScrollJump() {
-  const [dir, setDir] = useState<"down" | "up" | null>(null);
+  const [state, setState] = useState<{ dir: "down" | "up"; left: number; bottom: number } | null>(null);
 
   useEffect(() => {
     let frame = 0;
@@ -303,8 +308,15 @@ export function ScrollJump() {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const doc = document.documentElement;
-        const fromBottom = doc.scrollHeight - (window.scrollY + window.innerHeight);
-        setDir(fromBottom > 400 ? "down" : window.scrollY > 400 ? "up" : null);
+        const vh = window.innerHeight;
+        const fromBottom = doc.scrollHeight - (window.scrollY + vh);
+        const dir = fromBottom > 400 ? "down" : window.scrollY > 400 ? "up" : null;
+        if (!dir) return setState(null);
+        const col = document.getElementById("studio-column")?.getBoundingClientRect();
+        const comp = document.getElementById("studio-composer")?.getBoundingClientRect();
+        const left = col ? col.left + col.width / 2 : window.innerWidth / 2;
+        const bottom = comp && comp.top < vh ? Math.max(24, vh - comp.top + 12) : 24;
+        setState({ dir, left: Math.round(left), bottom: Math.round(bottom) });
       });
     };
     measure();
@@ -321,13 +333,14 @@ export function ScrollJump() {
     };
   }, []);
 
-  if (!dir) return null;
-  const down = dir === "down";
+  if (!state) return null;
+  const down = state.dir === "down";
   return (
     <button
       type="button"
       onClick={() => window.scrollTo({ top: down ? document.documentElement.scrollHeight : 0, behavior: "smooth" })}
-      className="absolute -top-9 left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/40 ring-1 ring-blue-300/40 transition hover:bg-blue-500"
+      className="fixed z-40 inline-flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/40 ring-1 ring-blue-300/40 transition hover:bg-blue-500"
+      style={{ left: state.left, bottom: state.bottom }}
     >
       <SvgIcon d={<path d={down ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"} />} size={18} />
       {down ? "Scroll to bottom" : "Back to top"}
