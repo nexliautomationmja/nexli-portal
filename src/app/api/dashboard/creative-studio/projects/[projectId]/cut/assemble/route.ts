@@ -7,7 +7,7 @@ import { creativeAssets, creativeCuts } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
 import { joinPieces } from "@/lib/creative-studio/autocut";
-import { findPiece, loadCut, overridesFor, planFor, tempDir } from "@/lib/creative-studio/autocut-service";
+import { entryFor, findPiece, loadCut, planFor, tempDir } from "@/lib/creative-studio/autocut-service";
 import { readStorage, writeStorage } from "@/lib/creative-studio/frames";
 
 export const maxDuration = 300;
@@ -25,7 +25,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (!cut) return NextResponse.json({ error: "Cut not found" }, { status: 404 });
 
   const clips = await clipsOf(project.id);
-  const plans = clips.map((c) => planFor(project, c, cut.settings, cut.plan.find((p) => p.clipId === c.id)?.version === c.version ? overridesFor(cut, c.id) : []));
+  const plans = clips.map((c) => {
+    const e = entryFor(cut, c);
+    return planFor(project, c, cut.settings, e.overrides, e.manual);
+  });
   const pieces = await Promise.all(plans.map((pl) => findPiece(project.id, pl.hash)));
   const missing = clips.filter((_, i) => !pieces[i]).map((c) => c.id);
   if (missing.length > 0) return NextResponse.json({ error: "Some clips aren't cut yet", missing }, { status: 409 });

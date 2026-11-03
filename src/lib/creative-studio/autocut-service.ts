@@ -10,6 +10,7 @@ import {
   type CutClipPlan,
   type CutOverride,
   type CutSettings,
+  type ManualTrim,
 } from "@/lib/creative-studio/tables";
 import { buildClipPlan, probeDuration, tempDir } from "@/lib/creative-studio/autocut";
 import { transcribeClip } from "@/lib/creative-studio/transcribe";
@@ -43,6 +44,13 @@ export function overridesFor(cut: Cut | null, clipId: string): CutOverride[] {
   return cut?.plan.find((p) => p.clipId === clipId)?.overrides ?? [];
 }
 
+/** A clip's fixes in this cut (overrides + manual trim) — only if they were made on its current take. */
+export function entryFor(cut: Cut | null, clip: Clip): { overrides: CutOverride[]; manual: ManualTrim | null } {
+  const e = cut?.plan.find((p) => p.clipId === clip.id);
+  if (!e || e.version !== clip.version) return { overrides: [], manual: null };
+  return { overrides: e.overrides ?? [], manual: e.manual ?? null };
+}
+
 /** Download a clip's rendered video to a temp file. */
 export async function clipVideoFile(clip: Clip, dir: string): Promise<string> {
   if (!clip.videoAssetId) throw new Error(`Clip ${clip.idx + 1} has no rendered video`);
@@ -67,7 +75,13 @@ export async function ensureTranscript(clip: Clip, videoFile: string): Promise<C
   return updated;
 }
 
-export function planFor(project: Project, clip: Clip, settings: CutSettings, overrides: CutOverride[]): CutClipPlan {
+export function planFor(
+  project: Project,
+  clip: Clip,
+  settings: CutSettings,
+  overrides: CutOverride[],
+  manual: ManualTrim | null = null
+): CutClipPlan {
   const t = clip.transcript && clip.transcript.version === clip.version ? clip.transcript : null;
   return buildClipPlan({
     clipId: clip.id,
@@ -77,6 +91,7 @@ export function planFor(project: Project, clip: Clip, settings: CutSettings, ove
     settings,
     overrides,
     format: project.format,
+    manual,
   });
 }
 

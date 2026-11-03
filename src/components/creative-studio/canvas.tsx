@@ -13,7 +13,7 @@ import { ACCENT, LaunchPadStyles, SYNE, type Accent } from "@/components/launch-
  * beats Tailwind colour classes, so the canvas sets those variables to the
  * dark values on itself — otherwise light mode would paint dark text on navy.
  */
-const CANVAS_VARS = {
+export const CANVAS_VARS = {
   "--text-main": "#f8fafc",
   "--text-muted": "#94a3b8",
   "--card-border": "rgba(255,255,255,0.1)",

@@ -4,7 +4,7 @@ import { creativeCuts } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
 import { DEFAULT_CUT } from "@/lib/creative-studio/autocut";
-import { latestCut, overridesFor } from "@/lib/creative-studio/autocut-service";
+import { entryFor, latestCut } from "@/lib/creative-studio/autocut-service";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -35,11 +35,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       version: (base?.version ?? 0) + 1,
       settings: base?.settings ?? DEFAULT_CUT,
       plan: clips.map((c) => {
-        const prev = base?.plan.find((p) => p.clipId === c.id);
+        const prev = entryFor(base, c);
         return {
           clipId: c.id,
           version: c.version,
-          overrides: prev && prev.version === c.version ? overridesFor(base, c.id) : [],
+          overrides: prev.overrides,
+          manual: prev.manual,
           segments: [],
           sourceS: 0,
           keptS: 0,

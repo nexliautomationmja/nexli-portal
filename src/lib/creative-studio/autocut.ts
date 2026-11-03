@@ -10,7 +10,9 @@ import type {
   CutClipPlan,
   CutOverride,
   CutSettings,
+  ManualTrim,
 } from "@/lib/creative-studio/tables";
+import { computeSegments, round3 } from "@/lib/creative-studio/cutplan";
 
 /**
  * Auto-cut: after Kling renders every clip, cut each one tight (1.2× speed,
@@ -22,40 +24,7 @@ import type {
  * clips whose plan changed are re-rendered.
  */
 
-export const DEFAULT_CUT: CutSettings = { speed: 1.2, gap: 0.25 };
-/** Source seconds kept before the first word / after the last word of a clip. */
-const LEAD = 0.1;
-const TAIL = 0.15;
-const TIGHT_GAP = 0.12;
-const LOOSE_GAP = 0.45;
-const MIN_SEGMENT = 0.04;
-
-const round = (n: number) => Math.round(n * 1000) / 1000;
-
-/** Pause cap (playback seconds) for the boundary after word `i`, from the overrides (last one wins). */
-function gapAfter(i: number, settings: CutSettings, overrides: CutOverride[]): number {
-  let gap = settings.gap;
-  for (const o of overrides) {
-    // A range covers the boundaries inside it plus the one just before it.
-    if (i >= o.fromWord - 1 && i <= o.toWord) {
-      if (o.action === "tighten") gap = o.gapSeconds ?? TIGHT_GAP;
-      else if (o.action === "loosen") gap = o.gapSeconds ?? LOOSE_GAP;
-      else if (o.action === "restore") gap = Number.POSITIVE_INFINITY;
-    }
-  }
-  return gap;
-}
-
-function cutWords(count: number, overrides: CutOverride[]): Set<number> {
-  const out = new Set<number>();
-  for (const o of overrides) {
-    for (let i = Math.max(0, o.fromWord); i <= Math.min(count - 1, o.toWord); i++) {
-      if (o.action === "cut") out.add(i);
-      else if (o.action === "restore") out.delete(i);
-    }
-  }
-  return out;
-}
+export { DEFAULT_CUT } from "@/lib/creative-studio/cutplan";
 
 export function planHash(clipId: string, version: number, segments: { start: number; end: number }[], settings: CutSettings, format: CreativeFormat) {
   return createHash("sha1")
@@ -73,52 +42,20 @@ export function buildClipPlan(args: {
   settings: CutSettings;
   overrides: CutOverride[];
   format: CreativeFormat;
+  manual?: ManualTrim | null;
 }): CutClipPlan {
   const { clipId, version, transcript, sourceS, settings, overrides, format } = args;
-  const words = transcript?.words ?? [];
-  const removed = cutWords(words.length, overrides);
-  const kept = words.map((w, i) => ({ ...w, i })).filter((w) => !removed.has(w.i));
-
-  let segments: { start: number; end: number }[];
-  if (kept.length === 0) {
-    segments = [{ start: 0, end: sourceS }];
-  } else {
-    segments = [];
-    let segStart = Math.max(0, kept[0].start - LEAD);
-    for (let k = 0; k < kept.length - 1; k++) {
-      const prev = kept[k];
-      const next = kept[k + 1];
-      const skippedWords = next.i - prev.i > 1;
-      const cap = skippedWords ? settings.gap : gapAfter(prev.i, settings, overrides);
-      const maxSrc = cap * settings.speed; // a pause of `cap` at playback speed
-      const srcGap = next.start - prev.end;
-      if (Number.isFinite(maxSrc) && srcGap > maxSrc) {
-        segments.push({ start: segStart, end: prev.end + maxSrc / 2 });
-        segStart = next.start - maxSrc / 2;
-      }
-    }
-    const last = kept[kept.length - 1];
-    segments.push({ start: segStart, end: Math.min(sourceS, last.end + TAIL) });
-  }
-
-  // Clean up: clamp, merge overlaps, drop slivers, round.
-  const cleaned: { start: number; end: number }[] = [];
-  for (const s of segments.map((x) => ({ start: Math.max(0, x.start), end: Math.min(sourceS, x.end) }))) {
-    if (s.end - s.start < MIN_SEGMENT) continue;
-    const prev = cleaned[cleaned.length - 1];
-    if (prev && s.start <= prev.end + 0.01) prev.end = Math.max(prev.end, s.end);
-    else cleaned.push({ ...s });
-  }
-  const finalSegs = (cleaned.length ? cleaned : [{ start: 0, end: sourceS }]).map((s) => ({ start: round(s.start), end: round(s.end) }));
-  const keptS = round(finalSegs.reduce((t, s) => t + (s.end - s.start), 0));
+  const manual = args.manual ?? null;
+  const { segments, keptS } = computeSegments({ transcript, sourceS, settings, overrides, manual });
   return {
     clipId,
     version,
-    segments: finalSegs,
+    ...(manual ? { manual } : {}),
+    segments,
     overrides,
-    sourceS: round(sourceS),
+    sourceS: round3(sourceS),
     keptS,
-    hash: planHash(clipId, version, finalSegs, settings, format),
+    hash: planHash(clipId, version, segments, settings, format),
   };
 }
 
@@ -365,8 +302,8 @@ export function applyRevision(
 ): { settings: CutSettings; overrides: Map<number, CutOverride[]> } {
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
   const next: CutSettings = {
-    speed: rev.settings.speed !== null && Number.isFinite(rev.settings.speed) ? round(clamp(rev.settings.speed, 0.8, 1.6)) : settings.speed,
-    gap: rev.settings.gap !== null && Number.isFinite(rev.settings.gap) ? round(clamp(rev.settings.gap, 0.05, 1.5)) : settings.gap,
+    speed: rev.settings.speed !== null && Number.isFinite(rev.settings.speed) ? round3(clamp(rev.settings.speed, 0.8, 1.6)) : settings.speed,
+    gap: rev.settings.gap !== null && Number.isFinite(rev.settings.gap) ? round3(clamp(rev.settings.gap, 0.05, 1.5)) : settings.gap,
   };
   const out = new Map<number, CutOverride[]>([...overrides].map(([k, v]) => [k, [...v]]));
   for (const e of rev.edits) {
@@ -376,7 +313,7 @@ export function applyRevision(
     const from = clamp(Math.min(e.fromWord, e.toWord), 0, max);
     const to = clamp(Math.max(e.fromWord, e.toWord), 0, max);
     const o: CutOverride = { fromWord: from, toWord: to, action: e.action };
-    if (e.gapSeconds !== null && Number.isFinite(e.gapSeconds)) o.gapSeconds = round(clamp(e.gapSeconds, 0.03, 2));
+    if (e.gapSeconds !== null && Number.isFinite(e.gapSeconds)) o.gapSeconds = round3(clamp(e.gapSeconds, 0.03, 2));
     out.set(idx, [...(out.get(idx) ?? []), o]);
   }
   return { settings: next, overrides: out };

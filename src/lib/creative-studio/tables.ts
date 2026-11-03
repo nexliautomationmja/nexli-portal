@@ -177,9 +177,17 @@ export interface CutOverride {
   gapSeconds?: number;
 }
 
+/** A hand-set trim window for one clip, in source seconds. */
+export interface ManualTrim {
+  start: number;
+  end: number;
+}
+
 export interface CutClipPlan {
   clipId: string;
   version: number;
+  /** Set by the trim editor; absent = the auto-cut's own window. */
+  manual?: ManualTrim | null;
   /** Kept segments in source seconds. */
   segments: { start: number; end: number }[];
   overrides: CutOverride[];

@@ -6,6 +6,7 @@ import { CTA_CLASSES } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
+import { TrimEditor } from "@/components/creative-studio/trim-editor";
 
 type Cut = ProjectDetail["cuts"][number];
 
@@ -34,6 +35,7 @@ export function CutCard({
   const allDone = clips.length > 0 && clips.every((c) => c.status === "done" && c.videoUrl);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [showWords, setShowWords] = useState(true);
+  const [trimId, setTrimId] = useState<string | null>(null);
   const running = useRef<string | null>(null);
   const started = useRef<string | null>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -227,23 +229,35 @@ export function CutCard({
 
             {/* Flow strip */}
             <div className="cs-scroll mt-4 flex gap-1.5 overflow-x-auto pb-1">
-              {flow.map((r) => (
-                <button
-                  key={r.clip.id}
-                  type="button"
-                  onClick={() => jump(r.start)}
-                  className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-left hover:border-emerald-400/40 hover:bg-white/[0.06]"
-                  style={{ minWidth: `${Math.max(64, Math.min(160, r.out * 18))}px` }}
-                  title={r.clip.line}
-                >
-                  <p className="text-[10px] font-bold text-white" style={NUM_FONT}>
-                    #{r.clip.idx + 1} · {r.out.toFixed(1)}s
-                  </p>
-                  <p className="text-[10px] text-neutral-500" style={NUM_FONT}>
-                    from {(r.plan?.sourceS ?? 0).toFixed(1)}s
-                  </p>
-                </button>
-              ))}
+              {flow.map((r) => {
+                const trimmed = Boolean(r.plan?.manual) || (r.plan?.overrides ?? []).some((o) => o.action === "cut");
+                return (
+                  <div
+                    key={r.clip.id}
+                    className={`group relative shrink-0 rounded-lg border bg-white/[0.03] hover:bg-white/[0.06] ${trimmed ? "border-emerald-400/40" : "border-white/10 hover:border-emerald-400/40"}`}
+                    style={{ minWidth: `${Math.max(76, Math.min(170, r.out * 18))}px` }}
+                  >
+                    <button type="button" onClick={() => jump(r.start)} className="block w-full px-2.5 py-1.5 pr-8 text-left" title={r.clip.line}>
+                      <p className="text-[10px] font-bold text-white" style={NUM_FONT}>
+                        #{r.clip.idx + 1} · {r.out.toFixed(1)}s
+                      </p>
+                      <p className="text-[10px] text-neutral-500" style={NUM_FONT}>
+                        {trimmed ? "✂ trimmed" : `from ${(r.plan?.sourceS ?? 0).toFixed(1)}s`}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTrimId(r.clip.id)}
+                      disabled={latest?.status === "cutting" || !r.clip.videoUrl}
+                      className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-neutral-500 hover:bg-emerald-500/20 hover:text-emerald-200 disabled:opacity-30"
+                      aria-label={`Trim clip ${r.clip.idx + 1}`}
+                      title="Trim this clip by hand"
+                    >
+                      ✂
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Transcript with cut points */}
@@ -259,6 +273,11 @@ export function CutCard({
                         #{r.clip.idx + 1}
                       </button>
                       <Words words={r.clip.words} segments={r.plan?.segments ?? []} fallback={r.clip.line} />
+                      {latest?.status !== "cutting" && r.clip.videoUrl && (
+                        <button type="button" onClick={() => setTrimId(r.clip.id)} className="ml-1 align-baseline text-[10px] font-bold text-neutral-500 hover:text-emerald-300">
+                          ✂ Trim
+                        </button>
+                      )}
                     </p>
                   ))}
                   <p className="text-[10px] text-neutral-500">
@@ -270,6 +289,23 @@ export function CutCard({
           </>
         )}
       </AssistantCard>
+
+      {trimId && shown && (() => {
+        const clip = clips.find((c) => c.id === trimId);
+        if (!clip) return null;
+        return (
+          <TrimEditor
+            projectId={p.id}
+            clip={clip}
+            entry={shown.plan.find((pl) => pl.clipId === clip.id && pl.version === clip.version)}
+            settings={shown.settings}
+            aspect={aspect}
+            onClose={() => setTrimId(null)}
+            onApplied={onChange}
+            onError={onError}
+          />
+        );
+      })()}
     </div>
   );
 }

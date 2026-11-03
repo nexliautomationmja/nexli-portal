@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { creativeAssets, creativeClips } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { renderPiece } from "@/lib/creative-studio/autocut";
-import { clipVideoFile, ensureTranscript, findPiece, loadCut, overridesFor, planFor, tempDir } from "@/lib/creative-studio/autocut-service";
+import { clipVideoFile, ensureTranscript, entryFor, findPiece, loadCut, planFor, tempDir } from "@/lib/creative-studio/autocut-service";
 import { writeStorage } from "@/lib/creative-studio/frames";
 
 export const maxDuration = 300;
@@ -38,8 +38,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       video = await clipVideoFile(current, dir);
       current = await ensureTranscript(current, video);
     }
-    const overrides = cut.plan.find((p) => p.clipId === clip.id)?.version === clip.version ? overridesFor(cut, clip.id) : [];
-    const plan = planFor(project, current, cut.settings, overrides);
+    const e = entryFor(cut, clip);
+    const plan = planFor(project, current, cut.settings, e.overrides, e.manual);
     const cached = await findPiece(project.id, plan.hash);
     if (cached) return NextResponse.json({ ok: true, hash: plan.hash, keptS: plan.keptS, cached: true });
 

@@ -4,7 +4,7 @@ import { creativeCuts, type CutOverride } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
 import { applyRevision, reviseCut } from "@/lib/creative-studio/autocut";
-import { latestCut, overridesFor } from "@/lib/creative-studio/autocut-service";
+import { entryFor, latestCut } from "@/lib/creative-studio/autocut-service";
 import { claudeError } from "@/lib/creative-studio/script";
 
 export const maxDuration = 120;
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
   const clips = await clipsOf(project.id);
   const current = new Map<number, CutOverride[]>(
-    clips.map((c, i) => [i, base.plan.find((p) => p.clipId === c.id)?.version === c.version ? overridesFor(base, c.id) : []])
+    clips.map((c, i) => [i, entryFor(base, c).overrides])
   );
 
   let rev;
@@ -75,6 +75,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         version: c.version,
         // A re-rendered take gets new words, so its old fixes don't apply.
         overrides: rerenderIds.has(c.id) ? [] : next.overrides.get(i) ?? [],
+        manual: rerenderIds.has(c.id) ? null : entryFor(base, c).manual,
         segments: [],
         sourceS: 0,
         keptS: 0,
