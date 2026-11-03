@@ -1,0 +1,81 @@
+# Deploys the Creative Studio's Remotion project to AWS: the render function
+# (Remotion Lambda) and the site (the bundled src/remotion compositions).
+# The portal derives the function name from the same memory/disk/timeout
+# (src/lib/creative-studio/remotion.ts) — change them in both places.
+#
+# Never runs on pull requests: this repo is public, and fork PRs must not
+# reach the AWS secrets.
+name: Deploy Remotion (Creative Studio)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/remotion/**"
+      - "package-lock.json"
+      - ".github/workflows/remotion-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remotion-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Installed before any secret is in the environment.
+      - run: npm ci
+
+      - name: Check the AWS secrets are set
+        env:
+          REMOTION_AWS_ACCESS_KEY_ID: ${{ secrets.REMOTION_AWS_ACCESS_KEY_ID }}
+          REMOTION_AWS_SECRET_ACCESS_KEY: ${{ secrets.REMOTION_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$REMOTION_AWS_ACCESS_KEY_ID" ] || [ -z "$REMOTION_AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::error::Add REMOTION_AWS_ACCESS_KEY_ID and REMOTION_AWS_SECRET_ACCESS_KEY under GitHub → Settings → Secrets and variables → Actions, then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Validate the AWS user policy
+        env:
+          REMOTION_AWS_ACCESS_KEY_ID: ${{ secrets.REMOTION_AWS_ACCESS_KEY_ID }}
+          REMOTION_AWS_SECRET_ACCESS_KEY: ${{ secrets.REMOTION_AWS_SECRET_ACCESS_KEY }}
+        run: npx remotion lambda policies validate
+
+      - name: Deploy the render function
+        env:
+          REMOTION_AWS_ACCESS_KEY_ID: ${{ secrets.REMOTION_AWS_ACCESS_KEY_ID }}
+          REMOTION_AWS_SECRET_ACCESS_KEY: ${{ secrets.REMOTION_AWS_SECRET_ACCESS_KEY }}
+        run: npx remotion lambda functions deploy --region=us-east-1 --memory=3009 --disk=2048 --timeout=900
+
+      - name: Deploy the site
+        env:
+          REMOTION_AWS_ACCESS_KEY_ID: ${{ secrets.REMOTION_AWS_ACCESS_KEY_ID }}
+          REMOTION_AWS_SECRET_ACCESS_KEY: ${{ secrets.REMOTION_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          set -o pipefail
+          npx remotion lambda sites create src/remotion/index.ts \
+            --site-name=nexli-creative-studio \
+            --region=us-east-1 \
+            --public-dir=src/remotion/public 2>&1 | tee site.log
+          URL=$(grep -oE 'https://[^ ]+/sites/nexli-creative-studio/index\.html' site.log | tail -1)
+          echo "Serve URL: $URL"
+          {
+            echo "### Remotion site deployed"
+            echo ""
+            echo "Set this in Vercel as \`REMOTION_SERVE_URL\` (it stays the same on every deploy):"
+            echo ""
+            echo "\`$URL\`"
+          } >> "$GITHUB_STEP_SUMMARY"
