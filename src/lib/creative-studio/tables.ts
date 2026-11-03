@@ -149,8 +149,66 @@ export const creativeClips = pgTable("creative_clips", {
   version: integer("version").notNull().default(1),
   previous: jsonb("previous").$type<Record<string, unknown>[]>().notNull().default([]),
   error: text("error"),
+  /** Word timings from speech-to-text of the rendered clip (for the auto-cut). */
+  transcript: jsonb("transcript").$type<ClipTranscript | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export interface TranscriptWord {
+  text: string;
+  start: number;
+  end: number;
+}
+
+export interface ClipTranscript {
+  /** Which take (clip version) these timings belong to. */
+  version: number;
+  durationS: number;
+  words: TranscriptWord[];
+  text: string;
+}
+
+/** A per-range override from feedback ("tighter where she says…"). Word indexes are inclusive. */
+export interface CutOverride {
+  fromWord: number;
+  toWord: number;
+  action: "tighten" | "loosen" | "cut" | "restore";
+  gapSeconds?: number;
+}
+
+export interface CutClipPlan {
+  clipId: string;
+  version: number;
+  /** Kept segments in source seconds. */
+  segments: { start: number; end: number }[];
+  overrides: CutOverride[];
+  sourceS: number;
+  keptS: number;
+  hash: string;
+}
+
+export interface CutSettings {
+  speed: number;
+  /** Max pause at playback speed, seconds. */
+  gap: number;
+}
+
+/** One auto-cut version: settings + per-clip plan + the joined rough cut. */
+export const creativeCuts = pgTable("creative_cuts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => creativeProjects.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  settings: jsonb("settings").$type<CutSettings>().notNull(),
+  plan: jsonb("plan").$type<CutClipPlan[]>().notNull(),
+  /** cutting | ready | approved | failed */
+  status: text("status").notNull().default("cutting"),
+  note: text("note"),
+  assetId: uuid("asset_id"),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 /**
@@ -257,6 +315,24 @@ export function ensureCreativeStudioTables(): Promise<void> {
       `);
       await db.execute(
         sql`CREATE INDEX IF NOT EXISTS "creative_clips_project_idx" ON "creative_clips" ("project_id", "idx")`
+      );
+      await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "transcript" jsonb`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_cuts" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "project_id" uuid NOT NULL REFERENCES "creative_projects"("id") ON DELETE CASCADE,
+          "version" integer NOT NULL,
+          "settings" jsonb NOT NULL,
+          "plan" jsonb NOT NULL,
+          "status" text NOT NULL DEFAULT 'cutting',
+          "note" text,
+          "asset_id" uuid,
+          "error" text,
+          "created_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(
+        sql`CREATE INDEX IF NOT EXISTS "creative_cuts_project_idx" ON "creative_cuts" ("project_id", "version")`
       );
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_kling_connections" (

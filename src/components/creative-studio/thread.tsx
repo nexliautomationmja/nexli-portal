@@ -24,11 +24,13 @@ import { FrameCard } from "@/components/creative-studio/frame-card";
 import { ScriptCard } from "@/components/creative-studio/script-card";
 import { ClipsCard } from "@/components/creative-studio/clips-card";
 import { FinalCutCard, uploadFinalCut } from "@/components/creative-studio/final-cut-card";
+import { CutCard } from "@/components/creative-studio/cut-card";
 
-type Stage = "direction" | "frame" | "write" | "review" | "locked";
+type Stage = "direction" | "frame" | "write" | "review" | "locked" | "cut";
 
 function stageOf(d: ProjectDetail): Stage {
-  const locked = ["approved", "rendering", "clips_ready"].includes(d.project.status);
+  if (d.project.status === "clips_ready") return "cut";
+  const locked = ["approved", "rendering"].includes(d.project.status);
   if (locked) return "locked";
   if (d.clips.length > 0) return "review";
   if (!d.project.direction.trim()) return "direction";
@@ -57,6 +59,10 @@ const COMPOSER: Record<Stage, { placeholder: string; hint: string }> = {
     placeholder: "Fix a clip, e.g. “clip 3: she said the number twice” · or attach your final cut",
     hint: "Mention the clip number · attach a video to upload your cut",
   },
+  cut: {
+    placeholder: "Tighter where she says “…” · looser after the hook · slow it to 1.1×",
+    hint: "Enter → re-cut with your note · attach a video to upload your own cut",
+  },
 };
 
 /**
@@ -71,6 +77,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
   const [working, setWorking] = useState<{ label: string; detail?: string; accent?: "violet" | "blue" | "cyan" | "emerald" } | null>(null);
   const [format, setFormat] = useState<CreativeFormat>("ad_9x16");
   const [frameChanged, setFrameChanged] = useState(false);
+  const [cutSummary, setCutSummary] = useState<string | null>(null);
   const [params] = useState(() => (typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)));
   const [autoWrite, setAutoWrite] = useState(() => params.get("start") === "1");
   const klingNotice = params.get("kling");
@@ -130,7 +137,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!stage) return;
     if (lastStage.current && lastStage.current !== stage) {
-      const id = stage === "review" ? "stage-review" : stage === "locked" ? "stage-clips" : "stage-frame";
+      const id = stage === "review" ? "stage-review" : stage === "locked" ? "stage-clips" : stage === "cut" ? "stage-cut" : "stage-frame";
       setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
     }
     lastStage.current = stage;
@@ -148,7 +155,8 @@ export function StudioThread({ projectId }: { projectId: string }) {
 
   const p = detail.project;
   const status = STATUS_PILL[p.status] ?? STATUS_PILL.draft;
-  const locked = stage === "locked";
+  // Approved, rendering, or rendered (auto-cut stage): the script is locked.
+  const locked = stage === "locked" || stage === "cut";
 
   async function changeFormat(f: CreativeFormat) {
     setFormat(f);
@@ -211,6 +219,24 @@ export function StudioThread({ projectId }: { projectId: string }) {
         setWorking(null);
         if (!r.ok) throw new Error(r.error);
         apply(r.data);
+        return true;
+      }
+      if (st === "cut") {
+        setWorking({ label: "Re-cutting with your note…", detail: `“${text}”`, accent: "emerald" });
+        const r = await send(api(`${p.id}/cut/revise`), "POST", { note: text });
+        setWorking(null);
+        if (!r.ok) throw new Error(r.error);
+        const extra = r.data as unknown as { summary?: string; rerender?: { clipId: string; number: number; note: string }[] };
+        apply(r.data);
+        setCutSummary(extra.summary ?? null);
+        // Problems in the take itself go back to Kling; the cut re-runs when they land.
+        for (const rr of extra.rerender ?? []) {
+          setWorking({ label: `Re-rendering clip ${rr.number} on Kling…`, detail: rr.note, accent: "cyan" });
+          const redo = await send(api(`${p.id}/render`), "POST", { redo: { clipId: rr.clipId, note: rr.note } });
+          setWorking(null);
+          if (!redo.ok) throw new Error(redo.error);
+          apply(redo.data);
+        }
         return true;
       }
       // Locked: "clip 3: …" → redo that clip with the note.
@@ -308,6 +334,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
           {(stage === "review" || stage === "locked") && <ScriptCard detail={detail} locked={locked} onChange={apply} onError={fail} />}
 
           {locked && <ClipsCard detail={detail} klingNotice={klingNotice} onChange={apply} onError={fail} />}
+          {locked && (stage === "cut" || detail.cuts.length > 0) && <CutCard detail={detail} summary={cutSummary} onChange={apply} onError={fail} />}
           {locked && <FinalCutCard detail={detail} onChange={apply} onError={fail} />}
 
           {working && <ThinkingCard accent={working.accent} label={working.label} detail={working.detail} />}

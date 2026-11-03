@@ -3,6 +3,7 @@ import { db } from "@/db";
 import {
   creativeAssets,
   creativeClips,
+  creativeCuts,
   creativeProjects,
   type ClipFields,
   type ScriptSnapshot,
@@ -53,7 +54,7 @@ export async function clipsOf(projectId: string) {
 
 /** Everything the project page needs, with signed frame URLs. */
 export async function projectDetail(project: Project) {
-  const [frames, clips, extras] = await Promise.all([
+  const [frames, clips, extras, cuts] = await Promise.all([
     framesOf(project.id),
     clipsOf(project.id),
     db
@@ -61,7 +62,11 @@ export async function projectDetail(project: Project) {
       .from(creativeAssets)
       .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut"])))
       .orderBy(asc(creativeAssets.createdAt)),
+    db.select().from(creativeCuts).where(eq(creativeCuts.projectId, project.id)).orderBy(asc(creativeCuts.version)),
   ]);
+  const cutAssetIds = cuts.map((c) => c.assetId).filter((v): v is string => Boolean(v));
+  const cutAssets = cutAssetIds.length ? await db.select().from(creativeAssets).where(inArray(creativeAssets.id, cutAssetIds)) : [];
+  const cutPath = new Map(cutAssets.map((a) => [a.id, a.storagePath]));
   const options = extras.filter((a) => a.kind === "frame_option");
   const manusTasks = extras.filter((a) => a.kind === "manus_task");
   const finalCuts = extras.filter((a) => a.kind === "final_cut");
@@ -71,7 +76,7 @@ export async function projectDetail(project: Project) {
     : [];
   const videoPath = new Map(videos.map((v) => [v.id, v.storagePath]));
   const signed = await signPaths(
-    [...frames, ...videos, ...options, ...finalCuts].map((a) => a.storagePath),
+    [...frames, ...videos, ...options, ...finalCuts, ...cutAssets].map((a) => a.storagePath),
     6 * 3600
   );
   const url = (path: string | null) => (path ? signed.get(path) ?? null : null);
@@ -119,6 +124,17 @@ export async function projectDetail(project: Project) {
       filename: ((f.metadata ?? {}) as { filename?: string }).filename ?? "final cut",
       uploadedAt: f.createdAt.toISOString(),
     })),
+    cuts: cuts.map((c) => ({
+      id: c.id,
+      version: c.version,
+      status: c.status,
+      note: c.note,
+      error: c.error,
+      settings: c.settings,
+      plan: c.plan.map((pl) => ({ clipId: pl.clipId, version: pl.version, segments: pl.segments, sourceS: pl.sourceS, keptS: pl.keptS })),
+      url: c.assetId ? url(cutPath.get(c.assetId) ?? null) : null,
+      createdAt: c.createdAt.toISOString(),
+    })),
     clips: clips.map((c) => ({
       id: c.id,
       idx: c.idx,
@@ -131,6 +147,7 @@ export async function projectDetail(project: Project) {
       error: c.error,
       videoUrl: c.videoAssetId ? signed.get(videoPath.get(c.videoAssetId) ?? "") ?? null : null,
       previousTakes: (c.previous ?? []).length,
+      words: c.transcript && c.transcript.version === c.version ? c.transcript.words : null,
     })),
   };
 }
