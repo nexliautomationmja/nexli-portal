@@ -174,3 +174,20 @@ export function applySwaps(words: CaptionWord[], swaps: { find: string; replace:
 export function wholeCutWords(words: TranscriptWord[]): CaptionWord[] {
   return finalizeWords(mergeTokens(words.map((w) => ({ word: normalizeWord(w.text), start: w.start, end: w.end })).filter((w) => w.word)));
 }
+
+/**
+ * Retype words [from..to] of the captions by hand (a misheard word, a line
+ * you want worded differently). The new words share that span's timing;
+ * empty text removes them. Same rules and checks as the words file.
+ */
+export function replaceCaptionWords(words: CaptionWord[], from: number, to: number, text: string): CaptionWord[] {
+  const a = Math.max(0, Math.min(from, to));
+  const b = Math.min(words.length - 1, Math.max(from, to));
+  if (a > b || !words[a]) return words;
+  const next = mergeTokens(text.split(/\s+/).map(normalizeWord).filter(Boolean).map((word) => ({ word, start: 0, end: 0 })));
+  const start = words[a].start;
+  const end = words[b].end;
+  const step = (end - start) / Math.max(1, next.length);
+  const placed = next.map((w, k) => ({ word: w.word, start: start + step * k, end: k === next.length - 1 ? end : start + step * (k + 1) }));
+  return finalizeWords([...words.slice(0, a), ...placed, ...words.slice(b + 1)]);
+}

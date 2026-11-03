@@ -15,7 +15,7 @@ export const LadderRig: React.FC<EditProps> = ({ videoUrl, words, overlays }) =>
   return (
     <AbsoluteFill>
       <Plate src={videoUrl} />
-      <Captions words={words} size={50} vertical at={overlays.layout?.captions} />
+      <Captions words={words} size={50} vertical at={overlays.layout?.captions} look={overlays.captionStyle} />
       {overlays.title && <TitleBanner title={overlays.title} vertical at={overlays.layout?.title} />}
       <LadderRungs rungs={overlays.rungs} width={width} />
       {overlays.qualifier && <QualifierBand q={overlays.qualifier} vertical at={overlays.layout?.qualifier} />}

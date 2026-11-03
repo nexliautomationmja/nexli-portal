@@ -18,7 +18,7 @@ export const CustomRig: React.FC<EditProps> = ({ videoUrl, words, overlays, form
   return (
     <AbsoluteFill>
       <ZoomPlate src={videoUrl} zooms={overlays.zooms ?? []} />
-      {overlays.captions !== false && <Captions words={words} size={vertical ? 52 : 48} vertical={vertical} at={at.captions} />}
+      {overlays.captions !== false && <Captions words={words} size={vertical ? 52 : 48} vertical={vertical} at={at.captions} look={overlays.captionStyle} />}
       {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} at={at.title} />}
       {vertical && <LadderRungs rungs={overlays.rungs} width={width} />}
       {overlays.qualifier && <QualifierBand q={overlays.qualifier} vertical={vertical} at={at.qualifier} />}

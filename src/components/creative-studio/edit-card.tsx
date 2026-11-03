@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import type { EditLayout, EditProps, EditStyle, MovableSlot } from "@/remotion/types";
+import type { CaptionStyle, EditLayout, EditOverlays, EditProps, EditStyle, MovableSlot } from "@/remotion/types";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
 import { sameTarget, setText, setWindow, slotClashes, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
@@ -19,6 +19,46 @@ const EditPreview = dynamic(() => import("@/components/creative-studio/edit-prev
 type Edit = ProjectDetail["edits"][number];
 
 const clock = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
+
+/** A caption look without its rulebook-default values, so "Nexli" is the same as no look at all. */
+function plainLook(l: CaptionStyle): CaptionStyle {
+  const out: CaptionStyle = { ...l };
+  if (out.perLine === 3) delete out.perLine;
+  if (out.scale === 1) delete out.scale;
+  if (out.case === "caps") delete out.case;
+  if (out.highlight === "gradient") delete out.highlight;
+  if (!out.box) delete out.box;
+  if (out.font === "outfit") delete out.font;
+  return out;
+}
+
+function withLook(o: EditOverlays, look: CaptionStyle): EditOverlays {
+  const { captionStyle: _old, ...rest } = o;
+  void _old;
+  const clean = plainLook(look);
+  return Object.keys(clean).length ? { ...rest, captionStyle: clean } : rest;
+}
+
+const LOOK_PRESETS: { label: string; look: CaptionStyle }[] = [
+  { label: "Nexli", look: {} },
+  { label: "Bold box", look: { box: true, scale: 1.1 } },
+  { label: "One word at a time", look: { perLine: 1, scale: 1.35 } },
+  { label: "Minimal", look: { case: "title", highlight: "none", scale: 0.9 } },
+];
+
+const LOOK_OPTIONS: { label: string; key: keyof CaptionStyle; values: { v: CaptionStyle[keyof CaptionStyle]; label: string }[] }[] = [
+  { label: "Words per line", key: "perLine", values: [1, 2, 3, 4].map((n) => ({ v: n as CaptionStyle["perLine"], label: String(n) })) },
+  { label: "Size", key: "scale", values: [{ v: 0.85, label: "S" }, { v: 1, label: "M" }, { v: 1.2, label: "L" }, { v: 1.4, label: "XL" }] },
+  { label: "Case", key: "case", values: [{ v: "caps", label: "ABC" }, { v: "title", label: "Abc" }, { v: "lower", label: "abc" }] },
+  {
+    label: "Highlight",
+    key: "highlight",
+    values: [{ v: "gradient", label: "Nexli" }, { v: "green", label: "Green" }, { v: "yellow", label: "Yellow" }, { v: "none", label: "Off" }],
+  },
+  { label: "Background", key: "box", values: [{ v: false, label: "Shade" }, { v: true, label: "Box" }] },
+  { label: "Font", key: "font", values: [{ v: "outfit", label: "Outfit" }, { v: "jakarta", label: "Jakarta" }] },
+];
+const LOOK_DEFAULT: Required<CaptionStyle> = { perLine: 3, scale: 1, case: "caps", highlight: "gradient", box: false, font: "outfit" };
 
 /** "2.4", "0:02.4" or "1:05" → seconds (NaN if unreadable). */
 function parseClock(v: string): number {
@@ -155,14 +195,21 @@ export function EditCard({
     return list;
   }, [latest]);
 
+  // Captions by hand: the look (draft while the panel is open) and retyping one line.
+  const [captionDraft, setCaptionDraft] = useState<CaptionStyle | null>(null);
+  const [lineEdit, setLineEdit] = useState<{ from: number; to: number; text: string } | null>(null);
+  const savedLook = latest?.props?.overlays.captionStyle;
+  const perLine = (captionDraft ?? savedLook)?.perLine ?? 3;
+
   const chunks = useMemo(() => {
     const words = latest?.props?.words ?? [];
-    const out: { start: number; text: string }[] = [];
-    for (let i = 0; i < words.length; i += 3) {
-      out.push({ start: words[i].start, text: words.slice(i, i + 3).map((w) => w.word).join(" ") });
+    const out: { start: number; from: number; to: number; text: string }[] = [];
+    for (let i = 0; i < words.length; i += perLine) {
+      const to = Math.min(words.length, i + perLine) - 1;
+      out.push({ start: words[i].start, from: i, to, text: words.slice(i, to + 1).map((w) => w.word).join(" ") });
     }
     return out;
-  }, [latest]);
+  }, [latest, perLine]);
 
   async function start(style: EditStyle, instruction?: string) {
     if (!chosenCut) return;
@@ -329,7 +376,41 @@ export function EditCard({
   const draftText = editing ? (editing.preview ?? editing.text) : null;
   const withText = withLayout && editing && draftText !== null ? setText(withLayout.overlays, editing.target, draftText) : null;
   const withTime = withText && editing && draftWindow ? setWindow(withText, editing.target, draftWindow.start, draftWindow.end) : withText;
-  const previewProps = withLayout && withTime ? { ...withLayout, overlays: withTime } : withLayout;
+  const baseOverlays = withTime ?? withLayout?.overlays ?? null;
+  const lookOverlays = baseOverlays && captionDraft ? withLook(baseOverlays, captionDraft) : baseOverlays;
+  const previewProps = withLayout && lookOverlays ? { ...withLayout, overlays: lookOverlays } : withLayout;
+  const lookChanged = captionDraft !== null && JSON.stringify(plainLook(captionDraft)) !== JSON.stringify(plainLook(savedLook ?? {}));
+
+  function openLook() {
+    setMoving(null);
+    setEditing(null);
+    setView("preview");
+    setShowWords(false);
+    setCaptionDraft({ ...(savedLook ?? {}) });
+    const first = latest?.props?.words[0];
+    if (first) still(first.start + 0.2);
+  }
+  async function saveLook() {
+    if (!captionDraft) return;
+    const clean = plainLook(captionDraft);
+    setBusy({ label: "Saving the caption look…" });
+    const r = await send(api(`${p.id}/edit/captions`), "POST", { style: Object.keys(clean).length ? clean : null });
+    setBusy(null);
+    if (r.ok) {
+      setCaptionDraft(null);
+      onChange(r.data);
+    } else onError(r.error);
+  }
+  async function saveLine() {
+    if (!lineEdit) return;
+    setBusy({ label: "Saving the caption…" });
+    const r = await send(api(`${p.id}/edit/captions`), "POST", { words: lineEdit });
+    setBusy(null);
+    if (r.ok) {
+      setLineEdit(null);
+      onChange(r.data);
+    } else onError(r.error);
+  }
   const savedWindow = editing && latest?.props ? windowOf(latest.props.overlays, editing.target) : null;
   const timingChanged = Boolean(
     draftWindow && savedWindow && (Math.abs(draftWindow.start - savedWindow.start) > 0.01 || Math.abs(draftWindow.end - savedWindow.end) > 0.01)
@@ -899,26 +980,149 @@ export function EditCard({
             )}
 
             {chunks.length > 0 && latest.style !== "pov" && latest.props?.overlays.captions !== false && (
-              <div className="mt-3">
-                <button type="button" onClick={() => setShowWords((v) => !v)} className="text-[11px] font-semibold text-neutral-500 hover:text-white">
-                  {showWords ? "▾" : "▸"} Captions ({chunks.length} lines) · read them before rendering
-                </button>
-                {showWords && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 rounded-xl border border-white/10 bg-black/20 p-3">
-                    {chunks.map((c, i) => (
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">
+                    Captions{" "}
+                    <span className="normal-case tracking-normal text-neutral-600">
+                      · {chunks.length} lines{savedLook ? " · your look" : " · Nexli look"}
+                    </span>
+                  </p>
+                  {!rendering && (
+                    <div className="flex flex-wrap gap-1.5">
                       <button
-                        key={i}
                         type="button"
-                        onClick={() => jump(c.start)}
-                        disabled={showRender}
-                        className="rounded-md bg-white/[0.04] px-2 py-1 text-left text-[11px] font-bold text-neutral-200 hover:bg-cyan-500/15 hover:text-white"
-                        style={NUM_FONT}
+                        onClick={() => (captionDraft ? setCaptionDraft(null) : openLook())}
+                        className={`rounded-full border px-3 py-1 text-[11px] font-bold ${captionDraft ? "border-cyan-400 bg-cyan-500/20 text-white" : "border-white/10 bg-white/5 text-neutral-300 hover:text-white"}`}
                       >
-                        <span className="mr-1 text-neutral-500">{clock(c.start)}</span>
-                        {c.text}
+                        🎨 Change the look
                       </button>
-                    ))}
-                    <p className="w-full pt-1 text-[10px] text-neutral-500">Wrong word? Say it in the box below, e.g. “the caption says CALCULATING, it should be CALENDAR”.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWords((v) => !v);
+                          setLineEdit(null);
+                        }}
+                        className={`rounded-full border px-3 py-1 text-[11px] font-bold ${showWords ? "border-cyan-400 bg-cyan-500/20 text-white" : "border-white/10 bg-white/5 text-neutral-300 hover:text-white"}`}
+                      >
+                        ✎ Edit the words
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {captionDraft && (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      {LOOK_PRESETS.map((pr) => {
+                        const on = JSON.stringify(plainLook(captionDraft)) === JSON.stringify(plainLook(pr.look));
+                        return (
+                          <button
+                            key={pr.label}
+                            type="button"
+                            onClick={() => setCaptionDraft({ ...pr.look })}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${on ? "border-cyan-400 bg-cyan-500/15 text-white" : "border-white/10 bg-white/[0.04] text-neutral-300 hover:text-white"}`}
+                          >
+                            {pr.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {LOOK_OPTIONS.map((opt) => {
+                        const current = captionDraft[opt.key] ?? LOOK_DEFAULT[opt.key];
+                        return (
+                          <div key={opt.key} className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-neutral-400">{opt.label}</span>
+                            <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px] font-semibold">
+                              {opt.values.map((val) => (
+                                <button
+                                  key={String(val.v)}
+                                  type="button"
+                                  onClick={() => setCaptionDraft({ ...captionDraft, [opt.key]: val.v })}
+                                  className={`rounded-full px-2.5 py-0.5 ${current === val.v ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                                >
+                                  {val.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-neutral-500">The preview shows it as you click. Nexli is the rulebook look (3 words, ALL CAPS, brand gradient).</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void saveLook()}
+                        disabled={!lookChanged || Boolean(busy)}
+                        className="rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                      >
+                        Save look
+                      </button>
+                      <button type="button" onClick={() => setCaptionDraft(null)} className="px-1 text-xs font-semibold text-neutral-500 hover:text-white">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {showWords && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {chunks.map((c, i) => {
+                        const open = lineEdit?.from === c.from;
+                        return (
+                          <button
+                            key={`${c.from}-${i}`}
+                            type="button"
+                            onClick={() => {
+                              setView("preview");
+                              still(c.start + 0.1);
+                              setLineEdit(open ? null : { from: c.from, to: c.to, text: c.text });
+                            }}
+                            className={`rounded-md px-2 py-1 text-left text-[11px] font-bold ${open ? "bg-cyan-500/25 text-white ring-1 ring-cyan-400" : "bg-white/[0.04] text-neutral-200 hover:bg-cyan-500/15 hover:text-white"}`}
+                            style={NUM_FONT}
+                          >
+                            <span className="mr-1 text-neutral-500">{clock(c.start)}</span>
+                            {c.text}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {lineEdit && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-500/[0.05] p-2">
+                        <input
+                          autoFocus
+                          value={lineEdit.text}
+                          onChange={(e) => setLineEdit({ ...lineEdit, text: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void saveLine();
+                            }
+                            if (e.key === "Escape") setLineEdit(null);
+                          }}
+                          className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-2.5 py-1.5 text-sm uppercase text-white focus:border-cyan-400/50 focus:outline-none"
+                          aria-label="Caption words"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void saveLine()}
+                          disabled={Boolean(busy)}
+                          className="rounded-full bg-cyan-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                        >
+                          Save
+                        </button>
+                        <button type="button" onClick={() => setLineEdit(null)} className="px-1 text-xs font-semibold text-neutral-500 hover:text-white">
+                          Cancel
+                        </button>
+                        <p className="w-full text-[10px] text-neutral-500">
+                          The new words keep this line&apos;s timing. Leave it empty to take these words out of the captions (the audio stays).
+                        </p>
+                      </div>
+                    )}
+                    {!lineEdit && <p className="text-[10px] text-neutral-500">Click a line to jump there and retype it.</p>}
                   </div>
                 )}
               </div>

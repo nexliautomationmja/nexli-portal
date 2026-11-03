@@ -41,6 +41,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const words = sameCut ? prev.props.words : built.words;
     // Spots placed by hand (title clear of her face…) carry over to a new style on the same cut.
     const layout = sameCut ? prev.props.overlays.layout : undefined;
+    const captionStyle = sameCut ? prev.props.overlays.captionStyle : undefined;
     const durationS = await durationOf(finalCut, body.durationS, words);
     const result = await proposeLayout({ ...editContext(project, style, durationS, words, built.lines), instruction: instruction || undefined });
     const unaligned = built.unaligned.length
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         format: project.format,
         durationS,
         words,
-        overlays: { ...result.overlays, ...(layout ? { layout } : {}) },
+        overlays: { ...result.overlays, ...(layout ? { layout } : {}), ...(captionStyle ? { captionStyle } : {}) },
         ...(instruction ? { instruction } : {}),
       },
       notes: `${result.notes}${unaligned}`.trim() || null,

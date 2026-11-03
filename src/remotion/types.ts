@@ -59,6 +59,21 @@ export type MovableSlot = "title" | "qualifier" | "cta" | "captions" | "stickers
 
 export type EditLayout = Partial<Record<MovableSlot, Anchor>>;
 
+/** How the captions look. Absence of a field = the rulebook's captions. */
+export interface CaptionStyle {
+  /** Words per caption line (rulebook: 3). */
+  perLine?: 1 | 2 | 3 | 4;
+  /** Size multiplier on the rig's caption size. */
+  scale?: number;
+  /** caps = ALL CAPS (rulebook), title = Title Case, lower = lowercase; acronyms and figures stay as they are. */
+  case?: "caps" | "title" | "lower";
+  /** The active word's colour (rulebook: the brand gradient). none = no karaoke highlight. */
+  highlight?: "gradient" | "green" | "yellow" | "none";
+  /** A dark box behind the words instead of the scrim. */
+  box?: boolean;
+  font?: "outfit" | "jakarta";
+}
+
 export interface EditOverlays {
   /** Solo + ladder: the one title banner (a distillation, never a quote of the caption). */
   title: TimedText | null;
@@ -78,6 +93,8 @@ export interface EditOverlays {
   zooms?: Zoom[];
   /** Hand-placed positions. Absence of a slot = the rig's measured default geometry. */
   layout?: EditLayout;
+  /** Hand-set caption look. Absence = the rulebook's captions. */
+  captionStyle?: CaptionStyle;
 }
 
 // A type alias (not an interface) so it satisfies Remotion's Record<string, unknown> props constraint.
