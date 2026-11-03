@@ -287,3 +287,51 @@ export function ErrorStrip({ children, onClose }: { children: React.ReactNode; o
     </div>
   );
 }
+
+/**
+ * Floating ↓ / ↑ button: jumps to the bottom of a long thread (the editor and
+ * the chat box), or back to the top once you're there. Hidden when the page
+ * is short. The dashboard scrolls the window, so it watches the window.
+ */
+export function ScrollJump() {
+  const [dir, setDir] = useState<"down" | "up" | null>(null);
+
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const doc = document.documentElement;
+        const fromBottom = doc.scrollHeight - (window.scrollY + window.innerHeight);
+        setDir(fromBottom > 400 ? "down" : window.scrollY > 400 ? "up" : null);
+      });
+    };
+    measure();
+    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    // Cards load and grow (clips, previews): re-check when the page height changes.
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+      ro.disconnect();
+    };
+  }, []);
+
+  if (!dir) return null;
+  const down = dir === "down";
+  return (
+    <button
+      type="button"
+      onClick={() => window.scrollTo({ top: down ? document.documentElement.scrollHeight : 0, behavior: "smooth" })}
+      className="fixed right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-slate-900/85 text-white shadow-lg shadow-cyan-500/20 backdrop-blur-md transition hover:border-cyan-400/50 hover:bg-slate-800 sm:right-6"
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 9rem)" }}
+      aria-label={down ? "Jump to the bottom" : "Back to the top"}
+      title={down ? "Jump to the bottom" : "Back to the top"}
+    >
+      <SvgIcon d={<path d={down ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"} />} size={20} />
+    </button>
+  );
+}
