@@ -22,6 +22,7 @@ import {
   ShieldIcon,
   RocketIcon,
   ScanIcon,
+  SparklesIcon,
   SunIcon,
   MoonIcon,
   LogOutIcon,
@@ -149,7 +150,10 @@ const fullNav: NavItem[] = fullNavOrder
   .map((href) => [...firmNav, ...agencyNav].find((n) => n.href === href))
   .filter((n): n is NavItem => !!n);
 
-const adminNav: NavItem[] = [];
+/** Admin-only tools (Marcel and team members). */
+const adminNav: NavItem[] = [
+  { href: "/dashboard/creative-studio", label: "Creative Studio", icon: SparklesIcon, accent: "violet" },
+];
 
 export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMessages = false }: SidebarProps) {
   const pathname = usePathname();
