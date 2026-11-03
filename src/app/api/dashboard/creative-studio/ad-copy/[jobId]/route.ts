@@ -51,7 +51,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (!access.ok) return access.response;
   const job = await loadJob(access.ownerId, (await params).jobId);
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  await removePaths([job.storagePath, ...(metaOf(job).framePaths ?? [])]);
+  await removePaths([job.storagePath, ...(metaOf(job).framePaths ?? []), metaOf(job).audioPath]);
   await db.delete(creativeAssets).where(eq(creativeAssets.id, job.id));
   return NextResponse.json({ ok: true });
 }

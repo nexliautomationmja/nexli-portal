@@ -9,6 +9,7 @@ import { AssistantCard, Chip, ErrorStrip, SP, StudioCanvas, StudioTabs, SvgIcon,
 import { AdCopyResults } from "@/components/creative-studio/ad-copy-results";
 import { META_LIME, META_LIME_CONIC, MetaChip } from "@/components/creative-studio/meta";
 import { acceptFiles, copyAllText, copyCsv, MAX_CREATIVES } from "@/components/creative-studio/ad-copy-export";
+import { prepareVideo, WHOLE_UPLOAD_LIMIT } from "@/components/creative-studio/ad-copy-prepare";
 
 const BASE = "/api/dashboard/creative-studio/ad-copy";
 const ACCEPT = ["video/mp4", "video/quicktime", "image/png", "image/jpeg", "image/webp"];
@@ -28,7 +29,7 @@ async function call<T>(url: string, method: string, body?: unknown): Promise<T> 
   return data as T;
 }
 
-type Status = "ready" | "uploading" | "working" | "done" | "failed";
+type Status = "ready" | "preparing" | "uploading" | "working" | "done" | "failed";
 
 interface Item {
   key: string;
@@ -42,6 +43,7 @@ interface Item {
 
 const STATUS: Record<Status, { label: (kind: "video" | "image") => string; tone: "neutral" | "blue" | "green" | "red" | "amber" }> = {
   ready: { label: () => "Ready", tone: "neutral" },
+  preparing: { label: () => "Reading the video…", tone: "blue" },
   uploading: { label: () => "Uploading…", tone: "blue" },
   working: { label: (k) => (k === "video" ? "Listening & writing…" : "Looking & writing…"), tone: "amber" },
   done: { label: () => "✓ Done", tone: "green" },
@@ -119,17 +121,26 @@ export function AdCopyStudio() {
     try {
       let jobId = it.jobId;
       if (!jobId) {
-        patch(it.key, { status: "uploading", error: undefined });
-        const target = await call<{ path: string; token: string }>(BASE, "POST", { action: "sign", mime: it.file.type });
-        await uploadToTarget(target, it.file, it.file.type);
-        const reg = await call<{ id: string }>(BASE, "POST", {
-          action: "register",
-          path: target.path,
-          mime: it.file.type,
-          filename: it.file.name,
-          note,
-          ...(group ? { group, groupIndex: index } : {}),
-        });
+        const put = async (blob: Blob, mime: string) => {
+          const target = await call<{ path: string; token: string }>(BASE, "POST", { action: "sign", mime });
+          await uploadToTarget(target, blob, mime);
+          return target.path;
+        };
+        const common = { action: "register", mime: it.file.type, filename: it.file.name, note, ...(group ? { group, groupIndex: index } : {}) };
+        let reg: { id: string };
+        if (it.kind === "video" && it.file.size > WHOLE_UPLOAD_LIMIT) {
+          // Too big for the storage upload limit: send only the stills and the soundtrack.
+          patch(it.key, { status: "preparing", error: undefined });
+          const { frames, audio } = await prepareVideo(it.file);
+          patch(it.key, { status: "uploading" });
+          const framePaths: string[] = [];
+          for (const f of frames) framePaths.push(await put(f, "image/jpeg"));
+          const audioPath = audio ? await put(audio, "audio/wav") : null;
+          reg = await call<{ id: string }>(BASE, "POST", { ...common, path: framePaths[0], prepared: true, framePaths, audioPath });
+        } else {
+          patch(it.key, { status: "uploading", error: undefined });
+          reg = await call<{ id: string }>(BASE, "POST", { ...common, path: await put(it.file, it.file.type) });
+        }
         jobId = reg.id;
         patch(it.key, { jobId });
       }
@@ -175,7 +186,7 @@ export function AdCopyStudio() {
         return [];
       });
     } else {
-      setError(`${failed} of ${list.length} didn't finish. Retry ${failed === 1 ? "it" : "them"} below.`);
+      setError(`${failed} of ${list.length} didn't finish. The reason is on each one; retry ${failed === 1 ? "it" : "them"} below.`);
     }
   }
 
@@ -260,7 +271,7 @@ export function AdCopyStudio() {
         <AdCopyResults
           copy={v}
           versions={j.versions.length}
-          media={{ url: j.mediaUrl, kind: j.media }}
+          media={{ url: j.mediaUrl, kind: j.previewKind }}
           busy={Boolean(busyJob)}
           onRevise={(text) => void again(j.id, { note: text })}
           onFresh={() => void again(j.id, {})}
@@ -359,14 +370,16 @@ export function AdCopyStudio() {
                           </button>
                         )}
                         {it.status === "failed" && !running && (
-                          <button
-                            type="button"
-                            onClick={() => void writeAll([it])}
-                            className="absolute inset-x-1.5 top-9 rounded-md bg-rose-500/90 px-2 py-1 text-[10px] font-bold text-white hover:bg-rose-500"
-                            title={it.error}
-                          >
-                            ↻ Retry
-                          </button>
+                          <div className="absolute inset-x-1.5 top-9 space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => void writeAll([it])}
+                              className="w-full rounded-md bg-rose-500/90 px-2 py-1 text-[10px] font-bold text-white hover:bg-rose-500"
+                            >
+                              ↻ Retry
+                            </button>
+                            {it.error && <p className="line-clamp-3 rounded-md bg-black/80 px-1.5 py-1 text-[9px] leading-snug text-rose-100">{it.error}</p>}
+                          </div>
                         )}
                       </div>
                     );

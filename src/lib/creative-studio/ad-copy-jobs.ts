@@ -28,6 +28,13 @@ export interface CopyJobMeta {
   transcript?: string;
   /** Stored stills of a video (JPEG), in order. */
   framePaths?: string[];
+  /**
+   * Big videos are prepared in the browser (storage refuses files over its
+   * upload limit): only the stills and the soundtrack (WAV) are uploaded,
+   * and storagePath is the first still.
+   */
+  prepared?: boolean;
+  audioPath?: string | null;
   versions?: AdCopyVersion[];
 }
 
@@ -39,6 +46,7 @@ export const COPY_MEDIA: Record<string, "video" | "image"> = {
   "image/webp": "image",
 };
 export const COPY_EXT: Record<string, string> = {
+  "audio/wav": "wav",
   "video/mp4": "mp4",
   "video/quicktime": "mov",
   "image/png": "png",
@@ -74,6 +82,8 @@ export async function jobViews(jobs: Asset[]) {
       media,
       mime: j.mime,
       mediaUrl,
+      /** What the feed preview can show: the video, or (for a big prepared video) its first still. */
+      previewKind: (m.prepared ? "image" : media) as "video" | "image",
       thumbUrl: media === "image" ? mediaUrl : m.framePaths?.[0] ? signed.get(m.framePaths[0]) ?? null : null,
       note: m.note ?? "",
       group: m.group ?? null,
@@ -115,7 +125,18 @@ export async function copyContextFor(job: Asset, ownerId: string): Promise<CopyC
 
   let transcript = m.transcript;
   let framePaths = m.framePaths;
-  if (transcript === undefined || !framePaths?.length) {
+  if (m.prepared) {
+    // Stills and soundtrack came from the browser; the video itself was never uploaded.
+    if (transcript === undefined) {
+      const audio = m.audioPath;
+      const url = audio ? (await signPaths([audio], 3600)).get(audio) : undefined;
+      transcript = audio && url ? (await transcribeUrl(url, () => readStorage(audio))).text : "";
+      await db
+        .update(creativeAssets)
+        .set({ metadata: { ...m, transcript } })
+        .where(eq(creativeAssets.id, job.id));
+    }
+  } else if (transcript === undefined || !framePaths?.length) {
     const source = job.storagePath;
     const url = (await signPaths([source], 3600)).get(source);
     if (!url) throw new Error("Couldn't read the video from storage");

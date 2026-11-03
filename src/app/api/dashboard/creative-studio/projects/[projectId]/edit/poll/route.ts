@@ -83,7 +83,17 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
     let outputAssetId: string | null = null;
     if (size <= COPY_LIMIT) {
       const storagePath = `${project.id}/edits/v${edit.version}-${edit.id}.mp4`;
-      await writeStorage(storagePath, await fs.readFile(file), "video/mp4");
+      try {
+        await writeStorage(storagePath, await fs.readFile(file), "video/mp4");
+      } catch (err) {
+        // Over the storage upload limit (50 MB on Supabase's free plan): keep it on AWS, downloaded from there.
+        console.warn("[creative-studio] render kept on S3:", err instanceof Error ? err.message : err);
+        await db
+          .update(creativeEdits)
+          .set({ status: "done", progress: 100, outputAssetId: null, outputKey: state.outKey, specs, updatedAt: new Date() })
+          .where(eq(creativeEdits.id, edit.id));
+        return NextResponse.json(await projectDetail(project));
+      }
       const [asset] = await db
         .insert(creativeAssets)
         .values({
