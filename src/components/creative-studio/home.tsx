@@ -22,6 +22,8 @@ interface ProjectRow {
   thumbUrl: string | null;
   updatedAt: string;
   batchId: string | null;
+  /** Best video to preview on hover (final render > final cut > auto-cut > first clip). */
+  previewUrl: string | null;
 }
 
 interface BatchRow {
@@ -301,45 +303,11 @@ export function StudioHome() {
           ) : projects.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-white/10 py-8 text-center text-sm text-neutral-500">Your videos will show up here.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {projects.map((p, i) => {
-                const pill = STATUS_PILL[p.status] ?? STATUS_PILL.draft;
-                return (
-                  <Link
-                    key={p.id}
-                    href={`/dashboard/creative-studio/${p.id}`}
-                    className="lp-card group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-blue-400/30 hover:bg-white/[0.05]"
-                    style={{ animationDelay: `${Math.min(0.4, 0.2 + i * 0.03)}s` }}
-                  >
-                    <div className="relative aspect-[4/3] bg-black">
-                      {p.thumbUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
-                        <img src={p.thumbUrl} alt="" className="h-full w-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-[1.04]" />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-neutral-600">
-                          <SvgIcon d={SP.image} size={28} />
-                        </div>
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent" />
-                      <span className="absolute right-2 top-2">
-                        <Chip tone={pill.tone}>{pill.label}</Chip>
-                      </span>
-                      {p.batchId && (
-                        <span className="absolute left-2 top-2">
-                          <Chip>Batch</Chip>
-                        </span>
-                      )}
-                      <span className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white/80">
-                        {p.format === "vsl_16x9" ? "VSL" : "Ad"} · {p.clips} clips
-                      </span>
-                    </div>
-                    <div className="p-3">
-                      <p className="truncate text-sm font-semibold text-white">{p.title}</p>
-                      <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-neutral-500">{p.direction || "No direction yet"}</p>
-                    </div>
-                  </Link>
-                );
-              })}
+            // Masonry columns, so tall 9:16 ads and wide 16:9 VSLs sit together without gaps.
+            <div className="columns-2 gap-3 sm:columns-3">
+              {projects.map((p, i) => (
+                <ProjectCard key={p.id} p={p} delay={Math.min(0.4, 0.2 + i * 0.03)} />
+              ))}
             </div>
           )}
         </section>
@@ -432,5 +400,82 @@ function MiniPost({ tone }: { tone: string }) {
         <span className="rounded bg-white/15 px-1.5 py-0.5 text-[7px] font-bold text-white">Book Now</span>
       </div>
     </>
+  );
+}
+
+/**
+ * A recent video in its own shape (9:16 ad, 16:9 VSL). Hovering plays a muted
+ * preview in place; the video only loads on hover, so the grid stays light.
+ */
+function ProjectCard({ p, delay }: { p: ProjectRow; delay: number }) {
+  const [hover, setHover] = useState(false);
+  const [ready, setReady] = useState(false);
+  const pill = STATUS_PILL[p.status] ?? STATUS_PILL.draft;
+  const vsl = p.format === "vsl_16x9";
+  return (
+    <Link
+      href={`/dashboard/creative-studio/${p.id}`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => {
+        setHover(false);
+        setReady(false);
+      }}
+      className="lp-card group mb-3 block break-inside-avoid overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.05] hover:shadow-xl hover:shadow-blue-600/10"
+      style={{ animationDelay: `${delay}s` }}
+    >
+      <div className={`relative bg-black ${vsl ? "aspect-video" : "aspect-[9/16]"}`}>
+        {p.thumbUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+          <img src={p.thumbUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-90" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-neutral-600">
+            <SvgIcon d={SP.image} size={28} />
+          </div>
+        )}
+        {hover && p.previewUrl && (
+          <video
+            src={p.previewUrl}
+            muted
+            loop
+            playsInline
+            autoPlay
+            preload="auto"
+            onPlaying={() => setReady(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${ready ? "opacity-100" : "opacity-0"}`}
+          />
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/85 to-transparent" />
+        <span className="absolute right-2 top-2">
+          <Chip tone={pill.tone}>{pill.label}</Chip>
+        </span>
+        {p.batchId && (
+          <span className="absolute left-2 top-2">
+            <Chip>Batch</Chip>
+          </span>
+        )}
+        {p.previewUrl && (
+          <span
+            className={`absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-300 ${
+              hover ? "opacity-0" : "opacity-80"
+            }`}
+            aria-hidden="true"
+          >
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
+            </svg>
+          </span>
+        )}
+        {hover && p.previewUrl && !ready && (
+          <span className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-2 border-white/20 border-t-white" aria-hidden="true" />
+        )}
+        <span className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white/85">
+          {vsl ? "VSL · 16:9" : "Ad · 9:16"} · {p.clips} clips
+        </span>
+      </div>
+      <div className="p-3">
+        <p className="truncate text-sm font-semibold text-white">{p.title}</p>
+        <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-neutral-500">{p.direction || "No direction yet"}</p>
+      </div>
+    </Link>
   );
 }
