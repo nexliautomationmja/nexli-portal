@@ -22,7 +22,6 @@ import {
   ShieldIcon,
   RocketIcon,
   ScanIcon,
-  SparklesIcon,
   SunIcon,
   MoonIcon,
   LogOutIcon,
@@ -30,6 +29,7 @@ import {
   XIcon,
 } from "@/components/ui/icons";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
+import { MetaLogo } from "@/components/creative-studio/meta";
 import { ShimmerPill } from "@/components/ui/shimmer-pill";
 import type { Tier } from "@/lib/tier-access";
 
@@ -67,7 +67,8 @@ type NavAccent =
   | "violet"
   | "emerald"
   | "amber"
-  | "neutral";
+  | "neutral"
+  | "meta";
 
 interface NavItem {
   href: string;
@@ -150,10 +151,15 @@ const fullNav: NavItem[] = fullNavOrder
   .map((href) => [...firmNav, ...agencyNav].find((n) => n.href === href))
   .filter((n): n is NavItem => !!n);
 
-/** Admin-only tools (Marcel and team members). */
+/** Admin-only tools (Marcel and team members), shown right after Engagements. */
 const adminNav: NavItem[] = [
-  { href: "/dashboard/creative-studio", label: "Creative Studio", icon: SparklesIcon, accent: "violet" },
+  { href: "/dashboard/creative-studio", label: "Creative Studio", icon: MetaLogo, accent: "meta" },
 ];
+
+function withAdminTools(nav: NavItem[]): NavItem[] {
+  const at = nav.findIndex((n) => n.href === "/dashboard/engagements");
+  return at < 0 ? [...nav, ...adminNav] : [...nav.slice(0, at + 1), ...adminNav, ...nav.slice(at + 1)];
+}
 
 export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMessages = false }: SidebarProps) {
   const pathname = usePathname();
@@ -163,7 +169,7 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMess
 
   // Admin → everything; Foundation → firm tools only; DRS → the full list.
   const baseNav = isAdmin
-    ? [...fullNav, ...adminNav]
+    ? withAdminTools(fullNav)
     : tier === "foundation"
       ? firmNav
       : fullNav;
