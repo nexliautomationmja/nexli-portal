@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ACCENT, LaunchPadStyles, SYNE, type Accent } from "@/components/launch-pad";
+import Link from "next/link";
+import { ACCENT, LaunchPadStyles, SHIMMER_CONIC, SYNE, type Accent } from "@/components/launch-pad";
 
 /**
  * Creative Studio visual foundation: a Launch Pad canvas (the dark navy,
@@ -114,6 +115,12 @@ export const SP = {
   ),
   x: <path d="M18 6 6 18M6 6l12 12" />,
   chevronLeft: <path d="m15 18-6-6 6-6" />,
+  pen: (
+    <>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </>
+  ),
   globe: (
     <>
       <circle cx="12" cy="12" r="10" />
@@ -345,5 +352,73 @@ export function ScrollJump() {
       <SvgIcon d={<path d={down ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"} />} size={18} />
       {down ? "Scroll to bottom" : "Back to top"}
     </button>
+  );
+}
+
+const STUDIO_TABS = [
+  {
+    id: "videos",
+    href: "/dashboard/creative-studio",
+    label: "Videos",
+    sub: "Script → Kling → edit",
+    icon: SP.film,
+    on: "bg-gradient-to-r from-blue-600 to-cyan-500 shadow-lg shadow-blue-500/40",
+    tint: "group-hover:bg-blue-500/20 group-hover:text-blue-200",
+    badge: false,
+  },
+  {
+    id: "adcopy",
+    href: "/dashboard/creative-studio/ad-copy",
+    label: "Ad copy",
+    sub: "Drop a video, get the copy",
+    icon: SP.pen,
+    on: "bg-gradient-to-r from-violet-600 to-fuchsia-500 shadow-lg shadow-violet-500/40",
+    tint: "group-hover:bg-violet-500/20 group-hover:text-violet-200",
+    badge: true,
+  },
+] as const;
+
+/**
+ * The studio's two tabs — Videos and Ad copy — as a glass segmented control
+ * in the Launch Pad shimmer frame, so it reads as navigation at a glance.
+ */
+export function StudioTabs({ active }: { active: "videos" | "adcopy" }) {
+  return (
+    <nav aria-label="Creative Studio" className="relative inline-flex w-full max-w-lg overflow-hidden rounded-[22px] p-[1.5px] sm:w-auto">
+      <span aria-hidden="true" className="pointer-events-none absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-70" style={{ background: SHIMMER_CONIC }} />
+      <span aria-hidden="true" className="pointer-events-none absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-40 blur-md" style={{ background: SHIMMER_CONIC }} />
+      <div className="relative z-10 grid w-full grid-cols-2 gap-1 rounded-[21px] bg-[#0b1220]/95 p-1 backdrop-blur-xl">
+        {STUDIO_TABS.map((t) => {
+          const on = t.id === active;
+          return (
+            <Link
+              key={t.id}
+              href={t.href}
+              aria-current={on ? "page" : undefined}
+              className={`group relative flex items-center gap-2.5 rounded-[18px] px-3 py-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 sm:px-4 sm:py-2.5 ${
+                on ? `${t.on} text-white` : "text-neutral-400 hover:bg-white/[0.06] hover:text-white"
+              }`}
+            >
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${on ? "bg-white/20 text-white" : `bg-white/5 text-neutral-400 ${t.tint}`}`}
+              >
+                <SvgIcon d={t.icon} size={18} />
+              </span>
+              <span className="min-w-0 text-left">
+                <span className="flex items-center gap-1.5 text-sm font-bold leading-tight" style={SYNE}>
+                  {t.label}
+                  {t.badge && !on && (
+                    <span className="animate-pulse rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 px-1.5 py-px text-[8px] font-black uppercase tracking-wider text-white shadow shadow-fuchsia-500/40">
+                      New
+                    </span>
+                  )}
+                </span>
+                <span className={`hidden truncate text-[11px] leading-tight sm:block ${on ? "text-white/75" : "text-neutral-500 group-hover:text-neutral-300"}`}>{t.sub}</span>
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import type { CopyJobView } from "@/lib/creative-studio/ad-copy-jobs";
 import { CTA_CLASSES, SYNE } from "@/components/launch-pad";
 import { uploadToTarget } from "@/components/creative-studio/upload";
-import { AssistantCard, Chip, ErrorStrip, GradientText, SP, StudioCanvas, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
+import { AssistantCard, Chip, ErrorStrip, SP, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { AdCopyResults } from "@/components/creative-studio/ad-copy-results";
 
 const BASE = "/api/dashboard/creative-studio/ad-copy";
@@ -128,20 +127,15 @@ export function AdCopyStudio() {
   return (
     <StudioCanvas>
       <div className="mx-auto max-w-4xl px-4 pb-16 sm:px-6">
-        <header className="flex items-center gap-3 border-b border-white/5 py-4">
-          <Link href="/dashboard/creative-studio" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label="Back to Creative Studio">
-            <SvgIcon d={SP.chevronLeft} />
-          </Link>
-          <h1 className="text-base font-bold text-white sm:text-lg" style={SYNE}>
-            Ad copy
-          </h1>
+        <header className="lp-card flex justify-center pb-2 pt-8 sm:pt-12">
+          <StudioTabs active="adcopy" />
         </header>
 
         <div className="space-y-5 py-6">
           <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tighter text-white sm:text-4xl" style={SYNE}>
-              Drop it in, get the <GradientText>copy</GradientText>
-            </h2>
+            <h1 className="text-3xl font-bold tracking-tighter text-white sm:text-5xl" style={SYNE}>
+              Drop it in. <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">Get the copy.</span>
+            </h1>
             <p className="mx-auto mt-2 max-w-xl text-sm text-neutral-400">
               Any video or image. I listen to it and watch it, then write 4 primary texts and 4 headlines for Meta, in your style.
             </p>
@@ -187,29 +181,50 @@ export function AdCopyStudio() {
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => input.current?.click()}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragging(false);
-                  choose(Array.from(e.dataTransfer.files)[0]);
-                }}
-                className={`flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-14 text-center transition-colors ${
-                  dragging ? "border-violet-400 bg-violet-500/10" : "border-white/15 hover:border-violet-400/50 hover:bg-white/[0.02]"
-                }`}
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/15 text-violet-300">
-                  <SvgIcon d={SP.upload} size={22} />
-                </span>
-                <span className="text-sm font-semibold text-white">Drop a video or image here</span>
-                <span className="text-xs text-neutral-500">MP4 or MOV · PNG, JPG or WebP · or click to choose</span>
-              </button>
+              <div className={`relative overflow-hidden rounded-2xl p-[2px] transition-shadow ${dragging ? "shadow-2xl shadow-violet-600/40" : ""}`}>
+                {/* Animated violet border while a file is over it. */}
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute inset-[-100%] animate-[shimmer_4s_linear_infinite] transition-opacity ${dragging ? "opacity-100" : "opacity-0"}`}
+                  style={{ background: "conic-gradient(from 0deg at 50% 50%, #8B5CF6, #D946EF, #EC4899, #8B5CF6, #D946EF, #8B5CF6)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => input.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    choose(Array.from(e.dataTransfer.files)[0]);
+                  }}
+                  className={`group relative z-10 flex w-full flex-col items-center justify-center gap-3 rounded-[14px] border-2 border-dashed bg-[#0b1220] px-6 py-14 text-center transition-colors [&>*]:pointer-events-none ${
+                    dragging ? "border-transparent bg-violet-950/60" : "border-white/15 hover:border-violet-400/50 hover:bg-violet-500/[0.04]"
+                  }`}
+                >
+                  <span
+                    className="flex h-16 w-16 items-center justify-center rounded-2xl border border-violet-400/40 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/20 text-violet-100 shadow-lg shadow-violet-600/30"
+                    style={{ animation: "lp-float 4s ease-in-out infinite" }}
+                  >
+                    <SvgIcon d={SP.upload} size={26} />
+                  </span>
+                  <span className="text-base font-bold text-white" style={SYNE}>
+                    {dragging ? "Let go to drop it in" : "Drop a video or image here"}
+                  </span>
+                  <span className="flex flex-wrap justify-center gap-2 text-[11px] font-semibold">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-neutral-300">
+                      <SvgIcon d={SP.film} size={13} /> Video · MP4, MOV
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-neutral-300">
+                      <SvgIcon d={SP.image} size={13} /> Image · PNG, JPG, WebP
+                    </span>
+                  </span>
+                  <span className="text-xs text-neutral-500 group-hover:text-neutral-300">or click to choose a file</span>
+                </button>
+              </div>
             )}
             <input ref={input} type="file" accept={ACCEPT.join(",")} hidden onChange={(e) => {
               choose(e.target.files?.[0]);

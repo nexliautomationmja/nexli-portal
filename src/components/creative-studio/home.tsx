@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
-import { SYNE, ShimmerPill } from "@/components/launch-pad";
+import { SYNE } from "@/components/launch-pad";
 import { uploadFrameFile } from "@/components/creative-studio/upload";
-import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
+import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { Composer, type ComposerSubmit } from "@/components/creative-studio/composer";
 import { BatchPlanCard, type BatchPlan } from "@/components/creative-studio/batch-plan-card";
 import { assignFrames, BATCH_MAX } from "@/lib/creative-studio/batch-shared";
@@ -171,18 +171,8 @@ export function StudioHome() {
   return (
     <StudioCanvas>
       <div className="mx-auto max-w-3xl px-4 pb-16 pt-10 sm:px-6 sm:pt-20">
-        <div className="lp-card flex flex-wrap items-center justify-center gap-3">
-          <ShimmerPill>
-            <SvgIcon d={SP.sparkles} size={14} className="text-cyan-300" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white md:text-xs">Creative Studio</span>
-          </ShimmerPill>
-          <Link
-            href="/dashboard/creative-studio/ad-copy"
-            className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/40 bg-violet-500/15 px-4 py-2 text-xs font-bold text-violet-100 transition hover:bg-violet-500/25 hover:text-white"
-            title="Drop any video or image and get 4 primary texts and 4 headlines"
-          >
-            ✍️ Ad copy
-          </Link>
+        <div className="lp-card flex justify-center">
+          <StudioTabs active="videos" />
         </div>
         <h1 className="lp-card mt-6 text-center text-4xl font-bold tracking-tighter text-white sm:text-5xl" style={{ ...SYNE, animationDelay: "0.05s" }}>
           What are we <GradientText>making?</GradientText>
@@ -251,6 +241,8 @@ export function StudioHome() {
             ))}
           </div>
         </div>
+
+        <AdCopyFeature />
 
         {batches.length > 0 && (
           <section className="mt-16">
@@ -352,5 +344,88 @@ export function StudioHome() {
         </section>
       </div>
     </StudioCanvas>
+  );
+}
+
+/** The Ad copy tool, shown on the studio home so it's easy to find. */
+function AdCopyFeature() {
+  return (
+    <Link
+      href="/dashboard/creative-studio/ad-copy"
+      className="lp-card group relative mt-12 block overflow-hidden rounded-3xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.12] via-[#0b1220] to-fuchsia-500/[0.07] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-400/50 hover:shadow-2xl hover:shadow-violet-600/20 sm:p-7"
+      style={{ animationDelay: "0.2s" }}
+    >
+      <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-64 w-64 rounded-full bg-violet-600/25 blur-3xl transition-opacity group-hover:opacity-100" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-32 h-56 w-56 rounded-full bg-fuchsia-500/15 blur-3xl" />
+      <div className="relative grid items-center gap-6 sm:grid-cols-[1fr_auto]">
+        <div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/40 bg-violet-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-violet-200">
+            <SvgIcon d={SP.pen} size={12} /> Ad copy
+            <span className="rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 px-1.5 py-px text-[8px] tracking-wider text-white">New</span>
+          </span>
+          <h3 className="mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl" style={SYNE}>
+            Drop in any video.{" "}
+            <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">Get the copy.</span>
+          </h3>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-neutral-400">
+            I listen to it, watch it, and write <b className="text-white">4 primary texts</b> and <b className="text-white">4 headlines</b> for Meta, in your style. Images work too.
+          </p>
+          <span className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-600/30 transition-shadow group-hover:shadow-violet-500/50">
+            Open Ad copy <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
+          </span>
+        </div>
+        <AdCopyArt />
+      </div>
+    </Link>
+  );
+}
+
+/** Two mini feed posts and the four versions, drawn with divs. */
+function AdCopyArt() {
+  return (
+    <div aria-hidden="true" className="relative hidden h-48 w-64 sm:block">
+      <div className="absolute left-0 top-6 w-36 -rotate-6 rounded-xl border border-white/10 bg-[#0f172a] p-2 shadow-xl" style={{ animation: "lp-float 6s ease-in-out infinite" }}>
+        <MiniPost tone="from-blue-600/50 to-cyan-500/30" />
+      </div>
+      <div
+        className="absolute right-0 top-0 w-40 rotate-3 rounded-xl border border-violet-400/30 bg-[#111a2e] p-2 shadow-2xl shadow-violet-900/50"
+        style={{ animation: "lp-float 5s ease-in-out 0.6s infinite" }}
+      >
+        <MiniPost tone="from-violet-600/70 to-fuchsia-500/40" />
+      </div>
+      {["V1", "V2", "V3", "V4"].map((v, i) => (
+        <span
+          key={v}
+          className="absolute bottom-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-black text-white shadow-lg backdrop-blur"
+          style={{ left: `${6 + i * 24}%`, animation: `lp-float ${4 + i * 0.5}s ease-in-out ${i * 0.3}s infinite` }}
+        >
+          {v}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function MiniPost({ tone }: { tone: string }) {
+  return (
+    <>
+      <div className="flex items-center gap-1.5">
+        {/* eslint-disable-next-line @next/next/no-img-element -- small static logo */}
+        <img src="/logos/nexli-avatar.png" alt="" className="h-4 w-4 rounded-full" />
+        <span className="h-1.5 w-10 rounded bg-white/40" />
+      </div>
+      <div className="mt-2 space-y-1">
+        <span className="block h-1.5 w-full rounded bg-white/25" />
+        <span className="block h-1.5 w-4/5 rounded bg-white/20" />
+        <span className="block h-1.5 w-3/5 rounded bg-white/15" />
+      </div>
+      <div className={`relative mt-2 aspect-[4/3] rounded-md bg-gradient-to-br ${tone}`}>
+        <span className="absolute inset-0 m-auto flex h-6 w-6 items-center justify-center rounded-full bg-white/90 pl-0.5 text-[9px] text-black">▶</span>
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="h-1.5 w-14 rounded bg-white/30" />
+        <span className="rounded bg-white/15 px-1.5 py-0.5 text-[7px] font-bold text-white">Book Now</span>
+      </div>
+    </>
   );
 }
