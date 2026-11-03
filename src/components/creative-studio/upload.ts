@@ -70,10 +70,10 @@ export async function uploadToTarget(target: { path: string; token: string }, bl
     .storage.from("creative-studio")
     .uploadToSignedUrl(target.path, target.token, blob, { contentType: mime, upsert: false });
   if (error) {
-    // Supabase refuses files over the project's upload limit (100 MB, set in Supabase → Storage → Settings).
+    // Supabase refuses files over the project's upload limit (500 MB, set in Supabase → Storage → Settings).
     if (/maximum allowed size|exceeded|too large|payload/i.test(error.message ?? "")) {
       throw new Error(
-        `This file is ${Math.round(blob.size / 1e6)} MB, over your storage upload limit (100 MB). Raise it in Supabase → Storage → Settings, or use a smaller file.`
+        `This file is ${Math.round(blob.size / 1e6)} MB, over your storage upload limit (500 MB). Raise it in Supabase → Storage → Settings, or use a smaller file.`
       );
     }
     throw new Error(error.message || "Upload failed");

@@ -86,7 +86,7 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
       try {
         await writeStorage(storagePath, await fs.readFile(file), "video/mp4");
       } catch (err) {
-        // Over the storage upload limit (100 MB): keep it on AWS, downloaded from there.
+        // Over the storage upload limit (500 MB): keep it on AWS, downloaded from there.
         console.warn("[creative-studio] render kept on S3:", err instanceof Error ? err.message : err);
         await db
           .update(creativeEdits)

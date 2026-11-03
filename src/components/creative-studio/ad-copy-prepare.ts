@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * Big videos never leave the browser whole: the storage upload limit
- * (Supabase → Storage → Settings, 100 MB since Nov 3 2026) would refuse them. What the copy needs is what
+ * Very big videos never leave the browser whole: the server would have to
+ * read them whole to take the stills (its scratch disk is ~500 MB), and the
+ * storage upload limit is 500 MB (Supabase → Storage → Settings). What the copy needs is what
  * she says and what's on screen, so the browser grabs 6 stills (canvas →
  * JPEG) and the soundtrack (decoded, mono 16 kHz WAV — about 2 MB a minute)
  * and only those are uploaded.
  */
 
-/** Videos above this are prepared in the browser instead of uploaded whole (just under the 100 MB storage limit). */
-export const WHOLE_UPLOAD_LIMIT = 99_000_000;
+/** Videos above this are prepared in the browser instead of uploaded whole (smaller ones upload whole, so the preview plays). */
+export const WHOLE_UPLOAD_LIMIT = 200_000_000;
 
 const FRAMES = 6;
 const FRAME_WIDTH = 768;
