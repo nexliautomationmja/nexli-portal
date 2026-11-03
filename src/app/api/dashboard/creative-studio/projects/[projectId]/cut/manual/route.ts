@@ -19,7 +19,16 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (!access.ok) return access.response;
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
-  const body = (await req.json().catch(() => null)) as { clipId?: string; start?: number; end?: number; cutWords?: number[] } | null;
+  const body = (await req.json().catch(() => null)) as {
+    clipId?: string;
+    start?: number;
+    end?: number;
+    cutWords?: number[];
+    keepPauses?: boolean;
+    /** false = you didn't move the edges: keep the auto-cut's start/end, apply only word cuts. */
+    edges?: boolean;
+    reset?: boolean;
+  } | null;
 
   const base = await latestCut(project.id);
   if (!base || base.status === "cutting") {
@@ -35,13 +44,17 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (!Number.isFinite(start) || !Number.isFinite(end) || end - start < 0.2) {
     return NextResponse.json({ error: "Keep at least a fraction of a second of the clip." }, { status: 400 });
   }
-  const manual = { start: round3(Math.max(0, start)), end: round3(Math.min(duration || end, end)) };
+  const manual = {
+    start: round3(Math.max(0, start)),
+    end: round3(Math.min(duration || end, end)),
+    ...(body?.keepPauses ? { keepPauses: true } : {}),
+  };
   const wordCount = target.transcript?.version === target.version ? target.transcript.words.length : 0;
   const cutWords = Array.isArray(body?.cutWords)
     ? body.cutWords.filter((i) => Number.isInteger(i) && i >= 0 && i < wordCount)
     : [];
-  // Full trim window = no manual entry (back to the auto-cut).
-  const isReset = manual.start <= 0.001 && manual.end >= (duration || 0) - 0.001 && cutWords.length === 0;
+  // Only the editor's "Reset to auto" goes back to the auto-cut; any other window is kept exactly.
+  const isReset = body?.reset === true;
 
   const [cut] = await db
     .insert(creativeCuts)
@@ -58,8 +71,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         return {
           clipId: c.id,
           version: c.version,
-          overrides: [...keepTiming, ...cutRanges(cutWords)],
-          manual: isReset ? null : manual,
+          overrides: isReset ? keepTiming : [...keepTiming, ...cutRanges(cutWords)],
+          manual: isReset || body?.edges === false ? null : manual,
           segments: [],
           sourceS: 0,
           keptS: 0,

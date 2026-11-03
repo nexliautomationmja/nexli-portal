@@ -43,9 +43,14 @@ export function TrimEditor({
   const words = useMemo(() => clip.words ?? [], [clip.words]);
   const initialDuration = entry?.sourceS || clip.durationS;
   const [duration, setDuration] = useState(initialDuration);
-  const [start, setStart] = useState(entry?.manual?.start ?? 0);
-  const [end, setEnd] = useState(entry?.manual?.end ?? initialDuration);
+  // Handles open where the clip currently starts/ends (the auto-cut edges, or your last trim).
+  const [start, setStart] = useState(() => entry?.manual?.start ?? entry?.segments[0]?.start ?? 0);
+  const [end, setEnd] = useState(() => entry?.manual?.end ?? entry?.segments[entry.segments.length - 1]?.end ?? initialDuration);
   const [cut, setCut] = useState<Set<number>>(() => cutWordSet(words.length, (entry?.overrides ?? []) as CutOverride[]));
+  /** true once you move an edge: from then on the clip starts/ends exactly at the handles. */
+  const [touched, setTouched] = useState(Boolean(entry?.manual));
+  const [keepPauses, setKeepPauses] = useState(Boolean(entry?.manual?.keepPauses));
+  const [reset, setReset] = useState(false);
   const [preview, setPreview] = useState(true);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -66,9 +71,9 @@ export function TrimEditor({
         sourceS: duration,
         settings,
         overrides: [...timing, ...cutRanges([...cut])],
-        manual: { start, end },
+        manual: touched ? { start, end, keepPauses } : null,
       }),
-    [clip.version, duration, words, settings, timing, cut, start, end]
+    [clip.version, duration, words, settings, timing, cut, start, end, touched, keepPauses]
   );
 
   // Esc closes.
@@ -161,10 +166,14 @@ export function TrimEditor({
   };
 
   function setStartSafe(t: number) {
-    setStart(Math.max(0, Math.min(t, end - 0.2)));
+    setTouched(true);
+    setReset(false);
+    setStart(r3(Math.max(0, Math.min(t, end - 0.2))));
   }
   function setEndSafe(t: number) {
-    setEnd(Math.min(duration, Math.max(t, start + 0.2)));
+    setTouched(true);
+    setReset(false);
+    setEnd(r3(Math.min(duration, Math.max(t, start + 0.2))));
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -177,7 +186,16 @@ export function TrimEditor({
 
   async function apply() {
     setSaving(true);
-    const r = await send(api(`${projectId}/cut/manual`), "POST", { clipId: clip.id, start: r3(start), end: r3(end), cutWords: [...cut] });
+    const r = await send(api(`${projectId}/cut/manual`), "POST", {
+      clipId: clip.id,
+      start: r3(start),
+      end: r3(end),
+      cutWords: [...cut],
+      keepPauses,
+      // Untouched edges: keep the auto-cut's own start/end (only word cuts apply).
+      edges: touched,
+      reset,
+    });
     setSaving(false);
     if (r.ok) {
       onApplied(r.data);
@@ -221,10 +239,7 @@ export function TrimEditor({
                   preload="auto"
                   onLoadedMetadata={(e) => {
                     const d = e.currentTarget.duration;
-                    if (Number.isFinite(d) && d > 0) {
-                      setDuration(r3(d));
-                      if (!entry?.manual) setEnd(r3(d));
-                    }
+                    if (Number.isFinite(d) && d > 0) setDuration(r3(d));
                   }}
                   onTimeUpdate={onTimeUpdate}
                   onPlay={() => setPlaying(true)}
@@ -266,7 +281,7 @@ export function TrimEditor({
             <div>
               <div className="mb-1.5 flex items-center justify-between text-[11px]" style={NUM_FONT}>
                 <span className="font-bold text-emerald-300">Start {fmt(start)}</span>
-                <span className="text-neutral-500">Click to jump · drag the handles</span>
+                <span className="text-neutral-500">{touched ? "Exact trim · plays exactly between the handles" : "Auto edges · drag a handle to set your own"}</span>
                 <span className="font-bold text-emerald-300">End {fmt(end)}</span>
               </div>
               <div
@@ -353,14 +368,36 @@ export function TrimEditor({
                 <button type="button" onClick={() => setEndSafe(end + 0.05)} className="rounded-full bg-white/5 px-2 py-1.5 text-neutral-400 hover:bg-white/10" aria-label="End later">
                   ▸
                 </button>
+                <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2 py-1.5 text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={!keepPauses}
+                    onChange={(e) => {
+                      setKeepPauses(!e.target.checked);
+                      setTouched(true);
+                      setReset(false);
+                    }}
+                    className="accent-emerald-500"
+                  />
+                  Tighten pauses inside
+                </label>
                 <button
                   type="button"
                   onClick={() => {
-                    setStart(0);
-                    setEnd(duration);
+                    const auto = computeSegments({
+                      transcript: { version: clip.version, durationS: duration, words, text: "" },
+                      sourceS: duration,
+                      settings,
+                      overrides: timing,
+                    }).segments;
+                    setStart(auto[0]?.start ?? 0);
+                    setEnd(auto[auto.length - 1]?.end ?? duration);
                     setCut(new Set());
+                    setTouched(false);
+                    setKeepPauses(false);
+                    setReset(true);
                   }}
-                  className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-neutral-500 hover:text-white"
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-neutral-500 hover:text-white"
                 >
                   <SvgIcon d={SP.undo} size={12} /> Reset to auto
                 </button>

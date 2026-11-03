@@ -83,13 +83,18 @@ export function computeSegments(args: {
     segments = [{ start: lo, end: hi }];
   } else {
     segments = [];
-    let segStart = Math.max(0, kept[0].start - LEAD);
+    // A manual trim is exact: the clip starts and ends where the handles are.
+    let segStart = manual ? lo : Math.max(0, kept[0].start - LEAD);
     for (let k = 0; k < kept.length - 1; k++) {
       const prev = kept[k];
       const next = kept[k + 1];
       const skippedWords = next.i - prev.i > 1;
       // Around a cut word the join is near-seamless, so the word's audio is really gone.
-      const cap = skippedWords ? Math.min(settings.gap, CUT_JOIN_GAP) : gapAfter(prev.i, settings, overrides);
+      const cap = skippedWords
+        ? Math.min(settings.gap, CUT_JOIN_GAP)
+        : manual?.keepPauses
+          ? Number.POSITIVE_INFINITY
+          : gapAfter(prev.i, settings, overrides);
       const maxSrc = cap * settings.speed; // a pause of `cap` at playback speed
       const srcGap = next.start - prev.end;
       if (Number.isFinite(maxSrc) && srcGap > maxSrc) {
@@ -98,7 +103,7 @@ export function computeSegments(args: {
       }
     }
     const last = kept[kept.length - 1];
-    segments.push({ start: segStart, end: Math.min(sourceS, last.end + TAIL) });
+    segments.push({ start: segStart, end: manual ? hi : Math.min(sourceS, last.end + TAIL) });
   }
 
   // Clamp to the take (and the manual window), merge overlaps, drop slivers, round.

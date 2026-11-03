@@ -179,8 +179,11 @@ export interface CutOverride {
 
 /** A hand-set trim window for one clip, in source seconds. */
 export interface ManualTrim {
+  /** Exact keep window — the clip starts and ends precisely here (no auto lead/tail). */
   start: number;
   end: number;
+  /** Keep every pause inside the window as-is (no auto-tightening for this clip). */
+  keepPauses?: boolean;
 }
 
 export interface CutClipPlan {
