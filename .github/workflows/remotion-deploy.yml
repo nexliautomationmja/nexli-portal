@@ -58,7 +58,7 @@ jobs:
         env:
           REMOTION_AWS_ACCESS_KEY_ID: ${{ secrets.REMOTION_AWS_ACCESS_KEY_ID }}
           REMOTION_AWS_SECRET_ACCESS_KEY: ${{ secrets.REMOTION_AWS_SECRET_ACCESS_KEY }}
-        run: npx remotion lambda functions deploy --region=us-east-1 --memory=3009 --disk=2048 --timeout=900
+        run: npx remotion lambda functions deploy --region=us-east-1 --memory=3008 --disk=2048 --timeout=900
 
       - name: Deploy the site
         env:

@@ -14,7 +14,8 @@ import { COMPOSITION_ID, FPS, type EditProps } from "@/remotion/types";
  * of being another env var. Credentials come from REMOTION_AWS_ACCESS_KEY_ID /
  * REMOTION_AWS_SECRET_ACCESS_KEY, which @remotion/lambda reads itself.
  */
-export const LAMBDA_MEMORY_MB = 3009;
+// 3008, not 3009: new AWS accounts cap Lambda memory at 3008 MB.
+export const LAMBDA_MEMORY_MB = 3008;
 export const LAMBDA_DISK_MB = 2048;
 export const LAMBDA_TIMEOUT_S = 900;
 
