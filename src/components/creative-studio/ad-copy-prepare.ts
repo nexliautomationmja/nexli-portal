@@ -1,15 +1,15 @@
 "use client";
 
 /**
- * Big videos never leave the browser whole: the storage upload limit (50 MB
- * on Supabase's free plan) would refuse them. What the copy needs is what
+ * Big videos never leave the browser whole: the storage upload limit
+ * (Supabase → Storage → Settings, 100 MB since Nov 3 2026) would refuse them. What the copy needs is what
  * she says and what's on screen, so the browser grabs 6 stills (canvas →
  * JPEG) and the soundtrack (decoded, mono 16 kHz WAV — about 2 MB a minute)
  * and only those are uploaded.
  */
 
-/** Videos above this are prepared in the browser instead of uploaded whole. */
-export const WHOLE_UPLOAD_LIMIT = 45 * 1024 * 1024;
+/** Videos above this are prepared in the browser instead of uploaded whole (just under the 100 MB storage limit). */
+export const WHOLE_UPLOAD_LIMIT = 99_000_000;
 
 const FRAMES = 6;
 const FRAME_WIDTH = 768;
