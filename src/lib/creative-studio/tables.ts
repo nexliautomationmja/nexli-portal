@@ -149,6 +149,26 @@ export const creativeClips = pgTable("creative_clips", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/**
+ * The workspace's Kling connection: the portal is its own MCP client of
+ * Kling's MCP server (OAuth 2.1 + PKCE, dynamic client registration), so
+ * renders spend the same kling.ai credits Marcel uses in Claude. Tokens are
+ * AES-256-GCM encrypted at rest (see kling-mcp.ts).
+ */
+export const creativeKlingConnections = pgTable("creative_kling_connections", {
+  ownerId: uuid("owner_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  clientId: text("client_id").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  accessTokenEnc: text("access_token_enc"),
+  refreshTokenEnc: text("refresh_token_enc"),
+  expiresAt: timestamp("expires_at"),
+  klingUserId: text("kling_user_id"),
+  connectedAt: timestamp("connected_at"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 let ensured: Promise<void> | null = null;
 
 export function ensureCreativeStudioTables(): Promise<void> {
@@ -228,6 +248,19 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(
         sql`CREATE INDEX IF NOT EXISTS "creative_clips_project_idx" ON "creative_clips" ("project_id", "idx")`
       );
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_kling_connections" (
+          "owner_id" uuid PRIMARY KEY REFERENCES "users"("id") ON DELETE CASCADE,
+          "client_id" text NOT NULL,
+          "redirect_uri" text NOT NULL,
+          "access_token_enc" text,
+          "refresh_token_enc" text,
+          "expires_at" timestamp,
+          "kling_user_id" text,
+          "connected_at" timestamp,
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
     })().catch((err) => {
       ensured = null; // retry on the next request
       throw err;

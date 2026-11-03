@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   creativeAssets,
@@ -54,7 +54,12 @@ export async function clipsOf(projectId: string) {
 /** Everything the project page needs, with signed frame URLs. */
 export async function projectDetail(project: Project) {
   const [frames, clips] = await Promise.all([framesOf(project.id), clipsOf(project.id)]);
-  const signed = await signPaths(frames.map((f) => f.storagePath));
+  const videoIds = clips.map((c) => c.videoAssetId).filter((v): v is string => Boolean(v));
+  const videos = videoIds.length
+    ? await db.select().from(creativeAssets).where(inArray(creativeAssets.id, videoIds))
+    : [];
+  const videoPath = new Map(videos.map((v) => [v.id, v.storagePath]));
+  const signed = await signPaths([...frames.map((f) => f.storagePath), ...videos.map((v) => v.storagePath)], 6 * 3600);
   return {
     project: {
       id: project.id,
@@ -92,6 +97,9 @@ export async function projectDetail(project: Project) {
       model: c.model,
       status: c.status,
       version: c.version,
+      error: c.error,
+      videoUrl: c.videoAssetId ? signed.get(videoPath.get(c.videoAssetId) ?? "") ?? null : null,
+      previousTakes: (c.previous ?? []).length,
     })),
   };
 }

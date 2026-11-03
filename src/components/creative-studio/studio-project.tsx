@@ -9,6 +9,7 @@ import { FORMAT_LABEL, RIG_LABEL, isMultiPerson } from "@/lib/creative-studio/pr
 import { BriefFields, FormatRigFields, INPUT, LABEL } from "@/components/creative-studio/brief-fields";
 import { STATUS_LABEL } from "@/components/creative-studio/project-list";
 import { ScriptStep } from "@/components/creative-studio/script-step";
+import { ClipsStep } from "@/components/creative-studio/clips-step";
 import { prepareFrame, uploadToTarget } from "@/components/creative-studio/upload";
 import { api, send } from "@/components/creative-studio/client";
 
@@ -25,8 +26,14 @@ export function StudioProject({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<Step>("frame");
-  const stepChosen = useRef(false);
+  // Deep links: ?step=clips (e.g. back from Kling's approval page) and ?kling=connected|denied|error.
+  const [urlParams] = useState(() =>
+    typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)
+  );
+  const linkedStep = urlParams.get("step") as Step | null;
+  const [step, setStep] = useState<Step>(linkedStep && STEPS.some((s) => s.id === linkedStep) ? linkedStep : "frame");
+  const stepChosen = useRef(Boolean(linkedStep));
+  const klingNotice = urlParams.get("kling");
 
   const apply = useCallback((d: ProjectDetail) => {
     setDetail(d);
@@ -43,7 +50,9 @@ export function StudioProject({ projectId }: { projectId: string }) {
       }
       apply(r.data);
       // Open on the step that needs attention next.
-      if (!stepChosen.current && r.data.clips.length > 0) setStep("script");
+      if (!stepChosen.current && r.data.clips.length > 0) {
+        setStep(["rendering", "clips_ready"].includes(r.data.project.status) ? "clips" : "script");
+      }
     });
     return () => {
       cancelled = true;
@@ -124,16 +133,7 @@ export function StudioProject({ projectId }: { projectId: string }) {
 
       {step === "frame" && <FrameStep detail={detail} onChange={apply} onError={setError} onNext={() => setStep("script")} />}
       {step === "script" && <ScriptStep detail={detail} onChange={apply} onError={setError} />}
-      {step === "clips" && (
-        <Upcoming
-          title="Kling clip rendering is the next phase"
-          body={
-            p.status === "approved"
-              ? "Your script is approved and locked, ready to render. Rendering one clip per line on Kling (with redos and downloads) is being built next. It needs your Kling API keys from the Kling developer console."
-              : "Approve the script in step 2 first. Rendering one clip per line on Kling (with redos and downloads) is being built next."
-          }
-        />
-      )}
+      {step === "clips" && <ClipsStep detail={detail} klingNotice={klingNotice} onChange={apply} onError={setError} />}
       {step === "edit" && (
         <Upcoming
           title="Remotion editing comes after Kling rendering"

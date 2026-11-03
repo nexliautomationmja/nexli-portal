@@ -22,6 +22,8 @@ export const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   draft: { label: "Draft", cls: "bg-[var(--input-bg)] text-[var(--text-muted)]" },
   scripted: { label: "Script in review", cls: "bg-amber-500/15 text-amber-500" },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-500" },
+  rendering: { label: "Rendering on Kling", cls: "bg-blue-500/15 text-blue-400" },
+  clips_ready: { label: "Clips ready", cls: "bg-emerald-500/15 text-emerald-500" },
 };
 
 export function StudioProjectList() {

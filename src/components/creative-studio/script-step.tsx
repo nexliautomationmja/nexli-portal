@@ -31,7 +31,8 @@ export function ScriptStep({
   onError: (msg: string) => void;
 }) {
   const p = detail.project;
-  const approved = p.status === "approved";
+  // Approved, rendering or rendered: the script is locked.
+  const approved = ["approved", "rendering", "clips_ready"].includes(p.status);
   const [generating, setGenerating] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
