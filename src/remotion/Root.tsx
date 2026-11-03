@@ -5,6 +5,7 @@ import { SoloRig } from "./rigs/SoloRig";
 import { PovRig } from "./rigs/PovRig";
 import { VslRig } from "./rigs/VslRig";
 import { LadderRig } from "./rigs/LadderRig";
+import { CustomRig } from "./rigs/CustomRig";
 
 /** Variant registry (rulebook § Compose): one component per rig, registered by .map(). */
 export const RIGS: Record<EditStyle, React.FC<EditProps>> = {
@@ -12,6 +13,7 @@ export const RIGS: Record<EditStyle, React.FC<EditProps>> = {
   pov: PovRig,
   vsl: VslRig,
   ladder: LadderRig,
+  custom: CustomRig,
 };
 
 const calculateMetadata: CalculateMetadataFunction<EditProps> = ({ props }) => {

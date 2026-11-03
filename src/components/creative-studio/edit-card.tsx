@@ -31,7 +31,7 @@ function stable(key: string, url: string | null): string | null {
 }
 
 /** The cut's length as the browser reads it (uploaded cuts have no stored duration). */
-function measure(url: string): Promise<number | null> {
+export function measureDuration(url: string): Promise<number | null> {
   return new Promise((resolve) => {
     const v = document.createElement("video");
     let settled = false;
@@ -80,6 +80,7 @@ export function EditCard({
   const [showWords, setShowWords] = useState(false);
   const [view, setView] = useState<"auto" | "preview" | "render">("auto");
   const [cutChoice, setCutChoice] = useState<string | null>(null);
+  const [describe, setDescribe] = useState("");
   const polling = useRef(false);
 
   const chosenCut = finalCuts.find((f) => f.id === cutChoice) ?? finalCuts[finalCuts.length - 1];
@@ -115,6 +116,7 @@ export function EditCard({
     o.rungs.forEach((r) => rows.push({ label: `Rung · ${r.position.toLowerCase()}`, text: [r.pill, r.tag].filter(Boolean).join(" · "), start: r.start, end: r.end }));
     if (o.qualifier) rows.push({ label: "Qualifier", ...o.qualifier });
     if (o.cta) rows.push({ label: "CTA", ...o.cta });
+    (o.zooms ?? []).forEach((z) => rows.push({ label: "Zoom", text: `Punch in to ${z.scale}×`, start: z.start, end: z.end }));
     o.stickers.forEach((s, i) => rows.push({ label: `Sticker ${i + 1}`, ...s }));
     o.cards.forEach((c, i) => rows.push({ label: `Card ${i + 1} · ${c.kind}`, text: c.sub ? `${c.text} — ${c.sub}` : c.text, start: c.start, end: c.end }));
     return rows.sort((a, b) => a.start - b.start);
@@ -129,19 +131,25 @@ export function EditCard({
     return out;
   }, [latest]);
 
-  async function start(style: EditStyle) {
+  async function start(style: EditStyle, instruction?: string) {
     if (!chosenCut) return;
     setPicking(false);
     setView("auto");
-    setBusy({
-      label: `Claude is laying out the ${STYLE_LABEL[style]} edit…`,
-      detail: "Captions on the cut's timeline, then the title, cards and their timing from your editing rulebook. About a minute.",
-    });
-    const durationS = chosenCut.url ? await measure(chosenCut.url) : null;
-    const r = await send(api(`${p.id}/edit/start`), "POST", { style, finalCutId: chosenCut.id, durationS });
+    setBusy(
+      instruction
+        ? { label: "Claude is building your edit…", detail: `“${instruction}”` }
+        : {
+            label: `Claude is laying out the ${STYLE_LABEL[style]} edit…`,
+            detail: "Captions on the cut's timeline, then the title, cards and their timing from your editing rulebook. About a minute.",
+          }
+    );
+    const durationS = chosenCut.url ? await measureDuration(chosenCut.url) : null;
+    const r = await send(api(`${p.id}/edit/start`), "POST", { style, instruction, finalCutId: chosenCut.id, durationS });
     setBusy(null);
-    if (r.ok) onChange(r.data);
-    else onError(r.error);
+    if (r.ok) {
+      setDescribe("");
+      onChange(r.data);
+    } else onError(r.error);
   }
   async function render() {
     setBusy({ label: "Sending the edit to Remotion Lambda…" });
@@ -232,6 +240,36 @@ export function EditCard({
                 );
               })}
             </div>
+            <div className={`rounded-2xl border p-3 ${latest?.style === "custom" ? "border-cyan-400/60 bg-cyan-500/10" : "border-white/10 bg-white/[0.03]"}`}>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-sm font-bold text-white">Describe it yourself</p>
+                <Chip>Your way</Chip>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-neutral-400">
+                Type how you want it edited and Remotion builds exactly that: captions or none, a title, zooms on certain words, cards, a CTA at the end. You can also just type it in the chat box below.
+              </p>
+              <textarea
+                value={describe}
+                onChange={(e) => setDescribe(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && describe.trim()) void start("custom", describe.trim());
+                }}
+                rows={3}
+                placeholder="e.g. Captions on. Big title “Stop doing returns” for the first 3 seconds. Zoom in when she says $15,000. CTA “Book a call” at the end."
+                className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-cyan-400/50 focus:outline-none"
+              />
+              <div className="mt-2 flex items-center justify-end gap-3">
+                <span className="text-[10px] text-neutral-500">⌘ Enter</span>
+                <button
+                  type="button"
+                  onClick={() => void start("custom", describe.trim())}
+                  disabled={!describe.trim() || Boolean(busy) || rendering || !chosenCut}
+                  className={`${CTA_CLASSES} disabled:opacity-50`}
+                >
+                  Edit it this way
+                </button>
+              </div>
+            </div>
             {latest && (
               <button type="button" onClick={() => setPicking(false)} className="text-xs font-semibold text-neutral-500 hover:text-white">
                 Keep the {STYLE_LABEL[latest.style]} edit
@@ -278,7 +316,10 @@ export function EditCard({
                     { label: "Style", value: STYLE_LABEL[latest.style] },
                     { label: "Length", value: clock(latest.durationS) },
                     { label: "Graphics", value: String(elements.length) },
-                    { label: "Caption words", value: latest.style === "pov" ? "Off" : String(latest.props?.words.length ?? "—") },
+                    {
+                      label: "Caption words",
+                      value: latest.style === "pov" || latest.props?.overlays.captions === false ? "Off" : String(latest.props?.words.length ?? "—"),
+                    },
                   ].map((t) => (
                     <div key={t.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">{t.label}</p>
@@ -393,7 +434,7 @@ export function EditCard({
               </div>
             )}
 
-            {chunks.length > 0 && latest.style !== "pov" && (
+            {chunks.length > 0 && latest.style !== "pov" && latest.props?.overlays.captions !== false && (
               <div className="mt-3">
                 <button type="button" onClick={() => setShowWords((v) => !v)} className="text-[11px] font-semibold text-neutral-500 hover:text-white">
                   {showWords ? "▾" : "▸"} Captions ({chunks.length} lines) · read them before rendering

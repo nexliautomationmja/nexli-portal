@@ -12,7 +12,11 @@ export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
-/** Change the edit in plain words ("shorter title", "qualifier at 0:03", "the caption should say CALENDAR"). */
+/**
+ * Change the edit in plain words ("shorter title", "qualifier at 0:03", "zoom in
+ * when she says $15,000", "the caption should say CALENDAR"). A change the
+ * style has no slot for moves the edit to the custom ("your way") composition.
+ */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
@@ -29,7 +33,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   try {
     const { lines } = await captionWords(project, finalCut);
-    const ctx = editContext(project, edit.style, edit.props.durationS, edit.props.words, lines);
+    const ctx = { ...editContext(project, edit.style, edit.props.durationS, edit.props.words, lines), instruction: edit.props.instruction };
     const result = await reviseLayout(ctx, edit.props.overlays, note);
     let words = edit.props.words;
     let fixed = "";
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     await db.insert(creativeEdits).values({
       projectId: project.id,
       version: edit.version + 1,
-      style: edit.style,
+      style: result.style,
       finalCutAssetId: edit.finalCutAssetId,
       props: { ...edit.props, words, overlays: result.overlays },
       notes: `${result.notes}${fixed}`.trim() || null,

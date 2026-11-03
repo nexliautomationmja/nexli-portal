@@ -25,12 +25,20 @@ import { ScriptCard } from "@/components/creative-studio/script-card";
 import { ClipsCard } from "@/components/creative-studio/clips-card";
 import { FinalCutCard, uploadFinalCut } from "@/components/creative-studio/final-cut-card";
 import { CutCard } from "@/components/creative-studio/cut-card";
-import { EditCard } from "@/components/creative-studio/edit-card";
+import { EditCard, measureDuration } from "@/components/creative-studio/edit-card";
+import { AdCopyCard } from "@/components/creative-studio/ad-copy-card";
 
 type Stage = "direction" | "frame" | "write" | "review" | "locked" | "cut" | "edit";
 
 function stageOf(d: ProjectDetail): Stage {
-  if (d.edits.length > 0) return "edit";
+  // With a final cut the chat box drives the edit — unless a newer auto-cut is
+  // being worked on (a trim after approving), which keeps the cut notes going.
+  const newestFinal = d.finalCuts[d.finalCuts.length - 1];
+  const latestCut = d.cuts[d.cuts.length - 1];
+  const recutting = Boolean(
+    latestCut && newestFinal && !["approved", "failed"].includes(latestCut.status) && new Date(latestCut.createdAt) > new Date(newestFinal.uploadedAt)
+  );
+  if ((d.edits.length > 0 || newestFinal) && !recutting) return "edit";
   if (d.project.status === "clips_ready") return "cut";
   const locked = ["approved", "rendering"].includes(d.project.status);
   if (locked) return "locked";
@@ -66,9 +74,14 @@ const COMPOSER: Record<Stage, { placeholder: string; hint: string }> = {
     hint: "Enter → re-cut with your note · attach a video to upload your own cut",
   },
   edit: {
-    placeholder: "Change the edit, e.g. “shorter title” · “qualifier at 0:03” · “caption should say CALENDAR”",
+    placeholder: "Change the edit, e.g. “shorter title” · “zoom in on $15,000” · “caption should say CALENDAR”",
     hint: "Enter → Claude revises the edit · pick another style on the card · trim clips with ✂ on the auto-cut",
   },
+};
+
+const DESCRIBE_EDIT = {
+  placeholder: "Tell me how to edit it, e.g. “captions, title ‘Stop doing returns’, zoom in when she says $15,000”",
+  hint: "Enter → Remotion builds it your way · or pick one of the four styles above",
 };
 
 /**
@@ -228,6 +241,16 @@ export function StudioThread({ projectId }: { projectId: string }) {
         apply(r.data);
         return true;
       }
+      if (st === "edit" && d.edits.length === 0) {
+        const cut = d.finalCuts[d.finalCuts.length - 1];
+        setWorking({ label: "Claude is building your edit…", detail: `“${text}”`, accent: "cyan" });
+        const durationS = cut?.url ? await measureDuration(cut.url) : null;
+        const r = await send(api(`${p.id}/edit/start`), "POST", { style: "custom", instruction: text, finalCutId: cut?.id, durationS });
+        setWorking(null);
+        if (!r.ok) throw new Error(r.error);
+        apply(r.data);
+        return true;
+      }
       if (st === "edit") {
         setWorking({ label: "Claude is changing the edit…", detail: `“${text}”`, accent: "cyan" });
         const r = await send(api(`${p.id}/edit/revise`), "POST", { note: text });
@@ -297,7 +320,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
     else setError(r.error);
   }
 
-  const composer = COMPOSER[stage];
+  const composer = stage === "edit" && detail.edits.length === 0 ? DESCRIBE_EDIT : COMPOSER[stage];
   const showFormat = stage === "direction" || stage === "frame" || stage === "write";
 
   return (
@@ -352,6 +375,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
           {locked && (stage === "cut" || detail.cuts.length > 0) && <CutCard detail={detail} summary={cutSummary} onChange={apply} onError={fail} />}
           {locked && <FinalCutCard detail={detail} onChange={apply} onError={fail} />}
           {locked && detail.finalCuts.length > 0 && <EditCard detail={detail} onChange={apply} onError={fail} />}
+          {locked && detail.finalCuts.length > 0 && p.format === "ad_9x16" && <AdCopyCard detail={detail} onChange={apply} onError={fail} />}
 
           {working && <ThinkingCard accent={working.accent} label={working.label} detail={working.detail} />}
           {error && <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>}

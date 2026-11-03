@@ -14,6 +14,7 @@ export const STYLE_LABEL: Record<EditStyle, string> = {
   pov: "Organic / POV",
   vsl: "VSL",
   ladder: "Ladder",
+  custom: "Your way",
 };
 
 /** The style that fits the video: rig for ads, VSL for 16:9. */
@@ -24,4 +25,5 @@ export function suggestedStyle(format: CreativeFormat, rig: CreativeRig): EditSt
   return "solo";
 }
 
-export const isEditStyle = (v: unknown): v is EditStyle => v === "solo" || v === "pov" || v === "vsl" || v === "ladder";
+export const isEditStyle = (v: unknown): v is EditStyle =>
+  v === "solo" || v === "pov" || v === "vsl" || v === "ladder" || v === "custom";

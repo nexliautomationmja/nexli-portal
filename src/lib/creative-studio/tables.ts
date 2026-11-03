@@ -248,6 +248,8 @@ export interface EditPropsStored {
   durationS: number;
   words: CaptionWord[];
   overlays: EditOverlays;
+  /** "Your way": how the user described the edit, kept for later changes. */
+  instruction?: string;
 }
 
 /** Specs read off the delivered mp4 (rulebook § 7 gate 5). */

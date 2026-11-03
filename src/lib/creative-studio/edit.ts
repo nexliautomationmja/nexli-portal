@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { EDITING_RULES } from "@/lib/creative-studio/rules.generated";
 import { RIG_LABEL } from "@/lib/creative-studio/prompts";
 import type { CreativeFormat, CreativeRig, FramePosition } from "@/lib/creative-studio/tables";
-import type { CaptionWord, EditOverlays, EditStyle, LadderRung, TimedText, VslCard } from "@/remotion/types";
+import type { CaptionWord, EditOverlays, EditStyle, LadderRung, TimedText, VslCard, Zoom } from "@/remotion/types";
 import { normalizeWord } from "@/lib/creative-studio/words";
 
 /**
@@ -27,6 +27,10 @@ Fill only the slots of the chosen style; return null / [] for every other slot.
 - pov — stickers only: Instagram-style white text stickers, one on screen at a time, 1–4 in total, each 10 words or fewer, written the way a person types a sticker (sentence case). No captions run in this style.
 - ladder — title (opens the video), one rung per person (position must be one of the positions listed; pill = the price or outcome, 10 characters or fewer, e.g. "$250K" or "10 HRS/WK"; tag = the client type, 3 words or fewer, e.g. "SHOEBOX CLIENTS"; a rung pops in when that person starts speaking and normally stays to the end), the red qualifier band early (inside the first quarter of the video, 2.5–5 s), and the CTA in the last 2–4 s. The qualifier and the CTA share one slot: never overlap them.
 - vsl — cards only, one left-column slot, sequenced so two cards are never on screen at once. kind: point (a sharper distillation of an idea), stat (a number she makes the case with), qualifier (who it's for, placed early, around 0:10, not where she says it), cta (at the end: a short directional line like "Pick a time below"; the renderer adds the arrow; sub null). About 3–8 cards for a 3–5 minute VSL, fewer for a shorter one. Long unadorned stretches are the point.
+- custom — "your way": the user describes the edit in their own words (the instruction). Every slot is available: title, qualifier, cta, rungs (vertical, 2–3 people only), stickers, cards, plus captions on/off and zooms (punch-ins on the plate: {start, end, scale 1.05–1.3}, at least 0.8 s each, on the moments the instruction names or, if it asks for zooms generally, on the strongest beats — never more than one every 4 s). Build exactly what the instruction asks for and nothing it doesn't. Where the instruction conflicts with the rulebook, the user's instruction wins: build it and say so once in notes.
+
+captions: true when captions run. Default true for solo, vsl, ladder and custom; false for pov. Only set it false in custom when the user asks for no captions.
+zooms: [] unless the style is custom.
 
 Writing rules:
 - Never restate the caption running underneath. A title or card uses words that are not being spoken in that moment; check the words list around each window. The title is a distillation, not a quote.
@@ -39,7 +43,7 @@ notes: up to four plain sentences for the user — your judgment calls (where yo
 
 swaps: caption-text corrections only. On a first layout return []. On a revision, when the user's note is about caption wording ("the caption says CALCULATING, it should be CALENDAR"), return {find, replace} with the caption tokens as they appear (ALL CAPS, multi-word allowed) and keep the layout as it is.
 
-Revisions: you get the current layout and the user's note. Change only what the note asks for; return everything else exactly as it was.
+Revisions: you get the current layout and the user's note. Change only what the note asks for; return everything else exactly as it was. If the note asks for something the current style has no slot for (zooms, captions off, a sticker in a ladder, a title in POV…), do it anyway with the slot it needs — the portal then switches the edit to the custom composition, which renders every slot.
 `;
 
 const SYSTEM = `${EDITING_RULES}\n${EDIT_ADDENDUM}`;
@@ -57,8 +61,18 @@ const TIMED_OR_NULL = { anyOf: [TIMED, { type: "null" }] } as const;
 const LAYOUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["title", "qualifier", "cta", "rungs", "stickers", "cards", "swaps", "notes"],
+  required: ["title", "qualifier", "cta", "rungs", "stickers", "cards", "captions", "zooms", "swaps", "notes"],
   properties: {
+    captions: { type: "boolean" },
+    zooms: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["start", "end", "scale"],
+        properties: { start: NUM, end: NUM, scale: NUM },
+      },
+    },
     title: TIMED_OR_NULL,
     qualifier: TIMED_OR_NULL,
     cta: TIMED_OR_NULL,
@@ -113,6 +127,8 @@ interface RawLayout {
   rungs: Omit<LadderRung, "nudgeX">[];
   stickers: TimedText[];
   cards: (VslCard & { sub: string | null })[];
+  captions: boolean;
+  zooms: Zoom[];
   swaps: { find: string; replace: string }[];
   notes: string;
 }
@@ -127,6 +143,8 @@ export interface EditContext {
   /** Script lines, with their window on the cut when known (auto-cut). */
   lines: { number: number; section: string; speaker: string | null; line: string; start: number | null; end: number | null }[];
   words: CaptionWord[];
+  /** "Your way": how the user wants it edited, in their words. */
+  instruction?: string;
 }
 
 const t2 = (n: number) => n.toFixed(2);
@@ -150,7 +168,10 @@ function contextText(c: EditContext): string {
     `People in the frame:\n${people}`,
     `Script${c.lines.some((l) => l.start !== null) ? " (with each clip's window on the cut)" : " (the cut was uploaded, so windows are unknown — use the words)"}:\n${lines || "(no script)"}`,
     `Caption words (start time, ALL CAPS):\n${words}`,
-  ].join("\n\n");
+    c.instruction ? `How the user wants it edited, in their words:\n${c.instruction}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 async function callClaude(content: string): Promise<RawLayout> {
@@ -192,7 +213,7 @@ function quotesCaption(text: string, words: CaptionWord[], from: number, to: num
 }
 
 function restatements(o: EditOverlays, words: CaptionWord[], style: EditStyle): string[] {
-  if (style === "pov") return []; // no captions run under stickers
+  if (style === "pov" || o.captions === false) return []; // no captions run under them
   const out: string[] = [];
   const check = (label: string, x: TimedText | null) => {
     if (x && quotesCaption(x.text, words, x.start - 1, x.end + 1)) out.push(`${label} "${x.text}" repeats the caption running under it.`);
@@ -230,17 +251,9 @@ export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: nu
     const stickers = (raw.stickers ?? []).map((s) => timed(s, 90, 1.5)).filter((s): s is TimedText => Boolean(s));
     return { ...empty, stickers: sequence(stickers, 1.5).slice(0, 6) };
   }
-  if (style === "vsl") {
-    const kinds = ["point", "stat", "qualifier", "cta"];
-    const cards: VslCard[] = [];
-    for (const c of raw.cards ?? []) {
-      const t = timed(c, 90, 1.5);
-      if (t && kinds.includes(c.kind)) cards.push({ ...t, kind: c.kind, sub: c.sub?.trim() ? c.sub.trim().slice(0, 90) : null });
-    }
-    return { ...empty, cards: sequence(cards, 1.5).slice(0, 12) };
-  }
+  if (style === "vsl") return { ...empty, cards: vslCards(raw, timed) };
 
-  // Ladder
+  const order: Record<string, number> = { LEFT: 0, CENTER: 1, RIGHT: 2 };
   const allowed = new Set(positions.length ? positions.map((p) => p.position) : ["LEFT", "CENTER", "RIGHT"]);
   const seen = new Set<string>();
   const rungs: LadderRung[] = [];
@@ -251,56 +264,126 @@ export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: nu
     const end = clampT(r.end) > start + 1 ? clampT(r.end) : D;
     rungs.push({ position: r.position, pill: r.pill.trim().slice(0, 14), tag: (r.tag ?? "").trim().slice(0, 32), start, end });
   }
+  rungs.sort((a, b) => order[a.position] - order[b.position]);
+  // The qualifier and the CTA share one slot: sequence them.
   const qualifier = timed(raw.qualifier, 70);
   let cta = timed(raw.cta, 60);
   if (qualifier && cta && cta.start < qualifier.end + 0.1) {
     cta = cta.end - (qualifier.end + 0.1) >= 1 ? { ...cta, start: r2(qualifier.end + 0.1) } : null;
   }
-  const order: Record<string, number> = { LEFT: 0, CENTER: 1, RIGHT: 2 };
-  return { ...empty, title: timed(raw.title, 48), qualifier, cta, rungs: rungs.sort((a, b) => order[a.position] - order[b.position]) };
+
+  if (style === "ladder") return { ...empty, title: timed(raw.title, 48), qualifier, cta, rungs };
+
+  // Custom: every slot, captions on/off, zooms.
+  const stickers = (raw.stickers ?? []).map((x) => timed(x, 90, 1.5)).filter((x): x is TimedText => Boolean(x));
+  const zooms = sequence(
+    (raw.zooms ?? []).map((z) => ({
+      start: clampT(z.start),
+      end: clampT(z.end),
+      scale: r2(Math.min(1.3, Math.max(1.05, Number.isFinite(z.scale) ? z.scale : 1.15))),
+    })),
+    0.5
+  ).slice(0, 40);
+  return {
+    title: timed(raw.title, 48),
+    qualifier,
+    cta,
+    rungs: positions.length >= 2 ? rungs : [],
+    stickers: sequence(stickers, 1.5).slice(0, 8),
+    cards: vslCards(raw, timed),
+    captions: raw.captions !== false,
+    zooms,
+  };
+}
+
+function vslCards(raw: RawLayout, timed: (x: TimedText | null | undefined, max?: number, min?: number) => TimedText | null): VslCard[] {
+  const kinds = ["point", "stat", "qualifier", "cta"];
+  const cards: VslCard[] = [];
+  for (const c of raw.cards ?? []) {
+    const t = timed(c, 90, 1.5);
+    if (t && kinds.includes(c.kind)) cards.push({ ...t, kind: c.kind, sub: c.sub?.trim() ? c.sub.trim().slice(0, 90) : null });
+  }
+  return sequence(cards, 1.5).slice(0, 12);
+}
+
+const SLOTS: Record<EditStyle, (keyof EditOverlays)[]> = {
+  solo: ["title"],
+  pov: ["stickers"],
+  vsl: ["cards"],
+  ladder: ["title", "qualifier", "cta", "rungs"],
+  custom: ["title", "qualifier", "cta", "rungs", "stickers", "cards"],
+};
+
+/** True when a revision used something the style can't render (→ switch to the custom composition). */
+function outsideStyle(style: EditStyle, raw: RawLayout): boolean {
+  if (style === "custom") return false;
+  const used: Record<string, boolean> = {
+    title: Boolean(raw.title?.text?.trim()),
+    qualifier: Boolean(raw.qualifier?.text?.trim()),
+    cta: Boolean(raw.cta?.text?.trim()),
+    rungs: (raw.rungs ?? []).length > 0,
+    stickers: (raw.stickers ?? []).length > 0,
+    cards: (raw.cards ?? []).length > 0,
+  };
+  const extraSlot = Object.entries(used).some(([k, v]) => v && !SLOTS[style].includes(k as keyof EditOverlays));
+  return extraSlot || (raw.zooms ?? []).length > 0 || raw.captions !== (style !== "pov");
 }
 
 export interface LayoutResult {
+  /** The style it ended up in (a revision can move a fixed style to custom). */
+  style: EditStyle;
   overlays: EditOverlays;
   swaps: { find: string; replace: string }[];
   notes: string;
 }
 
 /**
- * Lay out a style, then clean the times in code. A first layout that restates
- * the captions gets one retry; on a revision the user's ask wins and the
- * conflict is only flagged (rulebook: state it once, then build what was asked).
+ * Lay out a style, then clean the times in code. A first rulebook layout that
+ * restates the captions gets one retry; on a revision or a described ("your
+ * way") edit the user's ask wins and the conflict is only flagged (rulebook:
+ * state it once, then build what was asked).
  */
-async function layout(ctx: EditContext, prompt: string, enforce: boolean): Promise<LayoutResult> {
+async function layout(ctx: EditContext, prompt: string, revision: boolean): Promise<LayoutResult> {
+  const enforce = !revision && ctx.style !== "custom";
   let raw = await callClaude(prompt);
-  let overlays = sanitizeOverlays(ctx.style, raw, ctx.durationS, ctx.positions);
-  let problems = restatements(overlays, ctx.words, ctx.style);
+  let style: EditStyle = revision && outsideStyle(ctx.style, raw) ? "custom" : ctx.style;
+  let overlays = sanitizeOverlays(style, raw, ctx.durationS, ctx.positions);
+  let problems = restatements(overlays, ctx.words, style);
   if (problems.length && enforce) {
     raw = await callClaude(`${prompt}\n\nYour previous layout broke the no-restating rule:\n- ${problems.join("\n- ")}\nReturn the complete layout again with those fixed.`);
-    overlays = sanitizeOverlays(ctx.style, raw, ctx.durationS, ctx.positions);
-    problems = restatements(overlays, ctx.words, ctx.style);
+    style = ctx.style;
+    overlays = sanitizeOverlays(style, raw, ctx.durationS, ctx.positions);
+    problems = restatements(overlays, ctx.words, style);
   }
-  const notes = [(raw.notes ?? "").trim(), ...problems.map((p) => `Heads up: ${p}`)].filter(Boolean).join(" ");
+  const switched = style !== ctx.style ? " Switched to “Your way” so the edit can include that." : "";
+  const notes = [(raw.notes ?? "").trim(), ...problems.map((p) => `Heads up: ${p}`)].filter(Boolean).join(" ") + switched;
   return {
+    style,
     overlays,
-    swaps: Array.isArray(raw.swaps) ? raw.swaps.filter((s) => s.find?.trim() && s.replace?.trim()).slice(0, 20) : [],
-    notes,
+    swaps: Array.isArray(raw.swaps) ? raw.swaps.filter((x) => x.find?.trim() && x.replace?.trim()).slice(0, 20) : [],
+    notes: notes.trim(),
   };
 }
 
 export function proposeLayout(ctx: EditContext): Promise<LayoutResult> {
-  return layout(ctx, `${contextText(ctx)}\n\nLay out the graphics for this cut in the ${ctx.style} style.`, true);
+  const ask =
+    ctx.style === "custom"
+      ? "Build this edit the way the user described it, using the custom style."
+      : `Lay out the graphics for this cut in the ${ctx.style} style.${ctx.instruction ? " Follow the user's instruction within this style." : ""}`;
+  return layout(ctx, `${contextText(ctx)}\n\n${ask}`, false);
 }
 
 export function reviseLayout(ctx: EditContext, current: EditOverlays, note: string): Promise<LayoutResult> {
+  const effective = { ...current, captions: current.captions ?? ctx.style !== "pov", zooms: current.zooms ?? [] };
   return layout(
     ctx,
     [
       contextText(ctx),
-      `Current layout (JSON):\n${JSON.stringify(current)}`,
+      `Current style: ${ctx.style}`,
+      `Current layout (JSON):\n${JSON.stringify(effective)}`,
       `The user's requested change: ${note}`,
       "Return the complete layout with only that change made.",
     ].join("\n\n"),
-    false
+    true
   );
 }

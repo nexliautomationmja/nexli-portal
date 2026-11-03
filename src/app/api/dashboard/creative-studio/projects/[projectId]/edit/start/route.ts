@@ -14,18 +14,21 @@ type Ctx = { params: Promise<{ projectId: string }> };
 
 /**
  * Start (or restyle) the edit: caption words on the final cut's timeline,
- * then Claude lays out the chosen style's graphics. Every call is a new
- * version; caption fixes carry over while the final cut stays the same.
- * POST { style, finalCutId?, durationS? }
+ * then Claude lays out the chosen style's graphics — or, for "custom", the
+ * edit the user described in their own words. Every call is a new version;
+ * caption fixes carry over while the final cut stays the same.
+ * POST { style, instruction?, finalCutId?, durationS? }
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
-  const body = (await req.json().catch(() => null)) as { style?: unknown; finalCutId?: unknown; durationS?: unknown } | null;
-  if (!isEditStyle(body?.style)) return NextResponse.json({ error: "Pick one of the four styles" }, { status: 400 });
+  const body = (await req.json().catch(() => null)) as { style?: unknown; instruction?: unknown; finalCutId?: unknown; durationS?: unknown } | null;
+  if (!isEditStyle(body?.style)) return NextResponse.json({ error: "Pick a style or describe the edit" }, { status: 400 });
   const style = body.style;
+  const instruction = typeof body.instruction === "string" ? body.instruction.trim().slice(0, 4000) : "";
+  if (style === "custom" && !instruction) return NextResponse.json({ error: "Describe how you want it edited" }, { status: 400 });
 
   const finalCut = await finalCutFor(project.id, body.finalCutId);
   if (!finalCut) return NextResponse.json({ error: "Approve the auto-cut or upload your final cut first." }, { status: 400 });
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const built = await captionWords(project, finalCut);
     const words = prev && prev.finalCutAssetId === finalCut.id ? prev.props.words : built.words;
     const durationS = await durationOf(finalCut, body.durationS, words);
-    const result = await proposeLayout(editContext(project, style, durationS, words, built.lines));
+    const result = await proposeLayout({ ...editContext(project, style, durationS, words, built.lines), instruction: instruction || undefined });
     const unaligned = built.unaligned.length
       ? ` Captions for clip ${built.unaligned.join(", ")} use what Scribe heard rather than the script's spelling, so give them a read.`
       : "";
@@ -45,9 +48,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       version: (prev?.version ?? 0) + 1,
       style,
       finalCutAssetId: finalCut.id,
-      props: { format: project.format, durationS, words, overlays: result.overlays },
+      props: { format: project.format, durationS, words, overlays: result.overlays, ...(instruction ? { instruction } : {}) },
       notes: `${result.notes}${unaligned}`.trim() || null,
-      note: null,
+      note: instruction || null,
     });
     return NextResponse.json(await projectDetail(project));
   } catch (err) {

@@ -12,6 +12,10 @@ import {
 } from "@/lib/creative-studio/tables";
 import { buildKlingPrompt, clipDuration, klingModelFor } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
+import type { AdCopy } from "@/lib/creative-studio/ad-copy";
+
+/** One saved version of the Meta ad copy (creative_assets kind "ad_copy", in metadata). */
+export type AdCopyVersion = AdCopy & { version: number; note: string | null };
 
 type Project = typeof creativeProjects.$inferSelect;
 type Clip = typeof creativeClips.$inferSelect;
@@ -62,7 +66,7 @@ export async function projectDetail(project: Project) {
     db
       .select()
       .from(creativeAssets)
-      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut", "render"])))
+      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut", "render", "ad_copy"])))
       .orderBy(asc(creativeAssets.createdAt)),
     db.select().from(creativeCuts).where(eq(creativeCuts.projectId, project.id)).orderBy(asc(creativeCuts.version)),
     db.select().from(creativeEdits).where(eq(creativeEdits.projectId, project.id)).orderBy(asc(creativeEdits.version)),
@@ -183,6 +187,9 @@ export async function projectDetail(project: Project) {
       outputUrl: e.outputAssetId ? url(renders.get(e.outputAssetId) ?? null) : s3Outputs.get(e.id) ?? null,
       createdAt: e.createdAt.toISOString(),
     })),
+    adCopies: extras
+      .filter((a) => a.kind === "ad_copy")
+      .map((a) => ({ id: a.id, ...(a.metadata as unknown as AdCopyVersion), createdAt: a.createdAt.toISOString() })),
     clips: clips.map((c) => ({
       id: c.id,
       idx: c.idx,

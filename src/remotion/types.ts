@@ -6,7 +6,7 @@
  *
  * All times are seconds on the final cut's timeline.
  */
-export type EditStyle = "solo" | "pov" | "vsl" | "ladder";
+export type EditStyle = "solo" | "pov" | "vsl" | "ladder" | "custom";
 export type EditFormat = "ad_9x16" | "vsl_16x9";
 
 export interface CaptionWord {
@@ -40,6 +40,14 @@ export interface VslCard extends TimedText {
   sub?: string | null;
 }
 
+/** Custom style: a punch-in on the plate (scale eases in, holds, eases out). */
+export interface Zoom {
+  start: number;
+  end: number;
+  /** 1.05–1.3 */
+  scale: number;
+}
+
 export interface EditOverlays {
   /** Solo + ladder: the one title banner (a distillation, never a quote of the caption). */
   title: TimedText | null;
@@ -53,6 +61,10 @@ export interface EditOverlays {
   stickers: TimedText[];
   /** VSL: left-column cards, one slot, sequenced. */
   cards: VslCard[];
+  /** Custom only — absence means the style's default (captions on, except POV). */
+  captions?: boolean;
+  /** Custom only — absence means no zooms. */
+  zooms?: Zoom[];
 }
 
 // A type alias (not an interface) so it satisfies Remotion's Record<string, unknown> props constraint.
@@ -81,4 +93,5 @@ export const COMPOSITION_ID: Record<EditStyle, string> = {
   pov: "NexliPov",
   vsl: "NexliVsl",
   ladder: "NexliLadder",
+  custom: "NexliCustom",
 };
