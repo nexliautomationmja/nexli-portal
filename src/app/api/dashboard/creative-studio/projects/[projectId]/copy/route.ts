@@ -3,9 +3,9 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeAssets, creativeProjects } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipsOf, projectDetail, type AdCopyVersion } from "@/lib/creative-studio/service";
+import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
 import { claudeError } from "@/lib/creative-studio/script";
-import { reviseAdCopy, writeAdCopy, type CopyContext } from "@/lib/creative-studio/ad-copy";
+import { normalizeCopy, reviseAdCopy, writeAdCopy, type AdCopyVersion, type CopyContext } from "@/lib/creative-studio/ad-copy";
 import { latestEdit } from "@/lib/creative-studio/edit-service";
 
 export const maxDuration = 120;
@@ -59,9 +59,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   try {
     const ctx = await copyContext(project);
-    if (ctx.lines.length === 0 && !ctx.direction) return NextResponse.json({ error: "Write the script first" }, { status: 400 });
+    if (!ctx.lines?.length && !ctx.direction) return NextResponse.json({ error: "Write the script first" }, { status: 400 });
     const prev = await latestCopy(project.id);
-    const current = prev ? (prev.metadata as unknown as AdCopyVersion) : null;
+    const current = prev ? normalizeCopy(prev.metadata) : null;
     const copy = note && current ? await reviseAdCopy(ctx, current, note) : await writeAdCopy(ctx);
     const version = (current?.version ?? 0) + 1;
     const metadata: AdCopyVersion = { ...copy, version, note: note || null };

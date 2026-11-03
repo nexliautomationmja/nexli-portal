@@ -171,11 +171,18 @@ export function StudioHome() {
   return (
     <StudioCanvas>
       <div className="mx-auto max-w-3xl px-4 pb-16 pt-10 sm:px-6 sm:pt-20">
-        <div className="lp-card flex justify-center">
+        <div className="lp-card flex flex-wrap items-center justify-center gap-3">
           <ShimmerPill>
             <SvgIcon d={SP.sparkles} size={14} className="text-cyan-300" />
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white md:text-xs">Creative Studio</span>
           </ShimmerPill>
+          <Link
+            href="/dashboard/creative-studio/ad-copy"
+            className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/40 bg-violet-500/15 px-4 py-2 text-xs font-bold text-violet-100 transition hover:bg-violet-500/25 hover:text-white"
+            title="Drop any video or image and get 4 primary texts and 4 headlines"
+          >
+            ✍️ Ad copy
+          </Link>
         </div>
         <h1 className="lp-card mt-6 text-center text-4xl font-bold tracking-tighter text-white sm:text-5xl" style={{ ...SYNE, animationDelay: "0.05s" }}>
           What are we <GradientText>making?</GradientText>

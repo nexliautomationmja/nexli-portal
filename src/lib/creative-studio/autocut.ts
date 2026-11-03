@@ -142,6 +142,23 @@ export async function probeSpecs(file: string): Promise<{ width: number | null; 
   };
 }
 
+/** `count` JPEG stills at even points through a video (skipping the very first and last moments), `width` px wide. */
+export async function extractFrames(file: string, outDir: string, count: number, width = 768): Promise<string[]> {
+  const duration = await probeDuration(file);
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = duration > 0 ? (duration * (i + 0.5)) / count : i;
+    const dest = path.join(outDir, `frame-${i + 1}.jpg`);
+    try {
+      await run(["-y", "-hide_banner", "-loglevel", "error", "-ss", t.toFixed(2), "-i", file, "-frames:v", "1", "-vf", `scale=${width}:-2`, "-q:v", "4", dest], 60_000);
+      out.push(dest);
+    } catch (err) {
+      console.warn("[creative-studio] frame grab failed at", t.toFixed(2), err instanceof Error ? err.message : err);
+    }
+  }
+  return out;
+}
+
 export async function tempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`));
 }

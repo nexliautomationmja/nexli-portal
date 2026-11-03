@@ -12,10 +12,7 @@ import {
 } from "@/lib/creative-studio/tables";
 import { buildKlingPrompt, clipDuration, klingModelFor } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
-import type { AdCopy } from "@/lib/creative-studio/ad-copy";
-
-/** One saved version of the Meta ad copy (creative_assets kind "ad_copy", in metadata). */
-export type AdCopyVersion = AdCopy & { version: number; note: string | null };
+import { normalizeCopy } from "@/lib/creative-studio/ad-copy";
 
 type Project = typeof creativeProjects.$inferSelect;
 type Clip = typeof creativeClips.$inferSelect;
@@ -190,7 +187,7 @@ export async function projectDetail(project: Project) {
     })),
     adCopies: extras
       .filter((a) => a.kind === "ad_copy")
-      .map((a) => ({ id: a.id, ...(a.metadata as unknown as AdCopyVersion), createdAt: a.createdAt.toISOString() })),
+      .map((a) => ({ id: a.id, ...normalizeCopy(a.metadata), createdAt: a.createdAt.toISOString() })),
     clips: clips.map((c) => ({
       id: c.id,
       idx: c.idx,
