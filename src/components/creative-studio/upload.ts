@@ -71,3 +71,52 @@ export async function uploadToTarget(target: { path: string; token: string }, bl
     .uploadToSignedUrl(target.path, target.token, blob, { contentType: mime, upsert: false });
   if (error) throw new Error(error.message || "Upload failed");
 }
+
+/**
+ * Upload an image as a project's opening frame (cropped to 9:16 for ads):
+ * sign → direct upload → register → make it the opening frame.
+ * Returns the fresh project detail.
+ */
+export async function uploadFrameFile(projectId: string, file: File, vertical: boolean) {
+  const base = `/api/dashboard/creative-studio/projects/${projectId}/frames`;
+  const prepared = await prepareFrame(file, vertical);
+  const kling = prepared.mime === "image/webp" ? await toPng(prepared.blob) : prepared;
+  const sign = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "sign", mime: kling.mime }),
+  });
+  const target = await sign.json().catch(() => null);
+  if (!sign.ok || !target?.token) throw new Error(target?.error || "Couldn't start the upload");
+  await uploadToTarget(target, kling.blob, kling.mime);
+  const reg = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "register", path: target.path, mime: kling.mime, width: prepared.width, height: prepared.height }),
+  });
+  const detail = await reg.json().catch(() => null);
+  if (!reg.ok || !detail?.frames) throw new Error(detail?.error || "Couldn't save the frame");
+  const newest = [...detail.frames].sort((a: { sort: number }, b: { sort: number }) => b.sort - a.sort)[0];
+  if (!newest) return detail;
+  const primary = await fetch(base, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ primaryId: newest.id }),
+  });
+  const out = await primary.json().catch(() => null);
+  if (!primary.ok) throw new Error(out?.error || "Couldn't set the frame");
+  return out;
+}
+
+/** Kling accepts PNG/JPG only — convert a WebP frame to PNG in the browser. */
+async function toPng(blob: Blob): Promise<{ blob: Blob; mime: string }> {
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
+  const png = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't convert the image"))), "image/png")
+  );
+  return { blob: png, mime: "image/png" };
+}
