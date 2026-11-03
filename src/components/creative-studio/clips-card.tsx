@@ -5,7 +5,7 @@ import type { ProjectDetail } from "@/lib/creative-studio/service";
 import { CREDITS_PER_SECOND } from "@/lib/creative-studio/prompts";
 import { CTA_CLASSES, ConfettiBurst, ProgressRing, SYNE, ShimmerCard } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
-import { api, send } from "@/components/creative-studio/client";
+import { api, downloadHref, send, videoFileName } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon } from "@/components/creative-studio/canvas";
 
 type Clip = ProjectDetail["clips"][number];
@@ -163,7 +163,7 @@ export function ClipsCard({
 
         <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
           {detail.clips.map((c) => (
-            <ClipTile key={`${c.id}-${c.version}`} clip={c} aspect={aspect} projectId={p.id} canRedo={Boolean(kling?.connected)} onChange={onChange} onError={onError} />
+            <ClipTile key={`${c.id}-${c.version}`} clip={c} aspect={aspect} projectId={p.id} title={p.title} canRedo={Boolean(kling?.connected)} onChange={onChange} onError={onError} />
           ))}
         </div>
 
@@ -185,6 +185,7 @@ function ClipTile({
   clip,
   aspect,
   projectId,
+  title,
   canRedo,
   onChange,
   onError,
@@ -192,6 +193,7 @@ function ClipTile({
   clip: Clip;
   aspect: string;
   projectId: string;
+  title: string;
   canRedo: boolean;
   onChange: (d: ProjectDetail) => void;
   onError: (msg: string) => void;
@@ -243,7 +245,11 @@ function ClipTile({
         {clip.error && <p className="text-[11px] font-semibold text-rose-300">{clip.error}</p>}
         <div className="flex flex-wrap gap-3 text-[11px] font-semibold">
           {clip.videoUrl && (
-            <a href={clip.videoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-cyan-300 hover:text-white">
+            <a
+              href={downloadHref(clip.videoUrl, videoFileName(title, `clip-${clip.idx + 1}`, `take-${clip.version}`))}
+              download
+              className="inline-flex items-center gap-1 text-cyan-300 hover:text-white"
+            >
               <SvgIcon d={SP.download} size={12} /> Download
             </a>
           )}

@@ -8,7 +8,7 @@ import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/
 import { sameTarget, setText, setWindow, slotClashes, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
-import { api, send } from "@/components/creative-studio/client";
+import { api, downloadHref, send, videoFileName } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon, ThinkingCard, UserBubble } from "@/components/creative-studio/canvas";
 
 const EditPreview = dynamic(() => import("@/components/creative-studio/edit-preview"), {
@@ -735,7 +735,7 @@ export function EditCard({
                     </button>
                   )}
                   {latestOutput && (
-                    <a href={latestOutput} target="_blank" rel="noopener noreferrer" className={CTA_CLASSES}>
+                    <a href={downloadHref(latestOutput, videoFileName(p.title, latest.style, `v${latest.version}`))} download className={CTA_CLASSES}>
                       <SvgIcon d={SP.download} size={15} /> Download
                     </a>
                   )}
@@ -768,7 +768,11 @@ export function EditCard({
                 {lastDone && lastDone.id !== latest.id && lastDone.outputUrl && (
                   <p className="text-xs text-neutral-500">
                     Last render: v{lastDone.version} · {STYLE_LABEL[lastDone.style]} ·{" "}
-                    <a href={lastDone.outputUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-neutral-300 hover:text-white">
+                    <a
+                      href={downloadHref(lastDone.outputUrl, videoFileName(p.title, lastDone.style, `v${lastDone.version}`))}
+                      download
+                      className="font-semibold text-neutral-300 hover:text-white"
+                    >
                       Download
                     </a>
                   </p>

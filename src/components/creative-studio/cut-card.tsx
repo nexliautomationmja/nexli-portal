@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import { CTA_CLASSES } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
-import { api, send } from "@/components/creative-studio/client";
+import { api, downloadHref, send, videoFileName } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
 import { TrimEditor } from "@/components/creative-studio/trim-editor";
 
@@ -215,7 +215,7 @@ export function CutCard({
                       Approve cut
                     </button>
                   )}
-                  <a href={shown.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/10 hover:text-white">
+                  <a href={downloadHref(shown.url, videoFileName(p.title, "auto-cut", `v${shown.version}`))} download className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/10 hover:text-white">
                     <SvgIcon d={SP.download} size={15} /> Download
                   </a>
                   {latest && latest.version > 1 && latest.status !== "approved" && latest.status !== "cutting" && (
