@@ -3,7 +3,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeClips, type ClipFields } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipFieldsOf, clipsOf, derivedClip, projectDetail } from "@/lib/creative-studio/service";
+import { clipFieldsOf, clipsOf, derivedClip, framesOf, projectDetail } from "@/lib/creative-studio/service";
+import { signPaths } from "@/lib/creative-studio/storage";
+import { rewriteClip } from "@/lib/creative-studio/script";
 import { submitClips } from "@/lib/creative-studio/render";
 import { accessToken, KlingNotConnectedError } from "@/lib/creative-studio/kling-mcp";
 
@@ -22,7 +24,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (!access.ok) return access.response;
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
-  const body = (await req.json().catch(() => null)) as { redo?: { clipId?: string; line?: string; cues?: string } } | null;
+  const body = (await req.json().catch(() => null)) as {
+    redo?: { clipId?: string; line?: string; cues?: string; note?: string };
+  } | null;
 
   let token: string;
   try {
@@ -44,11 +48,35 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "That clip is already rendering" }, { status: 409 });
     }
     // Change only what's needed (line / cue), keep the old take as history.
-    const fields: ClipFields = {
+    let fields: ClipFields = {
       ...clipFieldsOf(clip),
       ...(typeof body.redo.line === "string" && body.redo.line.trim() ? { line: body.redo.line.trim().slice(0, 2000) } : {}),
       ...(typeof body.redo.cues === "string" ? { cues: body.redo.cues.slice(0, 2000) } : {}),
     };
+    // "What should change?" note → Claude adjusts this clip's line / cue first.
+    const note = typeof body.redo.note === "string" ? body.redo.note.trim().slice(0, 1000) : "";
+    if (note) {
+      try {
+        const all = await clipsOf(project.id);
+        const frames = await framesOf(project.id);
+        const signed = await signPaths(frames.slice(0, 1).map((f) => f.storagePath));
+        const frameUrls = frames
+          .slice(0, 1)
+          .map((f) => (f.storagePath ? signed.get(f.storagePath) : undefined))
+          .filter(Boolean) as string[];
+        const rewritten = await rewriteClip({
+          input: { title: project.title, format: project.format, rig: project.rig, brief: project.brief, frameUrls },
+          frame: project.frameSpec,
+          clips: all.map(clipFieldsOf),
+          index: all.findIndex((c) => c.id === clip.id),
+          instruction: `${note} (This clip already rendered on Kling; fix it with a targeted change to the line or a pronunciation cue, per the framework's redo pattern.)`,
+        });
+        fields = rewritten.clip;
+      } catch (err) {
+        console.error("[creative-studio] redo rewrite failed:", err);
+        return NextResponse.json({ error: "Claude couldn't adjust the clip. Try again." }, { status: 502 });
+      }
+    }
     const previous = clip.klingTaskId || clip.videoAssetId
       ? [
           ...(clip.previous ?? []),

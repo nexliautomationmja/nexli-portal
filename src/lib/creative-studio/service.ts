@@ -53,13 +53,28 @@ export async function clipsOf(projectId: string) {
 
 /** Everything the project page needs, with signed frame URLs. */
 export async function projectDetail(project: Project) {
-  const [frames, clips] = await Promise.all([framesOf(project.id), clipsOf(project.id)]);
+  const [frames, clips, extras] = await Promise.all([
+    framesOf(project.id),
+    clipsOf(project.id),
+    db
+      .select()
+      .from(creativeAssets)
+      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut"])))
+      .orderBy(asc(creativeAssets.createdAt)),
+  ]);
+  const options = extras.filter((a) => a.kind === "frame_option");
+  const manusTasks = extras.filter((a) => a.kind === "manus_task");
+  const finalCuts = extras.filter((a) => a.kind === "final_cut");
   const videoIds = clips.map((c) => c.videoAssetId).filter((v): v is string => Boolean(v));
   const videos = videoIds.length
     ? await db.select().from(creativeAssets).where(inArray(creativeAssets.id, videoIds))
     : [];
   const videoPath = new Map(videos.map((v) => [v.id, v.storagePath]));
-  const signed = await signPaths([...frames.map((f) => f.storagePath), ...videos.map((v) => v.storagePath)], 6 * 3600);
+  const signed = await signPaths(
+    [...frames, ...videos, ...options, ...finalCuts].map((a) => a.storagePath),
+    6 * 3600
+  );
+  const url = (path: string | null) => (path ? signed.get(path) ?? null : null);
   return {
     project: {
       id: project.id,
@@ -77,6 +92,7 @@ export async function projectDetail(project: Project) {
         reason: h.reason,
         clips: h.clips.length,
       })),
+      direction: project.brief?.direction ?? "",
       approvedAt: project.approvedAt?.toISOString() ?? null,
       updatedAt: project.updatedAt.toISOString(),
     },
@@ -87,6 +103,21 @@ export async function projectDetail(project: Project) {
       height: f.height,
       source: f.source,
       sort: f.sort,
+    })),
+    frameOptions: options.map((o) => ({ id: o.id, url: url(o.storagePath), width: o.width, height: o.height })),
+    manus: manusTasks.map((t) => ({
+      id: t.id,
+      status: t.status,
+      error: t.error,
+      shot: ((t.metadata ?? {}) as { shot?: string }).shot ?? "",
+      startedAt: t.createdAt.toISOString(),
+    })),
+    finalCuts: finalCuts.map((f) => ({
+      id: f.id,
+      url: url(f.storagePath),
+      note: ((f.metadata ?? {}) as { note?: string }).note ?? "",
+      filename: ((f.metadata ?? {}) as { filename?: string }).filename ?? "final cut",
+      uploadedAt: f.createdAt.toISOString(),
     })),
     clips: clips.map((c) => ({
       id: c.id,
@@ -112,6 +143,7 @@ export async function snapshotOf(project: Project, reason: string): Promise<Scri
   if (clips.length === 0) return null;
   return {
     version: project.scriptVersion,
+    rig: project.rig,
     createdAt: new Date().toISOString(),
     reason,
     frameSpec: project.frameSpec,
@@ -127,13 +159,20 @@ export async function snapshotOf(project: Project, reason: string): Promise<Scri
  */
 export async function replaceScript(
   project: Project,
-  next: { frameSpec: Project["frameSpec"]; notes: string | null; clips: ClipFields[] },
+  next: {
+    frameSpec: Project["frameSpec"];
+    notes: string | null;
+    clips: ClipFields[];
+    rig?: Project["rig"];
+    title?: string;
+  },
   reason: string
 ): Promise<void> {
   const snapshot = await snapshotOf(project, reason);
   const history = [...(project.scriptHistory ?? []), ...(snapshot ? [snapshot] : [])].slice(-20);
   const version = project.scriptVersion + 1;
-  const updated: Project = { ...project, frameSpec: next.frameSpec };
+  const rig = next.rig ?? project.rig;
+  const updated: Project = { ...project, frameSpec: next.frameSpec, rig };
   const frames = await framesOf(project.id);
   const primaryFrame = frames[0]?.id ?? null;
 
@@ -154,6 +193,8 @@ export async function replaceScript(
     .update(creativeProjects)
     .set({
       frameSpec: next.frameSpec,
+      rig,
+      ...(next.title && project.title === "Untitled video" ? { title: next.title } : {}),
       scriptNotes: next.notes,
       scriptVersion: version,
       scriptHistory: history,

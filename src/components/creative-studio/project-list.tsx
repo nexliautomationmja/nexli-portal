@@ -3,39 +3,25 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { CreativeBrief, CreativeFormat, CreativeRig } from "@/lib/creative-studio/tables";
-import { EMPTY_BRIEF, FORMAT_LABEL, RIG_LABEL } from "@/lib/creative-studio/prompts";
-import { BriefFields, FormatRigFields, INPUT, LABEL } from "@/components/creative-studio/brief-fields";
+import type { CreativeFormat } from "@/lib/creative-studio/tables";
+import { ErrorNote, STATUS_LABEL } from "@/components/creative-studio/ui";
 
 interface ProjectRow {
   id: string;
   title: string;
   format: CreativeFormat;
-  rig: CreativeRig;
   status: string;
+  direction: string;
   clips: number;
   thumbUrl: string | null;
   updatedAt: string;
 }
-
-export const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Draft", cls: "bg-[var(--input-bg)] text-[var(--text-muted)]" },
-  scripted: { label: "Script in review", cls: "bg-amber-500/15 text-amber-500" },
-  approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-500" },
-  rendering: { label: "Rendering on Kling", cls: "bg-blue-500/15 text-blue-400" },
-  clips_ready: { label: "Clips ready", cls: "bg-emerald-500/15 text-emerald-500" },
-};
 
 export function StudioProjectList() {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [title, setTitle] = useState("");
-  const [format, setFormat] = useState<CreativeFormat>("ad_9x16");
-  const [rig, setRig] = useState<CreativeRig>("solo_locked");
-  const [brief, setBrief] = useState<CreativeBrief>(EMPTY_BRIEF);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,28 +29,26 @@ export function StudioProjectList() {
       .then((r) => r.json().then((b) => ({ ok: r.ok, b })))
       .then(({ ok, b }) => {
         if (cancelled) return;
-        if (!ok) setError(b?.error || "Couldn't load projects");
+        if (!ok) setError(b?.error || "Couldn't load your videos");
         else setProjects(b.projects);
       })
-      .catch(() => !cancelled && setError("Couldn't load projects"));
+      .catch(() => !cancelled && setError("Couldn't load your videos"));
     return () => {
       cancelled = true;
     };
   }, []);
 
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
+  async function newVideo() {
+    setCreating(true);
     const r = await fetch("/api/dashboard/creative-studio/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, format, rig, brief }),
+      body: "{}",
     });
     const b = await r.json().catch(() => null);
-    setBusy(false);
     if (!r.ok || !b?.id) {
-      setError(b?.error || "Couldn't create the project");
+      setCreating(false);
+      setError(b?.error || "Couldn't start a new video");
       return;
     }
     router.push(`/dashboard/creative-studio/${b.id}`);
@@ -78,48 +62,15 @@ export function StudioProjectList() {
             Creative Studio
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-            Frame → script → Kling clips → edit. Daniela ads (9:16) and VSLs (16:9), built on your framework.
+            Make Daniela&apos;s frame, say what the video is, approve the script, and Kling renders it.
           </p>
         </div>
-        {!creating && (
-          <button type="button" onClick={() => setCreating(true)} className="btn-primary px-5 py-2.5 text-sm">
-            New project
-          </button>
-        )}
+        <button type="button" onClick={newVideo} disabled={creating} className="btn-primary px-5 py-2.5 text-sm">
+          {creating ? "Starting…" : "New video"}
+        </button>
       </div>
 
-      {error && (
-        <div className="rounded-xl border px-4 py-3 text-sm border-rose-500/30 bg-rose-500/10 text-rose-500">{error}</div>
-      )}
-
-      {creating && (
-        <form onSubmit={create} className="glass-card p-5 space-y-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>New project</h2>
-            <button type="button" onClick={() => setCreating(false)} className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-              Cancel
-            </button>
-          </div>
-          <label className="block">
-            <span className={LABEL} style={{ color: "var(--text-muted)" }}>Title</span>
-            <input
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Volume trap · solo locked-off"
-              className={INPUT}
-              style={{ color: "var(--text-main)" }}
-            />
-          </label>
-          <FormatRigFields format={format} rig={rig} onChange={(n) => (setFormat(n.format), setRig(n.rig))} />
-          <BriefFields brief={brief} onChange={setBrief} />
-          <div className="flex justify-end">
-            <button type="submit" disabled={busy} className="btn-primary px-6 py-2.5 text-sm">
-              {busy ? "Creating…" : "Create and add the frame"}
-            </button>
-          </div>
-        </form>
-      )}
+      {error && <ErrorNote>{error}</ErrorNote>}
 
       {projects === null && !error ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-pulse">
@@ -127,10 +78,10 @@ export function StudioProjectList() {
             <div key={i} className="glass-card h-56" />
           ))}
         </div>
-      ) : projects && projects.length === 0 && !creating ? (
+      ) : projects && projects.length === 0 ? (
         <div className="glass-card p-10 text-center">
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            No projects yet. Start one with a title, the angle and the opening frame.
+            No videos yet. Press New video to start with Daniela&apos;s frame.
           </p>
         </div>
       ) : (
@@ -143,7 +94,7 @@ export function StudioProjectList() {
                 href={`/dashboard/creative-studio/${p.id}`}
                 className="glass-card overflow-hidden !p-0 flex flex-col transition-transform hover:-translate-y-0.5"
               >
-                <div className="relative h-40 bg-black">
+                <div className="relative h-44 bg-black">
                   {p.thumbUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
                     <img src={p.thumbUrl} alt="" className="h-full w-full object-contain" />
@@ -156,8 +107,11 @@ export function StudioProjectList() {
                 </div>
                 <div className="p-4 space-y-1">
                   <p className="text-sm font-bold truncate" style={{ color: "var(--text-main)" }}>{p.title}</p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {FORMAT_LABEL[p.format]} · {RIG_LABEL[p.rig]} · {p.clips} clip{p.clips === 1 ? "" : "s"}
+                  <p className="text-xs line-clamp-2" style={{ color: "var(--text-muted)" }}>
+                    {p.direction || "No direction yet"}
+                  </p>
+                  <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    {p.format === "vsl_16x9" ? "VSL" : "Ad"} · {p.clips} clip{p.clips === 1 ? "" : "s"}
                   </p>
                 </div>
               </Link>

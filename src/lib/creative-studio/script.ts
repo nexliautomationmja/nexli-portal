@@ -25,13 +25,15 @@ const PORTAL_ADDENDUM = `
 
 # Working inside the Nexli portal (Creative Studio)
 
-You are writing the script inside the portal's Creative Studio. The portal shows the §10 review page and assembles each clip's complete Kling prompt from the §7 templates using the fields you return, so do not write Kling prompts yourself. Return structured fields only:
+You are writing the script inside the portal's Creative Studio. The user gives you the opening frame and explains the video in their own words; they only choose ad or VSL. Infer everything else the §2 intake asks for (angle, old and new belief, proof, CTA, required lines) from their words, the framework and the current offer facts in §9 — do not ask questions. The portal shows the §10 review page and assembles each clip's complete Kling prompt from the §7 templates using the fields you return, so do not write Kling prompts yourself. Return structured fields only:
 
 - frame.subject — the §5 Subject: starts "Daniela, the woman with …", then outfit, seat and pose, ending with how she moves from the pose. For a handheld selfie frame, describe her holding the phone at arm's length as §5 says. Multi-person frames: leave subject as a short shared description.
 - frame.room — the §5 Room: props by side, background left to right, light, ending "Warm natural daylight, soft background blur." (adapt the light if the frame clearly differs).
 - frame.base and frame.positions — multi-person (duo/trio) only: base = who they are and their shared look; one position per person with the §5 \`who\` string, the outfit, and the short name for listener directions. Single presenter: base "" and positions [].
 - clips — the §3 structure for the format and rig, with the §4 fields. speaker: LEFT/CENTER/RIGHT for multi-person clips, NONE for a single presenter. action: one short physical beat written as a sentence about her that the pose in the frame can support. editNote: the §4 Edit note for the editor. cues: only the §6 pronunciation sentences this line needs, phrased exactly as the playbook phrases them (empty string if none). listenerReactions: multi-person only, one per listener by short name, small and specific; [] otherwise.
 - The portal computes each clip's duration with the §4 formula. Keep every line to one idea and about 22 words or fewer; split longer thoughts into two clips.
+- rig — read it from the frame: solo_locked (one person, camera on a stand), solo_selfie (one person holding the phone), duo (two people), trio (three people). VSLs are always solo_locked.
+- title — a short working title for the video (3–6 words).
 - notes — plain sentences for the user: risky lines (claims, numbers, long lines), math you recomputed, assumptions you made (e.g. frame order), and anything they should confirm before approving.
 
 Follow every standing rule in §1: C-P-A spelled with hyphens, dollar figures as digits, "investment" never "price", no guarantees, no savior positioning, "legally" when talking about keeping money from the I-R-S.
@@ -93,8 +95,14 @@ const FRAME_SCHEMA = {
 const SCRIPT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["frame", "clips", "notes"],
-  properties: { frame: FRAME_SCHEMA, clips: { type: "array", items: CLIP_SCHEMA }, notes: STR },
+  required: ["title", "rig", "frame", "clips", "notes"],
+  properties: {
+    title: STR,
+    rig: { type: "string", enum: ["solo_locked", "solo_selfie", "duo", "trio"] },
+    frame: FRAME_SCHEMA,
+    clips: { type: "array", items: CLIP_SCHEMA },
+    notes: STR,
+  },
 } as const;
 
 const REWRITE_SCHEMA = {
@@ -139,6 +147,13 @@ export interface ScriptInput {
 
 function briefText(input: ScriptInput): string {
   const b = input.brief;
+  if (b.direction?.trim()) {
+    return [
+      `Format: ${input.format === "vsl_16x9" ? "VSL, 16:9 horizontal" : "ad creative, 9:16 vertical"}`,
+      `What the user wants this video to be, in their words:\n${b.direction.trim()}`,
+      `Frames attached: ${input.frameUrls.length} (the first is the opening frame for every clip).`,
+    ].join("\n\n");
+  }
   const lines = [
     `Project: ${input.title}`,
     `Format: ${FORMAT_LABEL[input.format]} (${input.format === "vsl_16x9" ? "VSL, 16:9 horizontal" : "ad creative, 9:16 vertical"})`,
@@ -189,9 +204,73 @@ async function callClaude(content: Anthropic.ContentBlockParam[], schema: object
   }
 }
 
-export async function generateScript(
-  input: ScriptInput
-): Promise<{ frame: FrameSpec; clips: ClipFields[]; notes: string }> {
+export interface ScriptResult {
+  title: string;
+  rig: CreativeRig;
+  frame: FrameSpec;
+  clips: ClipFields[];
+  notes: string;
+}
+
+const RIGS: CreativeRig[] = ["solo_locked", "solo_selfie", "duo", "trio"];
+
+function toResult(raw: RawScript, format: CreativeFormat): ScriptResult {
+  const clips = (raw.clips ?? []).map(toClipFields).filter((c) => c.line);
+  if (clips.length === 0) throw new Error("Claude returned no clips. Please try again.");
+  const rig = format === "vsl_16x9" ? "solo_locked" : RIGS.includes(raw.rig) ? raw.rig : "solo_locked";
+  return {
+    title: (raw.title ?? "").trim().slice(0, 120),
+    rig,
+    frame: {
+      subject: raw.frame?.subject?.trim() ?? "",
+      room: raw.frame?.room?.trim() ?? "",
+      base: raw.frame?.base?.trim() ?? "",
+      positions: Array.isArray(raw.frame?.positions) ? raw.frame.positions : [],
+    },
+    clips,
+    notes: raw.notes?.trim() ?? "",
+  };
+}
+
+interface RawScript {
+  title: string;
+  rig: CreativeRig;
+  frame: FrameSpec;
+  clips: RawClip[];
+  notes: string;
+}
+
+/** Revise the whole script from a plain-English note ("make the hook punchier, drop clip 4"). */
+export async function reviseScript(args: {
+  input: ScriptInput;
+  frame: FrameSpec | null;
+  clips: ClipFields[];
+  note: string;
+}): Promise<ScriptResult> {
+  const { input, frame, clips, note } = args;
+  const raw = (await callClaude(
+    [
+      ...frameBlocks(input.frameUrls.slice(0, 1)),
+      {
+        type: "text",
+        text: [
+          briefText(input),
+          "",
+          `Current script (JSON):\n${JSON.stringify({ rig: input.rig, frame, clips })}`,
+          "",
+          `The user's requested changes: ${note}`,
+          "",
+          "Return the complete revised script. Change only what the note asks for (plus anything the framework requires as a consequence); keep every other clip exactly as it is.",
+        ].join("\n"),
+      },
+    ],
+    SCRIPT_SCHEMA,
+    48_000
+  )) as RawScript;
+  return toResult(raw, input.format);
+}
+
+export async function generateScript(input: ScriptInput): Promise<ScriptResult> {
   const raw = (await callClaude(
     [
       ...frameBlocks(input.frameUrls),
@@ -202,20 +281,8 @@ export async function generateScript(
     ],
     SCRIPT_SCHEMA,
     48_000
-  )) as { frame: FrameSpec; clips: RawClip[]; notes: string };
-
-  const clips = (raw.clips ?? []).map(toClipFields).filter((c) => c.line);
-  if (clips.length === 0) throw new Error("Claude returned no clips. Please try again.");
-  return {
-    frame: {
-      subject: raw.frame?.subject?.trim() ?? "",
-      room: raw.frame?.room?.trim() ?? "",
-      base: raw.frame?.base?.trim() ?? "",
-      positions: Array.isArray(raw.frame?.positions) ? raw.frame.positions : [],
-    },
-    clips,
-    notes: raw.notes?.trim() ?? "",
-  };
+  )) as RawScript;
+  return toResult(raw, input.format);
 }
 
 export async function rewriteClip(args: {
@@ -251,4 +318,10 @@ export async function rewriteClip(args: {
     8_000
   )) as { clip: RawClip; notes: string };
   return { clip: toClipFields(raw.clip), notes: raw.notes?.trim() ?? "" };
+}
+
+/** A user-facing message for a failed Claude call. */
+export function claudeError(err: unknown, fallback: string): string {
+  if (err instanceof Anthropic.APIError) return `Claude API error (${err.status ?? "network"}). Please try again.`;
+  return err instanceof Error ? err.message : fallback;
 }

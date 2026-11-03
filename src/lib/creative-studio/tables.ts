@@ -19,6 +19,8 @@ export type CreativeRig = "solo_locked" | "solo_selfie" | "duo" | "trio";
 export type ClipSpeaker = "LEFT" | "CENTER" | "RIGHT" | null;
 
 export interface CreativeBrief {
+  /** What Marcel says the video is about, in his own words (the simple flow). */
+  direction?: string;
   oldBelief: string;
   newBelief: string;
   proof: string;
@@ -68,6 +70,7 @@ export interface ClipFields {
 
 export interface ScriptSnapshot {
   version: number;
+  rig?: CreativeRig;
   createdAt: string;
   reason: string;
   frameSpec: FrameSpec | null;
@@ -99,10 +102,11 @@ export const creativeProjects = pgTable("creative_projects", {
 
 export const creativeAssets = pgTable("creative_assets", {
   id: uuid("id").defaultRandom().primaryKey(),
-  projectId: uuid("project_id")
-    .notNull()
-    .references(() => creativeProjects.id, { onDelete: "cascade" }),
-  /** frame | clip | audio | render */
+  /** Null for workspace-wide assets (Daniela reference images). */
+  projectId: uuid("project_id").references(() => creativeProjects.id, { onDelete: "cascade" }),
+  /** Set on workspace-wide assets. */
+  ownerId: uuid("owner_id"),
+  /** frame | frame_option | manus_task | reference | clip | final_cut | render */
   kind: text("kind").notNull(),
   storagePath: text("storage_path"),
   mime: text("mime"),
@@ -217,6 +221,12 @@ export function ensureCreativeStudioTables(): Promise<void> {
       `);
       await db.execute(
         sql`CREATE INDEX IF NOT EXISTS "creative_assets_project_idx" ON "creative_assets" ("project_id", "kind", "sort")`
+      );
+      // Nov 2026 simple flow: workspace-wide reference images have no project.
+      await db.execute(sql`ALTER TABLE "creative_assets" ALTER COLUMN "project_id" DROP NOT NULL`);
+      await db.execute(sql`ALTER TABLE "creative_assets" ADD COLUMN IF NOT EXISTS "owner_id" uuid`);
+      await db.execute(
+        sql`CREATE INDEX IF NOT EXISTS "creative_assets_owner_idx" ON "creative_assets" ("owner_id", "kind")`
       );
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_clips" (

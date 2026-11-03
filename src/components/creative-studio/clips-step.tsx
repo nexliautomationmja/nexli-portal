@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import { CREDITS_PER_SECOND, clipDuration } from "@/lib/creative-studio/prompts";
-import { INPUT, LABEL } from "@/components/creative-studio/brief-fields";
+import { INPUT } from "@/components/creative-studio/ui";
 import { api, send } from "@/components/creative-studio/client";
 
 type Clip = ProjectDetail["clips"][number];
@@ -258,18 +258,17 @@ function ClipTile({
 }) {
   const p = detail.project;
   const [redoOpen, setRedoOpen] = useState(false);
-  const [line, setLine] = useState(clip.line);
-  const [cues, setCues] = useState(clip.cues);
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const status = CLIP_STATUS[clip.status] ?? CLIP_STATUS.draft;
   const canRedo = ["done", "failed", "blocked"].includes(clip.status);
   const aspect = p.format === "ad_9x16" ? "9 / 16" : "16 / 9";
 
   async function redo() {
-    const cost = clipDuration(line) * CREDITS_PER_SECOND;
+    const cost = clipDuration(clip.line) * CREDITS_PER_SECOND;
     if (!confirm(`Redo clip ${clip.idx + 1}? About ${cost} credits. The current take is kept as v${clip.version}.`)) return;
     setBusy(true);
-    const r = await send(api(`${p.id}/render`), "POST", { redo: { clipId: clip.id, line, cues } });
+    const r = await send(api(`${p.id}/render`), "POST", { redo: { clipId: clip.id, note } });
     setBusy(false);
     if (r.ok) {
       onChange(r.data);
@@ -322,16 +321,16 @@ function ClipTile({
         </div>
         {redoOpen && (
           <div className="space-y-2 pt-2 border-t" style={{ borderColor: "var(--card-border)" }}>
-            <label className="block">
-              <span className={LABEL} style={{ color: "var(--text-muted)" }}>Line</span>
-              <textarea rows={2} value={line} onChange={(e) => setLine(e.target.value)} className={`${INPUT} resize-y`} style={{ color: "var(--text-main)" }} />
-            </label>
-            <label className="block">
-              <span className={LABEL} style={{ color: "var(--text-muted)" }}>Targeted cue (e.g. how to say a word or number)</span>
-              <textarea rows={2} value={cues} onChange={(e) => setCues(e.target.value)} className={`${INPUT} resize-y`} style={{ color: "var(--text-main)" }} />
-            </label>
+            <textarea
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="What should change? e.g. she said the number twice, say C-P-A as letters. Leave empty to redo as-is."
+              className={`${INPUT} resize-y`}
+              style={{ color: "var(--text-main)" }}
+            />
             <button type="button" onClick={redo} disabled={busy} className="btn-primary w-full px-4 py-2 text-xs">
-              {busy ? "Sending to Kling…" : "Redo with these changes"}
+              {busy ? "Sending to Kling…" : note.trim() ? "Fix and redo" : "Redo as-is"}
             </button>
           </div>
         )}

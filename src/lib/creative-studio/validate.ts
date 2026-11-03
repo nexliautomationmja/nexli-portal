@@ -7,6 +7,7 @@ export function cleanBrief(input: unknown): CreativeBrief {
   const b = (input ?? {}) as Partial<Record<keyof CreativeBrief, unknown>>;
   const s = (v: unknown) => (typeof v === "string" ? v.slice(0, 4000) : "");
   return {
+    direction: s((b as { direction?: unknown }).direction),
     oldBelief: s(b.oldBelief),
     newBelief: s(b.newBelief),
     proof: s(b.proof),
