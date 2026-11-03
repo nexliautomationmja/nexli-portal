@@ -389,3 +389,92 @@ export function reviseLayout(ctx: EditContext, current: EditOverlays, note: stri
     true
   );
 }
+
+// ---------- Hand-edited text: Claude's versions of what the user typed ----------
+
+function rulebookSection(start: string, end: string): string {
+  const i = EDITING_RULES.indexOf(start);
+  if (i < 0) return "";
+  const j = EDITING_RULES.indexOf(end, i);
+  return EDITING_RULES.slice(i, j > i ? j : undefined).trim();
+}
+
+const SUGGEST_SYSTEM = `You help write one piece of on-screen text for a short Nexli video ad (Nexli runs client acquisition for CPA firms). The user typed their own version; you offer alternatives that keep their idea.
+
+${rulebookSection("## Creative rules", "## Brand")}
+
+Copy rules: no guarantees of results, no savior positioning, no unverifiable claims; "investment" never "price"; write CPA and IRS (never C-P-A / I-R-S); figures as digits; use only numbers that appear in the user's text, the script or the captions.
+
+Return exactly three options. Each keeps the user's meaning and fits the slot's length; make them genuinely different (for example one punchier, one more specific, one from a different angle). Never repeat the words she is saying under it. Write in normal case (the renderer sets ALL CAPS where the style uses it), except stickers, which stay in sentence case.
+
+aboutYours: one short plain sentence if the user's own version breaks a rule above (repeats the caption under it, too long for the slot, a guarantee…), otherwise an empty string.`;
+
+const SUGGEST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["options", "aboutYours"],
+  properties: { options: { type: "array", items: { type: "string" } }, aboutYours: { type: "string" } },
+} as const;
+
+export async function suggestText(args: {
+  slot: string;
+  limit: number;
+  typed: string;
+  window: { start: number; end: number } | null;
+  words: CaptionWord[];
+  onScreen: string[];
+  direction: string;
+  script: string[];
+}): Promise<{ options: string[]; aboutYours: string }> {
+  const w = args.window;
+  const spoken = w
+    ? args.words
+        .filter((x) => x.end >= w.start - 1 && x.start <= w.end + 1)
+        .map((x) => x.word)
+        .join(" ")
+    : "";
+  const content = [
+    `What the video is about: ${args.direction || "(not given)"}`,
+    `Script: ${args.script.join(" ") || "(none)"}`,
+    `The slot: ${args.slot}. Hard limit ${args.limit} characters.`,
+    w ? `On screen ${t2(w.start)}–${t2(w.end)}s. What she says around then (captions): ${spoken || "(nothing)"}` : "",
+    args.onScreen.length ? `Other on-screen text in this edit:\n${args.onScreen.join("\n")}` : "",
+    `The user typed: ${args.typed}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const client = new Anthropic({ timeout: 60_000, maxRetries: 1 });
+  const params = {
+    model: MODEL,
+    max_tokens: 1500,
+    system: SUGGEST_SYSTEM,
+    messages: [{ role: "user", content }],
+    output_config: { effort: "low", format: { type: "json_schema", schema: SUGGEST_SCHEMA } },
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+  } as unknown as Parameters<typeof client.beta.messages.create>[0];
+  const message = (await client.beta.messages.create(params)) as Anthropic.Beta.BetaMessage;
+  if (message.stop_reason === "refusal") throw new Error("Claude couldn't suggest versions for that. Try rewording it.");
+  const text = message.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  let raw: { options?: string[]; aboutYours?: string };
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new Error("Claude returned unreadable versions. Please try again.");
+  }
+  const typed = args.typed.trim().toLowerCase();
+  const seen = new Set<string>([typed]);
+  const options: string[] = [];
+  for (const o of raw.options ?? []) {
+    const v = o.replace(/C-P-A/g, "CPA").replace(/I-R-S/g, "IRS").trim().slice(0, args.limit);
+    if (v && !seen.has(v.toLowerCase())) {
+      seen.add(v.toLowerCase());
+      options.push(v);
+    }
+  }
+  return { options: options.slice(0, 3), aboutYours: (raw.aboutYours ?? "").trim() };
+}

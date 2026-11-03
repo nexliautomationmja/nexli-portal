@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import type { EditLayout, EditProps, EditStyle, MovableSlot } from "@/remotion/types";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
+import { sameTarget, setText, textLimit, type TextTarget } from "@/lib/creative-studio/edit-text";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send } from "@/components/creative-studio/client";
@@ -114,14 +115,21 @@ export function EditCard({
   const elements = useMemo(() => {
     const o = latest?.props?.overlays;
     if (!o) return [];
-    const rows: { label: string; text: string; start: number; end: number }[] = [];
-    if (o.title) rows.push({ label: "Title", ...o.title });
-    o.rungs.forEach((r) => rows.push({ label: `Rung · ${r.position.toLowerCase()}`, text: [r.pill, r.tag].filter(Boolean).join(" · "), start: r.start, end: r.end }));
-    if (o.qualifier) rows.push({ label: "Qualifier", ...o.qualifier });
-    if (o.cta) rows.push({ label: "CTA", ...o.cta });
+    const rows: { label: string; text: string; start: number; end: number; target?: TextTarget }[] = [];
+    if (o.title) rows.push({ label: "Title", ...o.title, target: { slot: "title" } });
+    o.rungs.forEach((r, i) => {
+      const where = r.position.toLowerCase();
+      rows.push({ label: `Pill · ${where}`, text: r.pill, start: r.start, end: r.end, target: { slot: "rung", index: i, field: "pill" } });
+      rows.push({ label: `Tag · ${where}`, text: r.tag, start: r.start, end: r.end, target: { slot: "rung", index: i, field: "tag" } });
+    });
+    if (o.qualifier) rows.push({ label: "Qualifier", ...o.qualifier, target: { slot: "qualifier" } });
+    if (o.cta) rows.push({ label: "CTA", ...o.cta, target: { slot: "cta" } });
     (o.zooms ?? []).forEach((z) => rows.push({ label: "Zoom", text: `Punch in to ${z.scale}×`, start: z.start, end: z.end }));
-    o.stickers.forEach((s, i) => rows.push({ label: `Sticker ${i + 1}`, ...s }));
-    o.cards.forEach((c, i) => rows.push({ label: `Card ${i + 1} · ${c.kind}`, text: c.sub ? `${c.text} — ${c.sub}` : c.text, start: c.start, end: c.end }));
+    o.stickers.forEach((s, i) => rows.push({ label: `Sticker ${i + 1}`, ...s, target: { slot: "sticker", index: i } }));
+    o.cards.forEach((c, i) => {
+      rows.push({ label: `Card ${i + 1} · ${c.kind}`, text: c.text, start: c.start, end: c.end, target: { slot: "card", index: i, field: "text" } });
+      if (c.sub) rows.push({ label: `Card ${i + 1} · line 2`, text: c.sub, start: c.start, end: c.end, target: { slot: "card", index: i, field: "sub" } });
+    });
     return rows.sort((a, b) => a.start - b.start);
   }, [latest]);
 
@@ -187,6 +195,7 @@ export function EditCard({
   const still = (t: number) => setSeek((s) => ({ t, n: (s?.n ?? 0) + 1, still: true }));
 
   function startMoving() {
+    setEditing(null);
     const first = movable[0];
     if (!first || !latest?.props) return;
     setView("preview");
@@ -224,7 +233,55 @@ export function EditCard({
       onChange(r.data);
     } else onError(r.error);
   }
-  const previewProps = props && moving ? { ...props, overlays: { ...props.overlays, layout: moving.layout } } : props;
+  // Hand-editing one piece of text: live in the preview, then yours or one of Claude's versions.
+  const [editing, setEditing] = useState<{
+    target: TextTarget;
+    text: string;
+    preview: string | null;
+    options: string[] | null;
+    aboutYours: string;
+    loading: boolean;
+  } | null>(null);
+
+  function openEditor(target: TextTarget, text: string, t: number) {
+    setMoving(null);
+    setView("preview");
+    setEditing({ target, text, preview: null, options: null, aboutYours: "", loading: false });
+    still(Math.min(t + 0.6, latest?.durationS ?? t));
+  }
+  async function getVersions() {
+    if (!editing?.text.trim()) return;
+    const ask = editing;
+    setEditing({ ...ask, loading: true, options: null, preview: null });
+    try {
+      const r = await fetch(api(`${p.id}/edit/suggest`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: ask.target, text: ask.text }),
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(data?.error || `Request failed (${r.status})`);
+      setEditing((e) => (e && sameTarget(e.target, ask.target) ? { ...e, loading: false, options: data.options ?? [], aboutYours: data.aboutYours ?? "" } : e));
+    } catch (err) {
+      setEditing((e) => (e ? { ...e, loading: false } : e));
+      onError(err instanceof Error ? err.message : "Getting versions failed");
+    }
+  }
+  async function applyText(text: string) {
+    if (!editing) return;
+    setBusy({ label: "Saving the new text…" });
+    const r = await send(api(`${p.id}/edit/text`), "POST", { target: editing.target, text });
+    setBusy(null);
+    if (r.ok) {
+      setEditing(null);
+      onChange(r.data);
+    } else onError(r.error);
+  }
+
+  const withLayout = props && moving ? { ...props, overlays: { ...props.overlays, layout: moving.layout } } : props;
+  const draftText = editing ? (editing.preview ?? editing.text) : null;
+  const edited = withLayout && editing && draftText !== null ? setText(withLayout.overlays, editing.target, draftText) : null;
+  const previewProps = withLayout && edited ? { ...withLayout, overlays: edited } : withLayout;
   const spot = moving ? moving.layout[moving.slot] : undefined;
   // Vertical Feed-safe band (rulebook): 285–1248 of 1920.
   const BAND_TOP = 285 / 1920;
@@ -594,22 +651,131 @@ export function EditCard({
 
             {elements.length > 0 && (
               <div className="mt-4 space-y-1.5">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">On screen</p>
-                {elements.map((el, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => jump(el.start)}
-                    disabled={showRender}
-                    className="flex w-full items-baseline gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-1.5 text-left hover:border-cyan-400/30 hover:bg-white/[0.05] disabled:hover:border-white/5"
-                  >
-                    <span className="w-[86px] shrink-0 text-[10px] font-bold text-cyan-300" style={NUM_FONT}>
-                      {clock(el.start)}–{clock(el.end)}
-                    </span>
-                    <span className="w-[92px] shrink-0 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{el.label}</span>
-                    <span className="min-w-0 flex-1 text-[13px] text-neutral-200">{el.text}</span>
-                  </button>
-                ))}
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">
+                  On screen <span className="normal-case tracking-normal text-neutral-600">· ✎ to change the words</span>
+                </p>
+                {elements.map((el, i) => {
+                  const open = Boolean(editing && el.target && sameTarget(editing.target, el.target));
+                  return (
+                    <div key={i} className={`rounded-lg border ${open ? "border-cyan-400/40 bg-cyan-500/[0.04]" : "border-white/5 bg-white/[0.02]"}`}>
+                      <div className="flex items-center">
+                        <button
+                          type="button"
+                          onClick={() => jump(el.start)}
+                          disabled={showRender || Boolean(moving)}
+                          className="flex min-w-0 flex-1 items-baseline gap-3 px-3 py-1.5 text-left hover:bg-white/[0.03]"
+                        >
+                          <span className="w-[86px] shrink-0 text-[10px] font-bold text-cyan-300" style={NUM_FONT}>
+                            {clock(el.start)}–{clock(el.end)}
+                          </span>
+                          <span className="w-[92px] shrink-0 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{el.label}</span>
+                          <span className="min-w-0 flex-1 text-[13px] text-neutral-200">{el.text}</span>
+                        </button>
+                        {el.target && !rendering && (
+                          <button
+                            type="button"
+                            onClick={() => (open ? setEditing(null) : openEditor(el.target!, el.text, el.start))}
+                            className={`mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm ${open ? "bg-cyan-500/20 text-white" : "text-neutral-500 hover:bg-white/10 hover:text-white"}`}
+                            aria-label={`Change the ${el.label.toLowerCase()} text`}
+                            title="Change the words"
+                          >
+                            ✎
+                          </button>
+                        )}
+                      </div>
+
+                      {open && editing && (
+                        <div className="space-y-2.5 border-t border-white/5 p-3">
+                          <div className="flex items-center gap-2">
+                            <input
+                              autoFocus
+                              value={editing.text}
+                              maxLength={textLimit(editing.target)}
+                              onChange={(e) => setEditing({ ...editing, text: e.target.value, preview: null })}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  void getVersions();
+                                }
+                                if (e.key === "Escape") setEditing(null);
+                              }}
+                              placeholder="Type what it should say…"
+                              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-cyan-400/50 focus:outline-none"
+                            />
+                            <span className="shrink-0 text-[10px] text-neutral-500" style={NUM_FONT}>
+                              {editing.text.length}/{textLimit(editing.target)}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void applyText(editing.text)}
+                              disabled={(!editing.text.trim() && !(editing.target.slot === "card" && editing.target.field === "sub")) || Boolean(busy)}
+                              className="rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                            >
+                              Use mine
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void getVersions()}
+                              disabled={!editing.text.trim() || editing.loading}
+                              className="rounded-full border border-violet-400/40 bg-violet-500/15 px-3.5 py-1.5 text-xs font-bold text-violet-100 hover:bg-violet-500/25 disabled:opacity-40"
+                            >
+                              ✨ {editing.options ? "New AI versions" : "AI versions of mine"}
+                            </button>
+                            <button type="button" onClick={() => setEditing(null)} className="px-1 text-xs font-semibold text-neutral-500 hover:text-white">
+                              Cancel
+                            </button>
+                            <span className="text-[10px] text-neutral-600">Enter = AI versions</span>
+                          </div>
+
+                          {editing.loading && (
+                            <p className="flex items-center gap-2 text-xs text-violet-200">
+                              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-400/20 border-t-violet-300" />
+                              Claude is writing versions of yours…
+                            </p>
+                          )}
+
+                          {editing.options && (
+                            <div className="space-y-1.5">
+                              {[{ text: editing.text, mine: true }, ...editing.options.map((o) => ({ text: o, mine: false }))].map((opt, k) => {
+                                const previewing = (editing.preview ?? editing.text) === opt.text;
+                                return (
+                                  <div
+                                    key={k}
+                                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 ${previewing ? "border-cyan-400/50 bg-cyan-500/10" : "border-white/10 bg-white/[0.03]"}`}
+                                  >
+                                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${opt.mine ? "bg-white/10 text-neutral-300" : "bg-violet-500/20 text-violet-200"}`}>
+                                      {opt.mine ? "Yours" : "✨ AI"}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditing({ ...editing, preview: opt.mine ? null : opt.text })}
+                                      className="min-w-0 flex-1 text-left text-[13px] text-white"
+                                      title="Show it in the preview"
+                                    >
+                                      {opt.text || <span className="text-neutral-500">(empty)</span>}
+                                      {opt.mine && editing.aboutYours && <span className="mt-0.5 block text-[11px] text-amber-200/90">{editing.aboutYours}</span>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void applyText(opt.text)}
+                                      disabled={Boolean(busy)}
+                                      className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-white hover:bg-cyan-600 disabled:opacity-40"
+                                    >
+                                      Use
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                              <p className="text-[10px] text-neutral-500">Tap a version to see it on the video, then Use the one you want.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
