@@ -29,7 +29,13 @@ export function StudioCanvas({ children }: { children: React.ReactNode }) {
       <LaunchPadStyles />
       <style>{`
         @keyframes cs-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }
-        .cs-scroll::-webkit-scrollbar { height: 6px } .cs-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 9999px }
+        .cs-scroll::-webkit-scrollbar { height: 6px; width: 6px } .cs-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 9999px }
+        @keyframes cs-shimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+        .cs-shimmer-text { background: linear-gradient(90deg, #94a3b8 0%, #ffffff 35%, #67e8f9 50%, #ffffff 65%, #94a3b8 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: cs-shimmer 2.4s linear infinite }
+        @keyframes cs-sweep { from { transform: translateX(-100%) } to { transform: translateX(100%) } }
+        .cs-sweep { position: relative; overflow: hidden }
+        .cs-sweep::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.08) 45%, rgba(103,232,249,.12) 50%, rgba(255,255,255,.08) 55%, transparent 80%); animation: cs-sweep 1.8s ease-in-out infinite }
+        @keyframes cs-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(59,130,246,.45) } 70% { box-shadow: 0 0 0 10px rgba(59,130,246,0) } 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0) } }
       `}</style>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 -right-32 h-[560px] w-[560px] rounded-full" style={{ background: "radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)" }} />
@@ -108,6 +114,30 @@ export const SP = {
   ),
   x: <path d="M18 6 6 18M6 6l12 12" />,
   chevronLeft: <path d="m15 18-6-6 6-6" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" />
+    </>
+  ),
+  terminal: (
+    <>
+      <path d="m4 17 6-6-6-6M12 19h8" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </>
+  ),
+  external: <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />,
   copy: (
     <>
       <rect width="14" height="14" x="8" y="8" rx="2" />

@@ -6,6 +6,7 @@ import {
   creativeCuts,
   creativeProjects,
   type ClipFields,
+  type ManusActivitySnapshot,
   type ScriptSnapshot,
 } from "@/lib/creative-studio/tables";
 import { buildKlingPrompt, clipDuration, klingModelFor } from "@/lib/creative-studio/prompts";
@@ -115,6 +116,8 @@ export async function projectDetail(project: Project) {
       status: t.status,
       error: t.error,
       shot: ((t.metadata ?? {}) as { shot?: string }).shot ?? "",
+      taskUrl: ((t.metadata ?? {}) as { taskUrl?: string | null }).taskUrl ?? null,
+      activity: ((t.metadata ?? {}) as { activity?: ManusActivitySnapshot }).activity ?? null,
       waiting:
         t.status === "waiting"
           ? (((t.metadata ?? {}) as { waiting?: { kind: "question" | "confirm"; prompt: string; options: string[] } }).waiting ?? null)

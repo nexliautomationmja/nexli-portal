@@ -5,7 +5,8 @@ import type { ProjectDetail } from "@/lib/creative-studio/service";
 import { CTA_CLASSES, labelCls } from "@/components/launch-pad";
 import { api, send } from "@/components/creative-studio/client";
 import { prepareFrame, uploadToTarget } from "@/components/creative-studio/upload";
-import { AssistantCard, Chip, SP, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
+import { AssistantCard, Chip, SP, SvgIcon } from "@/components/creative-studio/canvas";
+import { ManusActivity } from "@/components/creative-studio/manus-activity";
 
 interface Reference {
   id: string;
@@ -39,9 +40,9 @@ export function FrameCard({
   const refInput = useRef<HTMLInputElement>(null);
   const polling = useRef(false);
 
-  const running = detail.manus.filter((t) => t.status === "running");
-  const waiting = detail.manus.filter((t) => t.status === "waiting" && t.waiting);
-  const lastFailed = [...detail.manus].reverse().find((t) => t.status === "failed");
+  const active = detail.manus.filter((t) => t.status === "running" || (t.status === "waiting" && t.waiting));
+  const newest = detail.manus[detail.manus.length - 1];
+  const lastFailed = newest?.status === "failed" && newest.error !== "Cancelled" ? newest : undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -54,9 +55,9 @@ export function FrameCard({
     };
   }, []);
 
-  // Manus takes a few minutes: check every 15 s while a task runs.
+  // Watch Manus live: check every 6 s while a task runs or waits.
   useEffect(() => {
-    if (running.length === 0) return;
+    if (active.length === 0) return;
     const tick = async () => {
       if (polling.current) return;
       polling.current = true;
@@ -64,9 +65,13 @@ export function FrameCard({
       polling.current = false;
       if (r.ok) onChange(r.data);
     };
-    const t = setInterval(tick, 15_000);
-    return () => clearInterval(t);
-  }, [running.length, p.id, onChange]);
+    const first = setTimeout(tick, 2_000);
+    const t = setInterval(tick, 6_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, [active.length, p.id, onChange]);
 
   const addReferences = useCallback(
     async (list: File[]) => {
@@ -134,10 +139,10 @@ export function FrameCard({
     } else onError(r.error);
   }
 
-  async function generate() {
+  async function generate(shotText: string = shot) {
     setBusy("Starting Manus…");
     const referenceIds = (refs ?? []).filter((r) => !unticked.has(r.id)).map((r) => r.id);
-    const r = await send(api(`${p.id}/frame/generate`), "POST", { shot, referenceIds });
+    const r = await send(api(`${p.id}/frame/generate`), "POST", { shot: shotText, referenceIds });
     setBusy(null);
     if (r.ok) {
       onChange(r.data);
@@ -276,20 +281,17 @@ export function FrameCard({
                 <input
                   value={shot}
                   onChange={(e) => setShot(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && shot.trim() && !busy && running.length === 0 && generate()}
+                  onKeyDown={(e) => e.key === "Enter" && shot.trim() && !busy && active.length === 0 && generate()}
                   placeholder="Daniela at a light wooden desk in a navy blazer, warm office light"
                   className="lp-input !rounded-full !px-4"
                 />
-                <button type="button" onClick={generate} disabled={!shot.trim() || !!busy || running.length > 0} className={`${CTA_CLASSES} shrink-0 !py-2`}>
+                <button type="button" onClick={() => generate()} disabled={!shot.trim() || !!busy || active.length > 0} className={`${CTA_CLASSES} shrink-0 !py-2`}>
                   <SvgIcon d={SP.wand} size={16} /> Create 2 options
                 </button>
               </div>
               <p className="text-[11px] text-neutral-500">
                 {p.format === "vsl_16x9" ? "Made 16:9 for a VSL." : "Made 9:16 for an ad."} Uses the references marked ✓ Manus.
               </p>
-              {lastFailed && running.length === 0 && detail.frameOptions.length === 0 && (
-                <p className="text-xs font-semibold text-rose-300">{lastFailed.error}</p>
-              )}
             </div>
 
             {detail.frameOptions.length > 0 && (
@@ -316,83 +318,12 @@ export function FrameCard({
         )}
       </AssistantCard>
 
-      {running.length > 0 && (
-        <ThinkingCard accent="blue" label="Manus is creating Daniela's frames…" detail={`${running[0].shot} · usually a few minutes. You can leave and come back.`} />
-      )}
-
-      {waiting.map((t) => (
-        <ManusQuestion key={t.id} projectId={p.id} task={t} onChange={onChange} onError={onError} />
+      {active.map((t) => (
+        <ManusActivity key={t.id} projectId={p.id} task={t} aspect={aspect} onChange={onChange} onError={onError} onRetry={(s) => void generate(s)} />
       ))}
-    </div>
-  );
-}
-
-/** Manus paused: answer its question, or allow / cancel the action it wants to take. */
-function ManusQuestion({
-  projectId,
-  task,
-  onChange,
-  onError,
-}: {
-  projectId: string;
-  task: ProjectDetail["manus"][number];
-  onChange: (d: ProjectDetail) => void;
-  onError: (msg: string) => void;
-}) {
-  const [answer, setAnswer] = useState("");
-  const [busy, setBusy] = useState(false);
-  const w = task.waiting!;
-
-  async function respond(body: Record<string, unknown>) {
-    setBusy(true);
-    const r = await send(api(`${projectId}/frame/reply`), "POST", { taskId: task.id, ...body });
-    setBusy(false);
-    if (r.ok) {
-      onChange(r.data);
-      setAnswer("");
-    } else onError(r.error);
-  }
-
-  return (
-    <AssistantCard accent="amber" icon={SP.sparkles} title={w.kind === "confirm" ? "Manus wants your OK" : "Manus has a question"} right={<Chip tone="amber">Paused</Chip>}>
-      <p className="whitespace-pre-line text-sm leading-relaxed text-neutral-200">{w.prompt}</p>
-      {w.kind === "confirm" ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={() => respond({ allow: true })} disabled={busy} className={CTA_CLASSES}>
-            Allow
-          </button>
-          <button type="button" onClick={() => respond({ cancel: true })} disabled={busy} className="rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/5">
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-2">
-          {w.options.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {w.options.map((o) => (
-                <button key={o} type="button" onClick={() => respond({ answer: o })} disabled={busy} className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/20">
-                  {o}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && answer.trim() && !busy && respond({ answer })}
-              placeholder="Answer Manus…"
-              className="lp-input !rounded-full !px-4"
-            />
-            <button type="button" onClick={() => respond({ answer })} disabled={busy || !answer.trim()} className={`${CTA_CLASSES} shrink-0 !py-2`}>
-              {busy ? "Sending…" : "Send"}
-            </button>
-          </div>
-          <button type="button" onClick={() => respond({ cancel: true })} disabled={busy} className="text-[11px] font-semibold text-neutral-500 hover:text-white">
-            Cancel this Manus task
-          </button>
-        </div>
+      {active.length === 0 && lastFailed && (
+        <ManusActivity projectId={p.id} task={lastFailed} aspect={aspect} onChange={onChange} onError={onError} onRetry={(s) => void generate(s)} />
       )}
-    </AssistantCard>
+    </div>
   );
 }

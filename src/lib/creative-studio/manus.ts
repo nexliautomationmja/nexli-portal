@@ -84,9 +84,16 @@ export async function startFrameTask(req: FrameRequest): Promise<{ taskId: strin
   return { taskId: res.task_id, taskUrl: res.task_url ?? null };
 }
 
-interface ManusMessage {
+import type { ManusActivitySnapshot } from "@/lib/creative-studio/tables";
+
+export interface ManusMessage {
   id?: string;
   type?: string;
+  timestamp?: number;
+  tool_used?: { tool?: string; status?: string; brief?: string; description?: string; message?: { action?: string; param?: string } };
+  plan_update?: { steps?: { status?: string; title?: string; started_at?: number | null; end_at?: number | null }[] };
+  new_plan_step?: { step_id?: string; title?: string };
+  explanation?: { content?: string };
   status_update?: {
     agent_status?: string;
     status_detail?: {
@@ -142,11 +149,66 @@ function imagesFrom(messages: ManusMessage[]): { url: string; filename: string |
   return images;
 }
 
-export async function checkFrameTask(taskId: string): Promise<FrameTaskState> {
-  const q = new URLSearchParams({ task_id: taskId, order: "desc", limit: "100" });
+const clean = (t: string | undefined | null, max = 160) => {
+  const v = (t ?? "").replace(/\s+/g, " ").trim();
+  return v.length > max ? `${v.slice(0, max - 1)}…` : v;
+};
+
+/** Normalise timestamps (Manus mixes ms and s) to ms. */
+const toMs = (t: number | null | undefined) => (typeof t === "number" && t > 0 ? (t < 1e12 ? t * 1000 : t) : null);
+
+/** Build the live activity snapshot from listMessages (newest first). */
+export function activityFrom(messages: ManusMessage[]): ManusActivitySnapshot {
+  const status = messages.find((m) => m.type === "status_update" && m.status_update?.agent_status)?.status_update;
+  const plan = messages.find((m) => m.type === "plan_update" && m.plan_update?.steps?.length)?.plan_update?.steps ?? [];
+  const chronological = [...messages].reverse();
+  const feed: ManusActivitySnapshot["feed"] = [];
+  for (const m of chronological) {
+    const at = toMs(m.timestamp) ?? Date.now();
+    const id = m.id ?? `${m.type}-${at}`;
+    if (m.type === "tool_used" && m.tool_used) {
+      const t = m.tool_used;
+      const action = clean(t.message?.action, 60);
+      const param = clean(t.message?.param, 90);
+      const title = action ? (param ? `${action} · ${param}` : action) : clean(t.brief, 120) || clean(t.tool, 40) || "Working";
+      feed.push({ id, kind: "tool", tool: t.tool ?? null, title, detail: clean(t.description, 200) || null, status: t.status ?? null, at });
+    } else if (m.type === "explanation" && m.explanation?.content) {
+      feed.push({ id, kind: "explanation", tool: null, title: clean(m.explanation.content, 240), detail: null, status: null, at });
+    } else if (m.type === "assistant_message" && m.assistant_message?.content) {
+      feed.push({ id, kind: "message", tool: null, title: clean(m.assistant_message.content, 240), detail: null, status: null, at });
+    } else if (m.type === "new_plan_step" && m.new_plan_step?.title) {
+      feed.push({ id, kind: "step", tool: null, title: clean(m.new_plan_step.title, 120), detail: null, status: null, at });
+    }
+  }
+  const raw = status?.agent_status;
+  const known = ["running", "waiting", "stopped", "error"] as const;
+  return {
+    status: (known as readonly string[]).includes(raw ?? "") ? (raw as ManusActivitySnapshot["status"]) : "unknown",
+    now: clean(status?.brief || status?.description, 140) || null,
+    plan: plan
+      .filter((st) => st.title)
+      .map((st) => ({
+        title: clean(st.title, 120),
+        status: (["todo", "doing", "done", "failed"].includes(st.status ?? "") ? st.status : "todo") as "todo" | "doing" | "done" | "failed",
+        startedAt: toMs(st.started_at ?? null),
+        endAt: toMs(st.end_at ?? null),
+      })),
+    feed: feed.slice(-14),
+    startedAt: toMs(chronological[0]?.timestamp ?? null),
+    updatedAt: Date.now(),
+  };
+}
+
+export async function checkFrameTask(taskId: string): Promise<{ state: FrameTaskState; activity: ManusActivitySnapshot }> {
+  const q = new URLSearchParams({ task_id: taskId, order: "desc", limit: "100", verbose: "true" });
   const res = await manus<{ messages?: ManusMessage[] }>(`task.listMessages?${q}`, { method: "GET" });
   const messages = res.messages ?? [];
+  const activity = activityFrom(messages);
+  const state = await stateFrom(taskId, messages);
+  return { state, activity };
+}
 
+async function stateFrom(taskId: string, messages: ManusMessage[]): Promise<FrameTaskState> {
   // Newest first: the first status_update is the current state.
   const status = messages.find((m) => m.type === "status_update" && m.status_update?.agent_status)?.status_update;
   const latest = status?.agent_status;

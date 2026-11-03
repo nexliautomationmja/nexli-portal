@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import sharp from "sharp";
 import { db } from "@/db";
 import { creativeAssets } from "@/lib/creative-studio/tables";
@@ -23,22 +23,38 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
   const running = await db
     .select()
     .from(creativeAssets)
-    .where(and(eq(creativeAssets.projectId, project.id), eq(creativeAssets.kind, "manus_task"), eq(creativeAssets.status, "running")));
+    .where(
+      and(
+        eq(creativeAssets.projectId, project.id),
+        eq(creativeAssets.kind, "manus_task"),
+        inArray(creativeAssets.status, ["running", "waiting"])
+      )
+    );
 
   for (const task of running) {
     if (!task.providerTaskId) continue;
     try {
-      const state = await checkFrameTask(task.providerTaskId);
-      if (state.state === "running") continue;
+      const { state, activity } = await checkFrameTask(task.providerTaskId);
+      // Save what Manus is doing so the live card survives a reload.
+      const meta: Record<string, unknown> = { ...((task.metadata ?? {}) as Record<string, unknown>), activity };
+      await db.update(creativeAssets).set({ metadata: meta }).where(eq(creativeAssets.id, task.id));
+      if (state.state === "running") {
+        if (task.status === "waiting") {
+          await db.update(creativeAssets).set({ status: "running", metadata: { ...meta, waiting: null } }).where(eq(creativeAssets.id, task.id));
+        }
+        continue;
+      }
       if (state.state === "waiting") {
-        const meta = (task.metadata ?? {}) as Record<string, unknown>;
+        // Already answered (Manus hasn't picked the reply up yet): keep showing it as working.
+        const answeredKey = state.eventId ?? `q:${state.prompt.slice(0, 200)}`;
+        if (meta.answeredKey === answeredKey) continue;
         const autoReplies = typeof meta.autoReplies === "number" ? meta.autoReplies : 0;
         // First question: answer it ourselves ("use your best judgment"). Never auto-approve actions.
         if (state.kind === "question" && autoReplies < 1) {
           await replyToTask(task.providerTaskId, AUTO_REPLY);
           await db
             .update(creativeAssets)
-            .set({ metadata: { ...meta, autoReplies: autoReplies + 1, lastQuestion: state.prompt } })
+            .set({ metadata: { ...meta, autoReplies: autoReplies + 1, lastQuestion: state.prompt, answeredKey } })
             .where(eq(creativeAssets.id, task.id));
           continue;
         }
@@ -48,7 +64,7 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
             status: "waiting",
             metadata: {
               ...meta,
-              waiting: { kind: state.kind, prompt: state.prompt, options: state.options, eventId: state.eventId, eventType: state.eventType },
+              waiting: { kind: state.kind, prompt: state.prompt, options: state.options, eventId: state.eventId, eventType: state.eventType, key: answeredKey },
             },
           })
           .where(eq(creativeAssets.id, task.id));

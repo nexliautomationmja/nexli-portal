@@ -188,6 +188,25 @@ export interface CutClipPlan {
   hash: string;
 }
 
+/** What Manus is doing right now (task.listMessages verbose=true), saved on the task asset. */
+export interface ManusActivitySnapshot {
+  status: "running" | "waiting" | "stopped" | "error" | "unknown";
+  /** The "Manus is …" line (latest status_update brief/description). */
+  now: string | null;
+  plan: { title: string; status: "todo" | "doing" | "done" | "failed"; startedAt: number | null; endAt: number | null }[];
+  feed: {
+    id: string;
+    kind: "tool" | "explanation" | "message" | "step";
+    tool: string | null;
+    title: string;
+    detail: string | null;
+    status: string | null;
+    at: number;
+  }[];
+  startedAt: number | null;
+  updatedAt: number;
+}
+
 export interface CutSettings {
   speed: number;
   /** Max pause at playback speed, seconds. */

@@ -26,7 +26,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     .where(and(eq(creativeAssets.id, body?.taskId ?? "00000000-0000-0000-0000-000000000000"), eq(creativeAssets.projectId, project.id), eq(creativeAssets.kind, "manus_task")))
     .limit(1);
   if (!task?.providerTaskId) return NextResponse.json({ error: "Manus task not found" }, { status: 404 });
-  const meta = (task.metadata ?? {}) as { waiting?: { kind: string; eventId: string | null } } & Record<string, unknown>;
+  const meta = (task.metadata ?? {}) as { waiting?: { kind: string; eventId: string | null; key?: string } } & Record<string, unknown>;
+  const answeredKey = meta.waiting?.key ?? null;
 
   try {
     if (body?.cancel) {
@@ -36,12 +37,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       if (!meta.waiting?.eventId) return NextResponse.json({ error: "Nothing to approve" }, { status: 400 });
       const ok = await confirmTaskAction(task.providerTaskId, meta.waiting.eventId);
       if (!ok) return NextResponse.json({ error: "Manus didn't accept the approval. Try again." }, { status: 409 });
-      await db.update(creativeAssets).set({ status: "running", metadata: { ...meta, waiting: null } }).where(eq(creativeAssets.id, task.id));
+      await db.update(creativeAssets).set({ status: "running", metadata: { ...meta, waiting: null, answeredKey } }).where(eq(creativeAssets.id, task.id));
     } else {
       const answer = typeof body?.answer === "string" ? body.answer.trim() : "";
       if (!answer) return NextResponse.json({ error: "Type an answer" }, { status: 400 });
       await replyToTask(task.providerTaskId, answer);
-      await db.update(creativeAssets).set({ status: "running", metadata: { ...meta, waiting: null } }).where(eq(creativeAssets.id, task.id));
+      await db.update(creativeAssets).set({ status: "running", metadata: { ...meta, waiting: null, answeredKey } }).where(eq(creativeAssets.id, task.id));
     }
   } catch (err) {
     return NextResponse.json({ error: err instanceof ManusError ? err.message : "Couldn't reach Manus" }, { status: 502 });
