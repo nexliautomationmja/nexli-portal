@@ -49,7 +49,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       version: edit.version + 1,
       style: result.style,
       finalCutAssetId: edit.finalCutAssetId,
-      props: { ...edit.props, words, overlays: result.overlays },
+      // Hand-placed spots stay put through a written change.
+      props: { ...edit.props, words, overlays: { ...result.overlays, ...(edit.props.overlays.layout ? { layout: edit.props.overlays.layout } : {}) } },
       notes: `${result.notes}${fixed}`.trim() || null,
       note,
     });

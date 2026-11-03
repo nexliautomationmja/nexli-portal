@@ -11,8 +11,8 @@ export const SoloRig: React.FC<EditProps> = ({ videoUrl, words, overlays, format
   return (
     <AbsoluteFill>
       <Plate src={videoUrl} />
-      <Captions words={words} size={vertical ? 54 : 48} vertical={vertical} />
-      {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} />}
+      <Captions words={words} size={vertical ? 54 : 48} vertical={vertical} at={overlays.layout?.captions} />
+      {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} at={overlays.layout?.title} />}
     </AbsoluteFill>
   );
 };

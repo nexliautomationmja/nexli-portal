@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import type { EditProps, EditStyle } from "@/remotion/types";
+import type { EditLayout, EditProps, EditStyle, MovableSlot } from "@/remotion/types";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
@@ -76,7 +76,10 @@ export function EditCard({
 
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState<{ label: string; detail?: string } | null>(null);
-  const [seek, setSeek] = useState<{ t: number; n: number } | null>(null);
+  const [seek, setSeek] = useState<{ t: number; n: number; still?: boolean } | null>(null);
+  // Move mode: tap or drag on the preview to place the picked element.
+  const [moving, setMoving] = useState<{ slot: MovableSlot; layout: EditLayout } | null>(null);
+  const dragging = useRef(false);
   const [showWords, setShowWords] = useState(false);
   const [view, setView] = useState<"auto" | "preview" | "render">("auto");
   const [cutChoice, setCutChoice] = useState<string | null>(null);
@@ -122,6 +125,22 @@ export function EditCard({
     return rows.sort((a, b) => a.start - b.start);
   }, [latest]);
 
+  // What can be placed by hand in this edit, and a moment when each one is on screen.
+  const movable = useMemo(() => {
+    const o = latest?.props?.overlays;
+    const words = latest?.props?.words ?? [];
+    if (!latest || !o) return [];
+    const at = (x: { start: number; end: number }) => Math.min(x.start + 0.6, x.end);
+    const list: { slot: MovableSlot; label: string; t: number }[] = [];
+    if (o.title) list.push({ slot: "title", label: "Title", t: at(o.title) });
+    if (o.qualifier) list.push({ slot: "qualifier", label: "Qualifier", t: at(o.qualifier) });
+    if (o.cta) list.push({ slot: "cta", label: "CTA", t: at(o.cta) });
+    if (latest.style !== "pov" && o.captions !== false && words.length) list.push({ slot: "captions", label: "Captions", t: words[0].start + 0.15 });
+    if (o.stickers.length) list.push({ slot: "stickers", label: "Stickers", t: at(o.stickers[0]) });
+    if (o.cards.length) list.push({ slot: "cards", label: "Cards", t: at(o.cards[0]) });
+    return list;
+  }, [latest]);
+
   const chunks = useMemo(() => {
     const words = latest?.props?.words ?? [];
     const out: { start: number; text: string }[] = [];
@@ -165,6 +184,52 @@ export function EditCard({
     else onError(r.error);
   }
   const jump = (t: number) => setSeek((s) => ({ t, n: (s?.n ?? 0) + 1 }));
+  const still = (t: number) => setSeek((s) => ({ t, n: (s?.n ?? 0) + 1, still: true }));
+
+  function startMoving() {
+    const first = movable[0];
+    if (!first || !latest?.props) return;
+    setView("preview");
+    setMoving({ slot: first.slot, layout: { ...(latest.props.overlays.layout ?? {}) } });
+    still(first.t);
+  }
+  function pick(slot: MovableSlot) {
+    setMoving((m) => (m ? { ...m, slot } : m));
+    const item = movable.find((x) => x.slot === slot);
+    if (item) still(item.t);
+  }
+  function place(e: React.PointerEvent<HTMLDivElement>) {
+    const r = e.currentTarget.getBoundingClientRect();
+    let x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    if (Math.abs(x - 0.5) < 0.03) x = 0.5; // snap to centre
+    const spot = { x: Math.round(x * 10_000) / 10_000, y: Math.round(y * 10_000) / 10_000 };
+    setMoving((m) => (m ? { ...m, layout: { ...m.layout, [m.slot]: spot } } : m));
+  }
+  function resetSlot() {
+    setMoving((m) => {
+      if (!m) return m;
+      const layout = { ...m.layout };
+      delete layout[m.slot];
+      return { ...m, layout };
+    });
+  }
+  async function saveLayout() {
+    if (!moving) return;
+    setBusy({ label: "Saving where everything sits…" });
+    const r = await send(api(`${p.id}/edit/layout`), "POST", { layout: moving.layout });
+    setBusy(null);
+    if (r.ok) {
+      setMoving(null);
+      onChange(r.data);
+    } else onError(r.error);
+  }
+  const previewProps = props && moving ? { ...props, overlays: { ...props.overlays, layout: moving.layout } } : props;
+  const spot = moving ? moving.layout[moving.slot] : undefined;
+  // Vertical Feed-safe band (rulebook): 285–1248 of 1920.
+  const BAND_TOP = 285 / 1920;
+  const BAND_BOTTOM = 1248 / 1920;
+  const outsideBand = Boolean(vertical && spot && (spot.y < BAND_TOP || spot.y > BAND_BOTTOM));
 
   const latestOutput = latest?.status === "done" ? stable(`render:${latest.id}`, latest.outputUrl) : null;
   const showRender = Boolean(latestOutput) && view !== "preview";
@@ -280,21 +345,76 @@ export function EditCard({
 
         {latest && !picking && (
           <>
-            <div className={vertical ? "grid gap-4 sm:grid-cols-[minmax(0,260px)_1fr]" : "space-y-4"}>
+            <div
+              className={
+                vertical ? `grid gap-4 ${moving ? "sm:grid-cols-[minmax(0,340px)_1fr]" : "sm:grid-cols-[minmax(0,260px)_1fr]"}` : "space-y-4"
+              }
+            >
               <div className="space-y-2">
                 <div
-                  className={`overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl shadow-cyan-500/10 ${vertical ? "mx-auto w-full max-w-[280px]" : "w-full"}`}
+                  className={`relative overflow-hidden rounded-2xl border bg-black shadow-2xl shadow-cyan-500/10 ${moving ? "border-cyan-400/60" : "border-white/15"} ${
+                    vertical ? `mx-auto w-full ${moving ? "max-w-[340px]" : "max-w-[280px]"}` : "w-full"
+                  }`}
                   style={{ aspectRatio: aspect }}
                 >
-                  {showRender && latestOutput ? (
+                  {showRender && latestOutput && !moving ? (
                     <video key={latestOutput} src={latestOutput} controls playsInline preload="metadata" className="h-full w-full object-contain" />
-                  ) : props ? (
-                    <EditPreview props={props} seek={seek} />
+                  ) : previewProps ? (
+                    <EditPreview props={previewProps} seek={seek} interactive={!moving} />
                   ) : (
                     <div className="flex h-full items-center justify-center p-4 text-center text-xs text-neutral-500">The preview appears once the layout is ready.</div>
                   )}
+                  {moving && (
+                    <div
+                      className="absolute inset-0 z-10 cursor-crosshair touch-none select-none"
+                      onPointerDown={(e) => {
+                        dragging.current = true;
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        place(e);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragging.current) place(e);
+                      }}
+                      onPointerUp={() => {
+                        dragging.current = false;
+                      }}
+                      onPointerCancel={() => {
+                        dragging.current = false;
+                      }}
+                    >
+                      {vertical && (
+                        <>
+                          <div className="absolute inset-x-0 top-0 bg-black/30" style={{ height: `${BAND_TOP * 100}%` }} />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/30" style={{ height: `${(1 - BAND_BOTTOM) * 100}%` }} />
+                          <div className="absolute inset-x-0 border-t border-dashed border-amber-300/80" style={{ top: `${BAND_TOP * 100}%` }}>
+                            <span className="absolute left-1.5 top-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-200/90">Feed crop above</span>
+                          </div>
+                          <div className="absolute inset-x-0 border-t border-dashed border-amber-300/80" style={{ top: `${BAND_BOTTOM * 100}%` }}>
+                            <span className="absolute left-1.5 top-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-200/90">Reels buttons below</span>
+                          </div>
+                        </>
+                      )}
+                      {spot?.x === 0.5 && <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-cyan-300/60" />}
+                      {movable
+                        .filter((m) => moving.layout[m.slot])
+                        .map((m) => {
+                          const at = moving.layout[m.slot]!;
+                          const active = m.slot === moving.slot;
+                          return (
+                            <div
+                              key={m.slot}
+                              className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+                              style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
+                            >
+                              <span className={`h-3 w-3 rounded-full border-2 ${active ? "border-white bg-cyan-400 shadow-[0_0_0_4px_rgba(34,211,238,0.35)]" : "border-white/70 bg-white/30"}`} />
+                              <span className={`mt-1 rounded px-1 text-[9px] font-bold ${active ? "bg-cyan-500 text-white" : "bg-black/60 text-white/80"}`}>{m.label}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
-                {latestOutput && (
+                {latestOutput && !moving && (
                   <div className="mx-auto flex w-fit rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px] font-semibold">
                     {(["render", "preview"] as const).map((v) => (
                       <button
@@ -310,7 +430,55 @@ export function EditCard({
                 )}
               </div>
 
-              <div className="space-y-3">
+              {moving && (
+                <div className="space-y-3">
+                  <p className="text-sm text-neutral-200">
+                    Pick what to move, then <b className="text-white">tap or drag</b> on the video where it should sit.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {movable.map((m) => (
+                      <button
+                        key={m.slot}
+                        type="button"
+                        onClick={() => pick(m.slot)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                          m.slot === moving.slot ? "border-cyan-400 bg-cyan-500/20 text-white" : "border-white/10 bg-white/5 text-neutral-300 hover:text-white"
+                        }`}
+                      >
+                        {m.label}
+                        {moving.layout[m.slot] ? <span className="ml-1 text-cyan-300">•</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                  {outsideBand && (
+                    <p className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                      That spot is outside the Feed-safe band: the 4:5 Feed crop or the Reels caption and buttons will cover it. It&apos;ll still go where you put it.
+                    </p>
+                  )}
+                  <p className="text-[11px] leading-relaxed text-neutral-500">
+                    {vertical ? "Stay between the dashed lines so nothing gets cropped in the Feed or covered by Reels buttons. " : ""}
+                    It snaps to the centre line. Anything you don&apos;t move keeps its rulebook spot.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => void saveLayout()} disabled={Boolean(busy)} className={`${CTA_CLASSES} disabled:opacity-50`}>
+                      Done
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMoving(null)}
+                      className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                    {spot && (
+                      <button type="button" onClick={resetSlot} className="px-2 text-xs font-semibold text-neutral-500 hover:text-white">
+                        Put the {movable.find((m) => m.slot === moving.slot)?.label.toLowerCase()} back
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className={moving ? "hidden" : "space-y-3"}>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { label: "Style", value: STYLE_LABEL[latest.style] },
@@ -380,6 +548,16 @@ export function EditCard({
                       <SvgIcon d={SP.download} size={15} /> Download
                     </a>
                   )}
+                  {!rendering && movable.length > 0 && props && (
+                    <button
+                      type="button"
+                      onClick={startMoving}
+                      disabled={Boolean(busy)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20 hover:text-white"
+                    >
+                      ✥ Move things
+                    </button>
+                  )}
                   {!rendering && (
                     <button
                       type="button"
@@ -406,7 +584,8 @@ export function EditCard({
                 )}
                 {latest.status === "draft" && (
                   <p className="text-xs text-neutral-400">
-                    Watch it, then tell me in the box below what to change, e.g. <span className="text-neutral-200">“shorter title”</span> or{" "}
+                    Watch it. To put the title, captions or qualifier somewhere else, use <span className="text-neutral-200">✥ Move things</span> and tap
+                    where they should sit. For anything else, tell me in the box below, e.g. <span className="text-neutral-200">“shorter title”</span> or{" "}
                     <span className="text-neutral-200">“qualifier at 0:03”</span>.
                   </p>
                 )}

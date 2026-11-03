@@ -14,22 +14,23 @@ import { CtaCard, LadderRungs, PovSticker, QualifierBand, TitleBanner, VslCardVi
 export const CustomRig: React.FC<EditProps> = ({ videoUrl, words, overlays, format }) => {
   const { width } = useVideoConfig();
   const vertical = format !== "vsl_16x9";
+  const at = overlays.layout ?? {};
   return (
     <AbsoluteFill>
       <ZoomPlate src={videoUrl} zooms={overlays.zooms ?? []} />
-      {overlays.captions !== false && <Captions words={words} size={vertical ? 52 : 48} vertical={vertical} />}
-      {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} />}
+      {overlays.captions !== false && <Captions words={words} size={vertical ? 52 : 48} vertical={vertical} at={at.captions} />}
+      {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} at={at.title} />}
       {vertical && <LadderRungs rungs={overlays.rungs} width={width} />}
-      {overlays.qualifier && <QualifierBand q={overlays.qualifier} vertical={vertical} />}
-      {overlays.cta && <CtaCard cta={overlays.cta} vertical={vertical} />}
-      {/* Stickers sit below the title when both are on. */}
-      <AbsoluteFill style={{ transform: overlays.title ? "translateY(150px)" : undefined }}>
+      {overlays.qualifier && <QualifierBand q={overlays.qualifier} vertical={vertical} at={at.qualifier} />}
+      {overlays.cta && <CtaCard cta={overlays.cta} vertical={vertical} at={at.cta} />}
+      {/* Stickers sit below the title when both are on (unless placed by hand). */}
+      <AbsoluteFill style={{ transform: overlays.title && !at.stickers ? "translateY(150px)" : undefined }}>
         {overlays.stickers.map((s, i) => (
-          <PovSticker key={i} s={s} />
+          <PovSticker key={i} s={s} at={at.stickers} />
         ))}
       </AbsoluteFill>
       {overlays.cards.map((c, i) => (
-        <VslCardView key={i} card={c} />
+        <VslCardView key={i} card={c} at={at.cards} />
       ))}
     </AbsoluteFill>
   );

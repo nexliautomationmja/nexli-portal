@@ -43,6 +43,8 @@ notes: up to four plain sentences for the user — your judgment calls (where yo
 
 swaps: caption-text corrections only. On a first layout return []. On a revision, when the user's note is about caption wording ("the caption says CALCULATING, it should be CALENDAR"), return {find, replace} with the caption tokens as they appear (ALL CAPS, multi-word allowed) and keep the layout as it is.
 
+Where things sit on screen is set by the user tapping on the preview (the "layout" field you may see in the current layout; you can't change it). If a note only asks to move something, keep the layout as it is and say in notes to use Move on the preview.
+
 Revisions: you get the current layout and the user's note. Change only what the note asks for; return everything else exactly as it was. If the note asks for something the current style has no slot for (zooms, captions off, a sticker in a ladder, a title in POV…), do it anyway with the slot it needs — the portal then switches the edit to the custom composition, which renders every slot.
 `;
 

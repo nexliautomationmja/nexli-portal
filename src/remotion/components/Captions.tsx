@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
-import type { CaptionWord } from "../types";
+import type { Anchor, CaptionWord } from "../types";
 import { BRAND, FB_SAFE_BOTTOM, OUTFIT, isMoney } from "../theme";
 
 /**
@@ -9,9 +9,9 @@ import { BRAND, FB_SAFE_BOTTOM, OUTFIT, isMoney } from "../theme";
  * past words solid white, future words white at 50%, money in green, and a
  * bottom scrim behind them.
  */
-export const Captions: React.FC<{ words: CaptionWord[]; size: number; vertical: boolean }> = ({ words, size, vertical }) => {
+export const Captions: React.FC<{ words: CaptionWord[]; size: number; vertical: boolean; at?: Anchor }> = ({ words, size, vertical, at }) => {
   const frame = useCurrentFrame();
-  const { fps, height } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const t = frame / fps;
 
   const chunks: CaptionWord[][] = [];
@@ -25,22 +25,39 @@ export const Captions: React.FC<{ words: CaptionWord[]; size: number; vertical: 
   // Vertical: sit on the bottom of the safe band. Landscape: lower third.
   const bottom = vertical ? height - FB_SAFE_BOTTOM + 40 : 90;
 
+  // Hand-placed: the block is centred on the anchor and the scrim moves with it.
+  const box = width - 120;
+  const position: React.CSSProperties = at
+    ? { left: at.x * width - box / 2, width: box, top: at.y * height, transform: "translateY(-50%)" }
+    : { left: 60, right: 60, bottom };
+
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
-      <AbsoluteFill
-        style={{
-          top: "auto",
-          height: vertical ? 760 : 380,
-          background: "linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))",
-        }}
-      />
+      {at ? (
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: at.y * height - size * 3,
+            height: size * 6,
+            background: "linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.45), rgba(0,0,0,0))",
+          }}
+        />
+      ) : (
+        <AbsoluteFill
+          style={{
+            top: "auto",
+            height: vertical ? 760 : 380,
+            background: "linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))",
+          }}
+        />
+      )}
       {chunk && (
         <div
           style={{
             position: "absolute",
-            left: 60,
-            right: 60,
-            bottom,
+            ...position,
             display: "flex",
             flexWrap: "wrap",
             justifyContent: "center",

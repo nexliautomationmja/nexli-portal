@@ -14,7 +14,7 @@ export const PovRig: React.FC<EditProps> = ({ videoUrl, overlays }) => (
     <Plate src={videoUrl} />
     <AbsoluteFill style={{ height: 520, background: "linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(0,0,0,0))" }} />
     {overlays.stickers.map((s, i) => (
-      <PovSticker key={i} s={s} />
+      <PovSticker key={i} s={s} at={overlays.layout?.stickers} />
     ))}
   </AbsoluteFill>
 );

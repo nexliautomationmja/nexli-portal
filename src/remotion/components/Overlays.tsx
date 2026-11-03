@@ -1,8 +1,25 @@
 import React from "react";
 import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import type { LadderRung, TimedText, VslCard } from "../types";
+import type { Anchor, LadderRung, TimedText, VslCard } from "../types";
 import { BRAND, FB_SAFE_TOP, JAKARTA, OUTFIT, isMoney } from "../theme";
 import { Pop } from "./Pop";
+
+/**
+ * A hand-placed element: a `box`-wide row centred on the anchor, the element
+ * centred inside it — the same geometry as the default full-width rows, just
+ * moved. Only used when the user placed the element (absence = default).
+ */
+export function placed(at: Anchor, box: number, width: number, height: number): React.CSSProperties {
+  return {
+    position: "absolute",
+    left: at.x * width - box / 2,
+    top: at.y * height,
+    width: box,
+    transform: "translateY(-50%)",
+    display: "flex",
+    justifyContent: "center",
+  };
+}
 
 /** Money tokens inside a line render green (rulebook: money / positive). */
 const Rich: React.FC<{ text: string }> = ({ text }) => (
@@ -14,19 +31,25 @@ const Rich: React.FC<{ text: string }> = ({ text }) => (
 );
 
 /** Solo / ladder: the one title banner, at the top of the safe band. */
-export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean }> = ({ title, vertical }) => (
+export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean; at?: Anchor }> = ({ title, vertical, at }) => {
+  const { width, height } = useVideoConfig();
+  return (
   <Pop
     start={title.start}
     end={title.end}
     from="up"
-    style={{
-      position: "absolute",
-      top: vertical ? FB_SAFE_TOP + 18 : 40,
-      left: 0,
-      right: 0,
-      display: "flex",
-      justifyContent: "center",
-    }}
+    style={
+      at
+        ? placed(at, width, width, height)
+        : {
+            position: "absolute",
+            top: vertical ? FB_SAFE_TOP + 18 : 40,
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "center",
+          }
+    }
   >
     <div
       style={{
@@ -48,11 +71,14 @@ export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean }> = ({
       {title.text}
     </div>
   </Pop>
-);
+  );
+};
 
 /** Red qualifier band — bottom chrome slot (above the captions). */
-export const QualifierBand: React.FC<{ q: TimedText; vertical: boolean }> = ({ q, vertical }) => (
-  <Pop start={q.start} end={q.end} style={{ position: "absolute", left: 0, right: 0, top: vertical ? 960 : undefined, bottom: vertical ? undefined : 230, display: "flex", justifyContent: "center" }}>
+export const QualifierBand: React.FC<{ q: TimedText; vertical: boolean; at?: Anchor }> = ({ q, vertical, at }) => {
+  const { width, height } = useVideoConfig();
+  return (
+  <Pop start={q.start} end={q.end} style={at ? placed(at, width, width, height) : { position: "absolute", left: 0, right: 0, top: vertical ? 960 : undefined, bottom: vertical ? undefined : 230, display: "flex", justifyContent: "center" }}>
     <div
       style={{
         maxWidth: vertical ? 900 : 1000,
@@ -72,15 +98,16 @@ export const QualifierBand: React.FC<{ q: TimedText; vertical: boolean }> = ({ q
       {q.text}
     </div>
   </Pop>
-);
+  );
+};
 
 /** CTA with a directional cue instead of a redundant subline. */
-export const CtaCard: React.FC<{ cta: TimedText; vertical: boolean }> = ({ cta, vertical }) => {
+export const CtaCard: React.FC<{ cta: TimedText; vertical: boolean; at?: Anchor }> = ({ cta, vertical, at }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const bob = Math.sin((frame / fps) * Math.PI * 2 * 1.2) * 8;
   return (
-    <Pop start={cta.start} end={cta.end} style={{ position: "absolute", left: 0, right: 0, top: vertical ? 960 : undefined, bottom: vertical ? undefined : 230, display: "flex", justifyContent: "center" }}>
+    <Pop start={cta.start} end={cta.end} style={at ? placed(at, width, width, height) : { position: "absolute", left: 0, right: 0, top: vertical ? 960 : undefined, bottom: vertical ? undefined : 230, display: "flex", justifyContent: "center" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "16px 28px", borderRadius: 18, background: BRAND.panel, border: "2px solid rgba(6,182,212,0.6)", color: "#fff", fontFamily: OUTFIT, fontWeight: 800, fontSize: vertical ? 42 : 36, textTransform: "uppercase" }}>
         <span>{cta.text}</span>
         <span style={{ display: "inline-block", transform: `translateY(${bob}px)`, backgroundImage: BRAND.gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", fontSize: vertical ? 52 : 44 }}>↓</span>
@@ -121,18 +148,21 @@ export const LadderRungs: React.FC<{ rungs: LadderRung[]; width: number }> = ({ 
 };
 
 /** POV: Instagram's own white text-sticker idiom — no brand palette, no dark glass. */
-export const PovSticker: React.FC<{ s: TimedText }> = ({ s }) => (
-  <Pop start={s.start} end={s.end} style={{ position: "absolute", top: FB_SAFE_TOP + 90, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
+export const PovSticker: React.FC<{ s: TimedText; at?: Anchor }> = ({ s, at }) => {
+  const { width, height } = useVideoConfig();
+  return (
+  <Pop start={s.start} end={s.end} style={at ? placed(at, width, width, height) : { position: "absolute", top: FB_SAFE_TOP + 90, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
     <div style={{ maxWidth: 860, padding: "16px 26px", borderRadius: 18, background: "#ffffff", color: "#000000", fontFamily: JAKARTA, fontWeight: 800, fontSize: 46, lineHeight: 1.15, textAlign: "center", boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
       {s.text}
     </div>
   </Pop>
-);
+  );
+};
 
 /** VSL left column: one slot, cards sequenced; fit-content with a 500px ceiling. */
-export const VslCardView: React.FC<{ card: VslCard }> = ({ card }) => {
+export const VslCardView: React.FC<{ card: VslCard; at?: Anchor }> = ({ card, at }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const t = frame / fps;
   const glow = interpolate(Math.sin(t * 3), [-1, 1], [0.35, 0.6]);
   const base: React.CSSProperties = {
@@ -152,7 +182,7 @@ export const VslCardView: React.FC<{ card: VslCard }> = ({ card }) => {
         ? { ...base, background: BRAND.panel, border: `2px solid rgba(6,182,212,${glow})` }
         : { ...base, background: BRAND.panel, border: "1px solid rgba(255,255,255,0.12)" };
   return (
-    <Pop start={card.start} end={card.end} from="up" style={{ position: "absolute", left: 48, top: "51%", transform: "translateY(-50%)" }}>
+    <Pop start={card.start} end={card.end} from="up" style={at ? placed(at, 560, width, height) : { position: "absolute", left: 48, top: "51%", transform: "translateY(-50%)" }}>
       <div style={style}>
         <div style={{ fontSize: card.kind === "stat" ? 64 : 38, lineHeight: 1.05, textTransform: "uppercase", color: card.kind === "stat" ? BRAND.money : "#fff" }}>
           <Rich text={card.text} />

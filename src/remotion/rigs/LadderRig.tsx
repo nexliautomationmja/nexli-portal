@@ -15,11 +15,11 @@ export const LadderRig: React.FC<EditProps> = ({ videoUrl, words, overlays }) =>
   return (
     <AbsoluteFill>
       <Plate src={videoUrl} />
-      <Captions words={words} size={50} vertical />
-      {overlays.title && <TitleBanner title={overlays.title} vertical />}
+      <Captions words={words} size={50} vertical at={overlays.layout?.captions} />
+      {overlays.title && <TitleBanner title={overlays.title} vertical at={overlays.layout?.title} />}
       <LadderRungs rungs={overlays.rungs} width={width} />
-      {overlays.qualifier && <QualifierBand q={overlays.qualifier} vertical />}
-      {overlays.cta && <CtaCard cta={overlays.cta} vertical />}
+      {overlays.qualifier && <QualifierBand q={overlays.qualifier} vertical at={overlays.layout?.qualifier} />}
+      {overlays.cta && <CtaCard cta={overlays.cta} vertical at={overlays.layout?.cta} />}
     </AbsoluteFill>
   );
 };

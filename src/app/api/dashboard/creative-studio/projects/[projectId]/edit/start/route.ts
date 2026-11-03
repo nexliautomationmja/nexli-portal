@@ -37,7 +37,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   try {
     const built = await captionWords(project, finalCut);
-    const words = prev && prev.finalCutAssetId === finalCut.id ? prev.props.words : built.words;
+    const sameCut = prev && prev.finalCutAssetId === finalCut.id;
+    const words = sameCut ? prev.props.words : built.words;
+    // Spots placed by hand (title clear of her face…) carry over to a new style on the same cut.
+    const layout = sameCut ? prev.props.overlays.layout : undefined;
     const durationS = await durationOf(finalCut, body.durationS, words);
     const result = await proposeLayout({ ...editContext(project, style, durationS, words, built.lines), instruction: instruction || undefined });
     const unaligned = built.unaligned.length
@@ -48,7 +51,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       version: (prev?.version ?? 0) + 1,
       style,
       finalCutAssetId: finalCut.id,
-      props: { format: project.format, durationS, words, overlays: result.overlays, ...(instruction ? { instruction } : {}) },
+      props: {
+        format: project.format,
+        durationS,
+        words,
+        overlays: { ...result.overlays, ...(layout ? { layout } : {}) },
+        ...(instruction ? { instruction } : {}),
+      },
       notes: `${result.notes}${unaligned}`.trim() || null,
       note: instruction || null,
     });

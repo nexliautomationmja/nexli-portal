@@ -12,9 +12,9 @@ import { VslCardView } from "../components/Overlays";
 export const VslRig: React.FC<EditProps> = ({ videoUrl, words, overlays }) => (
   <AbsoluteFill>
     <Plate src={videoUrl} />
-    <Captions words={words} size={48} vertical={false} />
+    <Captions words={words} size={48} vertical={false} at={overlays.layout?.captions} />
     {overlays.cards.map((c, i) => (
-      <VslCardView key={i} card={c} />
+      <VslCardView key={i} card={c} at={overlays.layout?.cards} />
     ))}
   </AbsoluteFill>
 );

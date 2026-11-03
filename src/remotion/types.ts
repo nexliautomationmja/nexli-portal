@@ -48,6 +48,17 @@ export interface Zoom {
   scale: number;
 }
 
+/** A spot on the frame as fractions of width and height — where the element's centre sits. */
+export interface Anchor {
+  x: number;
+  y: number;
+}
+
+/** What can be moved by tapping on the preview (ladder rungs stay over their person). */
+export type MovableSlot = "title" | "qualifier" | "cta" | "captions" | "stickers" | "cards";
+
+export type EditLayout = Partial<Record<MovableSlot, Anchor>>;
+
 export interface EditOverlays {
   /** Solo + ladder: the one title banner (a distillation, never a quote of the caption). */
   title: TimedText | null;
@@ -65,6 +76,8 @@ export interface EditOverlays {
   captions?: boolean;
   /** Custom only — absence means no zooms. */
   zooms?: Zoom[];
+  /** Hand-placed positions. Absence of a slot = the rig's measured default geometry. */
+  layout?: EditLayout;
 }
 
 // A type alias (not an interface) so it satisfies Remotion's Record<string, unknown> props constraint.
