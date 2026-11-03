@@ -68,12 +68,32 @@ export function FrameStep({
     return () => clearInterval(t);
   }, [running.length, p.id, onChange]);
 
+  // Paste images straight into the references (Cmd/Ctrl+V anywhere on the
+  // page). Text pastes into the shot box are left alone.
+  const addRef = useRef(addReferences);
+  addRef.current = addReferences;
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const images = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+      if (images.length === 0) return;
+      e.preventDefault();
+      void addRef.current(
+        images.map((f, i) =>
+          f.name && f.name !== "image.png" ? f : new File([f], `pasted-${Date.now()}-${i}.${f.type.split("/")[1] || "png"}`, { type: f.type })
+        )
+      );
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
+
   const chosen = selected ?? new Set((refs ?? []).map((r) => r.id));
 
-  async function addReferences(files: FileList | null) {
-    if (!files) return;
-    setBusy("Adding reference…");
-    for (const file of Array.from(files)) {
+  async function addReferences(files: FileList | File[] | null) {
+    const list = files ? Array.from(files).filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type)) : [];
+    if (list.length === 0) return;
+    setBusy(list.length > 1 ? `Adding ${list.length} references…` : "Adding reference…");
+    for (const file of list) {
       try {
         const prepared = await prepareFrame(file, false);
         const sign = await fetch("/api/dashboard/creative-studio/references", {
@@ -169,7 +189,7 @@ export function FrameStep({
           <div>
             <p className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>Daniela references</p>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Your baseline images of Daniela, saved for every video. Use one as the frame, or tick the ones Manus should copy her look from.
+              Your baseline images of Daniela, saved for every video. Paste an image (⌘V) or add files. Use one as the frame, or tick the ones Manus should copy her look from.
             </p>
           </div>
           <button
@@ -191,7 +211,7 @@ export function FrameStep({
             className="w-full rounded-xl border-2 border-dashed py-8 text-sm hover:bg-[var(--input-bg)]"
             style={{ borderColor: "var(--card-border)", color: "var(--text-muted)" }}
           >
-            Add 3–6 images of Daniela: a clear face close-up, a couple of outfits, your usual office setups.
+            Paste (⌘V) or click to add 3–6 images of Daniela: a clear face close-up, a couple of outfits, your usual office setups.
           </button>
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-1">
