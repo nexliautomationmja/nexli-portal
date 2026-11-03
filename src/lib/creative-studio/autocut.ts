@@ -4,7 +4,6 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
-import ffmpegStatic from "ffmpeg-static";
 import type {
   ClipTranscript,
   CreativeFormat,
@@ -127,13 +126,19 @@ export function buildClipPlan(args: {
 
 let binary: Promise<string> | null = null;
 
-/** The bundled ffmpeg (copied to /tmp and made executable if the bundle lost its exec bit). */
+/**
+ * The bundled ffmpeg from @ffmpeg-installer (a plain per-platform npm
+ * package, so no install script is needed to fetch it). Copied to /tmp and
+ * made executable if the deployment bundle lost its exec bit.
+ */
 function ffmpegBinary(): Promise<string> {
   if (!binary) {
     binary = (async () => {
-      const candidates = [process.env.FFMPEG_PATH, ffmpegStatic, path.join(process.cwd(), "node_modules/ffmpeg-static/ffmpeg")].filter(
-        (p): p is string => Boolean(p)
-      );
+      const platformPkg = `${os.platform()}-${os.arch()}`;
+      const candidates = [
+        process.env.FFMPEG_PATH,
+        path.join(process.cwd(), "node_modules/@ffmpeg-installer", platformPkg, "ffmpeg"),
+      ].filter((p): p is string => Boolean(p));
       for (const p of candidates) {
         try {
           await fs.access(p, fs.constants.X_OK);
@@ -230,7 +235,7 @@ export async function renderPiece(input: string, output: string, plan: CutClipPl
     "12M",
     "-r",
     "60",
-    "-fps_mode",
+    "-vsync",
     "cfr",
     "-c:a",
     "aac",

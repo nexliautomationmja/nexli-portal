@@ -4,11 +4,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  // Creative Studio auto-cut runs ffmpeg on the server: keep ffmpeg-static
-  // as a runtime require and ship its binary with the cut routes.
-  serverExternalPackages: ["ffmpeg-static"],
+  // Creative Studio auto-cut runs ffmpeg on the server: ship the Linux
+  // binary from @ffmpeg-installer with the cut routes.
   outputFileTracingIncludes: {
-    "/api/dashboard/creative-studio/projects/[projectId]/cut/**": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/dashboard/creative-studio/projects/[projectId]/cut/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
   },
 };
 
