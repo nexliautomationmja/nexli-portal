@@ -292,6 +292,7 @@ export function ErrorStrip({ children, onClose }: { children: React.ReactNode; o
  * Floating ↓ / ↑ button: jumps to the bottom of a long thread (the editor and
  * the chat box), or back to the top once you're there. Hidden when the page
  * is short. The dashboard scrolls the window, so it watches the window.
+ * Render it inside the sticky composer bar: it sits centred just above it.
  */
 export function ScrollJump() {
   const [dir, setDir] = useState<"down" | "up" | null>(null);
@@ -326,8 +327,7 @@ export function ScrollJump() {
     <button
       type="button"
       onClick={() => window.scrollTo({ top: down ? document.documentElement.scrollHeight : 0, behavior: "smooth" })}
-      className="fixed right-4 z-30 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/40 ring-1 ring-blue-300/40 transition hover:bg-blue-500 sm:right-6"
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 9rem)" }}
+      className="absolute -top-9 left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/40 ring-1 ring-blue-300/40 transition hover:bg-blue-500"
     >
       <SvgIcon d={<path d={down ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"} />} size={18} />
       {down ? "Scroll to bottom" : "Back to top"}

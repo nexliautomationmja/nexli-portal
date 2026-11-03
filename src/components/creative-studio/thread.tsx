@@ -382,10 +382,9 @@ export function StudioThread({ projectId }: { projectId: string }) {
           {error && <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>}
         </div>
 
-        <ScrollJump />
-
         {/* Composer */}
         <div className="sticky bottom-0 z-20 -mx-3 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent px-3 pb-4 pt-6 sm:-mx-6 sm:px-6" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
+          <ScrollJump />
           <Composer
             placeholder={composer.placeholder}
             hint={composer.hint}
