@@ -119,6 +119,7 @@ export async function projectDetail(project: Project) {
         clips: h.clips.length,
       })),
       direction: project.brief?.direction ?? "",
+      batchId: project.batchId ?? null,
       approvedAt: project.approvedAt?.toISOString() ?? null,
       updatedAt: project.updatedAt.toISOString(),
     },

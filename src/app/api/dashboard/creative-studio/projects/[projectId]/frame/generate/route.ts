@@ -11,13 +11,17 @@ export const maxDuration = 60;
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
-/** Ask Manus for 2 Daniela frame options from a one-line shot description + the reference images. */
+/**
+ * Ask Manus for Daniela frame options from a one-line shot description + the
+ * reference images: 2 to choose from, or 1 when a batch makes frames for
+ * many videos at once (body.count).
+ */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
-  const body = (await req.json().catch(() => null)) as { shot?: string; referenceIds?: string[] } | null;
+  const body = (await req.json().catch(() => null)) as { shot?: string; referenceIds?: string[]; count?: number } | null;
   const shot = typeof body?.shot === "string" ? body.shot.trim().slice(0, 1500) : "";
   if (!shot) return NextResponse.json({ error: "Describe the shot you want" }, { status: 400 });
 
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const task = await startFrameTask({
       shot,
       aspect: project.format === "vsl_16x9" ? "16:9" : "9:16",
-      count: 2,
+      count: body?.count === 1 ? 1 : 2,
       referenceUrls,
     });
     await db.insert(creativeAssets).values({

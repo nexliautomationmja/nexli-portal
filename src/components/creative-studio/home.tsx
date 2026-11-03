@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
 import { SYNE, ShimmerPill } from "@/components/launch-pad";
 import { uploadFrameFile } from "@/components/creative-studio/upload";
-import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, SvgIcon } from "@/components/creative-studio/canvas";
+import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { Composer, type ComposerSubmit } from "@/components/creative-studio/composer";
+import { BatchPlanCard, type BatchPlan } from "@/components/creative-studio/batch-plan-card";
+import { assignFrames, BATCH_MAX } from "@/lib/creative-studio/batch-shared";
 
 interface ProjectRow {
   id: string;
@@ -18,6 +20,19 @@ interface ProjectRow {
   clips: number;
   thumbUrl: string | null;
   updatedAt: string;
+  batchId: string | null;
+}
+
+interface BatchRow {
+  id: string;
+  format: CreativeFormat;
+  count: number;
+  brief: string;
+  titles: string[];
+  scripted: number;
+  rendering: number;
+  clipsReady: number;
+  createdAt: string;
 }
 
 const SUGGESTIONS = [
@@ -38,6 +53,11 @@ export function StudioHome() {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null);
   const [seed, setSeed] = useState(0);
   const [prefill, setPrefill] = useState<string | null>(null);
+  const [count, setCount] = useState(1);
+  const [batches, setBatches] = useState<BatchRow[]>([]);
+  const [plan, setPlan] = useState<BatchPlan | null>(null);
+  const [planning, setPlanning] = useState<string | null>(null);
+  const [creating, setCreating] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,12 +65,88 @@ export function StudioHome() {
       .then((r) => r.json())
       .then((b) => !cancelled && setProjects(b?.projects ?? []))
       .catch(() => !cancelled && setProjects([]));
+    fetch("/api/dashboard/creative-studio/batches")
+      .then((r) => r.json())
+      .then((b) => !cancelled && setBatches(b?.batches ?? []))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
 
-  async function start({ text, images, format: fmt }: ComposerSubmit): Promise<boolean> {
+  function changeFormat(f: CreativeFormat) {
+    setFormat(f);
+    setCount((n) => Math.min(n, BATCH_MAX[f]));
+  }
+
+  /** Claude splits the idea into `n` videos; frames are handed out in order (Manus for the rest). */
+  async function planBatch(brief: string, fmt: CreativeFormat, n: number, frames: BatchPlan["frames"], keep?: Pick<BatchPlan, "cover" | "random">) {
+    setError(null);
+    setPlanning(`Claude is planning ${n} ${fmt === "vsl_16x9" ? "VSLs" : "ads"}…`);
+    try {
+      const r = await fetch("/api/dashboard/creative-studio/batches/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief, format: fmt, count: n }),
+      });
+      const b = await r.json().catch(() => null);
+      if (!r.ok || !Array.isArray(b?.videos)) throw new Error(b?.error || "Couldn't plan the batch");
+      const videos = b.videos as { title: string; direction: string; shot: string }[];
+      const cover = keep?.cover ?? "rest";
+      const random = keep?.random ?? false;
+      const assigned = assignFrames(videos.length, frames.length, cover, random);
+      setPlan({ format: fmt, brief, notes: b.notes ?? "", frames, cover, random, items: videos.map((v, i) => ({ ...v, frame: assigned[i] })) });
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't plan the batch");
+      return false;
+    } finally {
+      setPlanning(null);
+    }
+  }
+
+  function dropPlan() {
+    plan?.frames.forEach((f) => URL.revokeObjectURL(f.url));
+    setPlan(null);
+  }
+
+  /** Create the batch and its videos, upload each assigned pasted frame, then open the batch page. */
+  async function createBatch() {
+    if (!plan) return;
+    setCreating("Creating the videos…");
+    setError(null);
+    try {
+      const r = await fetch("/api/dashboard/creative-studio/batches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: plan.format, brief: plan.brief, items: plan.items }),
+      });
+      const b = await r.json().catch(() => null);
+      if (!r.ok || !b?.id) throw new Error(b?.error || "Couldn't create the batch");
+      const projectsCreated = b.projects as { id: string; index: number }[];
+      const uploads = projectsCreated.filter((p) => plan.items[p.index]?.frame !== null && plan.items[p.index]?.frame !== undefined);
+      for (let i = 0; i < uploads.length; i++) {
+        setCreating(`Adding your frames · ${i + 1} of ${uploads.length}…`);
+        const frame = plan.frames[plan.items[uploads[i].index].frame as number];
+        if (frame) await uploadFrameFile(uploads[i].id, frame.file, plan.format === "ad_9x16");
+      }
+      router.push(`/dashboard/creative-studio/batch/${b.id}`);
+    } catch (err) {
+      setCreating(null);
+      setError(err instanceof Error ? err.message : "Couldn't create the batch");
+    }
+  }
+
+  async function start({ text, images, format: fmt, count: n }: ComposerSubmit): Promise<boolean> {
+    if (n > 1) {
+      if (!text) {
+        setError("Describe what the batch is about, e.g. “5 ads on scope creep”.");
+        return false;
+      }
+      if (plan) dropPlan();
+      const frames = images.slice(0, n).map((file) => ({ file, url: URL.createObjectURL(file) }));
+      return planBatch(text, fmt, n, frames);
+    }
     if (!text && images.length === 0) return false;
     setBusy(true);
     setError(null);
@@ -94,17 +190,41 @@ export function StudioHome() {
             large
             autoFocus
             defaultText={prefill ?? undefined}
-            placeholder="Describe the video — paste Daniela's frame if you have it"
-            hint="Enter to start · Shift+Enter for a new line"
-            busy={busy}
+            placeholder={
+              count > 1
+                ? `Describe the batch, e.g. “${count} ${format === "vsl_16x9" ? "VSLs" : "ads"} on scope creep” — paste frames if you have them`
+                : "Describe the video — paste Daniela's frame if you have it"
+            }
+            hint={count > 1 ? "Enter → Claude plans the batch for you to review" : "Enter to start · Shift+Enter for a new line"}
+            busy={busy || Boolean(planning) || Boolean(creating)}
             allowFormat
             format={format}
-            onFormat={setFormat}
+            onFormat={changeFormat}
+            count={count}
+            onCount={setCount}
+            maxCount={BATCH_MAX[format]}
             onSubmit={start}
           />
           {error && (
             <div className="mt-3">
               <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>
+            </div>
+          )}
+          {planning && (
+            <div className="mt-4">
+              <ThinkingCard accent="violet" label={planning} detail="Different angles and hooks from your idea, with a frame shot for each. About a minute." />
+            </div>
+          )}
+          {plan && !planning && (
+            <div className="mt-4">
+              <BatchPlanCard
+                plan={plan}
+                busy={creating}
+                onChange={setPlan}
+                onReplan={() => void planBatch(plan.brief, plan.format, plan.items.length, plan.frames, { cover: plan.cover, random: plan.random })}
+                onCancel={dropPlan}
+                onCreate={() => void createBatch()}
+              />
             </div>
           )}
           <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -125,7 +245,47 @@ export function StudioHome() {
           </div>
         </div>
 
-        <section className="mt-16">
+        {batches.length > 0 && (
+          <section className="mt-16">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white" style={SYNE}>
+                Batches
+              </h2>
+              <span className="text-xs text-neutral-500">{batches.length}</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {batches.map((b) => {
+                const noun = b.format === "vsl_16x9" ? "VSLs" : "ads";
+                const progress = [
+                  b.scripted ? `${b.scripted} script${b.scripted > 1 ? "s" : ""} ready` : "",
+                  b.rendering ? `${b.rendering} on Kling` : "",
+                  b.clipsReady ? `${b.clipsReady} clips ready` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <Link
+                    key={b.id}
+                    href={`/dashboard/creative-studio/batch/${b.id}`}
+                    className="lp-card rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-all hover:-translate-y-0.5 hover:border-cyan-400/30 hover:bg-white/[0.05]"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <Chip tone="blue">
+                        Batch · {b.count} {noun}
+                      </Chip>
+                      <span className="text-[10px] text-neutral-500">{new Date(b.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{b.brief}</p>
+                    <p className="mt-1 truncate text-[11px] text-neutral-500">{b.titles.join(" · ")}</p>
+                    {progress && <p className="mt-2 text-[11px] font-semibold text-cyan-200">{progress}</p>}
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        <section className={batches.length > 0 ? "mt-10" : "mt-16"}>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-bold text-white" style={SYNE}>
               Recent videos
@@ -164,6 +324,11 @@ export function StudioHome() {
                       <span className="absolute right-2 top-2">
                         <Chip tone={pill.tone}>{pill.label}</Chip>
                       </span>
+                      {p.batchId && (
+                        <span className="absolute left-2 top-2">
+                          <Chip>Batch</Chip>
+                        </span>
+                      )}
                       <span className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white/80">
                         {p.format === "vsl_16x9" ? "VSL" : "Ad"} · {p.clips} clips
                       </span>

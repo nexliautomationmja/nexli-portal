@@ -336,6 +336,11 @@ export function StudioThread({ projectId }: { projectId: string }) {
             <h1 className="truncate text-base font-bold text-white sm:text-lg" style={SYNE}>
               {p.title}
             </h1>
+            {p.batchId && (
+              <Link href={`/dashboard/creative-studio/batch/${p.batchId}`} className="text-[11px] font-semibold text-cyan-300 hover:text-white">
+                ← Back to batch
+              </Link>
+            )}
           </div>
           <Chip tone={status.tone}>{status.label}</Chip>
           <button type="button" onClick={remove} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-rose-500/10 hover:text-rose-300" aria-label="Delete video" title="Delete video">

@@ -52,6 +52,7 @@ export async function GET() {
         clips: clipCount.get(p.id) ?? 0,
         thumbUrl: path ? signed.get(path) ?? null : null,
         updatedAt: p.updatedAt.toISOString(),
+        batchId: p.batchId ?? null,
       };
     }),
   });

@@ -11,6 +11,8 @@ export interface ComposerSubmit {
   /** A video file (the final cut). */
   video: File | null;
   format: CreativeFormat;
+  /** Batch size (1 = a single video). */
+  count: number;
 }
 
 interface Attachment {
@@ -22,7 +24,7 @@ interface Attachment {
 /**
  * The chat box (ChatGPT / Claude style): auto-growing textarea, Enter sends
  * (Shift+Enter = new line), paste / drop / 📎 for images (and a video for the
- * final cut), optional Ad · VSL pill. Modeled on the composer in
+ * final cut), optional Ad · VSL pill and batch size. Modeled on the composer in
  * src/components/messages/message-thread.tsx.
  *
  * Image pastes anywhere on the page land here too — unless the pointer or
@@ -41,6 +43,9 @@ export function Composer({
   large = false,
   autoFocus = false,
   defaultText,
+  count = 1,
+  onCount,
+  maxCount = 1,
   onSubmit,
 }: {
   placeholder: string;
@@ -55,6 +60,10 @@ export function Composer({
   autoFocus?: boolean;
   /** Initial text (e.g. a suggestion chip). Remount with a new key to change it. */
   defaultText?: string;
+  /** Batch create: how many videos (with onCount, shows the − n + stepper). */
+  count?: number;
+  onCount?: (n: number) => void;
+  maxCount?: number;
   onSubmit: (s: ComposerSubmit) => Promise<boolean | void> | boolean | void;
 }) {
   const [text, setText] = useState(defaultText ?? "");
@@ -75,12 +84,16 @@ export function Composer({
     const accepted = list.filter((f) => f.type.startsWith("image/") || (allowVideo && f.type.startsWith("video/")));
     if (accepted.length === 0) return;
     setFiles((prev) => {
-      // One frame at a time: a new image replaces the previous image; one video max.
+      // One frame at a time (a new image replaces it); a batch keeps up to one frame per video. One video max.
+      const maxImages = Math.max(1, count);
+      const newImages = accepted.filter((f) => f.type.startsWith("image/"));
+      const prevImages = prev.filter((a) => a.file.type.startsWith("image/"));
+      const keepImages = newImages.length ? prevImages.slice(Math.max(0, prevImages.length + newImages.length - maxImages)) : prevImages;
       const keep = prev.filter((a) =>
-        accepted.some((f) => f.type.startsWith("image/")) ? !a.file.type.startsWith("image/") : !a.file.type.startsWith("video/")
+        a.file.type.startsWith("image/") ? keepImages.includes(a) : !accepted.some((f) => f.type.startsWith("video/"))
       );
       prev.filter((a) => !keep.includes(a)).forEach((a) => a.preview && URL.revokeObjectURL(a.preview));
-      const image = accepted.filter((f) => f.type.startsWith("image/")).slice(-1);
+      const image = newImages.slice(-maxImages);
       const video = accepted.filter((f) => f.type.startsWith("video/")).slice(-1);
       return [
         ...keep,
@@ -121,7 +134,7 @@ export function Composer({
     if (!t && files.length === 0) return;
     const images = files.filter((a) => a.file.type.startsWith("image/")).map((a) => a.file);
     const video = files.find((a) => a.file.type.startsWith("video/"))?.file ?? null;
-    const ok = await onSubmit({ text: t, images, video, format });
+    const ok = await onSubmit({ text: t, images, video, format, count });
     if (ok !== false) {
       setText("");
       files.forEach((a) => a.preview && URL.revokeObjectURL(a.preview));
@@ -257,6 +270,37 @@ export function Composer({
                 {label}
               </button>
             ))}
+          </div>
+        )}
+
+        {onCount && maxCount > 1 && (
+          <div
+            className={`flex items-center rounded-full border p-0.5 text-xs font-bold ${count > 1 ? "border-cyan-400/50 bg-cyan-500/10" : "border-white/10 bg-white/5"}`}
+            role="group"
+            aria-label="Batch size"
+            title={`Batch create: up to ${maxCount} ${format === "vsl_16x9" ? "VSLs" : "ads"} at once`}
+          >
+            <button
+              type="button"
+              onClick={() => onCount(Math.max(1, count - 1))}
+              disabled={count <= 1}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-30"
+              aria-label="Fewer videos"
+            >
+              −
+            </button>
+            <span className={`min-w-[64px] px-1 text-center ${count > 1 ? "text-cyan-100" : "text-neutral-400"}`}>
+              {count === 1 ? "1 video" : `${count} ${format === "vsl_16x9" ? "VSLs" : "ads"}`}
+            </span>
+            <button
+              type="button"
+              onClick={() => onCount(Math.min(maxCount, count + 1))}
+              disabled={count >= maxCount}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-30"
+              aria-label="More videos"
+            >
+              +
+            </button>
           </div>
         )}
 

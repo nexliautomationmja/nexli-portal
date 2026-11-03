@@ -97,6 +97,36 @@ export const creativeProjects = pgTable("creative_projects", {
   scriptVersion: integer("script_version").notNull().default(0),
   scriptHistory: jsonb("script_history").$type<ScriptSnapshot[]>().notNull().default([]),
   approvedAt: timestamp("approved_at"),
+  /** Set when the video was made as part of a batch (creative_batches). */
+  batchId: uuid("batch_id"),
+  batchIndex: integer("batch_index"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** One planned video in a batch (what Claude proposed, as the user edited it). */
+export interface BatchPlanItem {
+  title: string;
+  /** The brief for this one video, as the user would write it. */
+  direction: string;
+  /** One-line frame description for Manus (used when no pasted frame is assigned). */
+  shot: string;
+  /** Index into the frames the user pasted, or null = Manus makes one. */
+  frame: number | null;
+}
+
+/** Several videos made together from one idea (up to 10 ads or 5 VSLs). */
+export const creativeBatches = pgTable("creative_batches", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdBy: uuid("created_by"),
+  format: text("format").$type<CreativeFormat>().notNull(),
+  count: integer("count").notNull(),
+  /** The idea the user typed. */
+  brief: text("brief").notNull(),
+  plan: jsonb("plan").$type<BatchPlanItem[]>().notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -338,6 +368,25 @@ export function ensureCreativeStudioTables(): Promise<void> {
       `);
       await db.execute(
         sql`CREATE INDEX IF NOT EXISTS "creative_projects_owner_idx" ON "creative_projects" ("owner_id", "updated_at")`
+      );
+      // Nov 2026 batch create.
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "batch_id" uuid`);
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "batch_index" integer`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_batches" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "created_by" uuid,
+          "format" text NOT NULL,
+          "count" integer NOT NULL,
+          "brief" text NOT NULL,
+          "plan" jsonb NOT NULL,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(
+        sql`CREATE INDEX IF NOT EXISTS "creative_batches_owner_idx" ON "creative_batches" ("owner_id", "created_at")`
       );
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_assets" (

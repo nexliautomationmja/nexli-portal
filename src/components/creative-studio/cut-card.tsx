@@ -7,6 +7,7 @@ import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, downloadHref, send, videoFileName } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
 import { TrimEditor } from "@/components/creative-studio/trim-editor";
+import { assembleCut, cutPieces } from "@/components/creative-studio/pipeline";
 
 type Cut = ProjectDetail["cuts"][number];
 
@@ -58,27 +59,14 @@ export function CutCard({
     if (!allDone || !latest || latest.status !== "cutting" || running.current === latest.id) return;
     const cutId = latest.id;
     running.current = cutId;
-    const queue = clips.map((c) => c.id);
-    let done = 0;
-    let failed: string | null = null;
-    setProgress({ done: 0, total: queue.length });
-    const worker = async () => {
-      while (queue.length && !failed) {
-        const clipId = queue.shift()!;
-        const r = await send(api(`${p.id}/cut/clip`), "POST", { cutId, clipId });
-        if (!r.ok) failed = r.error;
-        done++;
-        setProgress({ done, total: clips.length });
-      }
-    };
-    void Promise.all([worker(), worker(), worker()]).then(async () => {
+    void cutPieces(p.id, cutId, clips.map((c) => c.id), (done, total) => setProgress({ done, total })).then(async (failed) => {
       if (failed) {
         running.current = null;
         setProgress(null);
         onError(`Auto-cut stopped: ${failed}`);
         return;
       }
-      const r = await send(api(`${p.id}/cut/assemble`), "POST", { cutId });
+      const r = await assembleCut(p.id, cutId);
       running.current = null;
       setProgress(null);
       if (r.ok) onChange(r.data);
