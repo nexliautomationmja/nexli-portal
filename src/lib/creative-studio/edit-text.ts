@@ -121,3 +121,43 @@ export function parseTarget(v: unknown): TextTarget | null {
 }
 
 export const sameTarget = (a: TextTarget | null, b: TextTarget | null) => JSON.stringify(a) === JSON.stringify(b);
+
+/** A copy of the overlays with the element's time window replaced (null if it doesn't exist). */
+export function setWindow(o: EditOverlays, t: TextTarget, start: number, end: number): EditOverlays | null {
+  const w = { start, end };
+  switch (t.slot) {
+    case "title":
+    case "qualifier":
+    case "cta": {
+      const x = o[t.slot];
+      return x ? { ...o, [t.slot]: { ...x, ...w } } : null;
+    }
+    case "sticker":
+      if (!o.stickers[t.index]) return null;
+      return { ...o, stickers: o.stickers.map((s, i) => (i === t.index ? { ...s, ...w } : s)) };
+    case "card":
+      if (!o.cards[t.index]) return null;
+      return { ...o, cards: o.cards.map((c, i) => (i === t.index ? { ...c, ...w } : c)) };
+    case "rung":
+      if (!o.rungs[t.index]) return null;
+      return { ...o, rungs: o.rungs.map((r, i) => (i === t.index ? { ...r, ...w } : r)) };
+  }
+}
+
+/**
+ * Other elements sharing this one's spot while it's on screen — stickers with
+ * stickers, cards with cards, the qualifier with the CTA (unless one of them
+ * was moved by hand to its own spot).
+ */
+export function slotClashes(o: EditOverlays, t: TextTarget, start: number, end: number): { label: string; start: number; end: number }[] {
+  const overlaps = (x: { start: number; end: number }) => x.start < end && x.end > start;
+  const out: { label: string; start: number; end: number }[] = [];
+  if (t.slot === "sticker") o.stickers.forEach((s, i) => i !== t.index && overlaps(s) && out.push({ label: `Sticker ${i + 1}`, ...s }));
+  if (t.slot === "card") o.cards.forEach((c, i) => i !== t.index && overlaps(c) && out.push({ label: `Card ${i + 1}`, ...c }));
+  const q = o.layout?.qualifier;
+  const c = o.layout?.cta;
+  const sameSpot = JSON.stringify(q) === JSON.stringify(c);
+  if (sameSpot && t.slot === "qualifier" && o.cta && overlaps(o.cta)) out.push({ label: "The CTA", ...o.cta });
+  if (sameSpot && t.slot === "cta" && o.qualifier && overlaps(o.qualifier)) out.push({ label: "The qualifier", ...o.qualifier });
+  return out;
+}

@@ -1,11 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import type { EditLayout, EditProps, EditStyle, MovableSlot } from "@/remotion/types";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
-import { sameTarget, setText, textLimit, type TextTarget } from "@/lib/creative-studio/edit-text";
+import { sameTarget, setText, setWindow, slotClashes, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send } from "@/components/creative-studio/client";
@@ -19,6 +19,12 @@ const EditPreview = dynamic(() => import("@/components/creative-studio/edit-prev
 type Edit = ProjectDetail["edits"][number];
 
 const clock = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
+
+/** "2.4", "0:02.4" or "1:05" → seconds (NaN if unreadable). */
+function parseClock(v: string): number {
+  const m = v.trim().match(/^(?:(\d+):)?(\d+(?:\.\d+)?)$/);
+  return m ? Number(m[1] ?? 0) * 60 + Number(m[2]) : NaN;
+}
 
 // Signed URLs are re-issued on every refresh; keep the first one per file so
 // the preview doesn't reload its video each time the project refetches.
@@ -241,13 +247,44 @@ export function EditCard({
     options: string[] | null;
     aboutYours: string;
     loading: boolean;
+    /** When it shows — the whole video, or a From/To typed (or taken from the playhead). */
+    timing: { mode: "whole" | "custom"; start: string; end: string };
   } | null>(null);
+  const playhead = useRef<() => number>(() => 0);
+  const onPlayer = useCallback((now: () => number) => {
+    playhead.current = now;
+  }, []);
 
-  function openEditor(target: TextTarget, text: string, t: number) {
+  function openEditor(target: TextTarget, text: string, start: number, end: number) {
     setMoving(null);
     setView("preview");
-    setEditing({ target, text, preview: null, options: null, aboutYours: "", loading: false });
-    still(Math.min(t + 0.6, latest?.durationS ?? t));
+    const D = latest?.durationS ?? end;
+    const whole = start <= 0.05 && end >= D - 0.05;
+    setEditing({
+      target,
+      text,
+      preview: null,
+      options: null,
+      aboutYours: "",
+      loading: false,
+      timing: { mode: whole ? "whole" : "custom", start: clock(start), end: clock(end) },
+    });
+    still(Math.min(start + 0.6, D));
+  }
+  async function saveTiming() {
+    if (!editing || !draftWindow) return;
+    setBusy({ label: "Saving when it shows…" });
+    const r = await send(
+      api(`${p.id}/edit/timing`),
+      "POST",
+      editing.timing.mode === "whole" ? { target: editing.target, whole: true } : { target: editing.target, start: draftWindow.start, end: draftWindow.end }
+    );
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
+  function setTiming(patch: Partial<{ mode: "whole" | "custom"; start: string; end: string }>) {
+    setEditing((e) => (e ? { ...e, timing: { ...e.timing, ...patch } } : e));
   }
   async function getVersions() {
     if (!editing?.text.trim()) return;
@@ -279,9 +316,25 @@ export function EditCard({
   }
 
   const withLayout = props && moving ? { ...props, overlays: { ...props.overlays, layout: moving.layout } } : props;
+  const D = latest?.durationS ?? 0;
+  // The draft window: whole video, or the typed From/To when it's readable and at least 0.5 s.
+  const draftWindow = (() => {
+    if (!editing) return null;
+    if (editing.timing.mode === "whole") return { start: 0, end: D };
+    const start = parseClock(editing.timing.start);
+    const end = parseClock(editing.timing.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > D + 0.05 || end - start < 0.5) return null;
+    return { start: Math.round(start * 100) / 100, end: Math.round(Math.min(end, D) * 100) / 100 };
+  })();
   const draftText = editing ? (editing.preview ?? editing.text) : null;
-  const edited = withLayout && editing && draftText !== null ? setText(withLayout.overlays, editing.target, draftText) : null;
-  const previewProps = withLayout && edited ? { ...withLayout, overlays: edited } : withLayout;
+  const withText = withLayout && editing && draftText !== null ? setText(withLayout.overlays, editing.target, draftText) : null;
+  const withTime = withText && editing && draftWindow ? setWindow(withText, editing.target, draftWindow.start, draftWindow.end) : withText;
+  const previewProps = withLayout && withTime ? { ...withLayout, overlays: withTime } : withLayout;
+  const savedWindow = editing && latest?.props ? windowOf(latest.props.overlays, editing.target) : null;
+  const timingChanged = Boolean(
+    draftWindow && savedWindow && (Math.abs(draftWindow.start - savedWindow.start) > 0.01 || Math.abs(draftWindow.end - savedWindow.end) > 0.01)
+  );
+  const clashes = editing && draftWindow && latest?.props ? slotClashes(latest.props.overlays, editing.target, draftWindow.start, draftWindow.end) : [];
   const spot = moving ? moving.layout[moving.slot] : undefined;
   // Vertical Feed-safe band (rulebook): 285–1248 of 1920.
   const BAND_TOP = 285 / 1920;
@@ -417,7 +470,7 @@ export function EditCard({
                   {showRender && latestOutput && !moving ? (
                     <video key={latestOutput} src={latestOutput} controls playsInline preload="metadata" className="h-full w-full object-contain" />
                   ) : previewProps ? (
-                    <EditPreview props={previewProps} seek={seek} interactive={!moving} />
+                    <EditPreview props={previewProps} seek={seek} interactive={!moving} onPlayer={onPlayer} />
                   ) : (
                     <div className="flex h-full items-center justify-center p-4 text-center text-xs text-neutral-500">The preview appears once the layout is ready.</div>
                   )}
@@ -652,7 +705,7 @@ export function EditCard({
             {elements.length > 0 && (
               <div className="mt-4 space-y-1.5">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">
-                  On screen <span className="normal-case tracking-normal text-neutral-600">· ✎ to change the words</span>
+                  On screen <span className="normal-case tracking-normal text-neutral-600">· ✎ to change the words or when it shows</span>
                 </p>
                 {elements.map((el, i) => {
                   const open = Boolean(editing && el.target && sameTarget(editing.target, el.target));
@@ -674,10 +727,10 @@ export function EditCard({
                         {el.target && !rendering && (
                           <button
                             type="button"
-                            onClick={() => (open ? setEditing(null) : openEditor(el.target!, el.text, el.start))}
+                            onClick={() => (open ? setEditing(null) : openEditor(el.target!, el.text, el.start, el.end))}
                             className={`mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm ${open ? "bg-cyan-500/20 text-white" : "text-neutral-500 hover:bg-white/10 hover:text-white"}`}
                             aria-label={`Change the ${el.label.toLowerCase()} text`}
-                            title="Change the words"
+                            title="Change the words or when it shows"
                           >
                             ✎
                           </button>
@@ -771,6 +824,72 @@ export function EditCard({
                               <p className="text-[10px] text-neutral-500">Tap a version to see it on the video, then Use the one you want.</p>
                             </div>
                           )}
+
+                          {/* When it shows */}
+                          <div className="space-y-2 border-t border-white/5 pt-2.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500">When it shows</span>
+                              <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px] font-semibold">
+                                {(["whole", "custom"] as const).map((m) => (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => setTiming({ mode: m })}
+                                    className={`rounded-full px-3 py-1 ${editing.timing.mode === m ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                                  >
+                                    {m === "whole" ? "Whole video" : "Custom"}
+                                  </button>
+                                ))}
+                              </div>
+                              {draftWindow && (
+                                <span className="text-[10px] text-neutral-500" style={NUM_FONT}>
+                                  {clock(draftWindow.start)}–{clock(draftWindow.end)} · {(draftWindow.end - draftWindow.start).toFixed(1)}s
+                                </span>
+                              )}
+                            </div>
+                            {editing.timing.mode === "custom" && (
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-neutral-400">
+                                {(["start", "end"] as const).map((k) => (
+                                  <label key={k} className="flex items-center gap-1.5">
+                                    {k === "start" ? "From" : "To"}
+                                    <input
+                                      value={editing.timing[k]}
+                                      onChange={(e) => setTiming({ [k]: e.target.value })}
+                                      className="w-[68px] rounded-md border border-white/10 bg-black/30 px-2 py-1 text-center text-xs text-white focus:border-cyan-400/50 focus:outline-none"
+                                      style={NUM_FONT}
+                                      aria-label={k === "start" ? "Starts at" : "Ends at"}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setTiming({ [k]: clock(Math.min(D, Math.max(0, playhead.current()))) })}
+                                      className="rounded-md border border-white/10 px-1.5 py-1 text-[10px] font-bold text-neutral-300 hover:bg-white/10 hover:text-white"
+                                      title="Use where the video is paused"
+                                    >
+                                      ⟵ now
+                                    </button>
+                                  </label>
+                                ))}
+                                <span className="text-[10px] text-neutral-600">Pause the video where it should start or end, then ⟵ now.</span>
+                              </div>
+                            )}
+                            {editing.timing.mode === "custom" && !draftWindow && (
+                              <p className="text-[11px] text-rose-300">Use times like 0:02.5 or 2.5, with the end at least half a second after the start (the video is {clock(D)}).</p>
+                            )}
+                            {clashes.length > 0 && (
+                              <p className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-100">
+                                {clashes.map((c) => `${c.label} (${clock(c.start)}–${clock(c.end)})`).join(", ")} {clashes.length > 1 ? "show" : "shows"} in the same spot
+                                then, so they&apos;ll stack. Move one with ✥ Move things or shorten this. It&apos;ll still save what you chose.
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => void saveTiming()}
+                              disabled={!draftWindow || !timingChanged || Boolean(busy)}
+                              className="rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                            >
+                              Save timing
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>

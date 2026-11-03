@@ -45,7 +45,7 @@ swaps: caption-text corrections only. On a first layout return []. On a revision
 
 Where things sit on screen is set by the user tapping on the preview (the "layout" field you may see in the current layout; you can't change it). If a note only asks to move something, keep the layout as it is and say in notes to use Move on the preview.
 
-Revisions: you get the current layout and the user's note. Change only what the note asks for; return everything else exactly as it was. If the note asks for something the current style has no slot for (zooms, captions off, a sticker in a ladder, a title in POV…), do it anyway with the slot it needs — the portal then switches the edit to the custom composition, which renders every slot.
+Revisions: you get the current layout and the user's note. Change only what the note asks for; return everything else exactly as it was — including the times. Times the user set by hand (a sticker or the qualifier on for the whole video, overlapping on purpose) are deliberate: keep them unless the note is about timing. If the note asks for something the current style has no slot for (zooms, captions off, a sticker in a ladder, a title in POV…), do it anyway with the slot it needs — the portal then switches the edit to the custom composition, which renders every slot.
 `;
 
 const SYSTEM = `${EDITING_RULES}\n${EDIT_ADDENDUM}`;
@@ -227,10 +227,14 @@ function restatements(o: EditOverlays, words: CaptionWord[], style: EditStyle): 
   return out;
 }
 
-/** Sequence items in one slot: sorted, never overlapping, none shorter than `min`. */
-function sequence<T extends { start: number; end: number }>(items: T[], min: number): T[] {
+/**
+ * Sequence items in one slot: sorted, never overlapping, none shorter than
+ * `min`. With keep=true (revisions) times are left as they are, so a
+ * "whole video" the user set by hand survives a later written change.
+ */
+function sequence<T extends { start: number; end: number }>(items: T[], min: number, keep = false): T[] {
   const sorted = [...items].sort((a, b) => a.start - b.start);
-  for (let i = 0; i < sorted.length - 1; i++) {
+  for (let i = 0; i < sorted.length - 1 && !keep; i++) {
     if (sorted[i + 1].start < sorted[i].end + 0.1) sorted[i] = { ...sorted[i], end: sorted[i + 1].start - 0.1 };
   }
   return sorted.filter((x) => x.end - x.start >= min);
@@ -238,7 +242,7 @@ function sequence<T extends { start: number; end: number }>(items: T[], min: num
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: number, positions: FramePosition[]): EditOverlays {
+export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: number, positions: FramePosition[], keepTimes = false): EditOverlays {
   const D = durationS;
   const clampT = (t: number) => r2(Math.min(D, Math.max(0, Number.isFinite(t) ? t : 0)));
   const timed = (x: TimedText | null | undefined, max = 80, min = 1): TimedText | null => {
@@ -251,9 +255,9 @@ export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: nu
   if (style === "solo") return { ...empty, title: timed(raw.title, 48) };
   if (style === "pov") {
     const stickers = (raw.stickers ?? []).map((s) => timed(s, 90, 1.5)).filter((s): s is TimedText => Boolean(s));
-    return { ...empty, stickers: sequence(stickers, 1.5).slice(0, 6) };
+    return { ...empty, stickers: sequence(stickers, 1.5, keepTimes).slice(0, 6) };
   }
-  if (style === "vsl") return { ...empty, cards: vslCards(raw, timed) };
+  if (style === "vsl") return { ...empty, cards: vslCards(raw, timed, keepTimes) };
 
   const order: Record<string, number> = { LEFT: 0, CENTER: 1, RIGHT: 2 };
   const allowed = new Set(positions.length ? positions.map((p) => p.position) : ["LEFT", "CENTER", "RIGHT"]);
@@ -270,7 +274,7 @@ export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: nu
   // The qualifier and the CTA share one slot: sequence them.
   const qualifier = timed(raw.qualifier, 70);
   let cta = timed(raw.cta, 60);
-  if (qualifier && cta && cta.start < qualifier.end + 0.1) {
+  if (qualifier && cta && cta.start < qualifier.end + 0.1 && !keepTimes) {
     cta = cta.end - (qualifier.end + 0.1) >= 1 ? { ...cta, start: r2(qualifier.end + 0.1) } : null;
   }
 
@@ -291,21 +295,25 @@ export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: nu
     qualifier,
     cta,
     rungs: positions.length >= 2 ? rungs : [],
-    stickers: sequence(stickers, 1.5).slice(0, 8),
-    cards: vslCards(raw, timed),
+    stickers: sequence(stickers, 1.5, keepTimes).slice(0, 8),
+    cards: vslCards(raw, timed, keepTimes),
     captions: raw.captions !== false,
     zooms,
   };
 }
 
-function vslCards(raw: RawLayout, timed: (x: TimedText | null | undefined, max?: number, min?: number) => TimedText | null): VslCard[] {
+function vslCards(
+  raw: RawLayout,
+  timed: (x: TimedText | null | undefined, max?: number, min?: number) => TimedText | null,
+  keepTimes = false
+): VslCard[] {
   const kinds = ["point", "stat", "qualifier", "cta"];
   const cards: VslCard[] = [];
   for (const c of raw.cards ?? []) {
     const t = timed(c, 90, 1.5);
     if (t && kinds.includes(c.kind)) cards.push({ ...t, kind: c.kind, sub: c.sub?.trim() ? c.sub.trim().slice(0, 90) : null });
   }
-  return sequence(cards, 1.5).slice(0, 12);
+  return sequence(cards, 1.5, keepTimes).slice(0, 12);
 }
 
 const SLOTS: Record<EditStyle, (keyof EditOverlays)[]> = {
@@ -349,7 +357,7 @@ async function layout(ctx: EditContext, prompt: string, revision: boolean): Prom
   const enforce = !revision && ctx.style !== "custom";
   let raw = await callClaude(prompt);
   let style: EditStyle = revision && outsideStyle(ctx.style, raw) ? "custom" : ctx.style;
-  let overlays = sanitizeOverlays(style, raw, ctx.durationS, ctx.positions);
+  let overlays = sanitizeOverlays(style, raw, ctx.durationS, ctx.positions, revision);
   let problems = restatements(overlays, ctx.words, style);
   if (problems.length && enforce) {
     raw = await callClaude(`${prompt}\n\nYour previous layout broke the no-restating rule:\n- ${problems.join("\n- ")}\nReturn the complete layout again with those fixed.`);

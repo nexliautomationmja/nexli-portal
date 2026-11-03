@@ -14,15 +14,22 @@ export default function EditPreview({
   props,
   seek,
   interactive = true,
+  onPlayer,
 }: {
   props: EditProps;
   /** Jump to t seconds (n changes on every request); play unless `still`. */
   seek: { t: number; n: number; still?: boolean } | null;
   /** Off while placing things: no controls, no click-to-play. */
   interactive?: boolean;
+  /** Hands the parent a way to read the playhead (seconds) when it needs it. */
+  onPlayer?: (now: () => number) => void;
 }) {
   const ref = useRef<PlayerRef>(null);
   const vertical = props.format !== "vsl_16x9";
+
+  useEffect(() => {
+    onPlayer?.(() => (ref.current?.getCurrentFrame() ?? 0) / FPS);
+  }, [onPlayer]);
 
   useEffect(() => {
     if (!seek || !ref.current) return;
