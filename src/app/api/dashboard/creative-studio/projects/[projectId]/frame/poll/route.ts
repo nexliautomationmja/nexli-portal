@@ -7,7 +7,7 @@ import { creativeAssets } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { projectDetail } from "@/lib/creative-studio/service";
 import { writeStorage } from "@/lib/creative-studio/frames";
-import { checkFrameTask, ManusError } from "@/lib/creative-studio/manus";
+import { AUTO_REPLY, checkFrameTask, ManusError, replyToTask } from "@/lib/creative-studio/manus";
 
 export const maxDuration = 90;
 
@@ -30,6 +30,30 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
     try {
       const state = await checkFrameTask(task.providerTaskId);
       if (state.state === "running") continue;
+      if (state.state === "waiting") {
+        const meta = (task.metadata ?? {}) as Record<string, unknown>;
+        const autoReplies = typeof meta.autoReplies === "number" ? meta.autoReplies : 0;
+        // First question: answer it ourselves ("use your best judgment"). Never auto-approve actions.
+        if (state.kind === "question" && autoReplies < 1) {
+          await replyToTask(task.providerTaskId, AUTO_REPLY);
+          await db
+            .update(creativeAssets)
+            .set({ metadata: { ...meta, autoReplies: autoReplies + 1, lastQuestion: state.prompt } })
+            .where(eq(creativeAssets.id, task.id));
+          continue;
+        }
+        await db
+          .update(creativeAssets)
+          .set({
+            status: "waiting",
+            metadata: {
+              ...meta,
+              waiting: { kind: state.kind, prompt: state.prompt, options: state.options, eventId: state.eventId, eventType: state.eventType },
+            },
+          })
+          .where(eq(creativeAssets.id, task.id));
+        continue;
+      }
       if (state.state === "failed") {
         await db.update(creativeAssets).set({ status: "failed", error: state.error.slice(0, 500) }).where(eq(creativeAssets.id, task.id));
         continue;

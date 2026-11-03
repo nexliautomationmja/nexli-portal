@@ -59,7 +59,8 @@ export function framePrompt(req: FrameRequest): string {
     `Format: ${size}. ${req.aspect === "9:16" ? "Framed for a vertical Facebook/Instagram ad, with room above her head." : "Framed for a landscape video, with her centred."}`,
     "She faces the camera with her mouth relaxed and closed, in a natural pose she can start talking from. Realistic skin, hair and fabric, natural light, shallow depth of field.",
     "No text, captions, logos or watermarks anywhere in the image.",
-    `Save each image as a separate PNG file and attach all ${req.count} files in your final message. Do not ask me any questions; make sensible choices and finish.`,
+    `Save each image as a separate PNG file and attach all ${req.count} files in your final message.`,
+    "This request comes from an automated tool: nobody is available to answer questions or approve steps. Never stop to ask — make sensible choices yourself and finish the task.",
   ].join("\n\n");
 }
 
@@ -83,52 +84,50 @@ export async function startFrameTask(req: FrameRequest): Promise<{ taskId: strin
   return { taskId: res.task_id, taskUrl: res.task_url ?? null };
 }
 
-/** All values under `key` anywhere in the object. */
-function collect(obj: unknown, key: string, out: unknown[] = [], depth = 0): unknown[] {
-  if (!obj || typeof obj !== "object" || depth > 8) return out;
-  if (Array.isArray(obj)) {
-    for (const v of obj) collect(v, key, out, depth + 1);
-    return out;
-  }
-  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-    if (k === key) out.push(v);
-    collect(v, key, out, depth + 1);
-  }
-  return out;
+interface ManusMessage {
+  id?: string;
+  type?: string;
+  status_update?: {
+    agent_status?: string;
+    status_detail?: {
+      waiting_for_event_id?: string;
+      waiting_for_event_type?: string;
+      waiting_description?: string;
+      confirm_input_schema?: unknown;
+    };
+    brief?: string;
+    description?: string;
+  };
+  assistant_message?: {
+    content?: string;
+    attachments?: { type?: string; filename?: string; url?: string; content_type?: string; file_uid?: string }[];
+    question_expectation?: { options?: string[] };
+  };
+  error_message?: { message?: string; content?: string };
 }
 
 export type FrameTaskState =
   | { state: "running" }
   | { state: "done"; images: { url: string; filename: string | null }[] }
-  | { state: "failed"; error: string };
+  | { state: "failed"; error: string }
+  | {
+      state: "waiting";
+      /** question → answer with sendMessage; confirm → an action Manus wants approved. */
+      kind: "question" | "confirm";
+      eventId: string | null;
+      eventType: string | null;
+      /** What Manus asked or wants to do, in its words. */
+      prompt: string;
+      options: string[];
+    };
 
-export async function checkFrameTask(taskId: string): Promise<FrameTaskState> {
-  const q = new URLSearchParams({ task_id: taskId, order: "desc", limit: "100" });
-  const messages = await manus<Record<string, unknown>>(`task.listMessages?${q}`, { method: "GET" });
+const QUESTION_TYPES = new Set(["messageAskUser", "cascadeAskUser"]);
 
-  // Newest first: the first agent_status we see is the latest.
-  const statuses = collect(messages, "agent_status").filter((s): s is string => typeof s === "string");
-  const latest = statuses[0];
-  if (latest === "error") {
-    const err = collect(messages, "error_message").find((e) => typeof e === "string") as string | undefined;
-    return { state: "failed", error: err || "Manus stopped with an error" };
-  }
-  if (latest === "waiting") {
-    return { state: "failed", error: "Manus stopped to ask a question. Try a more specific shot description." };
-  }
-  if (latest !== "stopped") return { state: "running" };
-
-  const detail = await manus<{ has_running_background_jobs?: boolean; task?: { has_running_background_jobs?: boolean } }>(
-    `task.detail?${new URLSearchParams({ task_id: taskId })}`,
-    { method: "GET" }
-  ).catch(() => null);
-  if (detail?.has_running_background_jobs || detail?.task?.has_running_background_jobs) return { state: "running" };
-
+function imagesFrom(messages: ManusMessage[]): { url: string; filename: string | null }[] {
   const images: { url: string; filename: string | null }[] = [];
   const seen = new Set<string>();
-  for (const list of collect(messages, "attachments")) {
-    if (!Array.isArray(list)) continue;
-    for (const a of list as Record<string, unknown>[]) {
+  for (const m of messages) {
+    for (const a of m.assistant_message?.attachments ?? []) {
       const url = typeof a.url === "string" ? a.url : null;
       const type = String(a.type ?? a.content_type ?? "");
       const name = typeof a.filename === "string" ? a.filename : null;
@@ -140,6 +139,77 @@ export async function checkFrameTask(taskId: string): Promise<FrameTaskState> {
       }
     }
   }
-  if (images.length === 0) return { state: "failed", error: "Manus finished without returning an image. Try again." };
+  return images;
+}
+
+export async function checkFrameTask(taskId: string): Promise<FrameTaskState> {
+  const q = new URLSearchParams({ task_id: taskId, order: "desc", limit: "100" });
+  const res = await manus<{ messages?: ManusMessage[] }>(`task.listMessages?${q}`, { method: "GET" });
+  const messages = res.messages ?? [];
+
+  // Newest first: the first status_update is the current state.
+  const status = messages.find((m) => m.type === "status_update" && m.status_update?.agent_status)?.status_update;
+  const latest = status?.agent_status;
+
+  if (latest === "error") {
+    const err = messages.find((m) => m.type === "error_message")?.error_message;
+    return { state: "failed", error: err?.message || err?.content || status?.description || "Manus stopped with an error" };
+  }
+
+  if (latest === "waiting") {
+    const d = status?.status_detail ?? {};
+    const lastAssistant = messages.find((m) => m.type === "assistant_message")?.assistant_message;
+    const type = d.waiting_for_event_type ?? null;
+    const isQuestion = !type || QUESTION_TYPES.has(type);
+    const prompt = (isQuestion ? lastAssistant?.content : d.waiting_description) || d.waiting_description || status?.description || lastAssistant?.content || "Manus needs input to continue.";
+    console.info(`[creative-studio] Manus task ${taskId} waiting (${type ?? "unknown"}): ${String(prompt).slice(0, 300)}`);
+    return {
+      state: "waiting",
+      kind: isQuestion ? "question" : "confirm",
+      eventId: d.waiting_for_event_id ?? null,
+      eventType: type,
+      prompt: String(prompt).slice(0, 1500),
+      options: isQuestion ? (lastAssistant?.question_expectation?.options ?? []).slice(0, 6) : [],
+    };
+  }
+
+  if (latest !== "stopped") return { state: "running" };
+
+  const detail = await manus<{ has_running_background_jobs?: boolean; task?: { has_running_background_jobs?: boolean } }>(
+    `task.detail?${new URLSearchParams({ task_id: taskId })}`,
+    { method: "GET" }
+  ).catch(() => null);
+  if (detail?.has_running_background_jobs || detail?.task?.has_running_background_jobs) return { state: "running" };
+
+  const images = imagesFrom(messages);
+  if (images.length === 0) {
+    const said = messages.find((m) => m.type === "assistant_message")?.assistant_message?.content;
+    return { state: "failed", error: said ? `Manus finished without an image: “${said.slice(0, 240)}”` : "Manus finished without returning an image. Try again." };
+  }
   return { state: "done", images };
 }
+
+/** Answer a question Manus asked (messageAskUser / cascadeAskUser). */
+export async function replyToTask(taskId: string, text: string): Promise<void> {
+  await manus("task.sendMessage", {
+    method: "POST",
+    body: JSON.stringify({ task_id: taskId, message: { content: text.slice(0, 4000) } }),
+  });
+}
+
+/** Approve an action Manus is waiting on — only ever called after the user clicks Allow. */
+export async function confirmTaskAction(taskId: string, eventId: string): Promise<boolean> {
+  const res = await manus<{ confirmed?: boolean }>("task.confirmAction", {
+    method: "POST",
+    body: JSON.stringify({ task_id: taskId, event_id: eventId }),
+  });
+  return res.confirmed !== false;
+}
+
+export async function stopTask(taskId: string): Promise<void> {
+  await manus("task.stop", { method: "POST", body: JSON.stringify({ task_id: taskId }) }).catch(() => {});
+}
+
+/** The automatic answer to Manus's first question: decide yourself and deliver. */
+export const AUTO_REPLY =
+  "This request comes from an automated tool, so nobody can answer questions. Please use your best judgment from the shot description and the reference photos, and create the images now. Save each one as a PNG file and attach them all in your final message.";

@@ -115,6 +115,10 @@ export async function projectDetail(project: Project) {
       status: t.status,
       error: t.error,
       shot: ((t.metadata ?? {}) as { shot?: string }).shot ?? "",
+      waiting:
+        t.status === "waiting"
+          ? (((t.metadata ?? {}) as { waiting?: { kind: "question" | "confirm"; prompt: string; options: string[] } }).waiting ?? null)
+          : null,
       startedAt: t.createdAt.toISOString(),
     })),
     finalCuts: finalCuts.map((f) => ({

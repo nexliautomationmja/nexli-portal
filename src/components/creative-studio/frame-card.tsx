@@ -40,6 +40,7 @@ export function FrameCard({
   const polling = useRef(false);
 
   const running = detail.manus.filter((t) => t.status === "running");
+  const waiting = detail.manus.filter((t) => t.status === "waiting" && t.waiting);
   const lastFailed = [...detail.manus].reverse().find((t) => t.status === "failed");
 
   useEffect(() => {
@@ -318,6 +319,80 @@ export function FrameCard({
       {running.length > 0 && (
         <ThinkingCard accent="blue" label="Manus is creating Daniela's frames…" detail={`${running[0].shot} · usually a few minutes. You can leave and come back.`} />
       )}
+
+      {waiting.map((t) => (
+        <ManusQuestion key={t.id} projectId={p.id} task={t} onChange={onChange} onError={onError} />
+      ))}
     </div>
+  );
+}
+
+/** Manus paused: answer its question, or allow / cancel the action it wants to take. */
+function ManusQuestion({
+  projectId,
+  task,
+  onChange,
+  onError,
+}: {
+  projectId: string;
+  task: ProjectDetail["manus"][number];
+  onChange: (d: ProjectDetail) => void;
+  onError: (msg: string) => void;
+}) {
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const w = task.waiting!;
+
+  async function respond(body: Record<string, unknown>) {
+    setBusy(true);
+    const r = await send(api(`${projectId}/frame/reply`), "POST", { taskId: task.id, ...body });
+    setBusy(false);
+    if (r.ok) {
+      onChange(r.data);
+      setAnswer("");
+    } else onError(r.error);
+  }
+
+  return (
+    <AssistantCard accent="amber" icon={SP.sparkles} title={w.kind === "confirm" ? "Manus wants your OK" : "Manus has a question"} right={<Chip tone="amber">Paused</Chip>}>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-neutral-200">{w.prompt}</p>
+      {w.kind === "confirm" ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" onClick={() => respond({ allow: true })} disabled={busy} className={CTA_CLASSES}>
+            Allow
+          </button>
+          <button type="button" onClick={() => respond({ cancel: true })} disabled={busy} className="rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/5">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {w.options.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {w.options.map((o) => (
+                <button key={o} type="button" onClick={() => respond({ answer: o })} disabled={busy} className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/20">
+                  {o}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && answer.trim() && !busy && respond({ answer })}
+              placeholder="Answer Manus…"
+              className="lp-input !rounded-full !px-4"
+            />
+            <button type="button" onClick={() => respond({ answer })} disabled={busy || !answer.trim()} className={`${CTA_CLASSES} shrink-0 !py-2`}>
+              {busy ? "Sending…" : "Send"}
+            </button>
+          </div>
+          <button type="button" onClick={() => respond({ cancel: true })} disabled={busy} className="text-[11px] font-semibold text-neutral-500 hover:text-white">
+            Cancel this Manus task
+          </button>
+        </div>
+      )}
+    </AssistantCard>
   );
 }
