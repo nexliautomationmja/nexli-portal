@@ -100,8 +100,17 @@ export function FinalCutCard({
             <SvgIcon d={SP.upload} size={22} />
           </span>
         )}
-        <span className="text-sm font-semibold text-white">{busy ?? "Drop your edited cut here"}</span>
-        <span className="text-xs text-neutral-500">MP4 or MOV · or click to choose · or attach it in the chat box with a note</span>
+        <span className="text-sm font-semibold text-white">
+          {busy ?? (
+            <>
+              <span className="[@media(hover:none)]:hidden">Drop your edited cut here</span>
+              <span className="[@media(hover:hover)]:hidden">Tap to upload your edited cut</span>
+            </>
+          )}
+        </span>
+        <span className="text-xs text-neutral-500">
+          MP4 or MOV · <span className="[@media(hover:none)]:hidden">or click to choose · </span>or attach it in the chat box with a note
+        </span>
       </button>
       <input ref={input} type="file" accept="video/mp4,video/quicktime" hidden onChange={(e) => upload(e.target.files?.[0])} />
       <p className="mt-3 text-[11px] text-neutral-500">

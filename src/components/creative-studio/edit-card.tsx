@@ -8,7 +8,8 @@ import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/
 import { sameTarget, setText, setWindow, slotClashes, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
-import { api, downloadHref, send, videoFileName } from "@/components/creative-studio/client";
+import { api, send, videoFileName } from "@/components/creative-studio/client";
+import { SaveVideoLink } from "@/components/creative-studio/save-video";
 import { AssistantCard, Chip, SP, SvgIcon, ThinkingCard, UserBubble } from "@/components/creative-studio/canvas";
 
 const EditPreview = dynamic(() => import("@/components/creative-studio/edit-preview"), {
@@ -515,7 +516,7 @@ export function EditCard({
                 className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-cyan-400/50 focus:outline-none"
               />
               <div className="mt-2 flex items-center justify-end gap-3">
-                <span className="text-[10px] text-neutral-500">⌘ Enter</span>
+                <span className="text-[10px] text-neutral-500 [@media(hover:none)]:hidden">⌘ Enter</span>
                 <button
                   type="button"
                   onClick={() => void start("custom", describe.trim())}
@@ -622,7 +623,8 @@ export function EditCard({
               </div>
 
               {moving && (
-                <div className="space-y-3">
+                // Phones: the picker and Done sit above the preview, so they're in reach while you drag.
+                <div className="space-y-3 max-sm:order-first">
                   <p className="text-sm text-neutral-200">
                     Pick what to move, then <b className="text-white">tap or drag</b> on the video where it should sit.
                   </p>
@@ -694,8 +696,8 @@ export function EditCard({
                 )}
 
                 {rendering && (
-                  <div className="flex items-center gap-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-3">
-                    <div className="origin-left scale-[0.62] -my-6 -mr-10">
+                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-3 text-center sm:flex-row sm:gap-4 sm:text-left">
+                    <div className="sm:-my-6 sm:-mr-10 sm:origin-left sm:scale-[0.62] max-sm:scale-75">
                       <ProgressRing percent={latest.progress} />
                     </div>
                     <div className="text-sm">
@@ -735,9 +737,9 @@ export function EditCard({
                     </button>
                   )}
                   {latestOutput && (
-                    <a href={downloadHref(latestOutput, videoFileName(p.title, latest.style, `v${latest.version}`))} download className={CTA_CLASSES}>
+                    <SaveVideoLink url={latestOutput} filename={videoFileName(p.title, latest.style, `v${latest.version}`)} className={CTA_CLASSES}>
                       <SvgIcon d={SP.download} size={15} /> Download
-                    </a>
+                    </SaveVideoLink>
                   )}
                   {!rendering && movable.length > 0 && props && (
                     <button
@@ -768,13 +770,13 @@ export function EditCard({
                 {lastDone && lastDone.id !== latest.id && lastDone.outputUrl && (
                   <p className="text-xs text-neutral-500">
                     Last render: v{lastDone.version} · {STYLE_LABEL[lastDone.style]} ·{" "}
-                    <a
-                      href={downloadHref(lastDone.outputUrl, videoFileName(p.title, lastDone.style, `v${lastDone.version}`))}
-                      download
-                      className="font-semibold text-neutral-300 hover:text-white"
+                    <SaveVideoLink
+                      url={lastDone.outputUrl}
+                      filename={videoFileName(p.title, lastDone.style, `v${lastDone.version}`)}
+                      className="inline-flex min-h-8 items-center font-semibold text-neutral-300 hover:text-white"
                     >
                       Download
-                    </a>
+                    </SaveVideoLink>
                   </p>
                 )}
                 {latest.status === "draft" && (
@@ -801,19 +803,19 @@ export function EditCard({
                           type="button"
                           onClick={() => jump(el.start)}
                           disabled={showRender || Boolean(moving)}
-                          className="flex min-w-0 flex-1 items-baseline gap-3 px-3 py-1.5 text-left hover:bg-white/[0.03]"
+                          className="grid min-w-0 flex-1 grid-cols-[auto_1fr] items-baseline gap-x-2 gap-y-0.5 px-3 py-2 text-left hover:bg-white/[0.03] sm:flex sm:gap-3 sm:py-1.5"
                         >
-                          <span className="w-[86px] shrink-0 text-[10px] font-bold text-cyan-300" style={NUM_FONT}>
+                          <span className="shrink-0 text-[10px] font-bold text-cyan-300 sm:w-[86px]" style={NUM_FONT}>
                             {clock(el.start)}–{clock(el.end)}
                           </span>
-                          <span className="w-[92px] shrink-0 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{el.label}</span>
-                          <span className="min-w-0 flex-1 text-[13px] text-neutral-200">{el.text}</span>
+                          <span className="shrink-0 truncate text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:w-[92px]">{el.label}</span>
+                          <span className="col-span-2 min-w-0 flex-1 break-words text-[13px] text-neutral-200 sm:col-span-1">{el.text}</span>
                         </button>
                         {el.target && !rendering && (
                           <button
                             type="button"
                             onClick={() => (open ? setEditing(null) : openEditor(el.target!, el.text, el.start, el.end))}
-                            className={`mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm ${open ? "bg-cyan-500/20 text-white" : "text-neutral-500 hover:bg-white/10 hover:text-white"}`}
+                            className={`mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm sm:mr-1.5 sm:h-7 sm:w-7 sm:rounded-md ${open ? "bg-cyan-500/20 text-white" : "text-neutral-500 hover:bg-white/10 hover:text-white"}`}
                             aria-label={`Change the ${el.label.toLowerCase()} text`}
                             title="Change the words or when it shows"
                           >
@@ -849,7 +851,7 @@ export function EditCard({
                               type="button"
                               onClick={() => void applyText(editing.text)}
                               disabled={(!editing.text.trim() && !(editing.target.slot === "card" && editing.target.field === "sub")) || Boolean(busy)}
-                              className="rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                              className="min-h-9 rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
                             >
                               Use mine
                             </button>
@@ -857,14 +859,14 @@ export function EditCard({
                               type="button"
                               onClick={() => void getVersions()}
                               disabled={!editing.text.trim() || editing.loading}
-                              className="rounded-full border border-violet-400/40 bg-violet-500/15 px-3.5 py-1.5 text-xs font-bold text-violet-100 hover:bg-violet-500/25 disabled:opacity-40"
+                              className="min-h-9 rounded-full border border-violet-400/40 bg-violet-500/15 px-3.5 py-1.5 text-xs font-bold text-violet-100 hover:bg-violet-500/25 disabled:opacity-40"
                             >
                               ✨ {editing.options ? "New AI versions" : "AI versions of mine"}
                             </button>
                             <button type="button" onClick={() => setEditing(null)} className="px-1 text-xs font-semibold text-neutral-500 hover:text-white">
                               Cancel
                             </button>
-                            <span className="text-[10px] text-neutral-600">Enter = AI versions</span>
+                            <span className="text-[10px] text-neutral-600 [@media(hover:none)]:hidden">Enter = AI versions</span>
                           </div>
 
                           {editing.loading && (
@@ -899,7 +901,7 @@ export function EditCard({
                                       type="button"
                                       onClick={() => void applyText(opt.text)}
                                       disabled={Boolean(busy)}
-                                      className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-white hover:bg-cyan-600 disabled:opacity-40"
+                                      className="min-h-8 shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-white hover:bg-cyan-600 disabled:opacity-40"
                                     >
                                       Use
                                     </button>
@@ -920,7 +922,7 @@ export function EditCard({
                                     key={m}
                                     type="button"
                                     onClick={() => setTiming({ mode: m })}
-                                    className={`rounded-full px-3 py-1 ${editing.timing.mode === m ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                                    className={`min-h-8 rounded-full px-3 py-1 ${editing.timing.mode === m ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
                                   >
                                     {m === "whole" ? "Whole video" : "Custom"}
                                   </button>
@@ -940,14 +942,14 @@ export function EditCard({
                                     <input
                                       value={editing.timing[k]}
                                       onChange={(e) => setTiming({ [k]: e.target.value })}
-                                      className="w-[68px] rounded-md border border-white/10 bg-black/30 px-2 py-1 text-center text-xs text-white focus:border-cyan-400/50 focus:outline-none"
+                                      className="w-[76px] rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-center text-xs text-white focus:border-cyan-400/50 focus:outline-none"
                                       style={NUM_FONT}
                                       aria-label={k === "start" ? "Starts at" : "Ends at"}
                                     />
                                     <button
                                       type="button"
                                       onClick={() => setTiming({ [k]: clock(Math.min(D, Math.max(0, playhead.current()))) })}
-                                      className="rounded-md border border-white/10 px-1.5 py-1 text-[10px] font-bold text-neutral-300 hover:bg-white/10 hover:text-white"
+                                      className="min-h-9 rounded-md border border-white/10 px-2 text-[11px] font-bold text-neutral-300 hover:bg-white/10 hover:text-white"
                                       title="Use where the video is paused"
                                     >
                                       ⟵ now
@@ -970,7 +972,7 @@ export function EditCard({
                               type="button"
                               onClick={() => void saveTiming()}
                               disabled={!draftWindow || !timingChanged || Boolean(busy)}
-                              className="rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                              className="min-h-9 rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
                             >
                               Save timing
                             </button>
@@ -1036,15 +1038,15 @@ export function EditCard({
                       {LOOK_OPTIONS.map((opt) => {
                         const current = captionDraft[opt.key] ?? LOOK_DEFAULT[opt.key];
                         return (
-                          <div key={opt.key} className="flex items-center justify-between gap-2">
+                          <div key={opt.key} className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                             <span className="text-[11px] text-neutral-400">{opt.label}</span>
-                            <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px] font-semibold">
+                            <div className="flex flex-wrap rounded-2xl border border-white/10 bg-white/5 p-0.5 text-[11px] font-semibold sm:rounded-full">
                               {opt.values.map((val) => (
                                 <button
                                   key={String(val.v)}
                                   type="button"
                                   onClick={() => setCaptionDraft({ ...captionDraft, [opt.key]: val.v })}
-                                  className={`rounded-full px-2.5 py-0.5 ${current === val.v ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                                  className={`min-h-8 rounded-full px-3 py-0.5 sm:min-h-0 sm:px-2.5 ${current === val.v ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
                                 >
                                   {val.label}
                                 </button>
@@ -1060,7 +1062,7 @@ export function EditCard({
                         type="button"
                         onClick={() => void saveLook()}
                         disabled={!lookChanged || Boolean(busy)}
-                        className="rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                        className="min-h-9 rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
                       >
                         Save look
                       </button>

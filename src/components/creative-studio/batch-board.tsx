@@ -325,26 +325,30 @@ export function BatchBoard({ batchId }: { batchId: string }) {
               const busy = working[v.id];
               const err = errors[v.id];
               return (
-                <div key={v.id} className="lp-card flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-                  <div className={`relative bg-black ${isAd ? "aspect-[4/5]" : "aspect-video"}`}>
+                // Phones: a compact row (thumbnail left); from sm up: a card.
+                <div key={v.id} className="lp-card flex overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] sm:flex-col">
+                  <div className={`relative w-24 shrink-0 bg-black sm:w-auto ${isAd ? "aspect-[4/5]" : "aspect-video max-sm:aspect-[4/5]"}`}>
                     {v.frameUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
                       <img src={v.frameUrl} alt="" className="h-full w-full object-cover opacity-90" />
                     ) : (
                       <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-[11px] text-neutral-500">
                         <span className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" />
-                        {v.shot ? `Manus: ${v.shot}` : "Waiting for a frame"}
+                        <span className="hidden sm:inline">{v.shot ? `Manus: ${v.shot}` : "Waiting for a frame"}</span>
                       </div>
                     )}
                     <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-[11px] font-black text-white">{v.index + 1}</span>
-                    <span className="absolute right-2 top-2">
+                    <span className="absolute right-2 top-2 hidden sm:block">
                       <Chip tone={st.tone}>{st.label}</Chip>
                     </span>
                   </div>
-                  <div className="flex flex-1 flex-col gap-2 p-3">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2 p-3">
                     <p className="truncate text-sm font-semibold text-white" title={v.title}>
                       {v.title}
                     </p>
+                    <span className="sm:hidden">
+                      <Chip tone={st.tone}>{st.label}</Chip>
+                    </span>
                     <div className="flex gap-0.5" aria-label={`Step ${st.step + 1} of ${STEPS.length}: ${STEPS[st.step]}`}>
                       {STEPS.map((s, i) => (
                         <span key={s} title={s} className={`h-1 flex-1 rounded-full ${i < st.step ? "bg-cyan-400" : i === st.step ? (st.tone === "green" ? "bg-emerald-400" : "bg-cyan-400/50") : "bg-white/10"}`} />
@@ -360,7 +364,7 @@ export function BatchBoard({ batchId }: { batchId: string }) {
                       <p className="line-clamp-3 rounded-lg bg-rose-500/10 px-2 py-1 text-[11px] text-rose-200">{err ?? v.manus?.error}</p>
                     )}
                     <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
-                      <Link href={`/dashboard/creative-studio/${v.id}`} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20">
+                      <Link href={`/dashboard/creative-studio/${v.id}`} className="inline-flex min-h-9 items-center rounded-full bg-white/10 px-3.5 text-xs font-bold text-white hover:bg-white/20">
                         {st.needsYou ?? "Open"} →
                       </Link>
                       {(err || st.tone === "red") && (
@@ -376,7 +380,7 @@ export function BatchBoard({ batchId }: { batchId: string }) {
                               run(v.id, "poll", "Starting the render again…", () => send(api(`${v.id}/edit/render`), "POST"));
                             }
                           }}
-                          className="text-xs font-semibold text-neutral-400 hover:text-white"
+                          className="min-h-9 px-2 text-xs font-semibold text-neutral-400 hover:text-white"
                         >
                           ↻ Retry
                         </button>
@@ -395,15 +399,15 @@ export function BatchBoard({ batchId }: { batchId: string }) {
 
 function Action({ text, button, sub, onClick, disabled }: { text: string; button: string; sub?: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+    <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
       <p className="min-w-0 flex-1 text-sm text-neutral-200">{text}</p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
         {sub && (
           <span className="text-[11px] text-neutral-500" style={NUM_FONT}>
             {sub}
           </span>
         )}
-        <button type="button" onClick={onClick} disabled={disabled} className={`${CTA_CLASSES} disabled:opacity-50`}>
+        <button type="button" onClick={onClick} disabled={disabled} className={`${CTA_CLASSES} w-full disabled:opacity-50 sm:w-auto`}>
           {button}
         </button>
       </div>

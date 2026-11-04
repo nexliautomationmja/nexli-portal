@@ -156,15 +156,20 @@ export function ScriptCard({
                   </p>
                 )}
                 <div className="group rounded-xl px-2 py-2.5 transition-colors hover:bg-white/[0.03]">
-                  <div className="flex gap-3">
-                    <div className="w-14 shrink-0 pt-0.5 text-right" style={NUM_FONT}>
+                  <div className="flex sm:gap-3">
+                    <div className="hidden w-14 shrink-0 pt-0.5 text-right sm:block" style={NUM_FONT}>
                       <p className="text-xs font-bold text-white">#{clip.idx + 1}</p>
                       <p className="text-[10px] text-neutral-500">
                         {clock(start)}–{clock(end)}
                       </p>
                       <p className={`text-[10px] font-semibold ${clip.durationS >= 12 ? "text-rose-300" : "text-neutral-500"}`}>{clip.durationS}s</p>
                     </div>
-                    <div className="min-w-0 flex-1 border-l border-white/10 pl-3">
+                    <div className="min-w-0 flex-1 sm:border-l sm:border-white/10 sm:pl-3">
+                      {/* Phones: the clip's number, time and length on one line, so the line uses the full width. */}
+                      <p className="mb-1 text-[11px] font-bold text-neutral-400 sm:hidden" style={NUM_FONT}>
+                        #{clip.idx + 1} · {clock(start)}–{clock(end)} ·{" "}
+                        <span className={clip.durationS >= 12 ? "text-rose-300" : ""}>{clip.durationS}s</span>
+                      </p>
                       <p className="text-[15px] font-semibold leading-snug text-white">
                         {clip.speaker && <span className="mr-1.5 rounded bg-blue-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-blue-300">{clip.speaker}</span>}
                         {clip.line}

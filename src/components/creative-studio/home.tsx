@@ -11,6 +11,7 @@ import { Composer, type ComposerSubmit } from "@/components/creative-studio/comp
 import { BatchPlanCard, type BatchPlan } from "@/components/creative-studio/batch-plan-card";
 import { META_LIME, MetaChip, MetaLogo } from "@/components/creative-studio/meta";
 import { assignFrames, BATCH_MAX } from "@/lib/creative-studio/batch-shared";
+import { useIsTouch } from "@/lib/use-media";
 
 interface ProjectRow {
   id: string;
@@ -236,7 +237,7 @@ export function StudioHome() {
                   setPrefill(s);
                   setSeed((n) => n + 1);
                 }}
-                className="max-w-[260px] truncate rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-neutral-400 transition-colors hover:border-blue-400/40 hover:text-white"
+                className="max-w-full rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-left text-[11px] text-neutral-400 transition-colors hover:border-blue-400/40 hover:text-white sm:max-w-[260px] sm:truncate sm:rounded-full"
                 title={s}
               >
                 {s}
@@ -321,7 +322,7 @@ function AdCopyFeature() {
   return (
     <Link
       href="/dashboard/creative-studio/ad-copy"
-      className="lp-card group relative mt-12 block overflow-hidden rounded-3xl border border-lime-300/20 bg-gradient-to-br from-lime-400/[0.10] via-[#0b1220] to-emerald-500/[0.06] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-lime-300/50 hover:shadow-2xl hover:shadow-lime-500/15 sm:p-7"
+      className="lp-card group relative mt-8 block overflow-hidden rounded-3xl border border-lime-300/20 bg-gradient-to-br from-lime-400/[0.10] via-[#0b1220] to-emerald-500/[0.06] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-lime-300/50 hover:shadow-2xl hover:shadow-lime-500/15 sm:mt-12 sm:p-7"
       style={{ animationDelay: "0.2s" }}
     >
       <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-64 w-64 rounded-full bg-lime-400/20 blur-3xl" />
@@ -329,16 +330,16 @@ function AdCopyFeature() {
       <div className="relative grid items-center gap-6 sm:grid-cols-[1fr_auto]">
         <div>
           <MetaChip>Meta Ad Copy</MetaChip>
-          <h3 className="mt-4 text-2xl font-bold tracking-tight text-white sm:text-3xl" style={SYNE}>
+          <h3 className="mt-3 text-xl font-bold tracking-tight text-white sm:mt-4 sm:text-3xl" style={SYNE}>
             Drop in your creatives.{" "}
             <span className="bg-gradient-to-r from-lime-200 via-lime-300 to-lime-400 bg-clip-text text-transparent">Get the copy.</span>
           </h3>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-neutral-400">
+          <p className="mt-2 max-w-md text-[13px] leading-relaxed text-neutral-400 sm:text-sm">
             One creative or <b className="text-white">up to 20 at once</b>. I listen to each video (or read each image) and write{" "}
             <b className="text-white">4 primary texts</b> and <b className="text-white">4 headlines</b> for Meta, in your style.
           </p>
           <span
-            className="mt-5 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-[#0a0f1c] shadow-lg shadow-lime-500/30 transition-shadow group-hover:shadow-lime-400/50"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 sm:mt-5 sm:inline-flex sm:w-auto text-sm font-bold text-[#0a0f1c] shadow-lg shadow-lime-500/30 transition-shadow group-hover:shadow-lime-400/50"
             style={{ background: META_LIME }}
           >
             Open Meta Ad Copy <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
@@ -406,24 +407,38 @@ function MiniPost({ tone }: { tone: string }) {
 /**
  * A recent video in its own shape (9:16 ad, 16:9 VSL). Hovering plays a muted
  * preview in place; the video only loads on hover, so the grid stays light.
+ * On a phone there's no hover: tap ▶ to preview in place, tap the card to open.
  */
 function ProjectCard({ p, delay }: { p: ProjectRow; delay: number }) {
+  const touch = useIsTouch();
   const [hover, setHover] = useState(false);
   const [ready, setReady] = useState(false);
   const pill = STATUS_PILL[p.status] ?? STATUS_PILL.draft;
   const vsl = p.format === "vsl_16x9";
+  const aspect = vsl ? "aspect-video" : "aspect-[9/16]";
+  const playIcon = (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor">
+      {hover ? <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /> : <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />}
+    </svg>
+  );
   return (
+    <div className="relative mb-3 break-inside-avoid">
     <Link
       href={`/dashboard/creative-studio/${p.id}`}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => {
-        setHover(false);
-        setReady(false);
-      }}
-      className="lp-card group mb-3 block break-inside-avoid overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.05] hover:shadow-xl hover:shadow-blue-600/10"
+      // No mouse handlers on touch: iOS treats a tap that changes the card as a hover and swallows the click.
+      onMouseEnter={touch ? undefined : () => setHover(true)}
+      onMouseLeave={
+        touch
+          ? undefined
+          : () => {
+              setHover(false);
+              setReady(false);
+            }
+      }
+      className="lp-card group block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.05] hover:shadow-xl hover:shadow-blue-600/10"
       style={{ animationDelay: `${delay}s` }}
     >
-      <div className={`relative bg-black ${vsl ? "aspect-video" : "aspect-[9/16]"}`}>
+      <div className={`relative bg-black ${aspect}`}>
         {p.thumbUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
           <img src={p.thumbUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-90" />
@@ -445,27 +460,24 @@ function ProjectCard({ p, delay }: { p: ProjectRow; delay: number }) {
           />
         )}
         <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/85 to-transparent" />
-        <span className="absolute right-2 top-2">
-          <Chip tone={pill.tone}>{pill.label}</Chip>
-        </span>
-        {p.batchId && (
-          <span className="absolute left-2 top-2">
-            <Chip>Batch</Chip>
+        {/* One wrapping row, so the two chips stack instead of overlapping on narrow cards. */}
+        <div className="absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-1">
+          {p.batchId && <Chip>Batch</Chip>}
+          <span className="ml-auto">
+            <Chip tone={pill.tone}>{pill.label}</Chip>
           </span>
-        )}
-        {p.previewUrl && (
+        </div>
+        {p.previewUrl && !touch && (
           <span
             className={`absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-300 ${
               hover ? "opacity-0" : "opacity-80"
             }`}
             aria-hidden="true"
           >
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
-            </svg>
+            {playIcon}
           </span>
         )}
-        {hover && p.previewUrl && !ready && (
+        {!touch && hover && p.previewUrl && !ready && (
           <span className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-2 border-white/20 border-t-white" aria-hidden="true" />
         )}
         <span className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white/85">
@@ -477,5 +489,22 @@ function ProjectCard({ p, delay }: { p: ProjectRow; delay: number }) {
         <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-neutral-500">{p.direction || "No direction yet"}</p>
       </div>
     </Link>
+    {touch && p.previewUrl && (
+      // Beside the link (not inside it), over the middle of the video.
+      <div className={`pointer-events-none absolute inset-x-px top-px flex items-center justify-center ${aspect}`}>
+        <button
+          type="button"
+          onClick={() => {
+            setHover((h) => !h);
+            setReady(false);
+          }}
+          aria-label={hover ? "Stop the preview" : "Play a preview"}
+          className={`pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/25 backdrop-blur-sm transition-opacity ${hover && ready ? "opacity-40" : "opacity-90"}`}
+        >
+          {hover && !ready ? <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" aria-hidden="true" /> : playIcon}
+        </button>
+      </div>
+    )}
+    </div>
   );
 }

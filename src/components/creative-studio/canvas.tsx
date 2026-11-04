@@ -21,13 +21,18 @@ export const CANVAS_VARS = {
   "--card-border": "rgba(255,255,255,0.1)",
   "--glass-border": "rgba(255,255,255,0.1)",
   "--input-bg": "rgba(255,255,255,0.05)",
+  "--card-bg": "#0b1220",
   colorScheme: "dark",
 } as React.CSSProperties;
 
 export function StudioCanvas({ children }: { children: React.ReactNode }) {
   return (
     // overflow-clip (not hidden) so the sticky composer still sticks to the viewport.
-    <div className="relative isolate overflow-clip rounded-3xl bg-[#020617] text-white min-h-[calc(100dvh-3rem)] border border-white/5" style={CANVAS_VARS}>
+    // Edge to edge on phones (no double padding inside the dashboard), framed from sm up.
+    <div
+      className="relative isolate -mx-4 min-h-[calc(100dvh-5.75rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-clip border-y border-white/5 bg-[#020617] text-white sm:mx-0 sm:min-h-[calc(100dvh-3rem)] sm:rounded-3xl sm:border md:min-h-[calc(100dvh-3rem)]"
+      style={CANVAS_VARS}
+    >
       <LaunchPadStyles />
       <style>{`
         @keyframes cs-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }
@@ -159,7 +164,8 @@ export const SP = {
 function AvatarChip({ accent, icon }: { accent: Accent; icon: React.ReactNode }) {
   const a = ACCENT[accent];
   return (
-    <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${a.chip}`} style={{ filter: a.chipGlow }}>
+    // Hidden on phones (the card's title carries a small icon instead) to give the card its full width.
+    <div className={`mt-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:flex ${a.chip}`} style={{ filter: a.chipGlow }}>
       <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={a.icon}>
         {icon}
       </svg>
@@ -196,10 +202,15 @@ export function AssistantCard({
   return (
     <div id={id} className="lp-card flex gap-3 scroll-mt-24" style={{ animationDelay: `${delay}s` }}>
       <AvatarChip accent={accent} icon={icon} />
-      <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-5 backdrop-blur-sm">
+      <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur-sm sm:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[15px] font-bold text-white" style={SYNE}>
-            {title}
+          <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-bold text-white" style={SYNE}>
+            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg sm:hidden ${ACCENT[accent].chip}`} aria-hidden="true">
+              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" className={ACCENT[accent].icon}>
+                {icon}
+              </svg>
+            </span>
+            <span className="min-w-0">{title}</span>
           </h2>
           {right}
         </div>
@@ -221,7 +232,7 @@ export function UserBubble({
 }) {
   return (
     <div className="lp-card flex justify-end">
-      <div className="max-w-[88%] space-y-2 rounded-2xl rounded-br-md border border-blue-400/25 bg-gradient-to-br from-blue-600/25 to-cyan-500/15 px-4 py-3">
+      <div className="max-w-[92%] min-w-0 space-y-2 break-words rounded-2xl rounded-br-md border border-blue-400/25 bg-gradient-to-br from-blue-600/25 to-cyan-500/15 px-4 py-3 sm:max-w-[88%]">
         {images && images.filter(Boolean).length > 0 && (
           <div className="flex flex-wrap justify-end gap-2">
             {images.filter(Boolean).map((src) => (
@@ -248,14 +259,14 @@ export function ThinkingCard({ accent = "violet", label, detail }: { accent?: Ac
   return (
     <div className="lp-card flex gap-3">
       <AvatarChip accent={accent} icon={SP.sparkles} />
-      <div className="flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5">
-        <div className="flex items-center gap-3">
+      <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5">
+        <div className="flex min-w-0 items-center gap-3">
           <span className="flex gap-1" aria-hidden="true">
             {[0, 1, 2].map((i) => (
               <span key={i} className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-blue-400 to-cyan-300" style={{ animation: `cs-dot 1.2s ${i * 0.15}s infinite ease-in-out` }} />
             ))}
           </span>
-          <span className="text-sm font-semibold text-white">{label}</span>
+          <span className="min-w-0 text-sm font-semibold text-white">{label}</span>
           <span className="ml-auto text-xs tabular-nums text-neutral-500">{Math.round((now - started) / 1000)}s</span>
         </div>
         {detail && <p className="mt-1.5 text-xs text-neutral-400">{detail}</p>}
@@ -288,7 +299,7 @@ export function ErrorStrip({ children, onClose }: { children: React.ReactNode; o
     <div className="lp-card flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
       <span className="flex-1">{children}</span>
       {onClose && (
-        <button type="button" onClick={onClose} className="text-rose-300 hover:text-white" aria-label="Dismiss">
+        <button type="button" onClick={onClose} className="-m-2 flex h-10 w-10 shrink-0 items-center justify-center text-rose-300 hover:text-white" aria-label="Dismiss">
           <SvgIcon d={SP.x} size={16} />
         </button>
       )}
@@ -308,7 +319,7 @@ export function ErrorStrip({ children, onClose }: { children: React.ReactNode; o
  * it's on screen the button sits just above it.
  */
 export function ScrollJump() {
-  const [state, setState] = useState<{ dir: "down" | "up"; left: number; bottom: number } | null>(null);
+  const [state, setState] = useState<{ dir: "down" | "up"; left: number; bottom: number; compact: boolean } | null>(null);
 
   useEffect(() => {
     let frame = 0;
@@ -324,7 +335,7 @@ export function ScrollJump() {
         const comp = document.getElementById("studio-composer")?.getBoundingClientRect();
         const left = col ? col.left + col.width / 2 : window.innerWidth / 2;
         const bottom = comp && comp.top < vh ? Math.max(24, vh - comp.top + 12) : 24;
-        setState({ dir, left: Math.round(left), bottom: Math.round(bottom) });
+        setState({ dir, left: Math.round(left), bottom: Math.round(bottom), compact: window.innerWidth < 640 });
       });
     };
     measure();
@@ -343,10 +354,25 @@ export function ScrollJump() {
 
   if (!state) return null;
   const down = state.dir === "down";
+  const go = () => window.scrollTo({ top: down ? document.documentElement.scrollHeight : 0, behavior: "smooth" });
+  if (state.compact) {
+    // Phones: a small round button at the bottom right, clear of the content and the home indicator.
+    return (
+      <button
+        type="button"
+        onClick={go}
+        aria-label={down ? "Scroll to bottom" : "Back to top"}
+        className="fixed right-3 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 ring-1 ring-blue-300/40"
+        style={{ bottom: `calc(${state.bottom}px + env(safe-area-inset-bottom))` }}
+      >
+        <SvgIcon d={<path d={down ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"} />} size={20} />
+      </button>
+    );
+  }
   return (
     <button
       type="button"
-      onClick={() => window.scrollTo({ top: down ? document.documentElement.scrollHeight : 0, behavior: "smooth" })}
+      onClick={go}
       className="fixed z-40 inline-flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/40 ring-1 ring-blue-300/40 transition hover:bg-blue-500"
       style={{ left: state.left, bottom: state.bottom }}
     >
@@ -397,7 +423,7 @@ export function StudioTabs({ active }: { active: "videos" | "adcopy" }) {
               key={t.id}
               href={t.href}
               aria-current={on ? "page" : undefined}
-              className={`group relative flex items-center gap-2.5 rounded-[18px] px-3 py-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 sm:px-4 sm:py-2.5 ${tabClass}`}
+              className={`group relative flex min-h-11 min-w-0 items-center gap-2 rounded-[18px] px-2.5 py-2 transition-all duration-200 sm:gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 sm:px-4 sm:py-2.5 ${tabClass}`}
               style={
                 on && meta
                   ? { background: META_LIME_FILL, boxShadow: "inset 0 0 0 1px rgba(190,242,100,0.55), 0 10px 28px -10px rgba(163,230,53,0.55)" }
@@ -405,7 +431,7 @@ export function StudioTabs({ active }: { active: "videos" | "adcopy" }) {
               }
             >
               <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors sm:h-9 sm:w-9 sm:rounded-xl ${
                   on
                     ? meta
                       ? "bg-[#0a0f1c] ring-1 ring-lime-300/40"
@@ -417,12 +443,13 @@ export function StudioTabs({ active }: { active: "videos" | "adcopy" }) {
               >
                 {meta ? <MetaLogo className="h-auto w-[19px]" /> : <SvgIcon d={SP.film} size={18} />}
               </span>
-              <span className="min-w-0 text-left">
-                <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-bold leading-tight" style={SYNE}>
-                  {t.label}
+              <span className="min-w-0 flex-1 text-left">
+                <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-sm font-bold leading-tight" style={SYNE}>
+                  <span className="truncate sm:hidden">{meta ? "Ad Copy" : t.label}</span>
+                  <span className="hidden sm:inline">{t.label}</span>
                   {meta && on && <LimeBadge size={14} />}
                   {meta && !on && (
-                    <span className="animate-pulse rounded-full px-1.5 py-px text-[8px] font-black uppercase tracking-wider text-[#0a0f1c] shadow shadow-lime-400/40" style={{ background: META_LIME }}>
+                    <span className="hidden animate-pulse rounded-full px-1.5 py-px text-[8px] font-black uppercase tracking-wider text-[#0a0f1c] shadow shadow-lime-400/40 sm:inline" style={{ background: META_LIME }}>
                       New
                     </span>
                   )}

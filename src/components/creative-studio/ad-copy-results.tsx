@@ -65,7 +65,7 @@ export function AdCopyResults({
         e.stopPropagation();
         void copyText(k, value);
       }}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${copied === k ? "bg-emerald-500/20 text-emerald-200" : "bg-white/10 text-white hover:bg-lime-400 hover:text-[#0a0f1c]"}`}
+      className={`inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold ${copied === k ? "bg-emerald-500/20 text-emerald-200" : "bg-white/10 text-white hover:bg-lime-400 hover:text-[#0a0f1c]"}`}
     >
       {copied === k ? "✓ Copied" : (
         <>
@@ -144,7 +144,7 @@ export function AdCopyResults({
                 onKeyDown={(e) => e.key === "Enter" && setPick({ ...sel, text: i })}
                 className={`cursor-pointer rounded-xl border p-3 transition ${active ? "border-lime-300/60 bg-lime-400/10 shadow-lg shadow-lime-500/10" : "border-white/10 bg-white/[0.03] hover:border-lime-300/30"}`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold text-white">Version {i + 1}</span>
                   <span className="text-[10px] text-neutral-500" style={NUM_FONT}>
                     {wordCount(t)} words · {(t.match(EMOJI) ?? []).length} emojis

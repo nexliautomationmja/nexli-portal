@@ -59,6 +59,8 @@ export function TrimEditor({
   const video = useRef<HTMLVideoElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<"start" | "end" | null>(null);
+  // What tapping a word does (phones have no Alt-click; desktop keeps Alt-click = end).
+  const [wordMode, setWordMode] = useState<"start" | "end" | "cut">("start");
 
   const timing = useMemo(
     () => ((entry?.overrides ?? []) as CutOverride[]).filter((o) => o.action !== "cut" && o.action !== "restore"),
@@ -80,11 +82,13 @@ export function TrimEditor({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // The page scrolls on <html> (body clips overflow-x): hold that still behind the sheet.
+    const root = document.documentElement;
+    const prev = root.style.overflow;
+    root.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      root.style.overflow = prev;
     };
   }, [onClose]);
 
@@ -212,7 +216,7 @@ export function TrimEditor({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+        <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3 sm:px-5 sm:py-4">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-300">
             <SvgIcon d={SP.wand} size={18} />
           </span>
@@ -222,15 +226,15 @@ export function TrimEditor({
             </h2>
             <p className="truncate text-xs text-neutral-400">{clip.line}</p>
           </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white" aria-label="Close">
+          <button type="button" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white" aria-label="Close">
             <SvgIcon d={SP.x} />
           </button>
         </div>
 
-        <div className="cs-scroll grid flex-1 gap-5 overflow-y-auto p-5 md:grid-cols-[minmax(0,260px)_1fr]">
-          {/* Player */}
-          <div className="space-y-3">
-            <div className="mx-auto w-full max-w-[260px] overflow-hidden rounded-2xl border border-white/15 bg-black" style={{ aspectRatio: aspect }}>
+        <div className="cs-scroll grid flex-1 gap-4 overflow-y-auto overscroll-contain p-3 sm:gap-5 sm:p-5 md:grid-cols-[minmax(0,260px)_1fr]">
+          {/* Player — on phones it stays at the top while the timeline and words scroll under it */}
+          <div className="space-y-2 max-md:sticky max-md:top-0 max-md:z-20 max-md:-mx-3 max-md:-mt-3 max-md:bg-[#020617]/95 max-md:px-3 max-md:pb-2 max-md:pt-3 max-md:backdrop-blur-xl sm:space-y-3">
+            <div className="mx-auto w-full max-w-[260px] overflow-hidden rounded-2xl border border-white/15 bg-black max-md:max-h-[32dvh] max-md:w-auto" style={{ aspectRatio: aspect }}>
               {clip.videoUrl && (
                 <video
                   ref={video}
@@ -263,10 +267,10 @@ export function TrimEditor({
                 )}
               </button>
               <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px] font-bold">
-                <button type="button" onClick={() => setPreview(true)} className={`rounded-full px-3 py-1 ${preview ? "bg-emerald-600 text-white" : "text-neutral-400"}`}>
+                <button type="button" onClick={() => setPreview(true)} className={`min-h-8 rounded-full px-3 py-1 ${preview ? "bg-emerald-600 text-white" : "text-neutral-400"}`}>
                   Preview {settings.speed}×
                 </button>
-                <button type="button" onClick={() => setPreview(false)} className={`rounded-full px-3 py-1 ${!preview ? "bg-white/15 text-white" : "text-neutral-400"}`}>
+                <button type="button" onClick={() => setPreview(false)} className={`min-h-8 rounded-full px-3 py-1 ${!preview ? "bg-white/15 text-white" : "text-neutral-400"}`}>
                   Original
                 </button>
               </div>
@@ -281,12 +285,12 @@ export function TrimEditor({
             <div>
               <div className="mb-1.5 flex items-center justify-between text-[11px]" style={NUM_FONT}>
                 <span className="font-bold text-emerald-300">Start {fmt(start)}</span>
-                <span className="text-neutral-500">{touched ? "Exact trim · plays exactly between the handles" : "Auto edges · drag a handle to set your own"}</span>
+                <span className="hidden text-neutral-500 sm:inline">{touched ? "Exact trim · plays exactly between the handles" : "Auto edges · drag a handle to set your own"}</span>
                 <span className="font-bold text-emerald-300">End {fmt(end)}</span>
               </div>
               <div
                 ref={track}
-                className="relative h-24 cursor-pointer select-none overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]"
+                className="relative h-24 cursor-pointer touch-none select-none overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]"
                 onPointerDown={(e) => {
                   if (drag.current) return;
                   const t = timeAt(e.clientX);
@@ -295,7 +299,7 @@ export function TrimEditor({
                 }}
                 onPointerMove={onPointerMove}
                 onPointerUp={() => (drag.current = null)}
-                onPointerLeave={() => (drag.current = null)}
+                onPointerCancel={() => (drag.current = null)}
               >
                 {/* Waveform */}
                 {peaks && (
@@ -340,7 +344,7 @@ export function TrimEditor({
                       if (h === "start") setStartSafe(start + d);
                       else setEndSafe(end + d);
                     }}
-                    className="absolute inset-y-0 z-10 flex w-4 -translate-x-1/2 cursor-ew-resize items-center justify-center outline-none"
+                    className="absolute inset-y-0 z-10 flex w-10 -translate-x-1/2 cursor-ew-resize items-center justify-center outline-none"
                     style={{ left: pct(h === "start" ? start : end) }}
                   >
                     <span className="h-full w-1 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.8)]" />
@@ -349,26 +353,26 @@ export function TrimEditor({
                 ))}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
-                <button type="button" onClick={() => setStartSafe(time)} className="rounded-full bg-white/5 px-3 py-1.5 text-neutral-200 hover:bg-white/10">
+                <button type="button" onClick={() => setStartSafe(time)} className="min-h-9 rounded-full bg-white/5 px-3 text-neutral-200 hover:bg-white/10">
                   Set start here
                 </button>
-                <button type="button" onClick={() => setStartSafe(start - 0.05)} className="rounded-full bg-white/5 px-2 py-1.5 text-neutral-400 hover:bg-white/10" aria-label="Start earlier">
+                <button type="button" onClick={() => setStartSafe(start - 0.05)} className="min-h-9 min-w-9 rounded-full bg-white/5 px-2 text-neutral-400 hover:bg-white/10" aria-label="Start earlier">
                   ◂
                 </button>
-                <button type="button" onClick={() => setStartSafe(start + 0.05)} className="rounded-full bg-white/5 px-2 py-1.5 text-neutral-400 hover:bg-white/10" aria-label="Start later">
+                <button type="button" onClick={() => setStartSafe(start + 0.05)} className="min-h-9 min-w-9 rounded-full bg-white/5 px-2 text-neutral-400 hover:bg-white/10" aria-label="Start later">
                   ▸
                 </button>
                 <span className="mx-1 h-4 w-px bg-white/10" />
-                <button type="button" onClick={() => setEndSafe(time)} className="rounded-full bg-white/5 px-3 py-1.5 text-neutral-200 hover:bg-white/10">
+                <button type="button" onClick={() => setEndSafe(time)} className="min-h-9 rounded-full bg-white/5 px-3 text-neutral-200 hover:bg-white/10">
                   Set end here
                 </button>
-                <button type="button" onClick={() => setEndSafe(end - 0.05)} className="rounded-full bg-white/5 px-2 py-1.5 text-neutral-400 hover:bg-white/10" aria-label="End earlier">
+                <button type="button" onClick={() => setEndSafe(end - 0.05)} className="min-h-9 min-w-9 rounded-full bg-white/5 px-2 text-neutral-400 hover:bg-white/10" aria-label="End earlier">
                   ◂
                 </button>
-                <button type="button" onClick={() => setEndSafe(end + 0.05)} className="rounded-full bg-white/5 px-2 py-1.5 text-neutral-400 hover:bg-white/10" aria-label="End later">
+                <button type="button" onClick={() => setEndSafe(end + 0.05)} className="min-h-9 min-w-9 rounded-full bg-white/5 px-2 text-neutral-400 hover:bg-white/10" aria-label="End later">
                   ▸
                 </button>
-                <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2 py-1.5 text-neutral-300">
+                <label className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-2 text-neutral-300 sm:ml-auto">
                   <input
                     type="checkbox"
                     checked={!keepPauses}
@@ -397,7 +401,7 @@ export function TrimEditor({
                     setKeepPauses(false);
                     setReset(true);
                   }}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-1.5 text-neutral-500 hover:text-white"
+                  className="inline-flex min-h-9 items-center gap-1 rounded-full px-2 text-neutral-500 hover:text-white"
                 >
                   <SvgIcon d={SP.undo} size={12} /> Reset to auto
                 </button>
@@ -405,9 +409,28 @@ export function TrimEditor({
             </div>
 
             <div>
-              <p className="mb-2 text-[11px] text-neutral-400">
-                <b className="text-white">Click a word</b> to start the clip there (skips any gibberish before it) · <b className="text-white">Alt-click</b> to end there · <b className="text-white">✕</b> cuts a single word
-              </p>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-neutral-400">Tap a word to</span>
+                <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px] font-bold">
+                  {(
+                    [
+                      ["start", "Start here"],
+                      ["end", "End here"],
+                      ["cut", "Cut it"],
+                    ] as const
+                  ).map(([m, label]) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setWordMode(m)}
+                      className={`min-h-8 rounded-full px-3 ${wordMode === m ? (m === "cut" ? "bg-rose-500/80 text-white" : "bg-emerald-600 text-white") : "text-neutral-400 hover:text-white"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span className="hidden text-[11px] text-neutral-500 [@media(hover:hover)]:inline">· Alt-click a word to end there · ✕ cuts a single word</span>
+              </div>
               {words.length === 0 ? (
                 <p className="rounded-xl border border-white/10 px-3 py-3 text-xs text-neutral-500">No word timings for this take yet. Use the handles to trim.</p>
               ) : (
@@ -426,11 +449,19 @@ export function TrimEditor({
                         <button
                           type="button"
                           onClick={(e) => {
-                            if (e.altKey) setEndSafe(Math.min(duration, w.end + TAIL));
+                            const mode = e.altKey ? "end" : wordMode;
+                            if (mode === "end") setEndSafe(Math.min(duration, w.end + TAIL));
+                            else if (mode === "cut")
+                              setCut((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(i)) next.delete(i);
+                                else next.add(i);
+                                return next;
+                              });
                             else setStartSafe(Math.max(0, w.start - LEAD));
                             if (video.current) video.current.currentTime = w.start;
                           }}
-                          className={`px-2 py-1 ${out || isCut ? "text-neutral-600 line-through" : "text-neutral-100 hover:text-white"}`}
+                          className={`min-h-8 px-2 py-1 ${out || isCut ? "text-neutral-600 line-through" : "text-neutral-100 hover:text-white"}`}
                           title={`${w.start.toFixed(2)}s · click = start here, Alt-click = end here`}
                         >
                           {w.text}
@@ -448,7 +479,7 @@ export function TrimEditor({
                               return next;
                             })
                           }
-                          className={`border-l border-white/10 px-1.5 py-1 ${isCut ? "bg-rose-500/20 text-rose-200" : "text-neutral-600 opacity-60 hover:text-rose-300 group-hover:opacity-100"}`}
+                          className={`min-h-8 border-l border-white/10 px-2 py-1 ${isCut ? "bg-rose-500/20 text-rose-200" : "text-neutral-400 hover:text-rose-300 group-hover:opacity-100 [@media(hover:hover)]:text-neutral-600 [@media(hover:hover)]:opacity-60"}`}
                           aria-label={isCut ? `Keep "${w.text}"` : `Cut "${w.text}"`}
                           title={isCut ? "Keep this word" : "Cut this word"}
                         >
@@ -464,15 +495,15 @@ export function TrimEditor({
         </div>
 
         {/* Footer */}
-        <div className="flex flex-wrap items-center gap-3 border-t border-white/10 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3 border-t border-white/10 px-4 py-3 sm:px-5 sm:py-4" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
           <p className="text-xs text-neutral-400" style={NUM_FONT}>
             Keeps <b className="text-white">{plan.keptS.toFixed(1)}s</b> of {duration.toFixed(1)}s → <b className="text-emerald-300">{after.toFixed(1)}s</b> at {settings.speed}×
           </p>
-          <div className="ml-auto flex gap-2">
-            <button type="button" onClick={onClose} className="rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/5">
+          <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
+            <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/5 sm:flex-none">
               Cancel
             </button>
-            <button type="button" onClick={apply} disabled={saving} className={CTA_CLASSES}>
+            <button type="button" onClick={apply} disabled={saving} className={`${CTA_CLASSES} flex-1 sm:flex-none`}>
               {saving ? "Applying…" : "Apply trim"}
             </button>
           </div>

@@ -328,22 +328,31 @@ export function StudioThread({ projectId }: { projectId: string }) {
     <StudioCanvas>
       <div id="studio-column" className="mx-auto flex min-h-[calc(100dvh-3rem)] max-w-3xl flex-col px-3 sm:px-6">
         {/* Header */}
-        <header className="sticky top-0 z-20 -mx-3 flex items-center gap-3 border-b border-white/5 bg-[#020617]/80 px-3 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6">
-          <Link href="/dashboard/creative-studio" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label="Back to Creative Studio">
+        {/* Sticks under the fixed phone top bar (md+: to the top of the window). */}
+        <header className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 -mx-3 flex items-center gap-2 border-b border-white/5 bg-[#020617]/85 px-3 py-2.5 backdrop-blur-xl sm:-mx-6 sm:gap-3 sm:px-6 sm:py-3 md:top-0">
+          <Link href="/dashboard/creative-studio" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label="Back to Creative Studio">
             <SvgIcon d={SP.chevronLeft} />
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-bold text-white sm:text-lg" style={SYNE}>
               {p.title}
             </h1>
-            {p.batchId && (
-              <Link href={`/dashboard/creative-studio/batch/${p.batchId}`} className="text-[11px] font-semibold text-cyan-300 hover:text-white">
-                ← Back to batch
-              </Link>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Phones: the status sits under the title so the title keeps its room. */}
+              <span className="sm:hidden">
+                <Chip tone={status.tone}>{status.label}</Chip>
+              </span>
+              {p.batchId && (
+                <Link href={`/dashboard/creative-studio/batch/${p.batchId}`} className="inline-flex min-h-6 items-center text-[11px] font-semibold text-cyan-300 hover:text-white">
+                  ← Back to batch
+                </Link>
+              )}
+            </div>
           </div>
-          <Chip tone={status.tone}>{status.label}</Chip>
-          <button type="button" onClick={remove} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-rose-500/10 hover:text-rose-300" aria-label="Delete video" title="Delete video">
+          <span className="hidden sm:inline-flex">
+            <Chip tone={status.tone}>{status.label}</Chip>
+          </span>
+          <button type="button" onClick={remove} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-rose-500/10 hover:text-rose-300" aria-label="Delete video" title="Delete video">
             <SvgIcon d={SP.trash} size={16} />
           </button>
         </header>
@@ -391,7 +400,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
         <ScrollJump />
         <div
           id="studio-composer"
-          className="sticky bottom-0 z-20 -mx-3 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent px-3 pb-4 pt-6 sm:-mx-6 sm:px-6"
+          className="sticky bottom-0 z-20 -mx-3 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent px-3 pb-4 pt-3 sm:-mx-6 sm:px-6 sm:pt-6"
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
           <Composer

@@ -5,7 +5,8 @@ import type { ProjectDetail } from "@/lib/creative-studio/service";
 import { CREDITS_PER_SECOND } from "@/lib/creative-studio/prompts";
 import { CTA_CLASSES, ConfettiBurst, ProgressRing, SYNE, ShimmerCard } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
-import { api, downloadHref, send, videoFileName } from "@/components/creative-studio/client";
+import { api, send, videoFileName } from "@/components/creative-studio/client";
+import { SaveVideoLink } from "@/components/creative-studio/save-video";
 import { AssistantCard, Chip, SP, SvgIcon } from "@/components/creative-studio/canvas";
 
 type Clip = ProjectDetail["clips"][number];
@@ -234,7 +235,7 @@ function ClipTile({
         <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white" style={NUM_FONT}>
           #{clip.idx + 1} · {clip.durationS}s{clip.version > 1 ? ` · v${clip.version}` : ""}
         </span>
-        <span className="absolute right-2 top-2">
+        <span className="absolute left-2 top-9 sm:left-auto sm:right-2 sm:top-2">
           <Chip tone={pill.tone}>{pill.label}</Chip>
         </span>
       </div>
@@ -243,18 +244,18 @@ function ClipTile({
           {clip.line}
         </p>
         {clip.error && <p className="text-[11px] font-semibold text-rose-300">{clip.error}</p>}
-        <div className="flex flex-wrap gap-3 text-[11px] font-semibold">
+        <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
           {clip.videoUrl && (
-            <a
-              href={downloadHref(clip.videoUrl, videoFileName(title, `clip-${clip.idx + 1}`, `take-${clip.version}`))}
-              download
-              className="inline-flex items-center gap-1 text-cyan-300 hover:text-white"
+            <SaveVideoLink
+              url={clip.videoUrl}
+              filename={videoFileName(title, `clip-${clip.idx + 1}`, `take-${clip.version}`)}
+              className="inline-flex min-h-9 items-center gap-1 rounded-full bg-cyan-500/10 px-3 text-cyan-300 hover:text-white"
             >
               <SvgIcon d={SP.download} size={12} /> Download
-            </a>
+            </SaveVideoLink>
           )}
           {canRedo && ["done", "failed", "blocked"].includes(clip.status) && (
-            <button type="button" onClick={() => setFixing((v) => !v)} className="text-neutral-400 hover:text-white">
+            <button type="button" onClick={() => setFixing((v) => !v)} className="inline-flex min-h-9 items-center rounded-full bg-white/5 px-3 text-neutral-300 hover:text-white">
               Fix this clip
             </button>
           )}
@@ -266,9 +267,9 @@ function ClipTile({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="What's wrong? Leave empty to redo as-is."
-              className="lp-input resize-none !text-xs"
+              className="lp-input resize-none text-xs"
             />
-            <button type="button" onClick={redo} disabled={busy} className="w-full rounded-full bg-blue-600 py-1.5 text-[11px] font-bold text-white hover:bg-blue-500 disabled:opacity-50">
+            <button type="button" onClick={redo} disabled={busy} className="min-h-10 w-full rounded-full bg-blue-600 py-1.5 text-xs font-bold text-white hover:bg-blue-500 disabled:opacity-50">
               {busy ? "Sending…" : note.trim() ? "Fix and redo" : "Redo as-is"}
             </button>
           </div>

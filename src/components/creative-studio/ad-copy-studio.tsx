@@ -330,7 +330,7 @@ export function AdCopyStudio() {
                     <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(6, (doneCount / n) * 100)}%`, background: META_LIME }} />
                   </div>
                 )}
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                   {items.map((it) => {
                     const st = STATUS[it.status];
                     return (
@@ -363,7 +363,7 @@ export function AdCopyStudio() {
                           <button
                             type="button"
                             onClick={() => removeItem(it.key)}
-                            className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-neutral-300 opacity-0 transition group-hover:opacity-100 hover:text-white"
+                            className="touch-show absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-neutral-300 hover:text-white"
                             aria-label={`Remove ${it.file.name}`}
                           >
                             <SvgIcon d={SP.x} size={12} />
@@ -459,7 +459,14 @@ export function AdCopyStudio() {
                     <SvgIcon d={SP.upload} size={26} />
                   </span>
                   <span className="text-base font-bold text-white" style={SYNE}>
-                    {dragging ? "Let go to drop them in" : "Drop your creatives here"}
+                    {dragging ? (
+                      "Let go to drop them in"
+                    ) : (
+                      <>
+                        <span className="[@media(hover:none)]:hidden">Drop your creatives here</span>
+                        <span className="[@media(hover:hover)]:hidden">Tap to add your creatives</span>
+                      </>
+                    )}
                   </span>
                   <span className="flex flex-wrap justify-center gap-2 text-[11px] font-semibold">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-neutral-300">
@@ -470,7 +477,7 @@ export function AdCopyStudio() {
                     </span>
                     <span className="inline-flex items-center rounded-full border border-lime-300/30 bg-lime-400/10 px-3 py-1 text-lime-200">Up to {MAX_CREATIVES} at once</span>
                   </span>
-                  <span className="text-xs text-neutral-500 group-hover:text-neutral-300">or click to choose files</span>
+                  <span className="text-xs text-neutral-500 group-hover:text-neutral-300 [@media(hover:none)]:hidden">or click to choose files</span>
                 </button>
               </div>
             )}
@@ -546,7 +553,7 @@ export function AdCopyStudio() {
                         </span>
                         <span className="shrink-0 text-xs font-semibold text-neutral-500">{isOpen ? "▾" : "▸"} {v ? `${v.primaryTexts.length} + ${v.headlines.length}` : ""}</span>
                       </button>
-                      {isOpen && <div className="border-t border-white/5 p-3">{results(j)}</div>}
+                      {isOpen && <div className="border-t border-white/5 p-2 sm:p-3">{results(j)}</div>}
                     </div>
                   );
                 })}

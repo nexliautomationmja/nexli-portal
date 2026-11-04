@@ -128,7 +128,7 @@ export function BatchPlanCard({
                 aria-label={`Video ${i + 1} title`}
               />
               {n > 2 && (
-                <button type="button" onClick={() => remove(i)} className="text-[11px] font-semibold text-neutral-500 hover:text-rose-300" title="Drop this video">
+                <button type="button" onClick={() => remove(i)} className="min-h-8 shrink-0 rounded-full px-2.5 text-[11px] font-semibold text-neutral-500 hover:bg-white/5 hover:text-rose-300" title="Drop this video">
                   Remove
                 </button>
               )}
@@ -147,7 +147,7 @@ export function BatchPlanCard({
                   key={fi}
                   type="button"
                   onClick={() => setItem(i, { frame: fi })}
-                  className={`relative h-14 w-10 overflow-hidden rounded-md border-2 ${it.frame === fi ? "border-cyan-400" : "border-transparent opacity-60 hover:opacity-100"}`}
+                  className={`relative h-16 w-12 overflow-hidden rounded-md border-2 sm:h-14 sm:w-10 ${it.frame === fi ? "border-cyan-400" : "border-transparent opacity-60 hover:opacity-100"}`}
                   title={`Your frame ${fi + 1}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- local preview */}
@@ -158,7 +158,7 @@ export function BatchPlanCard({
               <button
                 type="button"
                 onClick={() => setItem(i, { frame: null })}
-                className={`flex h-14 items-center rounded-md border-2 px-2.5 text-[11px] font-bold ${it.frame === null ? "border-cyan-400 bg-cyan-500/10 text-white" : "border-white/10 text-neutral-400 hover:text-white"}`}
+                className={`flex h-16 items-center rounded-md border-2 px-2.5 text-[11px] font-bold sm:h-14 ${it.frame === null ? "border-cyan-400 bg-cyan-500/10 text-white" : "border-white/10 text-neutral-400 hover:text-white"}`}
               >
                 ✨ Manus
               </button>
@@ -168,7 +168,7 @@ export function BatchPlanCard({
                 value={it.shot}
                 onChange={(e) => setItem(i, { shot: e.target.value })}
                 placeholder="Describe the shot for Manus, e.g. Daniela in a lounge chair by the window"
-                className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-600 focus:border-cyan-400/50 focus:outline-none"
+                className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-neutral-200 sm:py-1.5 placeholder:text-neutral-600 focus:border-cyan-400/50 focus:outline-none"
                 aria-label={`Video ${i + 1} Manus shot`}
               />
             )}
@@ -181,7 +181,7 @@ export function BatchPlanCard({
           type="button"
           onClick={onCreate}
           disabled={Boolean(busy) || plan.items.some((it) => !it.direction.trim() || (it.frame === null && !it.shot.trim()))}
-          className={`${CTA_CLASSES} disabled:opacity-50`}
+          className={`${CTA_CLASSES} w-full disabled:opacity-50 sm:w-auto`}
         >
           {busy ?? `Create ${n} ${noun}`}
         </button>
@@ -193,7 +193,7 @@ export function BatchPlanCard({
         >
           ↻ Re-plan
         </button>
-        <button type="button" onClick={onCancel} disabled={Boolean(busy)} className="px-2 text-xs font-semibold text-neutral-500 hover:text-white">
+        <button type="button" onClick={onCancel} disabled={Boolean(busy)} className="min-h-10 px-3 text-xs font-semibold text-neutral-500 hover:text-white">
           Cancel
         </button>
         <span className="text-[11px] text-neutral-500">

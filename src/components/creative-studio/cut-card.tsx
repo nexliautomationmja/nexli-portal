@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import { CTA_CLASSES } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
-import { api, downloadHref, send, videoFileName } from "@/components/creative-studio/client";
+import { api, send, videoFileName } from "@/components/creative-studio/client";
+import { SaveVideoLink } from "@/components/creative-studio/save-video";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
 import { TrimEditor } from "@/components/creative-studio/trim-editor";
 import { assembleCut, cutPieces } from "@/components/creative-studio/pipeline";
@@ -109,6 +110,9 @@ export function CutCard({
   function jump(t: number) {
     const v = video.current;
     if (!v) return;
+    // On a phone the video is usually scrolled off-screen: bring it into view first.
+    const r = v.getBoundingClientRect();
+    if (r.bottom < 80 || r.top > window.innerHeight - 80) v.scrollIntoView({ behavior: "smooth", block: "center" });
     v.currentTime = t + 0.01;
     void v.play().catch(() => {});
   }
@@ -174,7 +178,7 @@ export function CutCard({
         {shown?.url && (
           <>
             <div className="grid gap-4 sm:grid-cols-[minmax(0,240px)_1fr]">
-              <div className="mx-auto w-full max-w-[260px] overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl shadow-emerald-500/10" style={{ aspectRatio: aspect }}>
+              <div className="mx-auto w-full max-w-[260px] overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl shadow-emerald-500/10 max-sm:max-h-[45dvh] max-sm:w-auto" style={{ aspectRatio: aspect }}>
                 <video key={shown.url} ref={video} src={shown.url} controls playsInline preload="metadata" className="h-full w-full object-contain" />
               </div>
               <div className="space-y-3">
@@ -203,9 +207,13 @@ export function CutCard({
                       Approve cut
                     </button>
                   )}
-                  <a href={downloadHref(shown.url, videoFileName(p.title, "auto-cut", `v${shown.version}`))} download className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/10 hover:text-white">
+                  <SaveVideoLink
+                    url={shown.url}
+                    filename={videoFileName(p.title, "auto-cut", `v${shown.version}`)}
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                  >
                     <SvgIcon d={SP.download} size={15} /> Download
-                  </a>
+                  </SaveVideoLink>
                   {latest && latest.version > 1 && latest.status !== "approved" && latest.status !== "cutting" && (
                     <button type="button" onClick={undo} className="inline-flex items-center gap-1 px-2 text-xs font-semibold text-neutral-500 hover:text-white">
                       <SvgIcon d={SP.undo} size={14} /> Undo last change
@@ -225,7 +233,7 @@ export function CutCard({
                     className={`group relative shrink-0 rounded-lg border bg-white/[0.03] hover:bg-white/[0.06] ${trimmed ? "border-emerald-400/40" : "border-white/10 hover:border-emerald-400/40"}`}
                     style={{ minWidth: `${Math.max(76, Math.min(170, r.out * 18))}px` }}
                   >
-                    <button type="button" onClick={() => jump(r.start)} className="block w-full px-2.5 py-1.5 pr-8 text-left" title={r.clip.line}>
+                    <button type="button" onClick={() => jump(r.start)} className="block w-full px-2.5 py-2 pr-10 text-left" title={r.clip.line}>
                       <p className="text-[10px] font-bold text-white" style={NUM_FONT}>
                         #{r.clip.idx + 1} · {r.out.toFixed(1)}s
                       </p>
@@ -237,7 +245,7 @@ export function CutCard({
                       type="button"
                       onClick={() => setTrimId(r.clip.id)}
                       disabled={latest?.status === "cutting" || !r.clip.videoUrl}
-                      className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-neutral-500 hover:bg-emerald-500/20 hover:text-emerald-200 disabled:opacity-30"
+                      className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-neutral-400 hover:bg-emerald-500/20 hover:text-emerald-200 disabled:opacity-30"
                       aria-label={`Trim clip ${r.clip.idx + 1}`}
                       title="Trim this clip by hand"
                     >
@@ -257,12 +265,12 @@ export function CutCard({
                 <div className="mt-2 space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                   {flow.map((r) => (
                     <p key={r.clip.id} className="text-[13px] leading-relaxed text-neutral-200">
-                      <button type="button" onClick={() => jump(r.start)} className="mr-1.5 align-baseline text-[10px] font-bold text-emerald-300 hover:text-white" style={NUM_FONT}>
+                      <button type="button" onClick={() => jump(r.start)} className="mr-1.5 inline-flex min-h-7 items-center align-baseline text-[11px] font-bold text-emerald-300 hover:text-white" style={NUM_FONT}>
                         #{r.clip.idx + 1}
                       </button>
                       <Words words={r.clip.words} segments={r.plan?.segments ?? []} fallback={r.clip.line} />
                       {latest?.status !== "cutting" && r.clip.videoUrl && (
-                        <button type="button" onClick={() => setTrimId(r.clip.id)} className="ml-1 align-baseline text-[10px] font-bold text-neutral-500 hover:text-emerald-300">
+                        <button type="button" onClick={() => setTrimId(r.clip.id)} className="ml-1 inline-flex min-h-7 items-center rounded-md bg-white/5 px-2 align-baseline text-[11px] font-bold text-neutral-300 hover:text-emerald-300">
                           ✂ Trim
                         </button>
                       )}

@@ -161,7 +161,7 @@ export function FrameCard({
         title="Daniela's frame"
         right={
           frame && !picking ? (
-            <button type="button" onClick={() => setPicking(true)} className="text-xs font-semibold text-neutral-400 hover:text-white">
+            <button type="button" onClick={() => setPicking(true)} className="inline-flex min-h-9 items-center rounded-full border border-white/10 px-3 text-xs font-semibold text-neutral-300 hover:text-white">
               Change frame
             </button>
           ) : frame ? (
@@ -213,13 +213,15 @@ export function FrameCard({
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className={`${labelCls} !mb-0`}>Daniela references</span>
-                <span className="text-[11px] text-neutral-500">{zoneActive ? "Paste or drop to save a reference" : "Hover here and paste to add"}</span>
+                <span className="text-[11px] text-neutral-500">
+                  {zoneActive ? "Paste or drop to save a reference" : <><span className="[@media(hover:none)]:hidden">Hover here and paste to add</span><span className="hidden [@media(hover:none)]:inline">Tap + to add a reference</span></>}
+                </span>
               </div>
               <div className="cs-scroll flex gap-2.5 overflow-x-auto pb-1">
                 {(refs ?? []).map((r) => {
                   const ticked = !unticked.has(r.id);
                   return (
-                    <div key={r.id} className="group relative w-24 shrink-0 overflow-hidden rounded-xl border bg-black" style={{ aspectRatio: "3 / 4", borderColor: ticked ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.1)" }}>
+                    <div key={r.id} className="group relative w-28 shrink-0 overflow-hidden rounded-xl border bg-black sm:w-24" style={{ aspectRatio: "3 / 4", borderColor: ticked ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.1)" }}>
                       {r.url && (
                         // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
                         <img src={r.url} alt="Daniela reference" className="h-full w-full object-cover" />
@@ -234,15 +236,15 @@ export function FrameCard({
                             return next;
                           })
                         }
-                        className={`absolute left-1.5 top-1.5 rounded-md px-1.5 py-0.5 text-[9px] font-bold ${ticked ? "bg-blue-600 text-white" : "bg-black/60 text-white/70"}`}
+                        className={`absolute left-1.5 top-1.5 rounded-md px-2 py-1 text-[10px] font-bold ${ticked ? "bg-blue-600 text-white" : "bg-black/60 text-white/70"}`}
                         title="Use this reference as Manus's baseline"
                       >
                         {ticked ? "✓ Manus" : "Manus"}
                       </button>
-                      <button type="button" onClick={() => removeReference(r.id)} className="absolute right-1.5 top-1.5 hidden rounded-md bg-black/70 p-0.5 text-white/80 group-hover:block" aria-label="Remove reference">
+                      <button type="button" onClick={() => removeReference(r.id)} className="touch-show absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-white/80" aria-label="Remove reference">
                         <SvgIcon d={SP.x} size={12} />
                       </button>
-                      <button type="button" onClick={() => pick(r.id)} disabled={!!busy} className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-black/40 py-1.5 text-[10px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 hover:text-cyan-300">
+                      <button type="button" onClick={() => pick(r.id)} disabled={!!busy} className="touch-show absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-black/40 py-2 text-[11px] font-bold text-white hover:text-cyan-300">
                         Use as frame
                       </button>
                     </div>
@@ -297,9 +299,9 @@ export function FrameCard({
             {detail.frameOptions.length > 0 && (
               <div className="space-y-2">
                 <span className={labelCls}>Manus options · use one as the frame?</span>
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
                   {detail.frameOptions.map((o) => (
-                    <div key={o.id} className="group relative w-40 overflow-hidden rounded-2xl border border-white/15 bg-black" style={{ aspectRatio: aspect }}>
+                    <div key={o.id} className="group relative overflow-hidden rounded-2xl border border-white/15 bg-black sm:w-40" style={{ aspectRatio: aspect }}>
                       {o.url && (
                         // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
                         <img src={o.url} alt="Frame option" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />

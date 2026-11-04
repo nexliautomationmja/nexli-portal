@@ -23,7 +23,7 @@ interface Attachment {
 
 /**
  * The chat box (ChatGPT / Claude style): auto-growing textarea, Enter sends
- * (Shift+Enter = new line), paste / drop / 📎 for images (and a video for the
+ * (Shift+Enter = new line; on phones Return adds a line and ↑ sends), paste / drop / 📎 for images (and a video for the
  * final cut), optional Ad · VSL pill and batch size. Modeled on the composer in
  * src/components/messages/message-thread.tsx.
  *
@@ -187,7 +187,7 @@ export function Composer({
               <button
                 type="button"
                 onClick={() => setFiles((prev) => prev.filter((x) => x.id !== a.id))}
-                className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-[#020617] text-white/80 hover:text-white"
+                className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-[#020617] text-white/80 hover:text-white"
                 aria-label="Remove attachment"
               >
                 <SvgIcon d={SP.x} size={12} />
@@ -218,6 +218,8 @@ export function Composer({
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            // Touch keyboards have no Shift+Enter: Return adds a new line there, the send button sends.
+            if (window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
             e.preventDefault();
             void submit();
           }
@@ -228,7 +230,7 @@ export function Composer({
         style={{ fontSize: undefined }}
       />
 
-      <div className="flex items-center gap-2 px-3 pb-3 pt-1">
+      <div className="flex flex-wrap items-center gap-2 px-3 pb-3 pt-1">
         <button
           type="button"
           onClick={() => picker.current?.click()}
@@ -263,11 +265,12 @@ export function Composer({
                 type="button"
                 onClick={() => onFormat(value)}
                 aria-pressed={format === value}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition-colors ${
+                className={`min-h-8 rounded-full px-3 py-1 text-xs font-bold transition-colors ${
                   format === value ? "bg-blue-600 text-white shadow shadow-blue-600/30" : "text-neutral-400 hover:text-white"
                 }`}
               >
-                {label}
+                <span className="sm:hidden">{value === "ad_9x16" ? "Ad" : "VSL"}</span>
+                <span className="hidden sm:inline">{label}</span>
               </button>
             ))}
           </div>
@@ -284,7 +287,7 @@ export function Composer({
               type="button"
               onClick={() => onCount(Math.max(1, count - 1))}
               disabled={count <= 1}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-30"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-30"
               aria-label="Fewer videos"
             >
               −
@@ -296,7 +299,7 @@ export function Composer({
               type="button"
               onClick={() => onCount(Math.min(maxCount, count + 1))}
               disabled={count >= maxCount}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-30"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-30"
               aria-label="More videos"
             >
               +

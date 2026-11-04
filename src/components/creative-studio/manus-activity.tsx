@@ -271,7 +271,7 @@ function FeedRow({ item, now, latest }: { item: FeedItem; now: number; latest: b
         <p className={`truncate text-xs ${latest ? "cs-shimmer-text font-semibold" : "text-neutral-300"}`}>
           {item.kind === "step" ? `New step: ${item.title}` : item.title}
         </p>
-        {item.detail && <p className="hidden truncate text-[11px] text-neutral-500 group-hover:block">{item.detail}</p>}
+        {item.detail && <p className="truncate text-[11px] text-neutral-500 [@media(hover:hover)]:hidden [@media(hover:hover)]:group-hover:block">{item.detail}</p>}
       </div>
       {item.status === "error" && <span className="text-[10px] font-bold text-rose-400">error</span>}
       <span className="shrink-0 text-[10px] text-neutral-600" style={NUM_FONT}>
