@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { creativeAssets } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { projectDetail } from "@/lib/creative-studio/service";
-import { confirmTaskAction, ManusError, replyToTask, stopTask } from "@/lib/creative-studio/manus";
+import { confirmTaskAction, isNotConfirmable, ManusError, replyToTask, stopTask } from "@/lib/creative-studio/manus";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -35,7 +35,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       await db.update(creativeAssets).set({ status: "failed", error: "Cancelled" }).where(eq(creativeAssets.id, task.id));
     } else if (body?.allow) {
       if (!meta.waiting?.eventId) return NextResponse.json({ error: "Nothing to approve" }, { status: 400 });
-      const ok = await confirmTaskAction(task.providerTaskId, meta.waiting.eventId);
+      // Not an approvable action (Manus is waiting on its own background job): nothing to
+      // approve, it carries on by itself, so go back to "Working" instead of showing an error.
+      const ok = await confirmTaskAction(task.providerTaskId, meta.waiting.eventId).catch((err) => {
+        if (isNotConfirmable(err)) return true;
+        throw err;
+      });
       if (!ok) return NextResponse.json({ error: "Manus didn't accept the approval. Try again." }, { status: 409 });
       await db.update(creativeAssets).set({ status: "running", metadata: { ...meta, waiting: null, answeredKey } }).where(eq(creativeAssets.id, task.id));
     } else {

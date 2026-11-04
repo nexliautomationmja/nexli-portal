@@ -129,6 +129,12 @@ export type FrameTaskState =
     };
 
 const QUESTION_TYPES = new Set(["messageAskUser", "cascadeAskUser"]);
+/**
+ * Manus waiting on its own background sub-job (e.g. an image generation it
+ * started). It resumes by itself and can't be confirmed ("Event type
+ * 'cascadeJobCall' does not support confirmation"), so it counts as running.
+ */
+const isBackgroundWait = (type: string | null) => Boolean(type && /JobCall$/i.test(type));
 
 function imagesFrom(messages: ManusMessage[]): { url: string; filename: string | null }[] {
   const images: { url: string; filename: string | null }[] = [];
@@ -222,6 +228,7 @@ async function stateFrom(taskId: string, messages: ManusMessage[]): Promise<Fram
     const d = status?.status_detail ?? {};
     const lastAssistant = messages.find((m) => m.type === "assistant_message")?.assistant_message;
     const type = d.waiting_for_event_type ?? null;
+    if (isBackgroundWait(type)) return { state: "running" };
     const isQuestion = !type || QUESTION_TYPES.has(type);
     const prompt = (isQuestion ? lastAssistant?.content : d.waiting_description) || d.waiting_description || status?.description || lastAssistant?.content || "Manus needs input to continue.";
     console.info(`[creative-studio] Manus task ${taskId} waiting (${type ?? "unknown"}): ${String(prompt).slice(0, 300)}`);
@@ -258,6 +265,9 @@ export async function replyToTask(taskId: string, text: string): Promise<void> {
     body: JSON.stringify({ task_id: taskId, message: { content: text.slice(0, 4000) } }),
   });
 }
+
+/** Manus's answer when the paused event isn't an approvable action (e.g. a background job). */
+export const isNotConfirmable = (err: unknown) => err instanceof ManusError && /does not support confirmation/i.test(err.message);
 
 /** Approve an action Manus is waiting on — only ever called after the user clicks Allow. */
 export async function confirmTaskAction(taskId: string, eventId: string): Promise<boolean> {
