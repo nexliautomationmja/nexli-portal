@@ -195,14 +195,12 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMess
     setMobileOpen(false);
   }, [pathname]);
 
+  // The page scrolls on <html> (body clips overflow-x), so lock that while the drawer is open.
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    const root = document.documentElement;
+    root.style.overflow = mobileOpen ? "hidden" : "";
     return () => {
-      document.body.style.overflow = "";
+      root.style.overflow = "";
     };
   }, [mobileOpen]);
 
@@ -409,14 +407,30 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMess
 
   return (
     <>
-      {/* Mobile hamburger button */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-lg flex items-center justify-center bg-[var(--card-bg)] border border-[var(--card-border)]"
-        style={{ color: "var(--text-muted)" }}
+      {/* Mobile top bar: menu + logo (fixed, glass) */}
+      <div
+        className="md:hidden fixed inset-x-0 top-0 z-50 border-b border-[var(--card-border)] backdrop-blur-xl"
+        style={{ background: "color-mix(in srgb, var(--bg-main) 84%, transparent)", paddingTop: "env(safe-area-inset-top)" }}
       >
-        <HamburgerIcon className="w-5 h-5" />
-      </button>
+        <div className="flex h-14 items-center gap-2 px-2">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open menu"
+            className="flex h-11 w-11 items-center justify-center rounded-xl transition-colors hover:bg-[var(--input-bg)]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <HamburgerIcon className="w-5 h-5" />
+          </button>
+          <Link href="/dashboard" className="flex items-center no-underline">
+            <img
+              src={theme === "dark" ? "/logos/nexli-logo-white-wordmark@2x.png" : "/logos/nexli-logo-dark-wordmark@2x.png"}
+              alt="Nexli"
+              className="h-6 w-auto"
+            />
+          </Link>
+        </div>
+      </div>
 
       {/* Mobile backdrop */}
       {mobileOpen && (
@@ -434,9 +448,11 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMess
         )}
       >
         <button
+          type="button"
           onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--input-bg)] transition-colors"
-          style={{ color: "var(--text-muted)" }}
+          aria-label="Close menu"
+          className="absolute top-3 right-3 w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[var(--input-bg)] transition-colors"
+          style={{ color: "var(--text-muted)", marginTop: "env(safe-area-inset-top)" }}
         >
           <XIcon className="w-4 h-4" />
         </button>

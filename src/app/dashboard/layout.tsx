@@ -150,7 +150,7 @@ export default async function DashboardLayout({
           }}
           showNexliMessages={isNexliClient}
         />
-        <main className="sidebar-content px-4 md:px-6 lg:px-8 py-6 pt-16 md:pt-6 relative z-10">
+        <main className="sidebar-content relative px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[calc(4.25rem+env(safe-area-inset-top))] md:px-6 md:py-6 lg:px-8">
           {isFoundationClient && <UpgradeBanner />}
           {children}
         </main>

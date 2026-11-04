@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ClientPicker } from "@/components/dashboard/client-picker";
@@ -69,6 +69,8 @@ export function EngagementComposer() {
   const [sent, setSent] = useState<{ id: string; signers: { name: string; email: string; engageUrl: string }[]; emailErrors: string[] | null } | null>(null);
   const [burst, setBurst] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const signerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +92,11 @@ export function EngagementComposer() {
       cancelled = true;
     };
   }, []);
+
+  // Desktop: start typing in the lead search right away. Phones: don't pop the keyboard.
+  useEffect(() => {
+    if (!loading && !window.matchMedia("(hover: none), (pointer: coarse)").matches) searchRef.current?.focus();
+  }, [loading]);
 
   // ── Templates → agreement cards ──
   const drsMonthly = templates.find((t) => isDrs(t) && !t.name.toLowerCase().includes("annual"));
@@ -129,6 +136,10 @@ export function EngagementComposer() {
     setLeadId(l.id);
     setSigners((cur) => [{ name: l.name, email: l.email ?? "" }, ...cur.slice(1)]);
     setCompany(l.company ?? "");
+    // On a phone the signer panel is below the list: bring it into view.
+    if (window.matchMedia("(max-width: 639px)").matches) {
+      setTimeout(() => signerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    }
   }
   const setSigner = (i: number, patch: Partial<Signer>) => setSigners((cur) => cur.map((s, j) => (j === i ? { ...s, ...patch } : s)));
 
@@ -225,40 +236,42 @@ export function EngagementComposer() {
   return (
     <LaunchPadCanvas>
       <ConfettiBurst burst={burst} />
-      <div className="mx-auto max-w-5xl px-4 pb-20 sm:px-6">
-        <header className="flex items-center justify-between gap-3 pt-5">
+      <div className="mx-auto max-w-5xl px-3 pb-10 sm:px-6 sm:pb-20">
+        <header className="grid grid-cols-[auto_1fr_auto] items-center gap-3 pt-4 sm:pt-5">
           <Link
             href="/dashboard/engagements"
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-neutral-400 transition hover:bg-white/5 hover:text-white"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/10 px-3 text-xs font-semibold text-neutral-400 transition hover:bg-white/5 hover:text-white"
           >
             <SvgIcon d={SP.chevronLeft} size={14} /> Engagements
           </Link>
-          <ShimmerPill conic={SHIMMER_CONIC}>
-            <SvgIcon d={SP.script} size={14} className="text-cyan-300" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white md:text-xs">Engagement letter</span>
-          </ShimmerPill>
-          <span className="w-[108px]" aria-hidden="true" />
+          <span className="hidden justify-self-center sm:flex">
+            <ShimmerPill conic={SHIMMER_CONIC}>
+              <SvgIcon d={SP.script} size={14} className="text-cyan-300" />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white md:text-xs">Engagement letter</span>
+            </ShimmerPill>
+          </span>
+          <span className="hidden w-[108px] sm:block" aria-hidden="true" />
         </header>
 
-        <h1 className="lp-card mt-8 text-center text-4xl font-bold tracking-tighter text-white sm:text-5xl" style={SYNE}>
+        <h1 className="lp-card mt-5 text-center text-3xl font-bold tracking-tighter text-white sm:mt-8 sm:text-5xl" style={SYNE}>
           {heading}
         </h1>
 
         {/* Steps */}
         {!sent && (
-          <nav aria-label="Steps" className="lp-card mx-auto mt-7 flex max-w-3xl items-center gap-2" style={{ animationDelay: "0.05s" }}>
+          <nav aria-label="Steps" className="lp-card mx-auto mt-5 flex max-w-3xl items-center gap-1.5 sm:mt-7 sm:gap-2" style={{ animationDelay: "0.05s" }}>
             {STEPS.map((label, i) => {
               const n = (i + 1) as 1 | 2 | 3;
               const done = n < step;
               const current = n === step;
               const reachable = n < step || (n === 2 && whoValid) || (n === 3 && whoValid && whatValid);
               return (
-                <div key={label} className="flex min-w-0 flex-1 items-center gap-2">
+                <div key={label} className={`flex min-w-0 items-center gap-2 ${current ? "flex-1" : "flex-none sm:flex-1"}`}>
                   <button
                     type="button"
                     onClick={() => reachable && setStep(n)}
                     disabled={!reachable && !current}
-                    className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl border px-3 py-2 text-left transition ${
+                    className={`flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded-2xl border px-2 py-2 text-left transition sm:gap-2.5 sm:px-3 ${
                       current
                         ? "border-cyan-400/50 bg-cyan-500/10 shadow-lg shadow-cyan-500/10"
                         : done
@@ -274,7 +287,7 @@ export function EngagementComposer() {
                       {done ? "✓" : n}
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-xs font-bold text-white">{label}</span>
+                      <span className={`${current ? "block" : "hidden sm:block"} truncate text-xs font-bold text-white`}>{label}</span>
                       <span className="hidden truncate text-[10px] text-neutral-400 sm:block">{stepSummary[i] || (current ? "Now" : " ")}</span>
                     </span>
                   </button>
@@ -285,7 +298,7 @@ export function EngagementComposer() {
           </nav>
         )}
 
-        <div className="mt-8">
+        <div className="mt-6 sm:mt-8">
           {loading ? (
             <div className="mx-auto h-64 max-w-3xl animate-pulse rounded-3xl bg-white/5" />
           ) : sent ? (
@@ -294,14 +307,14 @@ export function EngagementComposer() {
             <div className="mx-auto max-w-3xl space-y-5">
               {/* Source tabs */}
               <div className="flex justify-center">
-                <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] p-1 text-xs font-bold">
+                <div className="grid w-full grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 text-xs font-bold sm:inline-flex sm:w-auto sm:rounded-full">
                   {(
                     [
-                      ["pipeline", `From your pipeline${leads.length ? ` · ${leads.length}` : ""}`],
-                      ["contacts", "Other contacts"],
-                      ["new", "Someone new"],
+                      ["pipeline", `From your pipeline${leads.length ? ` · ${leads.length}` : ""}`, `Pipeline${leads.length ? ` · ${leads.length}` : ""}`],
+                      ["contacts", "Other contacts", "Contacts"],
+                      ["new", "Someone new", "New"],
                     ] as const
-                  ).map(([key, label]) => (
+                  ).map(([key, label, short]) => (
                     <button
                       key={key}
                       type="button"
@@ -309,9 +322,10 @@ export function EngagementComposer() {
                         setTab(key);
                         if (key !== "pipeline") setLeadId(null);
                       }}
-                      className={`rounded-full px-4 py-2 transition ${tab === key ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/30" : "text-neutral-400 hover:text-white"}`}
+                      className={`min-h-11 rounded-xl px-2 transition sm:min-h-0 sm:rounded-full sm:px-4 sm:py-2 ${tab === key ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/30" : "text-neutral-400 hover:text-white"}`}
                     >
-                      {label}
+                      <span className="sm:hidden">{short}</span>
+                      <span className="hidden sm:inline">{label}</span>
                     </button>
                   ))}
                 </div>
@@ -323,7 +337,7 @@ export function EngagementComposer() {
                     <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500">
                       <SvgIcon d={SP.search} size={16} />
                     </span>
-                    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your open leads by name, firm or email" className={`${inputCls} pl-10`} autoFocus />
+                    <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, firm or email" className={`${inputCls} pl-10`} />
                   </div>
                   {visibleLeads.length === 0 ? (
                     <div className="py-10 text-center">
@@ -343,7 +357,7 @@ export function EngagementComposer() {
                       </p>
                     </div>
                   ) : (
-                    <div className="cs-scroll mt-4 grid max-h-[460px] gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
+                    <div className="cs-scroll mt-4 grid gap-2.5 sm:max-h-[460px] sm:grid-cols-2 sm:overflow-y-auto sm:pr-1">
                       {visibleLeads.map((l) => {
                         const on = l.id === leadId;
                         const letter = letterStatus(l, letters);
@@ -359,7 +373,7 @@ export function EngagementComposer() {
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-sm font-black text-white shadow shadow-blue-500/30">
                               {l.name.trim().charAt(0).toUpperCase() || "?"}
                             </span>
-                            <span className="min-w-0 flex-1">
+                            <span className="min-w-0 flex-1 pr-6">
                               <span className="block truncate text-sm font-bold text-white">{l.name}</span>
                               <span className="block truncate text-[11px] text-neutral-400">{[l.company, l.email].filter(Boolean).join(" · ") || "No email yet"}</span>
                               <span className="mt-1.5 flex flex-wrap gap-1">
@@ -414,8 +428,8 @@ export function EngagementComposer() {
               )}
 
               {/* Signer panel */}
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
-                <div className="mb-3 flex items-center justify-between">
+              <div ref={signerRef} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">{leadId ? "Signing · from your pipeline" : "Signing"}</p>
                   {leadId && <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold text-cyan-200">Linked to the lead · turns Won when the setup is paid</span>}
                 </div>
@@ -424,7 +438,19 @@ export function EngagementComposer() {
                     const missingEmail = !s.email.trim();
                     const badEmail = Boolean(s.email.trim()) && !EMAIL.test(s.email.trim());
                     return (
-                      <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <div key={i} className={`grid gap-2 sm:grid-cols-[1fr_1fr_auto] ${i > 0 ? "border-t border-white/5 pt-3 sm:border-0 sm:pt-0" : ""}`}>
+                        {i > 0 && (
+                          <div className="flex items-center justify-between sm:hidden">
+                            <span className="text-[11px] font-bold text-neutral-400">Signer {i + 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => setSigners((cur) => cur.filter((_, j) => j !== i))}
+                              className="inline-flex min-h-10 items-center px-2 text-xs font-semibold text-rose-300"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
                         <input value={s.name} onChange={(e) => setSigner(i, { name: e.target.value })} placeholder={i === 0 ? "Full name" : "Co-signer's name"} className={inputCls} />
                         <div>
                           <input
@@ -441,7 +467,7 @@ export function EngagementComposer() {
                           <button
                             type="button"
                             onClick={() => setSigners((cur) => cur.filter((_, j) => j !== i))}
-                            className="flex h-10 w-10 items-center justify-center self-start rounded-xl text-neutral-500 hover:bg-rose-500/10 hover:text-rose-300"
+                            className="hidden h-10 w-10 items-center justify-center self-start rounded-xl text-neutral-500 hover:bg-rose-500/10 hover:text-rose-300 sm:flex"
                             aria-label="Remove co-signer"
                           >
                             <SvgIcon d={SP.x} size={14} />
@@ -457,16 +483,17 @@ export function EngagementComposer() {
                     <p className="mt-1 text-[10px] text-neutral-500">Shown as the client on the letter. Left blank, the signer&apos;s name is used.</p>
                   </div>
                   {signers.length < 5 && (
-                    <button type="button" onClick={() => setSigners((cur) => [...cur, { name: "", email: "" }])} className="text-xs font-semibold text-cyan-300 hover:text-white">
+                    <button type="button" onClick={() => setSigners((cur) => [...cur, { name: "", email: "" }])} className="inline-flex min-h-10 items-center text-xs font-semibold text-cyan-300 hover:text-white">
                       + Add another signer
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="flex justify-end">
-                <button type="button" onClick={() => setStep(2)} disabled={!whoValid} className={CTA_CLASSES}>
-                  Continue · choose the agreement →
+              <div className="flex flex-col sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setStep(2)} disabled={!whoValid} className={`${CTA_CLASSES} w-full sm:w-auto`}>
+                  <span className="sm:hidden">Continue →</span>
+                  <span className="hidden sm:inline">Continue · choose the agreement →</span>
                 </button>
               </div>
             </div>
@@ -554,26 +581,28 @@ export function EngagementComposer() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Expires in</span>
+              <div className="grid grid-cols-5 gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3 sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:px-4">
+                <span className="col-span-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Expires in</span>
                 {[7, 14, 30, 60, 90].map((d) => (
                   <button
                     key={d}
                     type="button"
                     onClick={() => setExpiresInDays(d)}
-                    className={`rounded-full px-3 py-1 text-xs font-bold transition ${expiresInDays === d ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                    className={`min-h-10 rounded-xl px-2 text-xs font-bold transition sm:min-h-0 sm:rounded-full sm:px-3 sm:py-1 ${expiresInDays === d ? "bg-white/15 text-white" : "bg-white/[0.03] text-neutral-400 hover:text-white sm:bg-transparent"}`}
                   >
-                    {d} days
+                    {d}
+                    <span className="hidden sm:inline"> days</span>
                   </button>
                 ))}
               </div>
 
-              <div className="flex items-center justify-between">
-                <button type="button" onClick={() => setStep(1)} className={SECONDARY_BTN}>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <button type="button" onClick={() => setStep(1)} className={`${SECONDARY_BTN} w-full sm:w-auto`}>
                   ← Back
                 </button>
-                <button type="button" onClick={() => setStep(3)} disabled={!whatValid} className={CTA_CLASSES}>
-                  Continue · review the letter →
+                <button type="button" onClick={() => setStep(3)} disabled={!whatValid} className={`${CTA_CLASSES} w-full sm:w-auto`}>
+                  <span className="sm:hidden">Review the letter →</span>
+                  <span className="hidden sm:inline">Continue · review the letter →</span>
                 </button>
               </div>
             </div>
@@ -622,7 +651,7 @@ export function EngagementComposer() {
                   </div>
 
                   <div className="mt-4 space-y-2 border-t border-white/5 pt-4">
-                    <button type="button" onClick={() => setEditText((v) => !v)} className="text-xs font-semibold text-cyan-300 hover:text-white">
+                    <button type="button" onClick={() => setEditText((v) => !v)} className="inline-flex min-h-10 items-center text-xs font-semibold text-cyan-300 hover:text-white">
                       {editText ? "▾ Hide the letter text" : "▸ Edit the letter text"}
                     </button>
                     {editText && (
@@ -636,7 +665,7 @@ export function EngagementComposer() {
                         className={`${inputCls} resize-y font-mono text-[12px] leading-relaxed`}
                       />
                     )}
-                    <label className="flex cursor-pointer items-center gap-2 text-xs text-neutral-300">
+                    <label className="flex min-h-10 cursor-pointer items-center gap-2 text-xs text-neutral-300">
                       <input type="checkbox" checked={saveAsTemplate} onChange={(e) => setSaveAsTemplate(e.target.checked)} className="h-4 w-4 accent-cyan-400" />
                       Save this letter as a template
                     </label>
@@ -644,6 +673,7 @@ export function EngagementComposer() {
                   </div>
                 </div>
 
+                <div className="hidden space-y-4 lg:block">
                 {error && <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>}
 
                 <button type="button" onClick={() => void send()} disabled={!canSend || (saveAsTemplate && !templateName.trim())} className={`${CTA_CLASSES} w-full py-4 text-base`}>
@@ -660,6 +690,7 @@ export function EngagementComposer() {
                 <button type="button" onClick={() => setStep(2)} className={`${SECONDARY_BTN} w-full`}>
                   ← Back to the agreement
                 </button>
+                </div>
               </div>
 
               <div className="overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl shadow-black/40">
@@ -669,7 +700,7 @@ export function EngagementComposer() {
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
                   <span className="ml-2 truncate">What {signers[0].name.split(" ")[0]} will sign</span>
                 </div>
-                <div className="max-h-[78vh] overflow-y-auto p-4 sm:p-6">
+                <div className="p-2 sm:p-6 lg:max-h-[78vh] lg:overflow-y-auto">
                   <DocumentPreview
                     content={fillClientPlaceholder(content, firm)}
                     subject={subject}
@@ -677,6 +708,35 @@ export function EngagementComposer() {
                     fromName={from.name}
                     fromCompany={from.company}
                   />
+                </div>
+              </div>
+
+              {/* Phones & tablets: Send stays at the bottom of the screen while you read the letter */}
+              <div
+                className="sticky bottom-0 z-20 -mx-3 space-y-2 border-t border-white/10 bg-[#020617]/90 px-3 pt-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:hidden"
+                style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+              >
+                {error && <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setStep(2)} className={`${SECONDARY_BTN} shrink-0 px-4`} aria-label="Back to the agreement">
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void send()}
+                    disabled={!canSend || (saveAsTemplate && !templateName.trim())}
+                    className={`${CTA_CLASSES} flex-1 text-base`}
+                  >
+                    {sending ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Sending…
+                    </>
+                  ) : (
+                    <>
+                      <SvgIcon d={SP.arrowUp} size={16} /> Send to {signers.length > 1 ? `${signers.length} signers` : signers[0].name.split(" ")[0]}
+                    </>
+                  )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -723,7 +783,7 @@ function SentCard({
   onAnother: () => void;
 }) {
   return (
-    <div className="lp-card mx-auto max-w-2xl rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-white/[0.03] to-cyan-500/10 p-6 text-center shadow-2xl shadow-emerald-600/10 sm:p-8">
+    <div className="lp-card mx-auto max-w-2xl rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-white/[0.03] to-cyan-500/10 p-5 text-center shadow-2xl shadow-emerald-600/10 sm:p-8">
       <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-3xl text-emerald-200 ring-1 ring-emerald-400/40" style={{ animation: "lp-check-bounce 0.6s ease-out both" }}>
         ✓
       </span>
@@ -733,7 +793,7 @@ function SentCard({
       <p className="mt-1 text-sm text-neutral-400">They&apos;ll get an email with a link to review and sign. You&apos;ll see it move from Sent to Viewed to Signed.</p>
       <div className="mt-5 space-y-2 text-left">
         {sent.signers.map((s) => (
-          <div key={s.email} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+          <div key={s.email} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-sm font-black text-white">{s.name.charAt(0).toUpperCase()}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold text-white">{s.name}</span>
@@ -743,7 +803,7 @@ function SentCard({
               <button
                 type="button"
                 onClick={() => onCopy(s.engageUrl)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition ${copied === s.engageUrl ? "bg-emerald-500/25 text-emerald-100" : "bg-white/10 text-white hover:bg-white/20"}`}
+                className={`min-h-10 w-full shrink-0 rounded-full px-3 text-xs font-bold transition sm:min-h-0 sm:w-auto sm:py-1.5 sm:text-[11px] ${copied === s.engageUrl ? "bg-emerald-500/25 text-emerald-100" : "bg-white/10 text-white hover:bg-white/20"}`}
               >
                 {copied === s.engageUrl ? "✓ Copied" : "Copy signing link"}
               </button>
@@ -756,7 +816,7 @@ function SentCard({
           The letter was created, but an email didn&apos;t go out: {sent.emailErrors.join("; ")}. Copy the signing link and send it yourself.
         </p>
       )}
-      <div className="mt-6 flex flex-wrap justify-center gap-2">
+      <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row sm:flex-wrap">
         <button type="button" onClick={onView} className={CTA_CLASSES}>
           View the letter
         </button>

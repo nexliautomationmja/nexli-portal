@@ -78,7 +78,7 @@ export function DocumentPreview({
       <div
         style={{
           background: "#0a0a0f",
-          padding: "20px 48px",
+          padding: "20px clamp(16px, 5vw, 48px)",
           borderRadius: "4px 4px 0 0",
           borderTop: branding.brandColor
             ? `4px solid ${branding.brandColor}`
@@ -86,6 +86,8 @@ export function DocumentPreview({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 8,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -109,7 +111,7 @@ export function DocumentPreview({
       </div>
 
       {/* Date + Recipient + Subject */}
-      <div style={{ padding: "28px 48px 0" }}>
+      <div style={{ padding: "28px clamp(16px, 5vw, 48px) 0" }}>
         <p
           style={{
             margin: "0 0 20px",
@@ -123,7 +125,7 @@ export function DocumentPreview({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
             gap: 20,
             marginBottom: 24,
           }}
@@ -195,7 +197,7 @@ export function DocumentPreview({
       </div>
 
       {/* Letter Body */}
-      <div style={{ padding: "28px 48px 16px" }}>
+      <div style={{ padding: "28px clamp(16px, 5vw, 48px) 16px" }}>
         {paragraphs.length > 0 ? (
           paragraphs.map((paragraph, i) => (
             <p
@@ -206,6 +208,7 @@ export function DocumentPreview({
                 lineHeight: 1.85,
                 color: "#374151",
                 whiteSpace: "pre-wrap",
+                overflowWrap: "anywhere",
               }}
             >
               {paragraph}
@@ -229,7 +232,7 @@ export function DocumentPreview({
       {/* Payment Processing Disclosure */}
       <div
         style={{
-          padding: "20px 48px 0",
+          padding: "20px clamp(16px, 5vw, 48px) 0",
           borderTop: "1px solid #e5e7eb",
           marginTop: 8,
         }}
@@ -281,7 +284,7 @@ export function DocumentPreview({
       </div>
 
       {/* Signature Block — two columns: sender (left) + recipient (right) */}
-      <div style={{ padding: "20px 48px 44px" }}>
+      <div style={{ padding: "20px clamp(16px, 5vw, 48px) 44px" }}>
         <p
           style={{
             margin: 0,
@@ -296,7 +299,7 @@ export function DocumentPreview({
           style={{
             marginTop: 24,
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
             gap: 32,
           }}
         >
@@ -305,7 +308,7 @@ export function DocumentPreview({
             <p
               style={{
                 margin: "0 0 6px",
-                fontSize: 9,
+                fontSize: 11,
                 fontWeight: 700,
                 color: "#9ca3af",
                 textTransform: "uppercase",
@@ -397,7 +400,7 @@ export function DocumentPreview({
             <p
               style={{
                 margin: "0 0 6px",
-                fontSize: 9,
+                fontSize: 11,
                 fontWeight: 700,
                 color: "#9ca3af",
                 textTransform: "uppercase",

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Outfit, Plus_Jakarta_Sans, Syne, Dancing_Script } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
@@ -27,6 +27,13 @@ const dancingScript = Dancing_Script({
   weight: ["400", "500", "600", "700"],
   display: "swap",
 });
+
+/** viewport-fit=cover so safe-area insets (iPhone home indicator / notch) are available to the layout. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "Nexli Dashboard | Client Analytics & Reporting",
