@@ -5,9 +5,11 @@ import {
   engagements,
   engagementSigners,
   engagementTemplates,
+  pipelineLeads,
   users,
 } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull } from "drizzle-orm";
+import { ensurePipelineTable } from "@/lib/pipeline-table";
 import { type BillingPlan, TERM_MONTHS } from "@/lib/drs-pricing";
 import { ENTERPRISE, isEnterpriseTier, isEnterpriseTemplateName } from "@/lib/enterprise-pricing";
 import { createEngagement } from "@/lib/engagements";
@@ -25,33 +27,15 @@ export async function GET() {
     .where(eq(engagements.ownerId, session.user.id))
     .orderBy(desc(engagements.createdAt));
 
-  // Fetch signers for all engagements
+  // Signers for this owner's engagements only (one query).
   const engagementIds = rows.map((r) => r.id);
-  const allSigners =
+  const signers =
     engagementIds.length > 0
-      ? await db
-          .select()
-          .from(engagementSigners)
-          .where(
-            eq(
-              engagementSigners.engagementId,
-              engagementIds.length === 1 ? engagementIds[0] : engagementIds[0]
-            )
-          )
+      ? await db.select().from(engagementSigners).where(inArray(engagementSigners.engagementId, engagementIds))
       : [];
-
-  // If more than one engagement, fetch all signers at once
-  const signersByEngagement: Record<string, (typeof allSigners)[number][]> = {};
-  if (engagementIds.length > 0) {
-    const signers = await db.select().from(engagementSigners);
-    const ownerEngagementIds = new Set(engagementIds);
-    for (const s of signers) {
-      if (!ownerEngagementIds.has(s.engagementId)) continue;
-      if (!signersByEngagement[s.engagementId]) {
-        signersByEngagement[s.engagementId] = [];
-      }
-      signersByEngagement[s.engagementId].push(s);
-    }
+  const signersByEngagement: Record<string, (typeof signers)[number][]> = {};
+  for (const s of signers) {
+    (signersByEngagement[s.engagementId] ??= []).push(s);
   }
 
   const enriched = rows.map((eng) => ({
@@ -95,6 +79,7 @@ export async function POST(req: NextRequest) {
     billingPlan,
     enterpriseTier,
     clientCompany: rawClientCompany,
+    pipelineLeadId: rawLeadId,
   } = body;
 
   if (
@@ -189,6 +174,32 @@ export async function POST(req: NextRequest) {
       termMonths: TERM_MONTHS[plan],
       clientCompany,
     };
+  }
+
+  // Picked from the pipeline: link the letter to the lead (it turns Won when
+  // the up-front invoice is paid — lib/pipeline-won.ts), and fill in the
+  // email / firm the lead didn't have yet (booked-call leads often lack them).
+  if (typeof rawLeadId === "string" && /^[0-9a-f-]{36}$/i.test(rawLeadId)) {
+    try {
+      await ensurePipelineTable();
+      const [lead] = await db
+        .select()
+        .from(pipelineLeads)
+        .where(and(eq(pipelineLeads.id, rawLeadId), eq(pipelineLeads.ownerId, session.user.id), isNull(pipelineLeads.deletedAt)))
+        .limit(1);
+      if (lead) {
+        engagementMetadata.pipelineLeadId = lead.id;
+        const email = String(recipients[0].email).trim().slice(0, 320);
+        const fill: Partial<typeof pipelineLeads.$inferInsert> = {};
+        if (!lead.email && email) fill.email = email;
+        if (!lead.company && clientCompany) fill.company = clientCompany;
+        if (Object.keys(fill).length) {
+          await db.update(pipelineLeads).set({ ...fill, updatedAt: new Date() }).where(eq(pipelineLeads.id, lead.id));
+        }
+      }
+    } catch (err) {
+      console.error("Engagement POST: pipeline lead link failed:", err);
+    }
   }
 
   const senderName =

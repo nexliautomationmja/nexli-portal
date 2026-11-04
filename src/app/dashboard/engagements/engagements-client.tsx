@@ -2,21 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PenLineIcon, SendIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
-import { ClientPicker } from "@/components/dashboard/client-picker";
+import { PenLineIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 import { DocumentPreview } from "@/components/engagement-document";
-import { generateDrsContent, fillClientPlaceholder } from "@/lib/engagement-defaults";
-import { DRS_PRICING, SETUP_SCOPE, TOTAL_MONTHLY_CENTS, TERM_MONTHS, ANNUAL_UPFRONT_CENTS, type BillingPlan } from "@/lib/drs-pricing";
-import { generateEnterpriseContent } from "@/lib/enterprise-engagement";
-import {
-  ENTERPRISE_TIER_ORDER,
-  ENTERPRISE_TIERS,
-  isEnterpriseTemplateName,
-  renewalCents,
-  type EnterpriseTier,
-} from "@/lib/enterprise-pricing";
-
-const fmtWhole = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
 
 interface Signer {
   id: string;
@@ -43,12 +30,6 @@ interface Engagement {
   signers: Signer[];
 }
 
-interface Template {
-  id: string;
-  name: string;
-  content: string;
-}
-
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   draft: { label: "Draft", color: "text-gray-500", bg: "bg-gray-500/10" },
   sent: { label: "Sent", color: "text-blue-500", bg: "bg-blue-500/10" },
@@ -61,167 +42,29 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 export function EngagementsClient() {
   const router = useRouter();
   const [engagements, setEngagements] = useState<Engagement[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCompose, setShowCompose] = useState(false);
   const [showDetail, setShowDetail] = useState<Engagement | null>(null);
 
-  // Compose form
-  const [recipients, setRecipients] = useState([{ name: "", email: "" }]);
-  // Client firm name — fills the letter's "Client: [CLIENT NAME / COMPANY]" line.
-  const [clientCompany, setClientCompany] = useState("");
-  const [subject, setSubject] = useState("");
-  const [content, setContent] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [expiresInDays, setExpiresInDays] = useState(30);
-  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [sending, setSending] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
-  // Billing plan: monthly $10,000 ($5,000 platform + $5,000 ad budget, 6-mo term)
-  // or annual $42,000 prepaid + $5,000/mo ad budget (12-mo term)
-  const [billingPlan, setBillingPlan] = useState<BillingPlan>("monthly");
-  // Enterprise License tier (Core / Growth / Scale) — only used when the
-  // selected template is the Enterprise letter.
-  const [enterpriseTier, setEnterpriseTier] = useState<EnterpriseTier>("core");
-
   useEffect(() => {
-    Promise.all([
-      fetch("/api/dashboard/engagements").then((r) => r.json()),
-      fetch("/api/dashboard/engagements/templates").then((r) => r.json()),
-    ])
-      .then(([engData, tmplData]) => {
-        setEngagements(engData.engagements || []);
-        setTemplates(tmplData.templates || []);
+    Promise.all([fetch("/api/dashboard/engagements").then((r) => r.json())])
+      .then(([engData]) => {
+        const list: Engagement[] = engData.engagements || [];
+        setEngagements(list);
         if (engData.from) {
           setFirmInfo(engData.from);
         }
+        // /dashboard/engagements?id=… opens that letter (Clients page, the composer's success screen).
+        const id = new URLSearchParams(window.location.search).get("id");
+        const linked = id ? list.find((e) => e.id === id) : undefined;
+        if (linked) setShowDetail(linked);
       })
       .catch(() => {
         setEngagements([]);
-        setTemplates([]);
       })
       .finally(() => setLoading(false));
   }, []);
-
-  function isDrsTemplate(tmpl: Template | undefined): boolean {
-    return !!tmpl && tmpl.name.toLowerCase().includes("digital rainmaker");
-  }
-
-  function isEnterpriseTemplate(tmpl: Template | undefined): boolean {
-    return !!tmpl && isEnterpriseTemplateName(tmpl.name);
-  }
-
-  function handleTemplateSelect(templateId: string) {
-    setSelectedTemplate(templateId);
-    const tmpl = templates.find((t) => t.id === templateId);
-    if (tmpl) {
-      if (isDrsTemplate(tmpl)) {
-        // DRS templates carry their plan in the name (— Monthly / — Annual);
-        // selecting one pre-sets the billing plan and regenerates the letter
-        // so the fee section always matches what gets sent.
-        const plan: BillingPlan = tmpl.name.toLowerCase().includes("annual")
-          ? "annual"
-          : "monthly";
-        setBillingPlan(plan);
-        setContent(generateDrsContent(plan));
-      } else if (isEnterpriseTemplate(tmpl)) {
-        // Enterprise letters are regenerated per tier so the fee section
-        // always matches what gets invoiced at signing.
-        setEnterpriseTier("core");
-        setContent(generateEnterpriseContent("core"));
-      } else {
-        setContent(tmpl.content);
-      }
-    }
-  }
-
-  function handleEnterpriseTierChange(tier: EnterpriseTier) {
-    setEnterpriseTier(tier);
-    const tmpl = templates.find((t) => t.id === selectedTemplate);
-    if (isEnterpriseTemplate(tmpl)) {
-      setContent(generateEnterpriseContent(tier));
-    }
-  }
-
-  function handleBillingPlanChange(plan: BillingPlan) {
-    setBillingPlan(plan);
-    const tmpl = templates.find((t) => t.id === selectedTemplate);
-    if (isDrsTemplate(tmpl)) {
-      setContent(generateDrsContent(plan));
-    }
-  }
-
-  function addRecipient() {
-    if (recipients.length >= 5) return;
-    setRecipients((prev) => [...prev, { name: "", email: "" }]);
-  }
-
-  function removeRecipient(index: number) {
-    if (recipients.length <= 1) return;
-    setRecipients((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function updateRecipient(index: number, field: "name" | "email", value: string) {
-    setRecipients((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, [field]: value } : r))
-    );
-  }
-
-  const allRecipientsValid = recipients.every((r) => r.name.trim() && r.email.trim());
-  // What the server will put in the parties block: firm name, else primary recipient.
-  const clientLabel = clientCompany.trim() || recipients[0]?.name.trim() || "";
-  const previewContent = fillClientPlaceholder(content, clientLabel);
-
-  async function handleSend() {
-    if (!allRecipientsValid || !subject || !content) return;
-    setSending(true);
-    try {
-      const res = await fetch("/api/dashboard/engagements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          recipients: recipients.map((r) => ({ name: r.name.trim(), email: r.email.trim() })),
-          clientCompany: clientCompany.trim().slice(0, 200) || undefined,
-          subject,
-          content,
-          templateId: selectedTemplate || undefined,
-          expiresInDays,
-          saveAsTemplate,
-          templateName: saveAsTemplate ? templateName : undefined,
-          // Only Enterprise letters carry a tier. (Sending the default "core"
-          // with every letter made DRS letters save as Enterprise, which
-          // dropped billingPlan and billed annual clients the setup fee only.)
-          billingPlan,
-          enterpriseTier: isEnterpriseTemplate(templates.find((t) => t.id === selectedTemplate))
-            ? enterpriseTier
-            : undefined,
-        }),
-      });
-      const data = await res.json();
-      if (data.engagement) {
-        // Re-fetch to get full engagement with signers
-        const refreshRes = await fetch("/api/dashboard/engagements");
-        const refreshData = await refreshRes.json();
-        setEngagements(refreshData.engagements || []);
-
-        if (saveAsTemplate && templateName) {
-          const tmplRes = await fetch("/api/dashboard/engagements/templates");
-          const tmplData = await tmplRes.json();
-          setTemplates(tmplData.templates || []);
-        }
-        if (data.emailErrors) {
-          alert(`Engagement created but some emails failed:\n${data.emailErrors.join("\n")}`);
-        }
-      }
-      resetForm();
-      setShowCompose(false);
-    } finally {
-      setSending(false);
-    }
-  }
 
   async function handleVoid(id: string) {
     await fetch(`/api/dashboard/engagements/${id}`, {
@@ -247,18 +90,6 @@ export function EngagementsClient() {
     await fetch(`/api/dashboard/engagements/${id}`, { method: "DELETE" });
     setEngagements((prev) => prev.filter((e) => e.id !== id));
     setShowDetail(null);
-  }
-
-  function resetForm() {
-    setRecipients([{ name: "", email: "" }]);
-    setClientCompany("");
-    setSubject("");
-    setContent("");
-    setSelectedTemplate("");
-    setExpiresInDays(30);
-    setSaveAsTemplate(false);
-    setTemplateName("");
-    setBillingPlan("monthly");
   }
 
   function formatDate(dateStr: string | null) {
@@ -330,7 +161,7 @@ export function EngagementsClient() {
           </p>
         </div>
         <button
-          onClick={() => setShowCompose(true)}
+          onClick={() => router.push("/dashboard/engagements/new")}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
           style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
         >
@@ -467,359 +298,6 @@ export function EngagementsClient() {
           </div>
         )}
       </div>
-
-      {/* Compose Modal */}
-      {showCompose && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowCompose(false)} />
-          <div
-            className="fixed inset-x-4 top-[5%] bottom-[5%] max-w-2xl mx-auto z-50 rounded-lg border overflow-hidden flex flex-col"
-            style={{ background: "var(--card-bg)", borderColor: "var(--card-border)" }}
-          >
-            {/* Modal header */}
-            <div className="flex items-center justify-between p-4 border-b border-[var(--card-border)]">
-              <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
-                New Engagement Letter
-              </h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowPreview(!showPreview)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                  style={{
-                    background: showPreview ? "linear-gradient(135deg, #2563EB, #06B6D4)" : "var(--input-bg)",
-                    color: showPreview ? "#fff" : "var(--text-muted)",
-                    border: showPreview ? "none" : "1px solid var(--card-border)",
-                  }}
-                >
-                  <EyeIcon className="w-3.5 h-3.5" />
-                  {showPreview ? "Edit" : "Preview"}
-                </button>
-                <button
-                  onClick={() => { setShowCompose(false); resetForm(); setShowPreview(false); }}
-                  className="p-1.5 rounded hover:bg-[var(--input-bg)] transition-colors"
-                >
-                  <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Document Preview Mode */}
-              {showPreview && (
-                <div style={{ padding: "8px 0" }}>
-                  <DocumentPreview
-                    content={previewContent}
-                    subject={subject}
-                    clientName={recipients[0]?.name || "Client Name"}
-                    fromName={firmInfo.name}
-                    fromCompany={firmInfo.company}
-                  />
-                </div>
-              )}
-
-              {/* Form Mode */}
-              {!showPreview && <>
-              {/* Recipients */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                    Recipients *
-                  </label>
-                </div>
-                <ClientPicker
-                  onSelect={(c) => {
-                    if (c.company && !clientCompany.trim()) setClientCompany(c.company);
-                    const emptyIdx = recipients.findIndex((r) => !r.name && !r.email);
-                    if (emptyIdx >= 0) {
-                      setRecipients((prev) =>
-                        prev.map((r, i) =>
-                          i === emptyIdx ? { ...r, name: c.name, email: c.email } : r
-                        )
-                      );
-                    } else if (recipients.length < 5) {
-                      setRecipients((prev) => [...prev, { name: c.name, email: c.email }]);
-                    }
-                  }}
-                  placeholder="Search existing clients..."
-                />
-                <div className="space-y-2">
-                  {recipients.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={r.name}
-                        onChange={(e) => updateRecipient(i, "name", e.target.value)}
-                        placeholder="Name"
-                        className="flex-1 px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                        style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                      />
-                      <input
-                        type="email"
-                        value={r.email}
-                        onChange={(e) => updateRecipient(i, "email", e.target.value)}
-                        placeholder="Email"
-                        className="flex-1 px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                        style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                      />
-                      {recipients.length > 1 && (
-                        <button
-                          onClick={() => removeRecipient(i)}
-                          className="p-2 rounded hover:bg-red-500/10 transition-colors shrink-0"
-                        >
-                          <XIcon className="w-3.5 h-3.5 text-red-400" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {recipients.length < 5 && (
-                  <div className="flex items-center justify-between mt-2">
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                      Up to 5 recipients can sign the same engagement letter.
-                    </p>
-                    <button
-                      onClick={addRecipient}
-                      className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-400 transition-colors"
-                    >
-                      <PlusIcon className="w-3 h-3" />
-                      Add Recipient
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Client firm name — fills the letter's parties block */}
-              <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Client firm / company name
-                </label>
-                <input
-                  type="text"
-                  value={clientCompany}
-                  onChange={(e) => setClientCompany(e.target.value)}
-                  maxLength={200}
-                  placeholder="e.g. Snack CPA, LLC"
-                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                  style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                />
-                <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
-                  Replaces [CLIENT NAME / COMPANY] in the letter. Left blank, the first recipient&apos;s name is used.
-                </p>
-              </div>
-
-              {/* Subject */}
-              <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Subject *
-                </label>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="2025 Tax Preparation Engagement Letter"
-                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                  style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                />
-              </div>
-
-              {/* Template selector */}
-              {templates.length > 0 && (
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
-                    Use Template
-                  </label>
-                  <select
-                    value={selectedTemplate}
-                    onChange={(e) => handleTemplateSelect(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                    style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                  >
-                    <option value="">Select a template...</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Billing plan (flat all-in-one) — only for DRS templates */}
-              {isDrsTemplate(templates.find((t) => t.id === selectedTemplate)) && (
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                    Billing Plan
-                  </p>
-                  {([
-                    {
-                      value: "monthly" as BillingPlan,
-                      label: `Monthly — ${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo`,
-                      sub: `Setup due at signing; the ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo (${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} upkeep + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget, one invoice) starts when the build is complete. ${TERM_MONTHS.monthly}-month initial term.`,
-                    },
-                    {
-                      value: "annual" as BillingPlan,
-                      label: `Annual — ${fmtWhole(ANNUAL_UPFRONT_CENTS)} at signing + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget`,
-                      sub: `${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${fmtWhole(DRS_PRICING.ANNUAL_CENTS)} platform paid in full (~${Math.round((1 - DRS_PRICING.ANNUAL_CENTS / (DRS_PRICING.MONTHLY_CENTS * 12)) * 100)}% off vs ${fmtWhole(DRS_PRICING.MONTHLY_CENTS * 12)}/yr monthly); ad budget billed monthly from launch, never front-loaded. ${TERM_MONTHS.annual}-month initial term.`,
-                    },
-                  ]).map((opt) => (
-                    <label
-                      key={opt.value}
-                      className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
-                      style={{
-                        borderColor: billingPlan === opt.value ? "#2563EB" : "var(--card-border)",
-                        background: billingPlan === opt.value ? "rgba(37, 99, 235, 0.05)" : "var(--input-bg)",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="billingPlan"
-                        value={opt.value}
-                        checked={billingPlan === opt.value}
-                        onChange={() => handleBillingPlanChange(opt.value)}
-                        className="accent-blue-500"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                          {opt.label}
-                        </p>
-                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          {opt.sub}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    <span className="font-semibold">Setup Fee covers:</span> {SETUP_SCOPE.map((g) => g.title).join(" · ")} — itemized in Section 1 of the letter and invoiced at signing (annual clients pay setup + the $42,000 platform fee on one invoice at signing). Only the up-front invoice is sent at signing; the Launch Pad opens once it&apos;s paid, and the first monthly invoice goes out when you mark the build complete in Onboarding. Ad management is included in the platform price — no revenue share. The managed ad budget is pass-through (deployed on the client&apos;s ad accounts, no markup) and shows as its own line on the invoice. No performance fees, bonuses, or guarantees — the client keeps all of the upside.
-                  </p>
-                </div>
-              )}
-
-              {/* Tier — only for the Nexli Enterprise License template */}
-              {isEnterpriseTemplate(templates.find((t) => t.id === selectedTemplate)) && (
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                    Tier
-                  </p>
-                  {ENTERPRISE_TIER_ORDER.map((tier) => {
-                    const info = ENTERPRISE_TIERS[tier];
-                    return (
-                      <label
-                        key={tier}
-                        className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
-                        style={{
-                          borderColor: enterpriseTier === tier ? "#2563EB" : "var(--card-border)",
-                          background: enterpriseTier === tier ? "rgba(37, 99, 235, 0.05)" : "var(--input-bg)",
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="enterpriseTier"
-                          value={tier}
-                          checked={enterpriseTier === tier}
-                          onChange={() => handleEnterpriseTierChange(tier)}
-                          className="accent-blue-500"
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                            {info.label} — {fmtWhole(info.priceCents)}
-                          </p>
-                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                            For {info.firmSize}. Renews at {fmtWhole(renewalCents(tier))}/yr.
-                          </p>
-                        </div>
-                      </label>
-                    );
-                  })}
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Invoiced in full at signing — ACH or wire only, no cards. The kickoff week is scheduled once funds clear. Annual renewal is invoiced manually 30 days before the anniversary.
-                  </p>
-                </div>
-              )}
-
-              {/* Letter content */}
-              <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Letter Content *
-                </label>
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Dear [Client Name],&#10;&#10;We are pleased to confirm our understanding of the services we are to provide...&#10;&#10;Please review this letter carefully and sign below to indicate your agreement."
-                  rows={12}
-                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors resize-none"
-                  style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                />
-              </div>
-
-              {/* Expiry */}
-              <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
-                  Expires In (days)
-                </label>
-                <select
-                  value={expiresInDays}
-                  onChange={(e) => setExpiresInDays(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                  style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                >
-                  <option value={7}>7 days</option>
-                  <option value={14}>14 days</option>
-                  <option value={30}>30 days</option>
-                  <option value={60}>60 days</option>
-                  <option value={90}>90 days</option>
-                </select>
-              </div>
-
-              {/* Save as template */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={saveAsTemplate}
-                    onChange={(e) => setSaveAsTemplate(e.target.checked)}
-                    className="w-4 h-4 rounded accent-blue-500"
-                  />
-                  <span className="text-sm" style={{ color: "var(--text-main)" }}>
-                    Save as template for future use
-                  </span>
-                </label>
-                {saveAsTemplate && (
-                  <input
-                    type="text"
-                    value={templateName}
-                    onChange={(e) => setTemplateName(e.target.value)}
-                    placeholder="Template name (e.g. Standard Tax Engagement)"
-                    className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
-                    style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-                  />
-                )}
-              </div>
-              </>}
-            </div>
-
-            {/* Modal footer */}
-            <div className="p-4 border-t border-[var(--card-border)] flex items-center justify-end gap-3">
-              <button
-                onClick={() => { setShowCompose(false); resetForm(); setShowPreview(false); }}
-                className="px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)]"
-                style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSend}
-                disabled={!allRecipientsValid || !subject || !content || sending}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-all hover:opacity-90"
-                style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-              >
-                <SendIcon className="w-3.5 h-3.5" />
-                {sending ? "Sending..." : `Send to ${recipients.length} Recipient${recipients.length > 1 ? "s" : ""}`}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Detail Modal */}
       {showDetail && (

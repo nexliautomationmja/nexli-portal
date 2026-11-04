@@ -438,3 +438,6 @@ export function StudioTabs({ active }: { active: "videos" | "adcopy" }) {
     </nav>
   );
 }
+
+/** The same dark Launch Pad canvas, for pages outside Creative Studio (e.g. the engagement letter composer). */
+export const LaunchPadCanvas = StudioCanvas;

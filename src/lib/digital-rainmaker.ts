@@ -73,6 +73,7 @@ import {
 } from "@/lib/email";
 import { getOwnerBranding } from "@/lib/branding";
 import { createNotification } from "@/lib/notifications";
+import { markLeadWonForPaidInvoice } from "@/lib/pipeline-won";
 import {
   initOnboarding,
   getOnboardingState,
@@ -936,6 +937,13 @@ export async function onDrsInvoicePaid(invoiceId: string): Promise<void> {
       .where(eq(invoices.id, invoiceId))
       .limit(1);
     if (!invoice || invoice.status !== "paid") return;
+
+    // Up-front invoice paid → the linked pipeline lead turns Won (DRS and Enterprise).
+    try {
+      await markLeadWonForPaidInvoice(invoiceId);
+    } catch (err) {
+      console.error("Pipeline Won update failed:", err);
+    }
 
     const meta = (invoice.metadata ?? {}) as Partial<DrsMetadata>;
     const engagementId = typeof meta.engagementId === "string" ? meta.engagementId : null;
