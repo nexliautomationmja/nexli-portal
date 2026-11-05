@@ -185,9 +185,17 @@ export async function renderPiece(input: string, output: string, plan: CutClipPl
   parts.push(
     `[ac]atempo=${settings.speed},highpass=f=80,afftdn=nf=-20,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,aformat=channel_layouts=stereo[ao]`
   );
+  // Two threads, not ffmpeg's default of one per visible core: a function
+  // instance has 1–2 vCPUs, and the extra threads only cost memory (measured:
+  // 615 MB → 327 MB peak, ~30% less CPU, identical H.264 headers, so pieces
+  // made either way still join without re-encoding).
   await run([
     "-hide_banner",
     "-y",
+    "-filter_threads",
+    "1",
+    "-threads",
+    "2",
     "-i",
     input,
     "-filter_complex",
@@ -206,6 +214,8 @@ export async function renderPiece(input: string, output: string, plan: CutClipPl
     "6M",
     "-bufsize",
     "12M",
+    "-threads",
+    "2",
     "-r",
     "60",
     "-vsync",

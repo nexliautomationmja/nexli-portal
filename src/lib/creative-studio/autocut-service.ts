@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   creativeAssets,
@@ -95,20 +95,55 @@ export function planFor(
   });
 }
 
+const pieceRows = (projectId: string, hash: string) =>
+  and(eq(creativeAssets.projectId, projectId), eq(creativeAssets.kind, "cut_part"), sql`${creativeAssets.metadata}->>'hash' = ${hash}`);
+
 /** A previously rendered piece with this plan hash (any cut of this project). */
 export async function findPiece(projectId: string, hash: string) {
   const [piece] = await db
     .select()
     .from(creativeAssets)
-    .where(
-      and(
-        eq(creativeAssets.projectId, projectId),
-        eq(creativeAssets.kind, "cut_part"),
-        sql`${creativeAssets.metadata}->>'hash' = ${hash}`
-      )
-    )
+    .where(and(pieceRows(projectId, hash), eq(creativeAssets.status, "ready")))
     .limit(1);
   return piece ?? null;
+}
+
+/** Longer than the clip route's 300 s limit: a claim this old belongs to a request that died. */
+const CLAIM_STALE_MS = 320_000;
+
+/**
+ * Claim rendering a piece, so two drivers (the batch page and the video page,
+ * or a reload mid-cut) never encode the same piece at once — doing that is
+ * what ran instances out of memory. Returns the claim's id, or null while
+ * another request is rendering it. `driver` is the page's run id: a retry
+ * from the same run takes over its own claim (its last request failed).
+ */
+export async function claimPiece(projectId: string, hash: string, clip: Clip, driver: string): Promise<string | null> {
+  const rendering = and(pieceRows(projectId, hash), eq(creativeAssets.status, "rendering"));
+  await db.delete(creativeAssets).where(and(rendering, lt(creativeAssets.createdAt, new Date(Date.now() - CLAIM_STALE_MS))));
+  if (driver) await db.delete(creativeAssets).where(and(rendering, sql`${creativeAssets.metadata}->>'driver' = ${driver}`));
+  const [mine] = await db
+    .insert(creativeAssets)
+    .values({
+      projectId,
+      kind: "cut_part",
+      status: "rendering",
+      source: "autocut",
+      sort: clip.idx,
+      metadata: { clipId: clip.id, hash, version: clip.version, driver },
+    })
+    .returning({ id: creativeAssets.id });
+  // Two claims made at the same moment: the oldest wins, the other steps back.
+  const [first] = await db.select({ id: creativeAssets.id }).from(creativeAssets).where(rendering).orderBy(asc(creativeAssets.createdAt), asc(creativeAssets.id)).limit(1);
+  if (first && first.id !== mine.id) {
+    await releasePiece(mine.id);
+    return null;
+  }
+  return mine.id;
+}
+
+export async function releasePiece(claimId: string) {
+  await db.delete(creativeAssets).where(and(eq(creativeAssets.id, claimId), eq(creativeAssets.status, "rendering")));
 }
 
 export { tempDir };

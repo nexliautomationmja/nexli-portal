@@ -8,7 +8,7 @@ import { api, send, videoFileName } from "@/components/creative-studio/client";
 import { SaveVideoLink } from "@/components/creative-studio/save-video";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
 import { TrimEditor } from "@/components/creative-studio/trim-editor";
-import { assembleCut, cutPieces } from "@/components/creative-studio/pipeline";
+import { assembleCut, cutPieces, failCut } from "@/components/creative-studio/pipeline";
 
 type Cut = ProjectDetail["cuts"][number];
 
@@ -55,16 +55,19 @@ export function CutCard({
     });
   }, [allDone, latest, clips, takesKey, p.id, onChange, onError]);
 
-  // Drive a cut that's in progress: each clip's piece (3 at a time), then the join.
+  // Drive a cut that's in progress: each clip's piece (2 at a time), then the join.
   useEffect(() => {
     if (!allDone || !latest || latest.status !== "cutting" || running.current === latest.id) return;
     const cutId = latest.id;
     running.current = cutId;
     void cutPieces(p.id, cutId, clips.map((c) => c.id), (done, total) => setProgress({ done, total })).then(async (failed) => {
       if (failed) {
+        // Mark it failed, so the card shows why and "Try again" instead of a stalled progress bar.
+        const r = await failCut(p.id, cutId, failed);
         running.current = null;
         setProgress(null);
-        onError(`Auto-cut stopped: ${failed}`);
+        if (r.ok) onChange(r.data);
+        else onError(`Auto-cut stopped: ${failed}`);
         return;
       }
       const r = await assembleCut(p.id, cutId);
