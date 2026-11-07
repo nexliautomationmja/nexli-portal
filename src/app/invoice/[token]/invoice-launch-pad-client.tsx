@@ -9,6 +9,9 @@
 // payments are charged at the card price (cardPriceCents). Autopay-eligible
 // invoices (first DRS monthly) start a Stripe subscription at checkout and
 // show per-month prices from the API (autopay.monthlyAchCents / CardCents).
+// Up-front invoices (payVia "bank_transfer") skip Stripe: the page shows
+// Nexli's Mercury bank details and the portal marks them paid when the
+// money lands (lib/mercury.ts).
 // ══════════════════════════════════════════════════════════
 
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -26,6 +29,7 @@ import {
   CoversCard,
   TotalsCard,
   PayCard,
+  BankTransferCard,
   InlineNote,
   AchPendingCard,
   AutopayOnCard,
@@ -41,6 +45,7 @@ import {
   type InvoiceKind,
   type InvoiceLine,
   type PayMethod,
+  type BankRemit,
 } from "@/components/invoice-launch-pad";
 
 // ─── API shape (GET /api/invoice/[token]) ──────────────────
@@ -82,6 +87,10 @@ interface InvoiceResponse {
     achSettlementStatus: string | null;
     kind: InvoiceKind;
     autopay: AutopayInfo | null;
+    /** bank_transfer: paid by ACH/wire into Nexli's Mercury account (no Stripe checkout). */
+    payVia?: "bank_transfer" | "stripe";
+    remit?: BankRemit | null;
+    transferSentAt?: string | null;
   };
   lineItems: {
     description: string;
@@ -156,6 +165,7 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
   const [payError, setPayError] = useState<string | null>(null);
   const [managing, setManaging] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
+  const [sendingTransfer, setSendingTransfer] = useState(false);
   const clientToday = useSyncExternalStore(noopSubscribe, getToday, () => null);
 
   // Drop ?payment=… from the address bar so a refresh doesn't replay it.
@@ -254,6 +264,32 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
     }
   }
 
+  /** "I've sent the transfer": pauses reminders, tells Nexli, and checks the bank right away. */
+  async function handleTransferSent() {
+    if (sendingTransfer) return;
+    setSendingTransfer(true);
+    setPayError(null);
+    try {
+      const res = await fetch(`/api/invoice/${token}/transfer-sent`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPayError(data.error || "We couldn't save that. Please try again.");
+        return;
+      }
+      // Re-read the invoice: a wire may already have landed and been matched.
+      const fresh = await fetch(`/api/invoice/${token}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (fresh) {
+        const next = fresh as InvoiceResponse;
+        setState({ status: "ready", data: next });
+        if (isPaid(next.invoice)) setBurst((b) => b + 1);
+      }
+    } catch {
+      setPayError("Something went wrong. Please try again.");
+    } finally {
+      setSendingTransfer(false);
+    }
+  }
+
   async function handleManage() {
     if (managing) return;
     setManaging(true);
@@ -304,10 +340,12 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
   const paidOn = inv.paidAt ? new Date(inv.paidAt) : today;
   const overdueDays = Math.floor((startOfDay(today) - startOfDay(due)) / DAY_MS);
   const overdue = !paid && !achPending && overdueDays > 0;
+  const bankTransfer = inv.payVia === "bank_transfer";
+  const transferSentAt = bankTransfer && !paid && inv.transferSentAt ? new Date(inv.transferSentAt) : null;
 
   const heroStatus: HeroStatus = paid
     ? { kind: "paid", paidOn }
-    : achPending
+    : achPending || transferSentAt
       ? { kind: "processing" }
       : overdue
         ? { kind: "overdue", days: overdueDays }
@@ -337,7 +375,7 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
         issued={issued}
         due={due}
         billedTo={billedTo}
-        amountLabel={paid ? "Amount paid" : achPending ? "Payment processing" : "Amount due"}
+        amountLabel={paid ? "Amount paid" : achPending ? "Payment processing" : transferSentAt ? "Transfer on its way" : "Amount due"}
         amountCents={paid ? inv.amountPaid || inv.total : balance}
         currency={currency}
         status={heroStatus}
@@ -396,7 +434,22 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
         </div>
       )}
 
-      {showPay && (
+      {showPay && bankTransfer && (
+        <BankTransferCard
+          remit={inv.remit ?? null}
+          amountCents={balance}
+          invoiceNumber={inv.invoiceNumber}
+          currency={currency}
+          chargebackWaived={Boolean(inv.chargebackWaived)}
+          sentAt={transferSentAt}
+          sending={sendingTransfer}
+          onSent={handleTransferSent}
+        >
+          {payError && <InlineNote tone="error">{payError}</InlineNote>}
+        </BankTransferCard>
+      )}
+
+      {showPay && !bankTransfer && (
         <PayCard
           achCents={achCents}
           cardCents={cardCents}
@@ -411,7 +464,7 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
         </PayCard>
       )}
 
-      <NextSteps kind={inv.kind} paid={paid} autopay={autopayEligible || autopayActive} />
+      <NextSteps kind={inv.kind} paid={paid} autopay={autopayEligible || autopayActive} bankTransfer={bankTransfer} />
 
       <NotesCard notes={inv.notes} terms={inv.terms} />
 

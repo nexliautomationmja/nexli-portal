@@ -229,6 +229,21 @@ export function isChargebackWaivedInvoiceMeta(metadata: unknown): boolean {
   return typeof role === "string" && (CHARGEBACK_WAIVED_DRS_ROLES as readonly string[]).includes(role);
 }
 
+/**
+ * Invoices paid by bank transfer (ACH or wire) straight into Nexli's Mercury
+ * account instead of through Stripe (Nov 7 2026, Marcel): processors balk at
+ * $32K–$500K charges. The setup fee, the annual up-front invoice and annual
+ * renewals by role, plus every Enterprise invoice. Monthly invoices stay on
+ * Stripe autopay. Only applies once Mercury is connected (lib/mercury.ts).
+ */
+export const BANK_TRANSFER_DRS_ROLES = ["setup_fee", "setup_annual", "platform_annual_renewal"] as const;
+
+export function isBankTransferInvoiceMeta(metadata: unknown): boolean {
+  const meta = (metadata ?? {}) as { drsRole?: unknown; offer?: unknown };
+  if (meta.offer === "enterprise") return true;
+  return typeof meta.drsRole === "string" && (BANK_TRANSFER_DRS_ROLES as readonly string[]).includes(meta.drsRole);
+}
+
 /** True when an invoice's metadata marks it bank-transfer/wire only (Enterprise, DRS setup). */
 export function isAchOnlyInvoiceMeta(metadata: unknown): boolean {
   const meta = (metadata ?? {}) as { achOnly?: unknown; drsRole?: unknown };

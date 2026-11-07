@@ -16,6 +16,7 @@ import {
   UsersIcon,
 } from "@/components/ui/icons";
 import { InvoiceDocumentPreview } from "@/components/invoice-document";
+import { MercuryPanel } from "@/components/dashboard/mercury-panel";
 
 interface LineItem {
   id: string;
@@ -55,6 +56,8 @@ interface Invoice {
   reminderConfig: { schedule: { dayOffset: number }[] } | null;
   createdAt: string;
   lineItems: LineItem[];
+  /** transferSentAt: the client tapped "I've sent the transfer" (bank-transfer invoices). */
+  metadata?: { transferSentAt?: string } | null;
 }
 
 interface ClientHistory {
@@ -584,6 +587,16 @@ export function InvoicesClient() {
           </button>
         </div>
       </div>
+
+      {/* Mercury bank transfers (Nexli admin only; renders nothing for firms) */}
+      <MercuryPanel
+        onInvoicesChanged={() => {
+          fetch("/api/dashboard/invoices")
+            .then((r) => r.json())
+            .then((data) => setInvoices(data.invoices || []))
+            .catch(() => {});
+        }}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1404,6 +1417,16 @@ export function InvoicesClient() {
               </div>
             </div>
 
+            {showDetail.metadata?.transferSentAt && ["sent", "viewed", "overdue", "partial"].includes(showDetail.status) && (
+              <p
+                className="mt-4 rounded-lg border px-4 py-2.5 text-sm"
+                style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
+              >
+                🏦 Client says they sent the bank transfer on {formatDate(showDetail.metadata.transferSentAt)}. It&apos;s marked
+                paid automatically when it lands in Mercury.
+              </p>
+            )}
+
             {["sent", "viewed", "overdue", "partial"].includes(showDetail.status) && (
               <MarkPaidPanel
                 key={showDetail.id}
@@ -2037,6 +2060,7 @@ export function InvoicesClient() {
 // ─── Mark as paid (wire / check / bank transfer outside Stripe) ──────────
 
 const MANUAL_PAYMENT_METHODS = [
+  { value: "bank_transfer", label: "Bank transfer (Mercury)" },
   { value: "wire", label: "Wire" },
   { value: "ach", label: "ACH (outside Stripe)" },
   { value: "check", label: "Check" },
@@ -2053,7 +2077,7 @@ function MarkPaidPanel({
   onPaid: (invoice: Partial<Invoice> & { id: string }) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [method, setMethod] = useState<ManualPaymentMethod>("wire");
+  const [method, setMethod] = useState<ManualPaymentMethod>("bank_transfer");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

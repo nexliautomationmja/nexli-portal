@@ -24,7 +24,7 @@ import {
 import { NUM_FONT, READ_FONT } from "@/components/engagement-launch-pad/styles";
 import { INVOICE_PATHS as P } from "./icons";
 import { fmtDay, fmtLongDay, money } from "./format";
-import type { BillingType, HeroStatus, InvoiceKind, InvoiceLine, PayMethod } from "./types";
+import type { BankRemit, BillingType, HeroStatus, InvoiceKind, InvoiceLine, PayMethod } from "./types";
 
 const BILLING_PILL: Record<BillingType, { label: string; cls: string }> = {
   one_time: { label: "One-time", cls: "bg-white/5 text-neutral-300 border border-white/10" },
@@ -560,6 +560,203 @@ export function PayCard({
   );
 }
 
+// ─── Pay by bank transfer (Mercury) ────────────────────────
+// Up-front invoices (setup, annual, renewal, Enterprise) are paid by ACH or
+// wire straight into Nexli's bank account — no card or processor. The portal
+// sees the money arrive and marks the invoice paid.
+
+export function BankTransferCard({
+  remit,
+  amountCents,
+  invoiceNumber,
+  currency,
+  chargebackWaived = false,
+  sentAt,
+  sending,
+  onSent,
+  children,
+}: {
+  /** Null while Nexli's bank details can't be loaded. */
+  remit: BankRemit | null;
+  amountCents: number;
+  invoiceNumber: string;
+  currency?: string;
+  chargebackWaived?: boolean;
+  /** When the client said they sent it ("I've sent the transfer"). */
+  sentAt: Date | null;
+  sending: boolean;
+  onSent: () => void;
+  children?: React.ReactNode;
+}) {
+  const [tab, setTab] = useState<"ach" | "wire">("ach");
+  const wire = tab === "wire" && remit?.wire ? remit.wire : null;
+  const amount = money(amountCents, currency);
+
+  return (
+    <LpCard className="lp-card" style={{ animationDelay: "0.2s" }}>
+      <CardHeader
+        accent="emerald"
+        icon={P.bank}
+        title="Pay by bank transfer"
+        sub="Send an ACH or wire from your bank to Nexli's account. No card fees, nothing to sign up for."
+      />
+      {chargebackWaived && (
+        <p
+          className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100"
+          style={READ_FONT}
+        >
+          This payment is non-refundable. Under Section 2 of your signed agreement you waived the right to dispute
+          or reverse it with your bank.
+        </p>
+      )}
+
+      {!remit ? (
+        <InlineNote tone="amber">
+          Our bank details didn&apos;t load. Refresh this page in a minute, or reply to your invoice email and
+          we&apos;ll send them.
+        </InlineNote>
+      ) : (
+        <>
+          {remit.wire && (
+            <div role="tablist" aria-label="Transfer type" className="mt-5 grid grid-cols-2 gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
+              {(["ach", "wire"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t}
+                  onClick={() => setTab(t)}
+                  className={`min-h-10 rounded-full text-sm font-bold transition-colors ${
+                    tab === t ? "bg-emerald-500/20 text-white ring-1 ring-emerald-400/40" : "text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  {t === "ach" ? "ACH transfer" : "Wire transfer"}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4 sm:p-5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-300/90">Send exactly</p>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <p className="text-3xl font-extrabold text-white" style={NUM_FONT}>
+                {amount}
+              </p>
+              <CopyButton value={(amountCents / 100).toFixed(2)} label="amount" />
+            </div>
+          </div>
+
+          <dl className="mt-3 divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-white/[0.02]">
+            <RemitRow label={wire ? "Beneficiary" : "Account name"} value={remit.beneficiary} />
+            {wire?.beneficiaryAddress && <RemitRow label="Beneficiary address" value={wire.beneficiaryAddress} />}
+            <RemitRow label={wire ? "Routing (ABA) number" : "Routing number"} value={remit.routingNumber} mono />
+            <RemitRow label="Account number" value={remit.accountNumber} mono />
+            <RemitRow label="Account type" value={remit.accountType} copy={false} />
+            {wire && <RemitRow label="Bank name" value={wire.bankName} />}
+            {wire && <RemitRow label="Bank address" value={wire.bankAddress} />}
+            <RemitRow label={wire ? "Reference (OBI)" : "Memo"} value={invoiceNumber} mono highlight />
+          </dl>
+
+          <ol className="mt-4 space-y-1.5 text-sm text-neutral-300" style={READ_FONT}>
+            <li>
+              1. In your bank, send {wire ? "a domestic wire" : "an ACH transfer"} to the account above.
+            </li>
+            <li>
+              2. Send exactly <b className="text-white" style={NUM_FONT}>{amount}</b>.
+            </li>
+            <li>
+              3. Put <b className="text-white" style={NUM_FONT}>{invoiceNumber}</b> in the {wire ? "reference" : "memo"} so we can match it.
+            </li>
+          </ol>
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-neutral-400">
+            <Icon d={P.clock} size={13} className="shrink-0 text-neutral-500" />
+            {wire
+              ? "Wires usually arrive the same business day. Your bank may charge a wire fee."
+              : "ACH transfers usually arrive in 1–3 business days."}
+          </p>
+
+          {sentAt ? (
+            <div role="status" className="mt-5 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+              <Icon d={P.send} size={18} className="mt-0.5 shrink-0 text-emerald-300" />
+              <p className="text-sm text-emerald-100" style={READ_FONT}>
+                <b className="text-white">Transfer on its way</b> (you told us on {fmtDay(sentAt)}). We check our bank
+                every few minutes and email your receipt as soon as it lands.
+              </p>
+            </div>
+          ) : (
+            <button type="button" onClick={onSent} disabled={sending} className={`${CTA_CLASSES} mt-5 w-full`}>
+              {sending ? "Checking…" : "I've sent the transfer"}
+            </button>
+          )}
+        </>
+      )}
+
+      {children}
+
+      <p className="mt-4 flex items-start gap-1.5 text-[11px] text-neutral-400" style={READ_FONT}>
+        <Icon d={P.shield} size={13} className="mt-px shrink-0 text-emerald-400" />
+        Nexli will never email you new bank details. Always pay from this page, and if anyone sends you different
+        details, call us before paying.
+      </p>
+    </LpCard>
+  );
+}
+
+function RemitRow({
+  label,
+  value,
+  mono = false,
+  highlight = false,
+  copy = true,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  highlight?: boolean;
+  copy?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+      <div className="min-w-0">
+        <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">{label}</dt>
+        <dd
+          className={`mt-0.5 text-sm font-semibold [overflow-wrap:anywhere] ${highlight ? "text-emerald-200" : "text-white"}`}
+          style={mono ? NUM_FONT : undefined}
+        >
+          {value}
+        </dd>
+      </div>
+      {copy && <CopyButton value={value} label={label.toLowerCase()} />}
+    </div>
+  );
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked (old browser / insecure frame): the value is on screen to copy by hand.
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      aria-label={`Copy ${label}`}
+      className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors ${
+        copied ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200" : "border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white"
+      }`}
+    >
+      <Icon d={copied ? PATHS.check : P.copy} size={13} className="shrink-0" />
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 // ─── Inline note (pay errors, canceled checkout, previews) ─
 
 export function InlineNote({
@@ -675,7 +872,18 @@ export function AutopayOnCard({
 
 // ─── What happens next ─────────────────────────────────────
 
-function nextSteps(kind: InvoiceKind, autopay: boolean): string[] {
+function nextSteps(kind: InvoiceKind, autopay: boolean, bankTransfer: boolean): string[] {
+  if (bankTransfer) {
+    switch (kind) {
+      case "setup":
+      case "annual":
+        return ["Send the bank transfer", "We confirm it landed", "Your Launch Pad opens"];
+      case "renewal":
+        return ["Send the bank transfer", "Your platform continues for another year", "Same team, same weekly updates"];
+      case "enterprise":
+        return ["Send the bank transfer", "Funds clear", "Kickoff week scheduled"];
+    }
+  }
   switch (kind) {
     case "setup":
     case "annual":
@@ -705,11 +913,14 @@ export function NextSteps({
   kind,
   paid,
   autopay = false,
+  bankTransfer = false,
 }: {
   kind: InvoiceKind;
   /** Marks step one done. */
   paid: boolean;
   autopay?: boolean;
+  /** Paid by bank transfer into Mercury. */
+  bankTransfer?: boolean;
 }) {
   return (
     <section className="lp-card" style={{ animationDelay: "0.25s" }} aria-labelledby="next-heading">
@@ -717,7 +928,7 @@ export function NextSteps({
         What happens next
       </p>
       <ol className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {nextSteps(kind, autopay).map((step, i) => {
+        {nextSteps(kind, autopay, bankTransfer).map((step, i) => {
           const done = paid && i === 0;
           return (
             <li

@@ -31,7 +31,16 @@ function fmt(cents: number): string {
 }
 
 // Dual-pricing presentation (never "fee added at checkout") — see drs-pricing.ts.
-const PAYMENT_METHODS_CLAUSE = `Payments may be made via ACH bank transfer or credit/debit card, processed through Stripe, at the same price: no surcharge or card price applies to card payments. The exact amount is presented at checkout before payment.`;
+// Nov 7 2026 (Marcel): the large up-front amounts are paid by bank transfer
+// straight into Nexli's bank account (Mercury) — processors balk at them.
+// Monthly invoices stay on Stripe (ACH or card, same price).
+function paymentMethodsClause(plan: BillingPlan): string {
+  const upFront =
+    plan === "annual"
+      ? "The Setup Fee, the Annual Investment and each renewal Annual Investment are"
+      : "The Setup Fee is";
+  return `${upFront} paid by ACH bank transfer or wire directly to Provider's bank account, using the payment instructions shown on the invoice; card payments are not accepted for ${plan === "annual" ? "these amounts" : "the Setup Fee"}. Monthly invoices are paid by ACH bank transfer or credit/debit card through Stripe, at the same price: no surcharge or card price applies to card payments. The exact amount is shown on each invoice before payment.`;
+}
 
 /** English words for the small set of numbers the letter spells out. */
 function numberWords(n: number): string {
@@ -102,6 +111,7 @@ const CURRENT_REVISION_MARKERS = [
   "invoiced when Provider completes the Phase 1 build", // Oct 18 2026: recurring billing starts at launch (Build complete)
   "waives any right to dispute, reverse or charge back", // Oct 26 2026: cards accepted again on setup; chargeback waiver
   "no surcharge or card price applies", // Oct 26 2026: card costs the same as ACH
+  "directly to Provider's bank account", // Nov 7 2026: setup / annual / renewals by bank transfer (Mercury), not Stripe
 ];
 
 // Same as CURRENT_REVISION_MARKERS, but only for phrases that exist in the
@@ -151,13 +161,13 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const service = ADVERTISED_SERVICE;
   const launchDays = LAUNCH_TARGET_DAYS;
 
-  const setupClause = `${drsFeeLine(plan)} — Due upon execution of this Agreement. The Setup Fee covers the complete Phase 1 Implementation itemized in Section 1 — the platform build, automations, content front-load and advertising engineering — and is non-refundable once Provider begins work. The Setup Fee may be paid by ACH bank transfer, wire, or credit/debit card, at the same price. Because the Setup Fee pays for implementation work that begins immediately and cannot be returned, the Setup Fee is non-refundable and non-disputable. Client knowingly and voluntarily waives any right to dispute, reverse or charge back the Setup Fee through Client's bank, card issuer or payment provider. Any such dispute is a material breach of this Agreement; Client agrees that this signed Agreement may be submitted as evidence that the charge was authorized and that this waiver was given, and Client remains liable for the full amount disputed plus any dispute fees and reasonable collection costs, including attorneys' fees.`;
+  const setupClause = `${drsFeeLine(plan)} — Due upon execution of this Agreement. The Setup Fee covers the complete Phase 1 Implementation itemized in Section 1 — the platform build, automations, content front-load and advertising engineering — and is non-refundable once Provider begins work. The Setup Fee is paid by ACH bank transfer or wire directly to Provider's bank account, using the instructions on the invoice; card payments are not accepted for the Setup Fee. Because the Setup Fee pays for implementation work that begins immediately and cannot be returned, the Setup Fee is non-refundable and non-disputable. Client knowingly and voluntarily waives any right to dispute, reverse or charge back the Setup Fee through Client's bank, card issuer or payment provider. Any such dispute is a material breach of this Agreement; Client agrees that this signed Agreement may be submitted as evidence that the charge was authorized and that this waiver was given, and Client remains liable for the full amount disputed plus any dispute fees and reasonable collection costs, including attorneys' fees.`;
 
   const feeStructure =
     plan === "annual"
       ? `${setupClause}
 
-${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, invoiced together as a single invoice, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. The first Annual Investment is paid together with the Setup Fee at a discount to the monthly rate. In consideration of that discount, the chargeback and dispute waiver in Section 2(a) applies equally to the first Annual Investment, so the entire ${annualUpfront} USD paid at signing is non-refundable and may not be disputed or charged back. It may be paid by ACH bank transfer, wire, or credit/debit card, at the same price. Renewal Annual Investments may be paid by ACH bank transfer or card through Stripe. The Annual Investment renews annually unless terminated under Section 11. Each renewal Annual Investment of ${annual} USD is invoiced thirty (30) days before the anniversary of the effective date and is due on the anniversary.
+${drsPlanLine("annual")} — Due upon execution of this Agreement together with the Setup Fee, invoiced together as a single invoice, for a total of ${annualUpfront} USD due at signing. This Platform Investment covers the Phase 2 ongoing operation of everything delivered in Phase 1 — hosting, maintenance, ad management, support, reporting and AI usage — for twelve (12) months, and reflects a savings versus the ${monthlyAnnualized} USD payable at the monthly rate. The first Annual Investment is paid together with the Setup Fee at a discount to the monthly rate. In consideration of that discount, the chargeback and dispute waiver in Section 2(a) applies equally to the first Annual Investment, so the entire ${annualUpfront} USD paid at signing is non-refundable and may not be disputed or charged back. It is paid by ACH bank transfer or wire directly to Provider's bank account, as is each renewal Annual Investment; card payments are not accepted for these amounts. The Annual Investment renews annually unless terminated under Section 11. Each renewal Annual Investment of ${annual} USD is invoiced thirty (30) days before the anniversary of the effective date and is due on the anniversary.
 
 c) Managed Advertising Budget: ${adSpend} USD/month — Billed monthly, with the first month invoiced when Provider completes the Phase 1 build and launches the system and each subsequent invoice issued monthly thereafter, and deployed by Provider on Client's behalf under Section 3(b). The advertising budget is intentionally not collected up front; advertising begins once the first monthly invoice is paid. Billed via ACH bank transfer or card through Stripe.
 
@@ -203,7 +213,7 @@ d) Attribution & Reporting: Leads and advisory clients generated through the acq
 
 4. PAYMENT TERMS
 
-a) ${PAYMENT_METHODS_CLAUSE}
+a) ${paymentMethodsClause(plan)}
 
 b) All fees are non-refundable and no refunds will be issued once payment is received.
 

@@ -844,6 +844,8 @@ export function buildInvoiceEmail(params: {
   dueDate: Date;
   invoiceUrl: string;
   branding?: OwnerBranding;
+  /** Paid by bank transfer into Nexli's Mercury account: no Stripe wording; details stay on the page (never in email). */
+  bankTransfer?: boolean;
 }): { subject: string; html: string } {
   const { clientName, senderName, invoiceNumber, total, dueDate, invoiceUrl } =
     params;
@@ -875,11 +877,11 @@ export function buildInvoiceEmail(params: {
       </table>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${invoiceUrl}" style="${buttonStyleFor(params.branding)}">View &amp; Pay Invoice</a>
+      <a href="${invoiceUrl}" style="${buttonStyleFor(params.branding)}">${params.bankTransfer ? "View Invoice &amp; Bank Details" : "View &amp; Pay Invoice"}</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
-        No account required &bull; Secure payment via Stripe
+        ${params.bankTransfer ? "Pay by bank transfer (ACH or wire) &bull; Account details are on the invoice page" : "No account required &bull; Secure payment via Stripe"}
       </p>
     </div>
   `, params.branding);
@@ -956,6 +958,8 @@ export function buildInvoiceReminderEmail(params: {
   isOverdue: boolean;
   invoiceUrl: string;
   branding?: OwnerBranding;
+  /** Paid by bank transfer into Nexli's Mercury account: no Stripe wording; details stay on the page (never in email). */
+  bankTransfer?: boolean;
 }): { subject: string; html: string } {
   const {
     clientName,
@@ -1002,11 +1006,11 @@ export function buildInvoiceReminderEmail(params: {
       </table>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${invoiceUrl}" style="${buttonStyleFor(params.branding)}">View &amp; Pay Invoice</a>
+      <a href="${invoiceUrl}" style="${buttonStyleFor(params.branding)}">${params.bankTransfer ? "View Invoice &amp; Bank Details" : "View &amp; Pay Invoice"}</a>
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:#4a4a5a;font-size:11px;">
-        No account required &bull; Secure payment via Stripe
+        ${params.bankTransfer ? "Pay by bank transfer (ACH or wire) &bull; Account details are on the invoice page" : "No account required &bull; Secure payment via Stripe"}
       </p>
     </div>
   `, params.branding);

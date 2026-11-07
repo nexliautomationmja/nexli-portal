@@ -52,6 +52,7 @@
  */
 
 import { db } from "@/db";
+import { usesBankTransfer } from "@/lib/bank-transfer";
 import {
   engagements,
   engagementSigners,
@@ -228,6 +229,7 @@ export async function emailInvoiceToClient(
       dueDate: invoice.dueDate,
       invoiceUrl,
       branding,
+      bankTransfer: await usesBankTransfer(invoice),
     });
 
     await sendEmailWithLog({

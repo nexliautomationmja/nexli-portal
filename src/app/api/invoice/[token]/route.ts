@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { invoices, invoiceLineItems, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getAutopayInfo } from "@/lib/autopay";
+import { remitDetails, usesBankTransfer } from "@/lib/mercury";
 
 /** What the invoice is for — drives the pay page's "what happens next" copy. */
 type InvoiceKind =
@@ -71,6 +72,12 @@ export async function GET(
   const meta = (invoice.metadata ?? null) as Record<string, unknown> | null;
   const autopay = getAutopayInfo(invoice, lineItems);
 
+  // Up-front invoices are paid by bank transfer into Mercury (lib/mercury.ts):
+  // the page shows the account details instead of Stripe checkout.
+  const bankTransfer = await usesBankTransfer(invoice);
+  const open = !["paid", "canceled", "void"].includes(invoice.status) && invoice.balanceDue > 0;
+  const remit = bankTransfer && open ? await remitDetails() : null;
+
   const [owner] = await db
     .select({ name: users.name, email: users.email, companyName: users.companyName })
     .from(users)
@@ -106,6 +113,9 @@ export async function GET(
       achSettlementStatus: invoice.achSettlementStatus,
       kind: invoiceKind(meta),
       autopay,
+      payVia: bankTransfer ? "bank_transfer" : "stripe",
+      remit,
+      transferSentAt: typeof meta?.transferSentAt === "string" ? meta.transferSentAt : null,
     },
     lineItems: lineItems.sort((a, b) => a.order - b.order),
     from: {

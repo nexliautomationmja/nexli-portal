@@ -8,10 +8,10 @@ import {
   calculateLineAmount,
   calculateInvoiceTotals,
 } from "@/lib/invoice-utils";
-import { sendPaymentNotifications } from "@/lib/payments-webhook-handlers";
-import { onDrsInvoicePaid } from "@/lib/digital-rainmaker";
+import { settleDateLabel, settleInvoicePayment } from "@/lib/invoice-settle";
 
 const MANUAL_METHODS = {
+  bank_transfer: "Bank transfer",
   wire: "Wire transfer",
   ach: "ACH",
   check: "Check",
@@ -116,7 +116,7 @@ export async function PATCH(
     const method = body.method;
     if (typeof method !== "string" || !(method in MANUAL_METHODS)) {
       return NextResponse.json(
-        { error: "method must be one of wire, ach, check, other" },
+        { error: "method must be one of bank_transfer, wire, ach, check, other" },
         { status: 400 }
       );
     }
@@ -128,41 +128,21 @@ export async function PATCH(
       return NextResponse.json({ error: "Note too long (max 500)" }, { status: 400 });
     }
 
-    const now = new Date();
-    const dateLabel = now.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
+    // Records the balance as paid and runs everything a Stripe payment runs
+    // (receipt, owner email, onboarding / pipeline Won). Atomic, so a double
+    // click can't record it twice.
+    const settled = await settleInvoicePayment({
+      invoiceId,
+      amountCents: Math.max(0, invoice.total - invoice.amountPaid),
+      method,
+      noteLine: `Payment recorded manually: ${MANUAL_METHODS[method as ManualMethod]} on ${settleDateLabel()}${note ? ` — ${note}` : ""}`,
+      payment: { source: "manual", ...(note ? { note } : {}) },
     });
-    const line = `Payment recorded manually: ${MANUAL_METHODS[method as ManualMethod]} on ${dateLabel}${note ? ` — ${note}` : ""}`;
-    const notes = invoice.notes ? `${invoice.notes}\n\n${line}` : line;
-    const paymentCents = Math.max(0, invoice.total - invoice.amountPaid);
-
-    const [updated] = await db
-      .update(invoices)
-      .set({
-        status: "paid",
-        amountPaid: invoice.total,
-        balanceDue: 0,
-        paidAt: now,
-        paymentMethod: method,
-        achSettlementStatus: null,
-        notes,
-        updatedAt: now,
-      })
-      .where(eq(invoices.id, invoiceId))
-      .returning();
-
-    // Same owner email / client receipt / notification as a Stripe payment
-    // (takes the pre-payment row).
-    try {
-      await sendPaymentNotifications(invoice, paymentCents, false);
-    } catch (err) {
-      console.error("Manual payment notifications failed:", err);
+    if (!settled) {
+      return NextResponse.json({ error: "This invoice changed — refresh and try again." }, { status: 409 });
     }
-    await onDrsInvoicePaid(invoiceId);
 
-    return NextResponse.json({ invoice: updated });
+    return NextResponse.json({ invoice: settled.invoice });
   }
 
   // Status change actions

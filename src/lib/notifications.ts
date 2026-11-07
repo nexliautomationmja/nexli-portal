@@ -22,7 +22,9 @@ export type NotificationType =
   | "survey_low_score"
   | "weekly_update_due"
   | "autopay_failed"
-  | "autopay_canceled";
+  | "autopay_canceled"
+  | "bank_transfer_sent"
+  | "bank_transfer_review";
 
 interface CreateNotificationParams {
   userId: string;
@@ -59,6 +61,8 @@ const TYPE_CONFIG: Record<
   weekly_update_due: { emoji: "\u{1F4EC}", color: "#F59E0B" },
   autopay_failed: { emoji: "\u26A0\uFE0F", color: "#F43F5E" },
   autopay_canceled: { emoji: "\u26D4", color: "#F43F5E" },
+  bank_transfer_sent: { emoji: "\u{1F3E6}", color: "#2563EB" },
+  bank_transfer_review: { emoji: "\u{1F50E}", color: "#F59E0B" },
 };
 
 export async function createNotification({

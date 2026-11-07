@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { usesBankTransfer } from "@/lib/bank-transfer";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { invoices, invoiceLineItems, invoiceReminders, users } from "@/db/schema";
@@ -67,6 +68,7 @@ export async function POST(
       dueDate: invoice.dueDate,
       invoiceUrl,
       branding,
+      bankTransfer: await usesBankTransfer(invoice),
     });
     await sendEmailWithLog({
       to: invoice.clientEmail,

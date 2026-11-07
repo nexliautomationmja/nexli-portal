@@ -20,6 +20,16 @@ export interface InvoiceLine {
 
 export type PayMethod = "ach" | "card";
 
+/** Nexli's bank details for invoices paid by bank transfer into Mercury (GET /api/invoice/[token] → remit). */
+export interface BankRemit {
+  beneficiary: string;
+  routingNumber: string;
+  accountNumber: string;
+  accountType: string;
+  /** Null when only ACH details are configured. */
+  wire: { bankName: string; bankAddress: string; beneficiaryAddress: string | null } | null;
+}
+
 /** Hero status pill. */
 export type HeroStatus =
   | { kind: "due"; due: Date }

@@ -7,6 +7,7 @@ import {
   resolveStripeAccountForOwner,
 } from "@/lib/stripe";
 import { cardPriceCents, isAchOnlyInvoiceMeta } from "@/lib/drs-pricing";
+import { usesBankTransfer } from "@/lib/bank-transfer";
 import {
   createAutopayCheckout,
   hasLiveAutopay,
@@ -52,6 +53,12 @@ export async function POST(
   // the client pay twice while it settles (3–5 business days).
   if (invoice.achSettlementStatus === "pending" || hasLiveAutopay(invoice)) {
     return NextResponse.json({ error: "payment_processing" }, { status: 409 });
+  }
+
+  // Up-front invoices are paid by bank transfer straight into Mercury — no
+  // Stripe checkout at all (the pay page shows the account details).
+  if (await usesBankTransfer(invoice)) {
+    return NextResponse.json({ error: "bank_transfer_only" }, { status: 400 });
   }
 
   // ACH-only invoices (the Enterprise License fee and the DRS setup

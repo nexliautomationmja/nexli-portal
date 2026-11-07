@@ -19,10 +19,13 @@ export function fmtLongDay(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-/** Human label for a stored payment method ("ach" | "card"). */
+/** Human label for a stored payment method (Stripe "ach" | "card", or a bank transfer / manual method). */
 export function paymentMethodLabel(method: string | null | undefined): string {
   if (method === "card") return "Card";
   if (method === "ach") return "Bank transfer (ACH)";
+  if (method === "bank_transfer") return "Bank transfer";
+  if (method === "wire") return "Wire transfer";
+  if (method === "check") return "Check";
   return "Online payment";
 }
 

@@ -13,6 +13,7 @@ import {
   generateInvoiceToken,
 } from "@/lib/invoice-utils";
 import { runAnnualRenewals } from "@/lib/digital-rainmaker";
+import { usesBankTransfer } from "@/lib/bank-transfer";
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -75,6 +76,11 @@ export async function GET(req: NextRequest) {
       // client meanwhile; retry this reminder on a later run.
       if (invoice.achSettlementStatus === "pending") continue;
 
+      // The client said they sent a bank transfer (lib/mercury.ts matches it
+      // when it lands): give it a week before reminding them again.
+      const transferSentAt = (invoice.metadata as { transferSentAt?: unknown } | null)?.transferSentAt;
+      if (typeof transferSentAt === "string" && now.getTime() - Date.parse(transferSentAt) < 7 * 86_400_000) continue;
+
       try {
         // Get the CPA name
         const [owner] = await db
@@ -99,6 +105,7 @@ export async function GET(req: NextRequest) {
           isOverdue,
           invoiceUrl,
           branding,
+          bankTransfer: await usesBankTransfer(invoice),
         });
 
         await sendEmailWithLog({ to: invoice.clientEmail, subject, html, fromName: branding.fromName, recipientName: invoice.clientName, emailType: "invoice_reminder", relatedId: invoice.id });
