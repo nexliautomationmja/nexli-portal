@@ -6,6 +6,7 @@ import {
   creativeCuts,
   creativeEdits,
   creativeProjects,
+  isWaiting,
   type ClipFields,
   type ManusActivitySnapshot,
   type ScriptSnapshot,
@@ -179,6 +180,9 @@ export async function projectDetail(project: Project) {
       style: e.style,
       status: e.status,
       progress: e.progress,
+      /** In line for a free AWS Lambda slot (render-queue.ts). */
+      waiting: isWaiting(e),
+      renderAttempts: e.renderAttempts,
       finalCutId: e.finalCutAssetId,
       durationS: e.props.durationS,
       // The full layout only for the newest version (VSL word lists are long).

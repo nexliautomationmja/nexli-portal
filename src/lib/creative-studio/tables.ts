@@ -347,9 +347,14 @@ export const creativeEdits = pgTable("creative_edits", {
   notes: text("notes"),
   /** The user's change request that produced this version (null for a fresh style). */
   note: text("note"),
-  /** draft | rendering | done | failed */
+  /**
+   * draft | rendering | done | failed. "rendering" with no render id yet =
+   * in line for a free Lambda slot (render-queue.ts).
+   */
   status: text("status").notNull().default("draft"),
   renderId: text("render_id"),
+  /** Times AWS refused to start this render (each retry uses fewer Lambda copies). */
+  renderAttempts: integer("render_attempts").notNull().default(0),
   renderBucket: text("render_bucket"),
   progress: integer("progress").notNull().default(0),
   outputAssetId: uuid("output_asset_id"),
@@ -360,6 +365,13 @@ export const creativeEdits = pgTable("creative_edits", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/** Held in creative_edits.render_id while the Lambda launch call is in flight. */
+export const RENDER_STARTING = "starting";
+
+/** A final render in line for a free AWS Lambda slot (not on Lambda yet) — render-queue.ts. */
+export const isWaiting = (e: { status: string; renderId: string | null }) =>
+  e.status === "rendering" && (!e.renderId || e.renderId === RENDER_STARTING);
 
 /**
  * The workspace's Kling connection: the portal is its own MCP client of
@@ -547,6 +559,8 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
       await db.execute(sql`ALTER TABLE "creative_batches" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
       await db.execute(sql`ALTER TABLE "creative_assets" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
+      // Nov 2026: renders queue for the AWS Lambda concurrency limit.
+      await db.execute(sql`ALTER TABLE "creative_edits" ADD COLUMN IF NOT EXISTS "render_attempts" integer NOT NULL DEFAULT 0`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_kling_connections" (
           "owner_id" uuid PRIMARY KEY REFERENCES "users"("id") ON DELETE CASCADE,

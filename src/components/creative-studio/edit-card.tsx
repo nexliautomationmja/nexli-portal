@@ -10,6 +10,7 @@ import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send, videoFileName } from "@/components/creative-studio/client";
 import { SaveVideoLink } from "@/components/creative-studio/save-video";
+import { AwsLimitNote } from "@/components/creative-studio/aws-limit-note";
 import { AssistantCard, Chip, SP, SvgIcon, ThinkingCard, UserBubble } from "@/components/creative-studio/canvas";
 
 const EditPreview = dynamic(() => import("@/components/creative-studio/edit-preview"), {
@@ -237,6 +238,13 @@ export function EditCard({
     const r = await send(api(`${p.id}/edit/render`), "POST");
     setBusy(null);
     setView("auto");
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
+  async function leaveLine() {
+    setBusy({ label: "Taking it out of line…" });
+    const r = await send(api(`${p.id}/edit/render`), "DELETE");
+    setBusy(null);
     if (r.ok) onChange(r.data);
     else onError(r.error);
   }
@@ -695,14 +703,30 @@ export function EditCard({
                   <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-xs leading-relaxed text-neutral-300">{latest.notes}</p>
                 )}
 
-                {rendering && (
+                {rendering && latest.waiting && (
+                  <div className="flex flex-col gap-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-semibold text-white">In line for AWS…</p>
+                      <p className="text-xs text-neutral-400">
+                        {latest.renderAttempts > 0
+                          ? "AWS was busy, so it'll try again with fewer machines in a moment."
+                          : "Another video is rendering. This one starts by itself as soon as there's room — keep this page or the batch open."}
+                      </p>
+                    </div>
+                    <button type="button" onClick={leaveLine} disabled={Boolean(busy)} className="min-h-9 self-start text-xs font-semibold text-neutral-400 hover:text-white sm:self-center">
+                      Take out of line
+                    </button>
+                  </div>
+                )}
+
+                {rendering && !latest.waiting && (
                   <div className="flex flex-col items-center gap-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-3 text-center sm:flex-row sm:gap-4 sm:text-left">
                     <div className="sm:-my-6 sm:-mr-10 sm:origin-left sm:scale-[0.62] max-sm:scale-75">
                       <ProgressRing percent={latest.progress} />
                     </div>
                     <div className="text-sm">
                       <p className="font-semibold text-white">Rendering on Remotion Lambda…</p>
-                      <p className="text-xs text-neutral-400">Up to 8 machines in parallel. An ad takes a minute or two; a VSL a few more. You can leave this page.</p>
+                      <p className="text-xs text-neutral-400">Split across several machines. An ad takes a minute or two; a VSL a few more. You can leave this page.</p>
                     </div>
                   </div>
                 )}
@@ -715,6 +739,8 @@ export function EditCard({
                     </button>
                   </div>
                 )}
+
+                {latest.status !== "done" && <AwsLimitNote />}
 
                 {latest.status === "done" && latest.specs && (
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px]" style={NUM_FONT}>

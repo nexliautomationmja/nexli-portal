@@ -7,6 +7,7 @@ import {
   creativeCuts,
   creativeEdits,
   creativeProjects,
+  isWaiting,
   type CreativeFormat,
 } from "@/lib/creative-studio/tables";
 import { CREDITS_PER_SECOND } from "@/lib/creative-studio/prompts";
@@ -29,7 +30,7 @@ export interface BatchVideo {
   clips: { total: number; done: number; working: number; failed: number; credits: number };
   cut: { id: string; status: string; version: number } | null;
   finalCut: boolean;
-  edit: { status: string; style: string; progress: number; version: number } | null;
+  edit: { status: string; style: string; progress: number; version: number; waiting: boolean } | null;
   adCopy: boolean;
 }
 
@@ -96,6 +97,7 @@ export async function batchSummary(batch: typeof creativeBatches.$inferSelect): 
         style: creativeEdits.style,
         progress: creativeEdits.progress,
         version: creativeEdits.version,
+        renderId: creativeEdits.renderId,
       })
       .from(creativeEdits)
       .where(inArray(creativeEdits.projectId, ids))
@@ -138,7 +140,7 @@ export async function batchSummary(batch: typeof creativeBatches.$inferSelect): 
       },
       cut: cut ? { id: cut.id, status: cut.status, version: cut.version } : null,
       finalCut: mine.some((a) => a.kind === "final_cut"),
-      edit: edit ? { status: edit.status, style: edit.style, progress: edit.progress, version: edit.version } : null,
+      edit: edit ? { status: edit.status, style: edit.style, progress: edit.progress, version: edit.version, waiting: isWaiting(edit) } : null,
       adCopy: mine.some((a) => a.kind === "ad_copy"),
     };
   });

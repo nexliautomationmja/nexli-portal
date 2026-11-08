@@ -9,6 +9,7 @@ import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/
 import { CTA_CLASSES, SYNE } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send, studioHref } from "@/components/creative-studio/client";
+import { AwsLimitNote } from "@/components/creative-studio/aws-limit-note";
 import { approveAndRender, runCut } from "@/components/creative-studio/pipeline";
 import { AssistantCard, Chip, ErrorStrip, SP, StudioCanvas, SvgIcon } from "@/components/creative-studio/canvas";
 
@@ -32,7 +33,9 @@ function stageOf(v: BatchVideo): { label: string; tone: Tone; step: number; need
     return { label: "Auto-cutting", tone: "blue", step: 4 };
   }
   if (!v.edit) return { label: "Ready to edit", tone: "amber", step: 5, needsYou: "Pick a style" };
-  if (v.edit.status === "rendering") return { label: `Final render ${v.edit.progress}%`, tone: "blue", step: 6 };
+  if (v.edit.status === "rendering") {
+    return { label: v.edit.waiting ? "Final render · in line" : `Final render ${v.edit.progress}%`, tone: "blue", step: 6 };
+  }
   if (v.edit.status === "done") return { label: "Done", tone: "green", step: 7 };
   if (v.edit.status === "failed") return { label: "Render failed", tone: "red", step: 6 };
   return { label: "Edit ready", tone: "amber", step: 6, needsYou: "Render" };
@@ -309,6 +312,7 @@ export function BatchBoard({ batchId }: { batchId: string }) {
                   disabled={Boolean(bulk)}
                 />
               )}
+              {(toRender.length > 0 || vids.some((v) => v.edit?.waiting)) && <AwsLimitNote />}
               {needCopy.length > 0 && (
                 <Action
                   text={`Meta ad copy for ${needCopy.length} ad${needCopy.length > 1 ? "s" : ""}.`}

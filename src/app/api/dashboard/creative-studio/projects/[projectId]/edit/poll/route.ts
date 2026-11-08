@@ -5,10 +5,11 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { creativeAssets, creativeEdits, type RenderSpecs } from "@/lib/creative-studio/tables";
+import { creativeAssets, creativeEdits, isWaiting, type RenderSpecs } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { projectDetail } from "@/lib/creative-studio/service";
 import { presignOutput, renderState } from "@/lib/creative-studio/remotion";
+import { requeueOrFail, startIfFree } from "@/lib/creative-studio/render-queue";
 import { probeSpecs, tempDir } from "@/lib/creative-studio/autocut";
 import { writeStorage } from "@/lib/creative-studio/frames";
 
@@ -34,7 +35,13 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
     .where(and(eq(creativeEdits.projectId, project.id), eq(creativeEdits.status, "rendering")))
     .orderBy(desc(creativeEdits.version))
     .limit(1);
-  if (!edit?.renderId || !edit.renderBucket) return NextResponse.json(await projectDetail(project));
+  if (!edit) return NextResponse.json(await projectDetail(project));
+  // Still in line for a Lambda slot: start it if the account has room now.
+  if (isWaiting(edit)) {
+    await startIfFree(edit);
+    return NextResponse.json(await projectDetail(project));
+  }
+  if (!edit.renderId || !edit.renderBucket) return NextResponse.json(await projectDetail(project));
 
   const state = await renderState(edit.renderId, edit.renderBucket).catch((err) => {
     console.error("[creative-studio] render progress failed:", err instanceof Error ? err.message : err);
@@ -42,7 +49,8 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
   });
   if (!state) return NextResponse.json(await projectDetail(project));
   if (state.failed) {
-    await db.update(creativeEdits).set({ status: "failed", error: state.failed, updatedAt: new Date() }).where(eq(creativeEdits.id, edit.id));
+    // AWS refused Lambda copies mid-render: back in line with fewer of them.
+    await requeueOrFail(edit, state.failed);
     return NextResponse.json(await projectDetail(project));
   }
   if (!state.done || !state.outKey || !state.outBucket) {
