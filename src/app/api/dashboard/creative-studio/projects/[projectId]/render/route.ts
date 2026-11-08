@@ -8,6 +8,7 @@ import { signPaths } from "@/lib/creative-studio/storage";
 import { rewriteClip } from "@/lib/creative-studio/script";
 import { submitClips } from "@/lib/creative-studio/render";
 import { accessToken, KlingNotConnectedError } from "@/lib/creative-studio/kling-mcp";
+import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 // Rate-limit backoff (60 s) plus batches of submissions.
 export const maxDuration = 300;
@@ -65,7 +66,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
           .map((f) => (f.storagePath ? signed.get(f.storagePath) : undefined))
           .filter(Boolean) as string[];
         const rewritten = await rewriteClip({
-          input: { title: project.title, format: project.format, rig: project.rig, brief: project.brief, frameUrls },
+          input: {
+          title: project.title,
+          format: project.format,
+          rig: project.rig,
+          brief: project.brief,
+          frameUrls,
+          firm: firmBrief(await studioById(access.ownerId, project.studioId)),
+        },
           frame: project.frameSpec,
           clips: all.map(clipFieldsOf),
           index: all.findIndex((c) => c.id === clip.id),

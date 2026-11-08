@@ -43,12 +43,29 @@ export interface FrameRequest {
   shot: string;
   aspect: "9:16" | "16:9";
   count: number;
-  /** Short-lived public URLs of the Daniela reference images. */
+  /** Short-lived public URLs of the reference images (Daniela's in Nexli's studio). */
   referenceUrls: string[];
+  /** A client firm's studio: the presenter is whoever is in its reference pictures (never Daniela). */
+  client?: boolean;
+}
+
+/** A client studio's presenter isn't Daniela: the person in that studio's reference pictures. */
+function clientFramePrompt(req: FrameRequest, size: string): string {
+  return [
+    `Create ${req.count} photorealistic still photographs of the presenter shown in the attached reference photos, to use as the opening frame of a talking-head video.`,
+    "It must clearly be the same person as in the reference photos in every image: same face, hair, skin tone and build.",
+    `The shot: ${req.shot.trim()}`,
+    `Format: ${size}. ${req.aspect === "9:16" ? "Framed for a vertical Facebook/Instagram ad, with room above the presenter's head." : "Framed for a landscape video, with the presenter centred."}`,
+    "The presenter faces the camera with the mouth relaxed and closed, in a natural pose to start talking from. Realistic skin, hair and fabric, natural light, shallow depth of field.",
+    "No text, captions, logos or watermarks anywhere in the image.",
+    `Save each image as a separate PNG file and attach all ${req.count} files in your final message.`,
+    "This request comes from an automated tool: nobody is available to answer questions or approve steps. Never stop to ask — make sensible choices yourself and finish the task.",
+  ].join("\n\n");
 }
 
 export function framePrompt(req: FrameRequest): string {
   const size = req.aspect === "9:16" ? "1080×1920 pixels, vertical 9:16" : "1920×1080 pixels, horizontal 16:9";
+  if (req.client) return clientFramePrompt(req, size);
   const refs = req.referenceUrls.length
     ? "The attached photos are reference images of Daniela. She must be clearly the same woman in every image: same face, hair, skin tone and build."
     : "Daniela is a confident woman in her thirties with long dark wavy hair.";
@@ -67,7 +84,7 @@ export function framePrompt(req: FrameRequest): string {
 export async function startFrameTask(req: FrameRequest): Promise<{ taskId: string; taskUrl: string | null }> {
   const content: Record<string, unknown>[] = [{ type: "text", text: framePrompt(req) }];
   req.referenceUrls.slice(0, 6).forEach((url, i) => {
-    content.push({ type: "file", file_url: url, filename: `daniela-reference-${i + 1}.png` });
+    content.push({ type: "file", file_url: url, filename: `${req.client ? "presenter" : "daniela"}-reference-${i + 1}.png` });
   });
   const res = await manus<{ task_id: string; task_url?: string }>("task.create", {
     method: "POST",
@@ -77,7 +94,7 @@ export async function startFrameTask(req: FrameRequest): Promise<{ taskId: strin
       interactive_mode: false,
       hide_in_task_list: true,
       share_visibility: "private",
-      title: "Nexli Creative Studio · Daniela frame",
+      title: req.client ? "Creative Studio · client frame" : "Nexli Creative Studio · Daniela frame",
     }),
   });
   if (!res.task_id) throw new ManusError("Manus didn't return a task id");

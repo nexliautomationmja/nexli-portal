@@ -147,6 +147,8 @@ export interface EditContext {
   words: CaptionWord[];
   /** "Your way": how the user wants it edited, in their words. */
   instruction?: string;
+  /** A client studio's firm brief (studios.ts firmBrief); empty for Nexli. */
+  firm?: string;
 }
 
 const t2 = (n: number) => n.toFixed(2);
@@ -176,12 +178,12 @@ function contextText(c: EditContext): string {
     .join("\n\n");
 }
 
-async function callClaude(content: string): Promise<RawLayout> {
+async function callClaude(content: string, firm = ""): Promise<RawLayout> {
   const client = new Anthropic({ timeout: 280_000, maxRetries: 1 });
   const params = {
     model: MODEL,
     max_tokens: 16_000,
-    system: SYSTEM,
+    system: `${SYSTEM}${firm}`,
     messages: [{ role: "user", content }],
     output_config: { effort: "high", format: { type: "json_schema", schema: LAYOUT_SCHEMA } },
     betas: ["server-side-fallback-2026-07-01"],
@@ -355,12 +357,15 @@ export interface LayoutResult {
  */
 async function layout(ctx: EditContext, prompt: string, revision: boolean): Promise<LayoutResult> {
   const enforce = !revision && ctx.style !== "custom";
-  let raw = await callClaude(prompt);
+  let raw = await callClaude(prompt, ctx.firm);
   let style: EditStyle = revision && outsideStyle(ctx.style, raw) ? "custom" : ctx.style;
   let overlays = sanitizeOverlays(style, raw, ctx.durationS, ctx.positions, revision);
   let problems = restatements(overlays, ctx.words, style);
   if (problems.length && enforce) {
-    raw = await callClaude(`${prompt}\n\nYour previous layout broke the no-restating rule:\n- ${problems.join("\n- ")}\nReturn the complete layout again with those fixed.`);
+    raw = await callClaude(
+      `${prompt}\n\nYour previous layout broke the no-restating rule:\n- ${problems.join("\n- ")}\nReturn the complete layout again with those fixed.`,
+      ctx.firm
+    );
     style = ctx.style;
     overlays = sanitizeOverlays(style, raw, ctx.durationS, ctx.positions);
     problems = restatements(overlays, ctx.words, style);
@@ -407,6 +412,7 @@ function rulebookSection(start: string, end: string): string {
   return EDITING_RULES.slice(i, j > i ? j : undefined).trim();
 }
 
+const SUGGEST_NEXLI = "a short Nexli video ad (Nexli runs client acquisition for CPA firms)";
 const SUGGEST_SYSTEM = `You help write one piece of on-screen text for a short Nexli video ad (Nexli runs client acquisition for CPA firms). The user typed their own version; you offer alternatives that keep their idea.
 
 ${rulebookSection("## Creative rules", "## Brand")}
@@ -433,6 +439,8 @@ export async function suggestText(args: {
   onScreen: string[];
   direction: string;
   script: string[];
+  /** A client studio: the firm's name and brief; absent for Nexli. */
+  firm?: { name: string; brief: string };
 }): Promise<{ options: string[]; aboutYours: string }> {
   const w = args.window;
   const spoken = w
@@ -456,7 +464,9 @@ export async function suggestText(args: {
   const params = {
     model: MODEL,
     max_tokens: 1500,
-    system: SUGGEST_SYSTEM,
+    system: args.firm
+      ? SUGGEST_SYSTEM.replace(SUGGEST_NEXLI, () => `a short video ad for ${args.firm!.name}, one of Nexli's client firms`) + args.firm.brief
+      : SUGGEST_SYSTEM,
     messages: [{ role: "user", content }],
     output_config: { effort: "low", format: { type: "json_schema", schema: SUGGEST_SCHEMA } },
     betas: ["server-side-fallback-2026-07-01"],

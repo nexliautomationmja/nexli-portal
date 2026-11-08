@@ -115,7 +115,7 @@ export function ManusActivity({
         {/* Header */}
         <div className="flex flex-wrap items-center gap-2 border-b border-white/5 px-4 py-3 sm:px-5">
           <h2 className="text-[15px] font-bold text-white" style={SYNE}>
-            Manus is creating Daniela&apos;s frames
+            Manus is creating the frames
           </h2>
           <span className="ml-auto flex items-center gap-2">
             <span className="text-xs tabular-nums text-neutral-500" style={NUM_FONT}>

@@ -9,6 +9,7 @@ import { extractFrames, tempDir } from "@/lib/creative-studio/autocut";
 import { transcribeUrl } from "@/lib/creative-studio/transcribe";
 import { readStorage, writeStorage } from "@/lib/creative-studio/frames";
 import { signPaths } from "@/lib/creative-studio/storage";
+import { inStudio, namedFirm, studioById, type Studio } from "@/lib/creative-studio/studios";
 
 /**
  * The Ad copy tool's jobs: any video or image dropped in, stored as a
@@ -97,11 +98,19 @@ export async function jobViews(jobs: Asset[]) {
 
 export type CopyJobView = Awaited<ReturnType<typeof jobViews>>[number];
 
-export async function listJobs(ownerId: string) {
+/** One studio's recent jobs. */
+export async function listJobs(ownerId: string, studio: Studio) {
   const jobs = await db
     .select()
     .from(creativeAssets)
-    .where(and(eq(creativeAssets.ownerId, ownerId), eq(creativeAssets.kind, "copy_job"), isNull(creativeAssets.projectId)))
+    .where(
+      and(
+        eq(creativeAssets.ownerId, ownerId),
+        eq(creativeAssets.kind, "copy_job"),
+        isNull(creativeAssets.projectId),
+        inStudio(creativeAssets.studioId, studio)
+      )
+    )
     .orderBy(desc(creativeAssets.createdAt))
     .limit(80);
   return jobViews(jobs);
@@ -118,9 +127,11 @@ export async function copyContextFor(job: Asset, ownerId: string): Promise<CopyC
   const m = metaOf(job);
   const media = COPY_MEDIA[job.mime ?? ""] ?? "image";
   if (!job.storagePath) throw new Error("The upload is missing");
+  // A client studio's copy sells the firm, never Nexli.
+  const firm = namedFirm(await studioById(ownerId, job.studioId));
 
   if (media === "image") {
-    return { media, note: m.note || undefined, images: [{ mediaType: "image/jpeg", data: await toB64(await readStorage(job.storagePath)) }] };
+    return { media, note: m.note || undefined, images: [{ mediaType: "image/jpeg", data: await toB64(await readStorage(job.storagePath)) }], firm };
   }
 
   let transcript = m.transcript;
@@ -170,5 +181,5 @@ export async function copyContextFor(job: Asset, ownerId: string): Promise<CopyC
     }
   }
   const images = await Promise.all((framePaths ?? []).map(async (p) => ({ mediaType: "image/jpeg" as const, data: (await readStorage(p)).toString("base64") })));
-  return { media, note: m.note || undefined, transcript: transcript ?? "", images };
+  return { media, note: m.note || undefined, transcript: transcript ?? "", images, firm };
 }

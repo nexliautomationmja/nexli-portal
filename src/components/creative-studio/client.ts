@@ -6,6 +6,13 @@ export function api(path: string) {
   return `/api/dashboard/creative-studio/projects/${path}`;
 }
 
+/** `?studio=…` for the studio-wide lists and creates (videos, batches, references, ad copy). */
+export const inStudioQs = (key: string) => `?studio=${encodeURIComponent(key)}`;
+
+/** A studio's home page ("nexli" = Nexli's own studio). */
+export const studioHref = (key: string, tab: "videos" | "adcopy" = "videos") =>
+  `/dashboard/creative-studio/s/${encodeURIComponent(key)}${tab === "adcopy" ? "/ad-copy" : ""}`;
+
 export async function send(
   url: string,
   method: string,

@@ -13,6 +13,7 @@ import {
 import { buildKlingPrompt, clipDuration, klingModelFor } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
 import { normalizeCopy } from "@/lib/creative-studio/ad-copy";
+import { studioById, studioRef } from "@/lib/creative-studio/studios";
 
 type Project = typeof creativeProjects.$inferSelect;
 type Clip = typeof creativeClips.$inferSelect;
@@ -57,7 +58,7 @@ export async function clipsOf(projectId: string) {
 
 /** Everything the project page needs, with signed frame URLs. */
 export async function projectDetail(project: Project) {
-  const [frames, clips, extras, cuts, edits] = await Promise.all([
+  const [frames, clips, extras, cuts, edits, studio] = await Promise.all([
     framesOf(project.id),
     clipsOf(project.id),
     db
@@ -67,6 +68,7 @@ export async function projectDetail(project: Project) {
       .orderBy(asc(creativeAssets.createdAt)),
     db.select().from(creativeCuts).where(eq(creativeCuts.projectId, project.id)).orderBy(asc(creativeCuts.version)),
     db.select().from(creativeEdits).where(eq(creativeEdits.projectId, project.id)).orderBy(asc(creativeEdits.version)),
+    studioById(project.ownerId, project.studioId),
   ]);
   const cutAssetIds = cuts.map((c) => c.assetId).filter((v): v is string => Boolean(v));
   const cutAssets = cutAssetIds.length ? await db.select().from(creativeAssets).where(inArray(creativeAssets.id, cutAssetIds)) : [];
@@ -117,6 +119,8 @@ export async function projectDetail(project: Project) {
       })),
       direction: project.brief?.direction ?? "",
       batchId: project.batchId ?? null,
+      /** Which studio this video lives in (Nexli's or a client firm's). */
+      studio: studioRef(studio),
       approvedAt: project.approvedAt?.toISOString() ?? null,
       updatedAt: project.updatedAt.toISOString(),
     },

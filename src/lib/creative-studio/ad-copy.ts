@@ -111,6 +111,8 @@ export interface CopyContext {
   note?: string;
   /** What was dropped in, when it isn't a studio video. */
   media?: "video" | "image";
+  /** Set in a client firm's studio: the copy sells the firm, never Nexli. */
+  firm?: { name: string; brief: string };
 }
 
 function contextText(c: CopyContext): string {
@@ -129,12 +131,25 @@ function contextText(c: CopyContext): string {
     .join("\n\n");
 }
 
-async function callClaude(content: Anthropic.ContentBlockParam[]): Promise<AdCopy> {
+const NEXLI_INTRO = "for Nexli, which runs paid-ads client acquisition for CPA firms.";
+
+/** Nexli: the prompt above, exactly. A client firm: about the firm, without Nexli's offer facts. */
+export function adCopySystem(firm?: CopyContext["firm"]): string {
+  if (!firm) return SYSTEM;
+  return (
+    SYSTEM.replace(NEXLI_INTRO, () => `for ${firm.name}, one of Nexli's client firms (Nexli makes the firm's ads; the copy sells the firm).`).replace(
+      `${section("## 9. Current Nexli offer facts")}\n\n`,
+      ""
+    ) + firm.brief
+  );
+}
+
+async function callClaude(content: Anthropic.ContentBlockParam[], firm?: CopyContext["firm"]): Promise<AdCopy> {
   const client = new Anthropic({ timeout: 200_000, maxRetries: 1 });
   const params = {
     model: MODEL,
     max_tokens: 8000,
-    system: SYSTEM,
+    system: adCopySystem(firm),
     messages: [{ role: "user", content }],
     output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
     betas: ["server-side-fallback-2026-07-01"],
@@ -211,11 +226,14 @@ function blocks(ctx: CopyContext, text: string): Anthropic.ContentBlockParam[] {
 
 async function write(ctx: CopyContext, ask: string): Promise<AdCopy> {
   const prompt = `${contextText(ctx)}\n\n${ask}`;
-  let copy = clean(await callClaude(blocks(ctx, prompt)));
+  let copy = clean(await callClaude(blocks(ctx, prompt), ctx.firm));
   const issues = problems(copy);
   if (issues.length) {
     copy = clean(
-      await callClaude(blocks(ctx, `${prompt}\n\nYour previous draft:\n${JSON.stringify(copy)}\n\nFix these and return the full copy:\n- ${issues.join("\n- ")}`))
+      await callClaude(
+        blocks(ctx, `${prompt}\n\nYour previous draft:\n${JSON.stringify(copy)}\n\nFix these and return the full copy:\n- ${issues.join("\n- ")}`),
+        ctx.firm
+      )
     );
   }
   if (copy.primaryTexts.length === 0 || copy.headlines.length === 0) throw new Error("Claude didn't return usable copy. Please try again.");

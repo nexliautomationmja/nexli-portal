@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { KLING_FRAMEWORK } from "@/lib/creative-studio/rules.generated";
+import { withoutNexliSections } from "@/lib/creative-studio/framework-sections";
 import { FORMAT_LABEL, RIG_LABEL } from "@/lib/creative-studio/prompts";
 import type {
   ClipFields,
@@ -143,6 +144,8 @@ export interface ScriptInput {
   brief: CreativeBrief;
   /** Signed URLs of the frame images, primary first. */
   frameUrls: string[];
+  /** A client studio's firm brief (studios.ts firmBrief); empty for Nexli. */
+  firm?: string;
 }
 
 function briefText(input: ScriptInput): string {
@@ -173,13 +176,14 @@ function frameBlocks(urls: string[]): Anthropic.ImageBlockParam[] {
   return urls.slice(0, 4).map((url) => ({ type: "image", source: { type: "url", url } }));
 }
 
-async function callClaude(content: Anthropic.ContentBlockParam[], schema: object, maxTokens: number): Promise<unknown> {
+async function callClaude(content: Anthropic.ContentBlockParam[], schema: object, maxTokens: number, firm = ""): Promise<unknown> {
   const client = new Anthropic({ timeout: 280_000, maxRetries: 1 });
   // Server-side refusal fallback ("default" routes by refusal category).
   const params = {
     model: MODEL,
     max_tokens: maxTokens,
-    system: SYSTEM,
+    // A client studio: Nexli's own walkthrough and offer facts are cut out, the firm's brief added.
+    system: firm ? `${withoutNexliSections(SYSTEM)}${firm}` : SYSTEM,
     messages: [{ role: "user", content }],
     output_config: { effort: "high", format: { type: "json_schema", schema } },
     betas: ["server-side-fallback-2026-07-01"],
@@ -265,7 +269,8 @@ export async function reviseScript(args: {
       },
     ],
     SCRIPT_SCHEMA,
-    48_000
+    48_000,
+    input.firm
   )) as RawScript;
   return toResult(raw, input.format);
 }
@@ -280,7 +285,8 @@ export async function generateScript(input: ScriptInput): Promise<ScriptResult> 
       },
     ],
     SCRIPT_SCHEMA,
-    48_000
+    48_000,
+    input.firm
   )) as RawScript;
   return toResult(raw, input.format);
 }
@@ -315,7 +321,8 @@ export async function rewriteClip(args: {
       },
     ],
     REWRITE_SCHEMA,
-    8_000
+    8_000,
+    input.firm
   )) as { clip: RawClip; notes: string };
   return { clip: toClipFields(raw.clip), notes: raw.notes?.trim() ?? "" };
 }

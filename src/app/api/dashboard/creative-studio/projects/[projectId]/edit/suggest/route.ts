@@ -5,6 +5,7 @@ import { claudeError } from "@/lib/creative-studio/script";
 import { suggestText } from "@/lib/creative-studio/edit";
 import { latestEdit } from "@/lib/creative-studio/edit-service";
 import { getText, parseTarget, sameTarget, slotBrief, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
+import { namedFirm, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 60;
 
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       onScreen,
       direction: project.brief?.direction ?? "",
       script: clips.map((c) => c.line),
+      firm: namedFirm(await studioById(access.ownerId, project.studioId)),
     });
     return NextResponse.json(result);
   } catch (err) {

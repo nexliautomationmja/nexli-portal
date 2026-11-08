@@ -237,7 +237,7 @@ export function Composer({
           disabled={disabled}
           className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white"
           aria-label="Attach an image"
-          title={allowVideo ? "Attach a frame image or your final cut video" : "Attach Daniela's frame"}
+          title={allowVideo ? "Attach a frame image or your final cut video" : "Attach the frame image"}
         >
           <SvgIcon d={SP.paperclip} />
         </button>

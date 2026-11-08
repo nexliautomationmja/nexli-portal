@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { KLING_FRAMEWORK } from "@/lib/creative-studio/rules.generated";
+import { withoutNexliSections } from "@/lib/creative-studio/framework-sections";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
 import { clampCount } from "@/lib/creative-studio/batch-shared";
 
@@ -54,14 +55,20 @@ export interface PlannedVideo {
   shot: string;
 }
 
-export async function planBatch(args: { brief: string; count: number; format: CreativeFormat }): Promise<{ videos: PlannedVideo[]; notes: string }> {
+export async function planBatch(args: {
+  brief: string;
+  count: number;
+  format: CreativeFormat;
+  /** A client studio's firm brief (studios.ts firmBrief); empty for Nexli. */
+  firm?: string;
+}): Promise<{ videos: PlannedVideo[]; notes: string }> {
   const count = clampCount(args.format, args.count);
   const kind = args.format === "vsl_16x9" ? "VSLs (16:9 horizontal, single presenter)" : "ad creatives (9:16 vertical)";
   const client = new Anthropic({ timeout: 280_000, maxRetries: 1 });
   const params = {
     model: MODEL,
     max_tokens: 16_000,
-    system: SYSTEM,
+    system: args.firm ? `${withoutNexliSections(SYSTEM)}${args.firm}` : SYSTEM,
     messages: [
       {
         role: "user",

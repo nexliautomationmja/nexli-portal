@@ -5,16 +5,20 @@ import { creativeAssets, creativeClips, creativeProjects } from "@/lib/creative-
 import { EMPTY_BRIEF } from "@/lib/creative-studio/prompts";
 import { cleanBrief, cleanFormatRig } from "@/lib/creative-studio/validate";
 import { requireStudioAdmin } from "@/lib/creative-studio/access";
+import { inStudio, studioFromRequest, studioNotFound } from "@/lib/creative-studio/studios";
 import { signPaths } from "@/lib/creative-studio/storage";
 
-export async function GET() {
+/** The videos in one studio (`?studio=`; Nexli's by default). */
+export async function GET(req: NextRequest) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
+  const studio = await studioFromRequest(access.ownerId, req);
+  if (!studio) return studioNotFound();
 
   const projects = await db
     .select()
     .from(creativeProjects)
-    .where(eq(creativeProjects.ownerId, access.ownerId))
+    .where(and(eq(creativeProjects.ownerId, access.ownerId), inStudio(creativeProjects.studioId, studio)))
     .orderBy(desc(creativeProjects.updatedAt));
   const ids = projects.map((p) => p.id);
 
@@ -90,10 +94,12 @@ export async function GET() {
   });
 }
 
-/** "New video": creates a project instantly, no form. */
+/** "New video": creates a project instantly in the studio (`?studio=`), no form. */
 export async function POST(req: NextRequest) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
+  const studio = await studioFromRequest(access.ownerId, req);
+  if (!studio) return studioNotFound();
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const title = typeof body?.title === "string" && body.title.trim() ? body.title.trim().slice(0, 200) : "Untitled video";
   const { format, rig } = cleanFormatRig(body?.format, body?.rig);
@@ -103,6 +109,7 @@ export async function POST(req: NextRequest) {
     .values({
       ownerId: access.ownerId,
       createdBy: access.actorId,
+      studioId: studio.id,
       title,
       format,
       rig,

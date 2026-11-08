@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
 import { SYNE } from "@/components/launch-pad";
-import { api, send } from "@/components/creative-studio/client";
+import { studioHref, api, send } from "@/components/creative-studio/client";
 import { uploadFrameFile } from "@/components/creative-studio/upload";
 import {
   AssistantCard,
@@ -207,7 +207,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
       if (images[0]) {
         const hadScript = d.clips.length > 0;
         if (hadScript && !confirm("Use this image as the new frame? You can rewrite the script for it afterwards.")) return false;
-        setWorking({ label: "Setting Daniela's frame…", accent: "blue" });
+        setWorking({ label: p.studio.kind === "client" ? "Setting the frame…" : "Setting Daniela's frame…", accent: "blue" });
         const fresh = await uploadFrameFile(p.id, images[0], (hadScript ? d.project.format : fmt) === "ad_9x16");
         d = fresh as ProjectDetail;
         apply(d);
@@ -317,11 +317,13 @@ export function StudioThread({ projectId }: { projectId: string }) {
   async function remove() {
     if (!confirm(`Delete "${p.title}" and everything in it? This can't be undone.`)) return;
     const r = await send(api(p.id), "DELETE");
-    if (r.ok) router.push("/dashboard/creative-studio");
+    if (r.ok) router.push(studioHref(p.studio.key));
     else setError(r.error);
   }
 
-  const composer = stage === "edit" && detail.edits.length === 0 ? DESCRIBE_EDIT : COMPOSER[stage];
+  const base = stage === "edit" && detail.edits.length === 0 ? DESCRIBE_EDIT : COMPOSER[stage];
+  // A client firm's studio has no Daniela.
+  const composer = p.studio.kind === "client" ? { ...base, placeholder: base.placeholder.replace("Daniela's frame", "the frame") } : base;
   const showFormat = stage === "direction" || stage === "frame" || stage === "write";
 
   return (
@@ -330,7 +332,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
         {/* Header */}
         {/* Sticks under the fixed phone top bar (md+: to the top of the window). */}
         <header className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 -mx-3 flex items-center gap-2 border-b border-white/5 bg-[#020617]/85 px-3 py-2.5 backdrop-blur-xl sm:-mx-6 sm:gap-3 sm:px-6 sm:py-3 md:top-0">
-          <Link href="/dashboard/creative-studio" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label="Back to Creative Studio">
+          <Link href={studioHref(p.studio.key)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label={`Back to ${p.studio.name} studio`}>
             <SvgIcon d={SP.chevronLeft} />
           </Link>
           <div className="min-w-0 flex-1">
@@ -342,6 +344,12 @@ export function StudioThread({ projectId }: { projectId: string }) {
               <span className="sm:hidden">
                 <Chip tone={status.tone}>{status.label}</Chip>
               </span>
+              <Link
+                href={studioHref(p.studio.key)}
+                className={`inline-flex min-h-6 items-center text-[11px] font-semibold hover:text-white ${p.studio.kind === "client" ? "text-violet-300" : "text-neutral-400"}`}
+              >
+                {p.studio.name} studio
+              </Link>
               {p.batchId && (
                 <Link href={`/dashboard/creative-studio/batch/${p.batchId}`} className="inline-flex min-h-6 items-center text-[11px] font-semibold text-cyan-300 hover:text-white">
                   ← Back to batch

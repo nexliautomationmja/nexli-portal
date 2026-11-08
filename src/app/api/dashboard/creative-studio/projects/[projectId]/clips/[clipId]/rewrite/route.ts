@@ -7,6 +7,7 @@ import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio
 import { clipFieldsOf, clipsOf, derivedClip, framesOf, projectDetail, snapshotOf } from "@/lib/creative-studio/service";
 import { signPaths } from "@/lib/creative-studio/storage";
 import { rewriteClip } from "@/lib/creative-studio/script";
+import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 120;
 
@@ -35,7 +36,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   let result;
   try {
     result = await rewriteClip({
-      input: { title: project.title, format: project.format, rig: project.rig, brief: project.brief, frameUrls },
+      input: {
+          title: project.title,
+          format: project.format,
+          rig: project.rig,
+          brief: project.brief,
+          frameUrls,
+          firm: firmBrief(await studioById(access.ownerId, project.studioId)),
+        },
       frame: project.frameSpec,
       clips: clips.map(clipFieldsOf),
       index,

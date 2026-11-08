@@ -79,6 +79,28 @@ export interface ScriptSnapshot {
   clips: ClipFields[];
 }
 
+/**
+ * A client firm's own Creative Studio. Nexli's studio is implicit (studio_id
+ * null everywhere), so everything made before studios existed stays Nexli's.
+ * Every admin in the workspace can open every studio.
+ */
+export const creativeStudios = pgTable("creative_studios", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  /** What the firm offers, who it serves, where, its call to action — fed to every writer in this studio. */
+  about: text("about"),
+  website: text("website"),
+  /** The firm's portal client account, when it has one (name/logo come from there). */
+  clientUserId: uuid("client_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdBy: uuid("created_by"),
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const creativeProjects = pgTable("creative_projects", {
   id: uuid("id").defaultRandom().primaryKey(),
   ownerId: uuid("owner_id")
@@ -100,6 +122,8 @@ export const creativeProjects = pgTable("creative_projects", {
   /** Set when the video was made as part of a batch (creative_batches). */
   batchId: uuid("batch_id"),
   batchIndex: integer("batch_index"),
+  /** The client studio it belongs to (creative_studios); null = Nexli's own studio. */
+  studioId: uuid("studio_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -127,6 +151,8 @@ export const creativeBatches = pgTable("creative_batches", {
   /** The idea the user typed. */
   brief: text("brief").notNull(),
   plan: jsonb("plan").$type<BatchPlanItem[]>().notNull(),
+  /** null = Nexli's own studio. */
+  studioId: uuid("studio_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -137,6 +163,8 @@ export const creativeAssets = pgTable("creative_assets", {
   projectId: uuid("project_id").references(() => creativeProjects.id, { onDelete: "cascade" }),
   /** Set on workspace-wide assets. */
   ownerId: uuid("owner_id"),
+  /** Workspace-wide assets (reference, copy_job): their client studio; null = Nexli's own. */
+  studioId: uuid("studio_id"),
   /** frame | frame_option | manus_task | reference | clip | cut_part | rough_cut | final_cut | render */
   kind: text("kind").notNull(),
   storagePath: text("storage_path"),
@@ -500,6 +528,25 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(
         sql`CREATE INDEX IF NOT EXISTS "creative_edits_project_idx" ON "creative_edits" ("project_id", "version")`
       );
+      // Nov 2026: a studio per client firm (null studio_id = Nexli's own studio).
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_studios" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "name" text NOT NULL,
+          "about" text,
+          "website" text,
+          "client_user_id" uuid REFERENCES "users"("id") ON DELETE SET NULL,
+          "created_by" uuid,
+          "archived_at" timestamp,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_studios_owner_idx" ON "creative_studios" ("owner_id")`);
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
+      await db.execute(sql`ALTER TABLE "creative_batches" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
+      await db.execute(sql`ALTER TABLE "creative_assets" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_kling_connections" (
           "owner_id" uuid PRIMARY KEY REFERENCES "users"("id") ON DELETE CASCADE,

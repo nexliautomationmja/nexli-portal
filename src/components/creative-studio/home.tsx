@@ -8,10 +8,12 @@ import { SYNE } from "@/components/launch-pad";
 import { uploadFrameFile } from "@/components/creative-studio/upload";
 import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { Composer, type ComposerSubmit } from "@/components/creative-studio/composer";
-import { BatchPlanCard, type BatchPlan } from "@/components/creative-studio/batch-plan-card";
+import { BatchPlanCard, type BatchPlan, type ManusMode } from "@/components/creative-studio/batch-plan-card";
 import { META_LIME, MetaChip, MetaLogo } from "@/components/creative-studio/meta";
 import { assignFrames, BATCH_MAX } from "@/lib/creative-studio/batch-shared";
 import { useIsTouch } from "@/lib/use-media";
+import { inStudioQs, studioHref } from "@/components/creative-studio/client";
+import type { StudioView } from "@/lib/creative-studio/studios";
 
 interface ProjectRow {
   id: string;
@@ -45,11 +47,21 @@ const SUGGESTIONS = [
   "Selfie-style ad: Daniela talks straight to owners writing the I-R-S a seven-figure check.",
 ];
 
+/** Starters for a client firm's studio: the firm's own ads to its own prospects. */
+const CLIENT_SUGGESTIONS = [
+  "Belief-shift ad: business owners think a big tax bill is just the cost of success — show what year-round planning keeps.",
+  "VSL: why owners who only see their C-P-A at tax time overpay, ending with booking a planning call.",
+  "Selfie-style ad: straight talk to owners who just wrote the I-R-S a six-figure check.",
+];
+
 /**
  * Creative Studio home — like opening a new chat: one big box. Describe the
- * video, paste Daniela's frame if you have it, pick Ad or VSL, send.
+ * video, paste the frame if you have it, pick Ad or VSL, send. Everything
+ * here belongs to one studio (Nexli's own, or a client firm's).
  */
-export function StudioHome() {
+export function StudioHome({ studio }: { studio: StudioView }) {
+  const qs = inStudioQs(studio.key);
+  const client = studio.kind === "client";
   const router = useRouter();
   const [format, setFormat] = useState<CreativeFormat>("ad_9x16");
   const [busy, setBusy] = useState(false);
@@ -62,21 +74,30 @@ export function StudioHome() {
   const [plan, setPlan] = useState<BatchPlan | null>(null);
   const [planning, setPlanning] = useState<string | null>(null);
   const [creating, setCreating] = useState<string | null>(null);
+  // A client studio's Manus frames need its own reference pictures (who presents isn't decided yet).
+  const [clientRefs, setClientRefs] = useState<number | null>(null);
+  const manus: ManusMode = !client ? "daniela" : clientRefs ? "studio" : "off";
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/dashboard/creative-studio/projects")
+    fetch(`/api/dashboard/creative-studio/projects${qs}`)
       .then((r) => r.json())
       .then((b) => !cancelled && setProjects(b?.projects ?? []))
       .catch(() => !cancelled && setProjects([]));
-    fetch("/api/dashboard/creative-studio/batches")
+    fetch(`/api/dashboard/creative-studio/batches${qs}`)
       .then((r) => r.json())
       .then((b) => !cancelled && setBatches(b?.batches ?? []))
       .catch(() => {});
+    if (client) {
+      fetch(`/api/dashboard/creative-studio/references${qs}`)
+        .then((r) => r.json())
+        .then((b) => !cancelled && setClientRefs(Array.isArray(b?.references) ? b.references.length : 0))
+        .catch(() => !cancelled && setClientRefs(0));
+    }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [qs, client]);
 
   function changeFormat(f: CreativeFormat) {
     setFormat(f);
@@ -88,7 +109,7 @@ export function StudioHome() {
     setError(null);
     setPlanning(`Claude is planning ${n} ${fmt === "vsl_16x9" ? "VSLs" : "ads"}…`);
     try {
-      const r = await fetch("/api/dashboard/creative-studio/batches/plan", {
+      const r = await fetch(`/api/dashboard/creative-studio/batches/plan${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brief, format: fmt, count: n }),
@@ -96,7 +117,8 @@ export function StudioHome() {
       const b = await r.json().catch(() => null);
       if (!r.ok || !Array.isArray(b?.videos)) throw new Error(b?.error || "Couldn't plan the batch");
       const videos = b.videos as { title: string; direction: string; shot: string }[];
-      const cover = keep?.cover ?? "rest";
+      // No Manus here yet: the pasted frames cover every video.
+      const cover = manus === "off" ? "all" : (keep?.cover ?? "rest");
       const random = keep?.random ?? false;
       const assigned = assignFrames(videos.length, frames.length, cover, random);
       setPlan({ format: fmt, brief, notes: b.notes ?? "", frames, cover, random, items: videos.map((v, i) => ({ ...v, frame: assigned[i] })) });
@@ -120,7 +142,7 @@ export function StudioHome() {
     setCreating("Creating the videos…");
     setError(null);
     try {
-      const r = await fetch("/api/dashboard/creative-studio/batches", {
+      const r = await fetch(`/api/dashboard/creative-studio/batches${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format: plan.format, brief: plan.brief, items: plan.items }),
@@ -155,7 +177,7 @@ export function StudioHome() {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/dashboard/creative-studio/projects", {
+      const r = await fetch(`/api/dashboard/creative-studio/projects${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brief: { direction: text }, format: fmt }),
@@ -175,15 +197,32 @@ export function StudioHome() {
   return (
     <StudioCanvas>
       <div className="mx-auto max-w-3xl px-4 pb-16 pt-10 sm:px-6 sm:pt-20">
+        <div className="lp-card mb-5 flex justify-center">
+          <StudioSwitch studio={studio} />
+        </div>
         <div className="lp-card flex justify-center">
-          <StudioTabs active="videos" />
+          <StudioTabs active="videos" studioKey={studio.key} />
         </div>
         <h1 className="lp-card mt-6 text-center text-4xl font-bold tracking-tighter text-white sm:text-5xl" style={{ ...SYNE, animationDelay: "0.05s" }}>
           What are we <GradientText>making?</GradientText>
         </h1>
         <p className="lp-card mx-auto mt-3 max-w-xl text-center text-sm text-neutral-400 sm:text-base" style={{ animationDelay: "0.1s" }}>
-          Describe the video and paste Daniela&apos;s frame. Claude writes it with your Kling framework, you approve, Kling renders it.
+          {client ? (
+            <>
+              Describe the video and paste the frame. Claude writes it for <b className="text-white">{studio.name}</b> with your Kling framework, you approve, Kling renders it.
+            </>
+          ) : (
+            <>Describe the video and paste Daniela&apos;s frame. Claude writes it with your Kling framework, you approve, Kling renders it.</>
+          )}
         </p>
+        {client && !studio.hasAbout && (
+          <p className="lp-card mx-auto mt-4 max-w-xl rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-center text-xs leading-relaxed text-amber-100" style={{ animationDelay: "0.12s" }}>
+            Tell Claude what {studio.name} offers, who they serve and the call to action, so scripts and copy sell the right thing.{" "}
+            <Link href={`/dashboard/creative-studio?edit=${encodeURIComponent(studio.key)}`} className="font-bold text-white underline underline-offset-2">
+              Add “About this firm”
+            </Link>
+          </p>
+        )}
 
         <div className="lp-card mt-8" style={{ animationDelay: "0.15s" }}>
           <Composer
@@ -194,7 +233,9 @@ export function StudioHome() {
             placeholder={
               count > 1
                 ? `Describe the batch, e.g. “${count} ${format === "vsl_16x9" ? "VSLs" : "ads"} on scope creep” — paste frames if you have them`
-                : "Describe the video — paste Daniela's frame if you have it"
+                : client
+                  ? "Describe the video — paste the frame if you have it"
+                  : "Describe the video — paste Daniela's frame if you have it"
             }
             hint={count > 1 ? "Enter → Claude plans the batch for you to review" : "Enter to start · Shift+Enter for a new line"}
             busy={busy || Boolean(planning) || Boolean(creating)}
@@ -220,6 +261,7 @@ export function StudioHome() {
             <div className="mt-4">
               <BatchPlanCard
                 plan={plan}
+                manus={manus}
                 busy={creating}
                 onChange={setPlan}
                 onReplan={() => void planBatch(plan.brief, plan.format, plan.items.length, plan.frames, { cover: plan.cover, random: plan.random })}
@@ -229,7 +271,7 @@ export function StudioHome() {
             </div>
           )}
           <div className="mt-3 flex flex-wrap justify-center gap-2">
-            {SUGGESTIONS.map((s) => (
+            {(client ? CLIENT_SUGGESTIONS : SUGGESTIONS).map((s) => (
               <button
                 key={s}
                 type="button"
@@ -246,7 +288,7 @@ export function StudioHome() {
           </div>
         </div>
 
-        <AdCopyFeature />
+        <AdCopyFeature href={studioHref(studio.key, "adcopy")} />
 
         {batches.length > 0 && (
           <section className="mt-16">
@@ -318,10 +360,10 @@ export function StudioHome() {
 }
 
 /** Meta Ad Copy, shown on the studio home so it's easy to find (lime, like the nexli.net Meta chip). */
-function AdCopyFeature() {
+function AdCopyFeature({ href }: { href: string }) {
   return (
     <Link
-      href="/dashboard/creative-studio/ad-copy"
+      href={href}
       className="lp-card group relative mt-8 block overflow-hidden rounded-3xl border border-lime-300/20 bg-gradient-to-br from-lime-400/[0.10] via-[#0b1220] to-emerald-500/[0.06] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-lime-300/50 hover:shadow-2xl hover:shadow-lime-500/15 sm:mt-12 sm:p-7"
       style={{ animationDelay: "0.2s" }}
     >
@@ -506,5 +548,36 @@ function ProjectCard({ p, delay }: { p: ProjectRow; delay: number }) {
       </div>
     )}
     </div>
+  );
+}
+
+/**
+ * Which studio you're in, as a pill above the tabs. Tapping it goes back to
+ * the picker ("What creative studio are we going for?").
+ */
+export function StudioSwitch({ studio, compact = false }: { studio: Pick<StudioView, "key" | "kind" | "name">; compact?: boolean }) {
+  const client = studio.kind === "client";
+  return (
+    <Link
+      href="/dashboard/creative-studio"
+      className={`group inline-flex max-w-full items-center gap-2 rounded-full border bg-white/[0.04] text-left transition-colors hover:bg-white/[0.08] ${
+        client ? "border-violet-400/30 hover:border-violet-300/60" : "border-cyan-400/30 hover:border-cyan-300/60"
+      } ${compact ? "min-h-8 px-2.5 py-1" : "min-h-10 py-1.5 pl-1.5 pr-3.5"}`}
+      title="Switch studio"
+    >
+      {!compact && (
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white ${
+            client ? "bg-gradient-to-br from-violet-500 to-fuchsia-500" : "bg-gradient-to-br from-blue-600 to-cyan-500"
+          }`}
+        >
+          {studio.name.trim().charAt(0).toUpperCase() || "S"}
+        </span>
+      )}
+      <span className="min-w-0 truncate text-xs font-bold text-white">
+        {client ? studio.name : "Nexli"} <span className="font-semibold text-neutral-400">studio</span>
+      </span>
+      <span className="shrink-0 text-[11px] font-semibold text-neutral-500 group-hover:text-white">⇄ Switch</span>
+    </Link>
   );
 }

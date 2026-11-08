@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ACCENT, LaunchPadStyles, SHIMMER_CONIC, SYNE, type Accent } from "@/components/launch-pad";
 import { LimeBadge, META_LIME, META_LIME_CONIC, META_LIME_FILL, MetaLogo } from "@/components/creative-studio/meta";
+import { studioHref } from "@/components/creative-studio/client";
 
 /**
  * Creative Studio visual foundation: a Launch Pad canvas (the dark navy,
@@ -385,13 +386,11 @@ export function ScrollJump() {
 const STUDIO_TABS = [
   {
     id: "videos",
-    href: "/dashboard/creative-studio",
     label: "Videos",
     sub: "Script → Kling → edit",
   },
   {
     id: "adcopy",
-    href: "/dashboard/creative-studio/ad-copy",
     label: "Meta Ad Copy",
     sub: "Drop creatives, get the copy",
   },
@@ -403,7 +402,7 @@ const STUDIO_TABS = [
  * Copy wears the lime "Campaigns built and run on Meta" chip look from
  * nexli.net; the frame's shimmer follows the active tab.
  */
-export function StudioTabs({ active }: { active: "videos" | "adcopy" }) {
+export function StudioTabs({ active, studioKey }: { active: "videos" | "adcopy"; studioKey: string }) {
   const frame = active === "adcopy" ? META_LIME_CONIC : SHIMMER_CONIC;
   return (
     <nav aria-label="Creative Studio" className="relative inline-flex w-full max-w-lg overflow-hidden rounded-[22px] p-[1.5px] sm:w-auto">
@@ -421,7 +420,7 @@ export function StudioTabs({ active }: { active: "videos" | "adcopy" }) {
           return (
             <Link
               key={t.id}
-              href={t.href}
+              href={studioHref(studioKey, t.id)}
               aria-current={on ? "page" : undefined}
               className={`group relative flex min-h-11 min-w-0 items-center gap-2 rounded-[18px] px-2.5 py-2 transition-all duration-200 sm:gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 sm:px-4 sm:py-2.5 ${tabClass}`}
               style={

@@ -8,7 +8,7 @@ import type { CreativeRig } from "@/lib/creative-studio/tables";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
 import { CTA_CLASSES, SYNE } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
-import { api, send } from "@/components/creative-studio/client";
+import { api, send, studioHref } from "@/components/creative-studio/client";
 import { approveAndRender, runCut } from "@/components/creative-studio/pipeline";
 import { AssistantCard, Chip, ErrorStrip, SP, StudioCanvas, SvgIcon } from "@/components/creative-studio/canvas";
 
@@ -225,14 +225,20 @@ export function BatchBoard({ batchId }: { batchId: string }) {
     <StudioCanvas>
       <div className="mx-auto max-w-5xl px-3 pb-16 sm:px-6">
         <header className="flex items-center gap-3 border-b border-white/5 py-4">
-          <Link href="/dashboard/creative-studio" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label="Back to Creative Studio">
+          <Link href={studioHref(summary.studio.key)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label={`Back to ${summary.studio.name} studio`}>
             <SvgIcon d={SP.chevronLeft} />
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-bold text-white sm:text-lg" style={SYNE}>
               Batch · {vids.length} {noun}
             </h1>
-            <p className="truncate text-xs text-neutral-500">{summary.brief}</p>
+            <p className="truncate text-xs text-neutral-500">
+              <Link href={studioHref(summary.studio.key)} className={`font-semibold hover:text-white ${summary.studio.kind === "client" ? "text-violet-300" : "text-neutral-400"}`}>
+                {summary.studio.name} studio
+              </Link>
+              {" · "}
+              {summary.brief}
+            </p>
           </div>
           <Chip tone={done === vids.length ? "green" : "blue"}>
             {done}/{vids.length} done

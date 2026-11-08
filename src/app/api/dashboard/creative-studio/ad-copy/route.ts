@@ -3,24 +3,29 @@ import { randomUUID } from "crypto";
 import { db } from "@/db";
 import { creativeAssets } from "@/lib/creative-studio/tables";
 import { requireStudioAdmin } from "@/lib/creative-studio/access";
+import { studioFromRequest, studioNotFound } from "@/lib/creative-studio/studios";
 import { createUploadTarget } from "@/lib/creative-studio/storage";
 import { COPY_EXT, COPY_MEDIA, listJobs } from "@/lib/creative-studio/ad-copy-jobs";
 
 /**
- * The Ad copy tool. GET → recent jobs.
+ * The Ad copy tool, per studio (`?studio=`; Nexli's by default). GET → recent jobs.
  * POST { action: "sign", mime } → one-time upload target (browser → storage).
  * POST { action: "register", path, mime, filename, note, group?, groupIndex? } → { id } of the new job
  * (group ties together creatives dropped in at once, up to 20).
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
-  return NextResponse.json({ jobs: await listJobs(access.ownerId) });
+  const studio = await studioFromRequest(access.ownerId, req);
+  if (!studio) return studioNotFound();
+  return NextResponse.json({ jobs: await listJobs(access.ownerId, studio) });
 }
 
 export async function POST(req: NextRequest) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
+  const studio = await studioFromRequest(access.ownerId, req);
+  if (!studio) return studioNotFound();
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const mime = typeof body?.mime === "string" ? body.mime : "";
   const mine = (p: unknown): p is string => typeof p === "string" && p.startsWith(`adcopy/${access.ownerId}/`);
@@ -41,6 +46,7 @@ export async function POST(req: NextRequest) {
       .insert(creativeAssets)
       .values({
         ownerId: access.ownerId,
+        studioId: studio.id,
         kind: "copy_job",
         storagePath: path,
         mime,

@@ -10,6 +10,9 @@ import { AdCopyResults } from "@/components/creative-studio/ad-copy-results";
 import { META_LIME, META_LIME_CONIC, MetaChip } from "@/components/creative-studio/meta";
 import { acceptFiles, copyAllText, copyCsv, MAX_CREATIVES } from "@/components/creative-studio/ad-copy-export";
 import { prepareVideo, WHOLE_UPLOAD_LIMIT } from "@/components/creative-studio/ad-copy-prepare";
+import { inStudioQs } from "@/components/creative-studio/client";
+import { StudioSwitch } from "@/components/creative-studio/home";
+import type { StudioView } from "@/lib/creative-studio/studios";
 
 const BASE = "/api/dashboard/creative-studio/ad-copy";
 const ACCEPT = ["video/mp4", "video/quicktime", "image/png", "image/jpeg", "image/webp"];
@@ -58,7 +61,9 @@ type Open = { type: "job"; id: string } | { type: "group"; id: string } | null;
  * 4 primary texts and 4 headlines. A batch gets one results card with a CSV
  * export; past jobs stay below to reopen.
  */
-export function AdCopyStudio() {
+export function AdCopyStudio({ studio }: { studio: StudioView }) {
+  // The list and new uploads belong to this studio; a job's own routes don't need it.
+  const listUrl = `${BASE}${inStudioQs(studio.key)}`;
   const [jobs, setJobs] = useState<CopyJobView[] | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [note, setNote] = useState("");
@@ -75,13 +80,13 @@ export function AdCopyStudio() {
 
   useEffect(() => {
     let cancelled = false;
-    call<{ jobs: CopyJobView[] }>(BASE, "GET")
+    call<{ jobs: CopyJobView[] }>(listUrl, "GET")
       .then((b) => !cancelled && setJobs(b.jobs))
       .catch(() => !cancelled && setJobs([]));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [listUrl]);
 
   function addFiles(list: File[]) {
     if (running) return;
@@ -122,7 +127,7 @@ export function AdCopyStudio() {
       let jobId = it.jobId;
       if (!jobId) {
         const put = async (blob: Blob, mime: string) => {
-          const target = await call<{ path: string; token: string }>(BASE, "POST", { action: "sign", mime });
+          const target = await call<{ path: string; token: string }>(listUrl, "POST", { action: "sign", mime });
           await uploadToTarget(target, blob, mime);
           return target.path;
         };
@@ -136,10 +141,10 @@ export function AdCopyStudio() {
           const framePaths: string[] = [];
           for (const f of frames) framePaths.push(await put(f, "image/jpeg"));
           const audioPath = audio ? await put(audio, "audio/wav") : null;
-          reg = await call<{ id: string }>(BASE, "POST", { ...common, path: framePaths[0], prepared: true, framePaths, audioPath });
+          reg = await call<{ id: string }>(listUrl, "POST", { ...common, path: framePaths[0], prepared: true, framePaths, audioPath });
         } else {
           patch(it.key, { status: "uploading", error: undefined });
-          reg = await call<{ id: string }>(BASE, "POST", { ...common, path: await put(it.file, it.file.type) });
+          reg = await call<{ id: string }>(listUrl, "POST", { ...common, path: await put(it.file, it.file.type) });
         }
         jobId = reg.id;
         patch(it.key, { jobId });
@@ -303,7 +308,10 @@ export function AdCopyStudio() {
     <StudioCanvas>
       <div className="mx-auto max-w-4xl px-4 pb-16 sm:px-6">
         <header className="lp-card flex justify-center pb-2 pt-8 sm:pt-12">
-          <StudioTabs active="adcopy" />
+          <div className="flex flex-col items-center gap-4">
+            <StudioSwitch studio={studio} />
+            <StudioTabs active="adcopy" studioKey={studio.key} />
+          </div>
         </header>
 
         <div className="space-y-5 py-6">

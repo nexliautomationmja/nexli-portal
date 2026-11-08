@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { inStudio, studioById } from "@/lib/creative-studio/studios";
 import { db } from "@/db";
 import { creativeAssets } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
@@ -25,13 +26,28 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const shot = typeof body?.shot === "string" ? body.shot.trim().slice(0, 1500) : "";
   if (!shot) return NextResponse.json({ error: "Describe the shot you want" }, { status: 400 });
 
-  const refsQuery = and(eq(creativeAssets.ownerId, access.ownerId), eq(creativeAssets.kind, "reference"), isNull(creativeAssets.projectId));
+  // Only this project's studio's references (Nexli's are Daniela; a client studio has its own).
+  const studio = await studioById(access.ownerId, project.studioId);
+  const refsQuery = and(
+    eq(creativeAssets.ownerId, access.ownerId),
+    eq(creativeAssets.kind, "reference"),
+    isNull(creativeAssets.projectId),
+    inStudio(creativeAssets.studioId, studio)
+  );
   const ids = Array.isArray(body?.referenceIds) ? body.referenceIds.filter((x) => typeof x === "string") : [];
   const refs = await db
     .select()
     .from(creativeAssets)
     .where(ids.length ? and(refsQuery, inArray(creativeAssets.id, ids)) : refsQuery)
     .limit(6);
+  if (studio.kind === "client" && refs.length === 0) {
+    return NextResponse.json(
+      {
+        error: `${studio.name}'s studio has no reference pictures yet, so Manus doesn't know who presents. Paste or upload a frame instead, or add reference pictures first.`,
+      },
+      { status: 400 }
+    );
+  }
   const signed = await signPaths(refs.map((r) => r.storagePath), 2 * 3600);
   const referenceUrls = refs.map((r) => (r.storagePath ? signed.get(r.storagePath) : undefined)).filter(Boolean) as string[];
 
@@ -41,6 +57,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       aspect: project.format === "vsl_16x9" ? "16:9" : "9:16",
       count: body?.count === 1 ? 1 : 2,
       referenceUrls,
+      client: studio.kind === "client",
     });
     await db.insert(creativeAssets).values({
       projectId: project.id,

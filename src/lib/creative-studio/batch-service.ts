@@ -11,6 +11,7 @@ import {
 } from "@/lib/creative-studio/tables";
 import { CREDITS_PER_SECOND } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
+import { studioById, studioRef, type StudioRef } from "@/lib/creative-studio/studios";
 
 /** Where one batch video is, light enough to poll every few seconds for 10 videos. */
 export interface BatchVideo {
@@ -34,6 +35,8 @@ export interface BatchVideo {
 
 export interface BatchSummary {
   id: string;
+  /** Which studio the batch lives in (Nexli's or a client firm's). */
+  studio: StudioRef;
   format: CreativeFormat;
   count: number;
   brief: string;
@@ -52,6 +55,7 @@ export async function loadBatch(ownerId: string, batchId: string) {
 }
 
 export async function batchSummary(batch: typeof creativeBatches.$inferSelect): Promise<BatchSummary> {
+  const studio = studioRef(await studioById(batch.ownerId, batch.studioId));
   const projects = await db
     .select()
     .from(creativeProjects)
@@ -59,7 +63,7 @@ export async function batchSummary(batch: typeof creativeBatches.$inferSelect): 
     .orderBy(asc(creativeProjects.batchIndex));
   const ids = projects.map((p) => p.id);
   const none = { videos: [] as BatchVideo[] };
-  if (ids.length === 0) return { id: batch.id, format: batch.format, count: batch.count, brief: batch.brief, createdAt: batch.createdAt.toISOString(), ...none };
+  if (ids.length === 0) return { id: batch.id, studio, format: batch.format, count: batch.count, brief: batch.brief, createdAt: batch.createdAt.toISOString(), ...none };
 
   const [assets, clips, cuts, edits] = await Promise.all([
     db
@@ -138,5 +142,5 @@ export async function batchSummary(batch: typeof creativeBatches.$inferSelect): 
       adCopy: mine.some((a) => a.kind === "ad_copy"),
     };
   });
-  return { id: batch.id, format: batch.format, count: batch.count, brief: batch.brief, createdAt: batch.createdAt.toISOString(), videos };
+  return { id: batch.id, studio, format: batch.format, count: batch.count, brief: batch.brief, createdAt: batch.createdAt.toISOString(), videos };
 }

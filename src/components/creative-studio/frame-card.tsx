@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import { CTA_CLASSES, labelCls } from "@/components/launch-pad";
-import { api, send } from "@/components/creative-studio/client";
+import { inStudioQs, api, send } from "@/components/creative-studio/client";
 import { prepareFrame, uploadToTarget } from "@/components/creative-studio/upload";
 import { AssistantCard, Chip, SP, SvgIcon } from "@/components/creative-studio/canvas";
 import { ManusActivity } from "@/components/creative-studio/manus-activity";
@@ -31,6 +31,9 @@ export function FrameCard({
 }) {
   const p = detail.project;
   const frame = detail.frames[0];
+  // References belong to this video's studio (Daniela's in Nexli's; a client firm's own).
+  const qs = inStudioQs(p.studio.key);
+  const client = p.studio.kind === "client";
   const [picking, setPicking] = useState(!frame);
   const [refs, setRefs] = useState<Reference[] | null>(null);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
@@ -46,14 +49,14 @@ export function FrameCard({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/dashboard/creative-studio/references")
+    fetch(`/api/dashboard/creative-studio/references${qs}`)
       .then((r) => r.json())
       .then((b) => !cancelled && setRefs(b?.references ?? []))
       .catch(() => !cancelled && setRefs([]));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [qs]);
 
   // Watch Manus live: check every 6 s while a task runs or waits.
   useEffect(() => {
@@ -81,7 +84,7 @@ export function FrameCard({
       for (const file of images) {
         try {
           const prepared = await prepareFrame(file, false);
-          const sign = await fetch("/api/dashboard/creative-studio/references", {
+          const sign = await fetch(`/api/dashboard/creative-studio/references${qs}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "sign", mime: prepared.mime }),
@@ -89,7 +92,7 @@ export function FrameCard({
           const target = await sign.json().catch(() => null);
           if (!sign.ok || !target?.token) throw new Error(target?.error || "Couldn't start the upload");
           await uploadToTarget(target, prepared.blob, prepared.mime);
-          const reg = await fetch("/api/dashboard/creative-studio/references", {
+          const reg = await fetch(`/api/dashboard/creative-studio/references${qs}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "register", path: target.path, mime: prepared.mime, width: prepared.width, height: prepared.height }),
@@ -103,7 +106,7 @@ export function FrameCard({
       }
       setBusy(null);
     },
-    [onError]
+    [onError, qs]
   );
   const addRef = useRef(addReferences);
   addRef.current = addReferences;
@@ -122,8 +125,8 @@ export function FrameCard({
   }, [zoneActive]);
 
   async function removeReference(id: string) {
-    if (!confirm("Remove this image from your Daniela references?")) return;
-    const r = await fetch(`/api/dashboard/creative-studio/references?assetId=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!confirm(client ? "Remove this reference picture?" : "Remove this image from your Daniela references?")) return;
+    const r = await fetch(`/api/dashboard/creative-studio/references${qs}&assetId=${encodeURIComponent(id)}`, { method: "DELETE" });
     const b = await r.json().catch(() => null);
     if (r.ok && b?.references) setRefs(b.references);
   }
@@ -158,7 +161,7 @@ export function FrameCard({
         id="stage-frame"
         accent="blue"
         icon={SP.image}
-        title="Daniela's frame"
+        title={client ? "The frame" : "Daniela's frame"}
         right={
           frame && !picking ? (
             <button type="button" onClick={() => setPicking(true)} className="inline-flex min-h-9 items-center rounded-full border border-white/10 px-3 text-xs font-semibold text-neutral-300 hover:text-white">
@@ -192,7 +195,7 @@ export function FrameCard({
               <b className="text-white">Paste the frame into the box below</b> and it&apos;s used as-is. Or use one of your references, or let Manus make one.
             </p>
 
-            {/* Daniela references (paste zone) */}
+            {/* References (paste zone): Daniela's in Nexli's studio, the studio's own in a client's */}
             <div
               data-paste-zone="references"
               data-active={zoneActive ? "true" : "false"}
@@ -212,7 +215,7 @@ export function FrameCard({
               }`}
             >
               <div className="mb-2 flex items-center justify-between gap-2">
-                <span className={`${labelCls} !mb-0`}>Daniela references</span>
+                <span className={`${labelCls} !mb-0`}>{client ? "Reference pictures" : "Daniela references"}</span>
                 <span className="text-[11px] text-neutral-500">
                   {zoneActive ? "Paste or drop to save a reference" : <><span className="[@media(hover:none)]:hidden">Hover here and paste to add</span><span className="hidden [@media(hover:none)]:inline">Tap + to add a reference</span></>}
                 </span>
@@ -224,7 +227,7 @@ export function FrameCard({
                     <div key={r.id} className="group relative w-28 shrink-0 overflow-hidden rounded-xl border bg-black sm:w-24" style={{ aspectRatio: "3 / 4", borderColor: ticked ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.1)" }}>
                       {r.url && (
                         // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
-                        <img src={r.url} alt="Daniela reference" className="h-full w-full object-cover" />
+                        <img src={r.url} alt={client ? "Reference picture" : "Daniela reference"} className="h-full w-full object-cover" />
                       )}
                       <button
                         type="button"
@@ -272,11 +275,20 @@ export function FrameCard({
                 />
               </div>
               {refs && refs.length === 0 && (
-                <p className="mt-1 text-[11px] text-neutral-500">Add 3–6 photos of Daniela (face close-up, outfits, your office setups). Manus copies her look from them.</p>
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  {client
+                    ? `This is ${p.studio.name}'s own library (Daniela's pictures stay in Nexli's studio). Once you've decided who presents for the firm, add 3–6 photos of them and Manus copies that look.`
+                    : "Add 3–6 photos of Daniela (face close-up, outfits, your office setups). Manus copies her look from them."}
+                </p>
               )}
             </div>
 
-            {/* Manus */}
+            {/* Manus — a client studio needs its own reference pictures first (no Daniela there) */}
+            {client && refs !== null && refs.length === 0 ? (
+              <p className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2.5 text-[11px] leading-relaxed text-neutral-400">
+                <b className="text-white">Manus</b> makes frames from this studio&apos;s reference pictures, so it&apos;s off until you add some. For now, paste or upload the frame.
+              </p>
+            ) : (
             <div className="space-y-2">
               <span className={labelCls}>Or have Manus create it</span>
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -284,7 +296,7 @@ export function FrameCard({
                   value={shot}
                   onChange={(e) => setShot(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && shot.trim() && !busy && active.length === 0 && generate()}
-                  placeholder="Daniela at a light wooden desk in a navy blazer, warm office light"
+                  placeholder={client ? "At a light wooden desk in a navy blazer, warm office light" : "Daniela at a light wooden desk in a navy blazer, warm office light"}
                   className="lp-input !rounded-full !px-4"
                 />
                 <button type="button" onClick={() => generate()} disabled={!shot.trim() || !!busy || active.length > 0} className={`${CTA_CLASSES} shrink-0 !py-2`}>
@@ -295,6 +307,7 @@ export function FrameCard({
                 {p.format === "vsl_16x9" ? "Made 16:9 for a VSL." : "Made 9:16 for an ad."} Uses the references marked ✓ Manus.
               </p>
             </div>
+            )}
 
             {detail.frameOptions.length > 0 && (
               <div className="space-y-2">

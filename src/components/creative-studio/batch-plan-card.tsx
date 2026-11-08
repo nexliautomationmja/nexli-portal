@@ -25,6 +25,9 @@ export interface BatchPlan {
   random: boolean;
 }
 
+/** Who makes frames with Manus here: Daniela (Nexli), this studio's references, or nobody yet. */
+export type ManusMode = "daniela" | "studio" | "off";
+
 /**
  * The batch plan before anything is made: Claude's videos (all editable),
  * which frame goes with which video, and — when fewer frames were pasted
@@ -32,6 +35,7 @@ export interface BatchPlan {
  */
 export function BatchPlanCard({
   plan,
+  manus = "daniela",
   busy,
   onChange,
   onReplan,
@@ -39,6 +43,8 @@ export function BatchPlanCard({
   onCreate,
 }: {
   plan: BatchPlan;
+  /** "off" = a client studio with no reference pictures yet: every video needs a pasted frame. */
+  manus?: ManusMode;
   busy: string | null;
   onChange: (p: BatchPlan) => void;
   onReplan: () => void;
@@ -76,9 +82,19 @@ export function BatchPlanCard({
 
       {/* Frames */}
       <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-        {k === 0 ? (
+        {k === 0 && manus === "off" ? (
+          <p className="text-xs text-amber-100">
+            No frames pasted, and this studio has no reference pictures for Manus yet (who presents for this firm is still to be decided).{" "}
+            <b className="text-white">Cancel and paste at least one frame</b> in the chat box with your idea.
+          </p>
+        ) : k === 0 ? (
           <p className="text-xs text-neutral-300">
-            No frames pasted, so <b className="text-white">Manus makes one frame per video</b> from its shot line, using your Daniela reference images. Paste frames in the chat box next time to use your own.
+            No frames pasted, so <b className="text-white">Manus makes one frame per video</b> from its shot line, using{" "}
+            {manus === "daniela" ? "your Daniela reference images" : "this studio's reference pictures"}. Paste frames in the chat box next time to use your own.
+          </p>
+        ) : k < n && manus === "off" ? (
+          <p className="text-sm font-semibold text-white">
+            You pasted {k} frame{k > 1 ? "s" : ""} for {n} videos, so {k > 1 ? "they're shared out" : "it's used"} across every video.
           </p>
         ) : k < n ? (
           <div className="space-y-2">
@@ -155,19 +171,21 @@ export function BatchPlanCard({
                   <span className="absolute bottom-0 right-0 rounded-tl bg-black/70 px-1 text-[9px] font-bold text-white">{fi + 1}</span>
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => setItem(i, { frame: null })}
-                className={`flex h-16 items-center rounded-md border-2 px-2.5 text-[11px] font-bold sm:h-14 ${it.frame === null ? "border-cyan-400 bg-cyan-500/10 text-white" : "border-white/10 text-neutral-400 hover:text-white"}`}
-              >
-                ✨ Manus
-              </button>
+              {manus !== "off" && (
+                <button
+                  type="button"
+                  onClick={() => setItem(i, { frame: null })}
+                  className={`flex h-16 items-center rounded-md border-2 px-2.5 text-[11px] font-bold sm:h-14 ${it.frame === null ? "border-cyan-400 bg-cyan-500/10 text-white" : "border-white/10 text-neutral-400 hover:text-white"}`}
+                >
+                  ✨ Manus
+                </button>
+              )}
             </div>
-            {it.frame === null && (
+            {it.frame === null && manus !== "off" && (
               <input
                 value={it.shot}
                 onChange={(e) => setItem(i, { shot: e.target.value })}
-                placeholder="Describe the shot for Manus, e.g. Daniela in a lounge chair by the window"
+                placeholder={manus === "daniela" ? "Describe the shot for Manus, e.g. Daniela in a lounge chair by the window" : "Describe the shot for Manus, e.g. at a desk by the window, warm light"}
                 className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-neutral-200 sm:py-1.5 placeholder:text-neutral-600 focus:border-cyan-400/50 focus:outline-none"
                 aria-label={`Video ${i + 1} Manus shot`}
               />
@@ -180,7 +198,9 @@ export function BatchPlanCard({
         <button
           type="button"
           onClick={onCreate}
-          disabled={Boolean(busy) || plan.items.some((it) => !it.direction.trim() || (it.frame === null && !it.shot.trim()))}
+          disabled={
+            Boolean(busy) || plan.items.some((it) => !it.direction.trim() || (it.frame === null && (manus === "off" || !it.shot.trim())))
+          }
           className={`${CTA_CLASSES} w-full disabled:opacity-50 sm:w-auto`}
         >
           {busy ?? `Create ${n} ${noun}`}

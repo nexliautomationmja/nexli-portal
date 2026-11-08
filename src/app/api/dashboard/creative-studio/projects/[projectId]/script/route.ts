@@ -7,6 +7,7 @@ import { framesOf, projectDetail, replaceScript } from "@/lib/creative-studio/se
 import { signPaths } from "@/lib/creative-studio/storage";
 import { claudeError, generateScript } from "@/lib/creative-studio/script";
 import { cleanFormatRig } from "@/lib/creative-studio/validate";
+import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 // A full VSL script (30–50 clips) can take a couple of minutes.
 export const maxDuration = 300;
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       rig: project.rig,
       brief: project.brief,
       frameUrls,
+      firm: firmBrief(await studioById(access.ownerId, project.studioId)),
     });
     await replaceScript(
       project,

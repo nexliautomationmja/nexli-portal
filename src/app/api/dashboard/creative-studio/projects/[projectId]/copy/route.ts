@@ -7,6 +7,7 @@ import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
 import { claudeError } from "@/lib/creative-studio/script";
 import { normalizeCopy, reviseAdCopy, writeAdCopy, type AdCopyVersion, type CopyContext } from "@/lib/creative-studio/ad-copy";
 import { latestEdit } from "@/lib/creative-studio/edit-service";
+import { namedFirm, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 120;
 
@@ -23,7 +24,7 @@ async function latestCopy(projectId: string) {
   return row ?? null;
 }
 
-async function copyContext(project: Project): Promise<CopyContext> {
+async function copyContext(project: Project, ownerId: string): Promise<CopyContext> {
   const [clips, edit] = await Promise.all([clipsOf(project.id), latestEdit(project.id)]);
   const o = edit?.props.overlays;
   const onScreen = o
@@ -41,6 +42,7 @@ async function copyContext(project: Project): Promise<CopyContext> {
     direction: project.brief?.direction ?? "",
     lines: clips.map((c) => ({ section: c.section, line: c.line })),
     onScreen,
+    firm: namedFirm(await studioById(ownerId, project.studioId)),
   };
 }
 
@@ -58,7 +60,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 2000) : "";
 
   try {
-    const ctx = await copyContext(project);
+    const ctx = await copyContext(project, access.ownerId);
     if (!ctx.lines?.length && !ctx.direction) return NextResponse.json({ error: "Write the script first" }, { status: 400 });
     const prev = await latestCopy(project.id);
     const current = prev ? normalizeCopy(prev.metadata) : null;

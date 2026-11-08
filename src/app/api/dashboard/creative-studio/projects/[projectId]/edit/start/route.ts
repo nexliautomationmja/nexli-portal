@@ -7,6 +7,7 @@ import { claudeError } from "@/lib/creative-studio/script";
 import { proposeLayout } from "@/lib/creative-studio/edit";
 import { isEditStyle } from "@/lib/creative-studio/edit-styles";
 import { captionWords, durationOf, editContext, finalCutFor, latestEdit } from "@/lib/creative-studio/edit-service";
+import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 300;
 
@@ -43,7 +44,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const layout = sameCut ? prev.props.overlays.layout : undefined;
     const captionStyle = sameCut ? prev.props.overlays.captionStyle : undefined;
     const durationS = await durationOf(finalCut, body.durationS, words);
-    const result = await proposeLayout({ ...editContext(project, style, durationS, words, built.lines), instruction: instruction || undefined });
+    const result = await proposeLayout({
+      ...editContext(project, style, durationS, words, built.lines),
+      instruction: instruction || undefined,
+      firm: firmBrief(await studioById(access.ownerId, project.studioId)),
+    });
     const unaligned = built.unaligned.length
       ? ` Captions for clip ${built.unaligned.join(", ")} use what Scribe heard rather than the script's spelling, so give them a read.`
       : "";

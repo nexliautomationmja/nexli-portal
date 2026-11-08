@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeBatches, creativeProjects, type BatchPlanItem } from "@/lib/creative-studio/tables";
 import { EMPTY_BRIEF } from "@/lib/creative-studio/prompts";
 import { cleanFormatRig } from "@/lib/creative-studio/validate";
 import { requireStudioAdmin } from "@/lib/creative-studio/access";
+import { inStudio, studioFromRequest, studioNotFound } from "@/lib/creative-studio/studios";
 import { BATCH_MAX } from "@/lib/creative-studio/batch-shared";
 
-/** Batches for the studio home, with how far their videos have got. */
-export async function GET() {
+/** Batches for one studio's home (`?studio=`), with how far their videos have got. */
+export async function GET(req: NextRequest) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
+  const studio = await studioFromRequest(access.ownerId, req);
+  if (!studio) return studioNotFound();
   const batches = await db
     .select()
     .from(creativeBatches)
-    .where(eq(creativeBatches.ownerId, access.ownerId))
+    .where(and(eq(creativeBatches.ownerId, access.ownerId), inStudio(creativeBatches.studioId, studio)))
     .orderBy(desc(creativeBatches.createdAt))
     .limit(30);
   const ids = batches.map((b) => b.id);
@@ -52,6 +55,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
+  const studio = await studioFromRequest(access.ownerId, req);
+  if (!studio) return studioNotFound();
   const body = (await req.json().catch(() => null)) as { format?: unknown; brief?: unknown; items?: unknown } | null;
   const { format, rig } = cleanFormatRig(body?.format, null);
   const brief = typeof body?.brief === "string" ? body.brief.trim().slice(0, 6000) : "";
@@ -71,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   const [batch] = await db
     .insert(creativeBatches)
-    .values({ ownerId: access.ownerId, createdBy: access.actorId, format, count: items.length, brief, plan: items })
+    .values({ ownerId: access.ownerId, createdBy: access.actorId, studioId: studio.id, format, count: items.length, brief, plan: items })
     .returning({ id: creativeBatches.id });
   const projects = await db
     .insert(creativeProjects)
@@ -79,6 +84,7 @@ export async function POST(req: NextRequest) {
       items.map((it, i) => ({
         ownerId: access.ownerId,
         createdBy: access.actorId,
+        studioId: studio.id,
         title: it.title,
         format,
         rig,

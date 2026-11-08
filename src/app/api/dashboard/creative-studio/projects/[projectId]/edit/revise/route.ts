@@ -7,6 +7,7 @@ import { claudeError } from "@/lib/creative-studio/script";
 import { reviseLayout } from "@/lib/creative-studio/edit";
 import { applySwaps } from "@/lib/creative-studio/words";
 import { captionWords, editContext, finalCutFor, latestEdit } from "@/lib/creative-studio/edit-service";
+import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 300;
 
@@ -33,7 +34,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   try {
     const { lines } = await captionWords(project, finalCut);
-    const ctx = { ...editContext(project, edit.style, edit.props.durationS, edit.props.words, lines), instruction: edit.props.instruction };
+    const ctx = {
+      ...editContext(project, edit.style, edit.props.durationS, edit.props.words, lines),
+      instruction: edit.props.instruction,
+      firm: firmBrief(await studioById(access.ownerId, project.studioId)),
+    };
     const result = await reviseLayout(ctx, edit.props.overlays, note);
     let words = edit.props.words;
     let fixed = "";

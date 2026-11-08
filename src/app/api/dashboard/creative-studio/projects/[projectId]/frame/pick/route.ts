@@ -5,6 +5,7 @@ import { creativeAssets } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { projectDetail } from "@/lib/creative-studio/service";
 import { readStorage, setOpeningFrame } from "@/lib/creative-studio/frames";
+import { sameStudio } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 60;
 
@@ -27,7 +28,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         eq(creativeAssets.id, id),
         or(
           and(eq(creativeAssets.projectId, project.id), eq(creativeAssets.kind, "frame_option")),
-          and(isNull(creativeAssets.projectId), eq(creativeAssets.ownerId, access.ownerId), eq(creativeAssets.kind, "reference"))
+          and(
+            isNull(creativeAssets.projectId),
+            eq(creativeAssets.ownerId, access.ownerId),
+            eq(creativeAssets.kind, "reference"),
+            // Only a reference from this video's own studio.
+            sameStudio(creativeAssets.studioId, project.studioId)
+          )
         )
       )
     )

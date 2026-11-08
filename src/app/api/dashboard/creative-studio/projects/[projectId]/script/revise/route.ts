@@ -4,6 +4,7 @@ import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio
 import { clipFieldsOf, clipsOf, framesOf, projectDetail, replaceScript } from "@/lib/creative-studio/service";
 import { signPaths } from "@/lib/creative-studio/storage";
 import { reviseScript } from "@/lib/creative-studio/script";
+import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 300;
 
@@ -29,7 +30,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   try {
     const result = await reviseScript({
-      input: { title: project.title, format: project.format, rig: project.rig, brief: project.brief, frameUrls },
+      input: {
+          title: project.title,
+          format: project.format,
+          rig: project.rig,
+          brief: project.brief,
+          frameUrls,
+          firm: firmBrief(await studioById(access.ownerId, project.studioId)),
+        },
       frame: project.frameSpec,
       clips: clips.map(clipFieldsOf),
       note,
