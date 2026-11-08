@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const clips = await clipsOf(project.id);
   const plans = clips.map((c) => {
     const e = entryFor(cut, c);
-    return planFor(project, c, cut.settings, e.overrides, e.manual);
+    return planFor(project, c, cut.settings, e.overrides, e.manual, e.sections);
   });
   const pieces = await Promise.all(plans.map((pl) => findPiece(project.id, pl.hash)));
   const missing = clips.filter((_, i) => !pieces[i]).map((c) => c.id);

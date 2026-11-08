@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       current = await ensureTranscript(current, video);
     }
     const e = entryFor(cut, clip);
-    const plan = planFor(project, current, cut.settings, e.overrides, e.manual);
+    const plan = planFor(project, current, cut.settings, e.overrides, e.manual, e.sections);
     const cached = await findPiece(project.id, plan.hash);
     if (cached) return NextResponse.json({ ok: true, hash: plan.hash, keptS: plan.keptS, cached: true });
     claim = await claimPiece(project.id, plan.hash, clip, driver);

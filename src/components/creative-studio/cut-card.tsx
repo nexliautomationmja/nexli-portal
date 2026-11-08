@@ -229,7 +229,8 @@ export function CutCard({
             {/* Flow strip */}
             <div className="cs-scroll mt-4 flex gap-1.5 overflow-x-auto pb-1">
               {flow.map((r) => {
-                const trimmed = Boolean(r.plan?.manual) || (r.plan?.overrides ?? []).some((o) => o.action === "cut");
+                const trimmed =
+                  Boolean(r.plan?.manual) || (r.plan?.sections ?? []).length > 0 || (r.plan?.overrides ?? []).some((o) => o.action === "cut");
                 return (
                   <div
                     key={r.clip.id}

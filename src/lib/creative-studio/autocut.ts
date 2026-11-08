@@ -11,8 +11,9 @@ import type {
   CutOverride,
   CutSettings,
   ManualTrim,
+  TimeCut,
 } from "@/lib/creative-studio/tables";
-import { computeSegments, round3 } from "@/lib/creative-studio/cutplan";
+import { computeSegments, normalizeSections, round3 } from "@/lib/creative-studio/cutplan";
 
 /**
  * Auto-cut: after Kling renders every clip, cut each one tight (1.2× speed,
@@ -43,14 +44,17 @@ export function buildClipPlan(args: {
   overrides: CutOverride[];
   format: CreativeFormat;
   manual?: ManualTrim | null;
+  sections?: TimeCut[] | null;
 }): CutClipPlan {
   const { clipId, version, transcript, sourceS, settings, overrides, format } = args;
   const manual = args.manual ?? null;
-  const { segments, keptS } = computeSegments({ transcript, sourceS, settings, overrides, manual });
+  const sections = normalizeSections(args.sections, sourceS);
+  const { segments, keptS } = computeSegments({ transcript, sourceS, settings, overrides, manual, sections });
   return {
     clipId,
     version,
     ...(manual ? { manual } : {}),
+    ...(sections.length ? { sections } : {}),
     segments,
     overrides,
     sourceS: round3(sourceS),
@@ -174,8 +178,14 @@ export async function renderPiece(input: string, output: string, plan: CutClipPl
   const parts: string[] = [];
   const labels: string[] = [];
   plan.segments.forEach((s, i) => {
+    // 8 ms fades at every join: a hand cut can land mid-sound, and a hard
+    // audio edge there clicks. Too short to hear as a fade.
+    const len = round3(s.end - s.start);
+    const fade = Math.min(0.008, len / 4);
     parts.push(`[0:v]trim=start=${s.start}:end=${s.end},setpts=PTS-STARTPTS[v${i}]`);
-    parts.push(`[0:a]atrim=start=${s.start}:end=${s.end},asetpts=PTS-STARTPTS[a${i}]`);
+    parts.push(
+      `[0:a]atrim=start=${s.start}:end=${s.end},asetpts=PTS-STARTPTS,afade=t=in:d=${fade},afade=t=out:st=${round3(len - fade)}:d=${fade}[a${i}]`
+    );
     labels.push(`[v${i}][a${i}]`);
   });
   parts.push(`${labels.join("")}concat=n=${plan.segments.length}:v=1:a=1[vc][ac]`);

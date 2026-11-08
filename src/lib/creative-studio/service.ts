@@ -164,6 +164,7 @@ export async function projectDetail(project: Project) {
         keptS: pl.keptS,
         overrides: pl.overrides ?? [],
         manual: pl.manual ?? null,
+        sections: pl.sections ?? [],
       })),
       url: c.assetId ? url(cutPath.get(c.assetId) ?? null) : null,
       createdAt: c.createdAt.toISOString(),

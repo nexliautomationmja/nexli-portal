@@ -3,16 +3,17 @@ import { db } from "@/db";
 import { creativeCuts } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
-import { cutRanges, round3 } from "@/lib/creative-studio/cutplan";
+import { computeSegments, cutRanges, MIN_KEPT, normalizeSections, round3 } from "@/lib/creative-studio/cutplan";
 import { entryFor, latestCut } from "@/lib/creative-studio/autocut-service";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
 /**
- * Hand trim from the trim editor: { clipId, start, end, cutWords }. Creates
- * the next cut version where that clip keeps only [start, end] (source
- * seconds) minus the cut words; every other clip is unchanged (its piece is
- * reused), so only this clip re-renders.
+ * Hand trim from the trim editor: { clipId, start, end, cutWords, sections }.
+ * Creates the next cut version where that clip keeps only [start, end]
+ * (source seconds) minus the cut words and the hand-cut sections (exact
+ * source-second ranges); every other clip is unchanged (its piece is reused),
+ * so only this clip re-renders.
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
@@ -24,6 +25,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     start?: number;
     end?: number;
     cutWords?: number[];
+    /** Exact stretches to cut out, in source seconds. */
+    sections?: { start?: unknown; end?: unknown }[];
     keepPauses?: boolean;
     /** false = you didn't move the edges: keep the auto-cut's start/end, apply only word cuts. */
     edges?: boolean;
@@ -55,6 +58,28 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     : [];
   // Only the editor's "Reset to auto" goes back to the auto-cut; any other window is kept exactly.
   const isReset = body?.reset === true;
+  const sections = isReset
+    ? []
+    : normalizeSections(
+        (Array.isArray(body?.sections) ? body.sections : [])
+          .slice(0, 50)
+          .map((x) => ({ start: Number(x?.start), end: Number(x?.end) })),
+        duration || end
+      );
+
+  const prevEntry = entryFor(base, target);
+  const keepTiming = prevEntry.overrides.filter((o) => o.action !== "cut" && o.action !== "restore");
+  const overrides = isReset ? keepTiming : [...keepTiming, ...cutRanges(cutWords)];
+  const windowed = isReset || body?.edges === false ? null : manual;
+  if (sections.length > 0) {
+    const t = target.transcript?.version === target.version ? target.transcript : null;
+    const check = computeSegments({ transcript: t, sourceS: duration || end, settings: base.settings, overrides, manual: windowed, sections });
+    // computeSegments falls back to the whole window when nothing is left, which would overlap a section.
+    const overlapsCut = check.segments.some((s) => sections.some((x) => s.start < x.end - 0.001 && s.end > x.start + 0.001));
+    if (check.keptS < MIN_KEPT || overlapsCut) {
+      return NextResponse.json({ error: "Those cuts leave almost nothing of the clip. Keep at least a fraction of a second." }, { status: 400 });
+    }
+  }
 
   const [cut] = await db
     .insert(creativeCuts)
@@ -65,14 +90,24 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       plan: clips.map((c) => {
         const prev = entryFor(base, c);
         if (c.id !== target.id) {
-          return { clipId: c.id, version: c.version, overrides: prev.overrides, manual: prev.manual, segments: [], sourceS: 0, keptS: 0, hash: "" };
+          return {
+            clipId: c.id,
+            version: c.version,
+            overrides: prev.overrides,
+            manual: prev.manual,
+            sections: prev.sections,
+            segments: [],
+            sourceS: 0,
+            keptS: 0,
+            hash: "",
+          };
         }
-        const keepTiming = prev.overrides.filter((o) => o.action !== "cut" && o.action !== "restore");
         return {
           clipId: c.id,
           version: c.version,
-          overrides: isReset ? keepTiming : [...keepTiming, ...cutRanges(cutWords)],
-          manual: isReset || body?.edges === false ? null : manual,
+          overrides,
+          manual: windowed,
+          sections,
           segments: [],
           sourceS: 0,
           keptS: 0,

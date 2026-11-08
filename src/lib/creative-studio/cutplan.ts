@@ -1,4 +1,4 @@
-import type { ClipTranscript, CutOverride, CutSettings, ManualTrim } from "@/lib/creative-studio/tables";
+import type { ClipTranscript, CutOverride, CutSettings, ManualTrim, TimeCut } from "@/lib/creative-studio/tables";
 
 /**
  * Pure auto-cut segment maths — shared by the server (which renders it) and
@@ -15,6 +15,10 @@ const LOOSE_GAP = 0.45;
 const MIN_SEGMENT = 0.04;
 /** Pause left (playback seconds) where cut words were removed. */
 const CUT_JOIN_GAP = 0.06;
+/** Shortest section you can cut out by hand (about one frame). */
+export const MIN_SECTION = 0.03;
+/** Shortest clip a trim may leave. */
+export const MIN_KEPT = 0.2;
 
 export const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -62,6 +66,42 @@ export function inWindow(w: { start: number; end: number }, manual: ManualTrim |
   return mid >= manual.start && mid <= manual.end;
 }
 
+/** Hand-cut sections, cleaned: inside the take, in order, overlaps merged, slivers dropped, rounded. */
+export function normalizeSections(sections: readonly TimeCut[] | null | undefined, sourceS: number): TimeCut[] {
+  const sorted = (sections ?? [])
+    .map((x) => ({ start: Math.max(0, Math.min(x.start, x.end)), end: Math.min(sourceS, Math.max(x.start, x.end)) }))
+    .filter((x) => Number.isFinite(x.start) && Number.isFinite(x.end) && x.end - x.start >= MIN_SECTION)
+    .sort((a, b) => a.start - b.start);
+  const out: TimeCut[] = [];
+  for (const x of sorted) {
+    const prev = out[out.length - 1];
+    if (prev && x.start <= prev.end) prev.end = Math.max(prev.end, x.end);
+    else out.push({ ...x });
+  }
+  return out.map((x) => ({ start: round3(x.start), end: round3(x.end) }));
+}
+
+/** True when the word is (mostly) inside a hand-cut section. */
+export function inSections(w: { start: number; end: number }, sections: readonly TimeCut[]): boolean {
+  const mid = (w.start + w.end) / 2;
+  return sections.some((x) => mid >= x.start && mid <= x.end);
+}
+
+/** Remove the sections from the segments, exactly. */
+function subtractSections(segments: { start: number; end: number }[], sections: readonly TimeCut[]) {
+  let out = segments;
+  for (const x of sections) {
+    out = out.flatMap((s) => {
+      if (x.end <= s.start || x.start >= s.end) return [s];
+      const parts: { start: number; end: number }[] = [];
+      if (x.start > s.start) parts.push({ start: s.start, end: x.start });
+      if (x.end < s.end) parts.push({ start: x.end, end: s.end });
+      return parts;
+    });
+  }
+  return out;
+}
+
 /** Kept segments (source seconds) for one clip. */
 export function computeSegments(args: {
   transcript: ClipTranscript | null;
@@ -69,14 +109,31 @@ export function computeSegments(args: {
   settings: CutSettings;
   overrides: CutOverride[];
   manual?: ManualTrim | null;
+  sections?: readonly TimeCut[] | null;
 }): { segments: { start: number; end: number }[]; keptS: number } {
   const { transcript, sourceS, settings, overrides } = args;
   const manual = args.manual ?? null;
+  const sections = normalizeSections(args.sections, sourceS);
   const lo = manual ? Math.max(0, manual.start) : 0;
   const hi = manual ? Math.min(sourceS, manual.end) : sourceS;
   const words = transcript?.words ?? [];
   const removed = cutWordSet(words.length, overrides);
-  const kept = words.map((w, i) => ({ ...w, i })).filter((w) => !removed.has(w.i) && inWindow(w, manual));
+  // A word a hand-cut section covers is gone (so the auto edges skip it); a
+  // word it only clips keeps its uncut part — otherwise the pause tightening
+  // would treat that leftover as silence and eat it. The section's own edges
+  // decide the join, not the cut-word join below.
+  const kept = words
+    .map((w, i) => ({ ...w, i }))
+    .filter((w) => !removed.has(w.i) && inWindow(w, manual))
+    .flatMap((w) => {
+      if (!sections.length) return [w];
+      const left = subtractSections([{ start: w.start, end: w.end }], sections);
+      return left.length ? [{ ...w, start: left[0].start, end: left[left.length - 1].end }] : [];
+    });
+  const cutBetween = (a: number, b: number) => {
+    for (let j = a + 1; j < b; j++) if (removed.has(j)) return true;
+    return false;
+  };
 
   let segments: { start: number; end: number }[];
   if (kept.length === 0) {
@@ -88,7 +145,7 @@ export function computeSegments(args: {
     for (let k = 0; k < kept.length - 1; k++) {
       const prev = kept[k];
       const next = kept[k + 1];
-      const skippedWords = next.i - prev.i > 1;
+      const skippedWords = cutBetween(prev.i, next.i);
       // Around a cut word the join is near-seamless, so the word's audio is really gone.
       const cap = skippedWords
         ? Math.min(settings.gap, CUT_JOIN_GAP)
@@ -106,15 +163,24 @@ export function computeSegments(args: {
     segments.push({ start: segStart, end: manual ? hi : Math.min(sourceS, last.end + TAIL) });
   }
 
-  // Clamp to the take (and the manual window), merge overlaps, drop slivers, round.
+  // Clamp to the take (and the manual window), cut the hand sections out,
+  // merge overlaps, drop slivers, round.
+  const clamped = segments.map((x) => ({ start: Math.max(lo, x.start), end: Math.min(hi, x.end) }));
   const cleaned: { start: number; end: number }[] = [];
-  for (const s of segments.map((x) => ({ start: Math.max(lo, x.start), end: Math.min(hi, x.end) }))) {
+  for (const s of subtractSections(clamped, sections)) {
     if (s.end - s.start < MIN_SEGMENT) continue;
     const prev = cleaned[cleaned.length - 1];
-    if (prev && s.start <= prev.end + 0.01) prev.end = Math.max(prev.end, s.end);
+    // Never merge across a hand-cut section, however short it is.
+    const across = prev && sections.some((x) => x.start >= prev.end - 0.001 && x.end <= s.start + 0.001);
+    if (prev && !across && s.start <= prev.end + 0.01) prev.end = Math.max(prev.end, s.end);
     else cleaned.push({ ...s });
   }
-  const finalSegs = (cleaned.length ? cleaned : [{ start: lo, end: hi }]).map((s) => ({ start: round3(s.start), end: round3(s.end) }));
+  // Nothing left: the whole window (a trim that cuts everything is refused before it's saved).
+  const fallback = subtractSections([{ start: lo, end: hi }], sections).filter((s) => s.end - s.start >= MIN_SEGMENT);
+  const finalSegs = (cleaned.length ? cleaned : fallback.length ? fallback : [{ start: lo, end: hi }]).map((s) => ({
+    start: round3(s.start),
+    end: round3(s.end),
+  }));
   const keptS = round3(finalSegs.reduce((t, s) => t + (s.end - s.start), 0));
   return { segments: finalSegs, keptS };
 }

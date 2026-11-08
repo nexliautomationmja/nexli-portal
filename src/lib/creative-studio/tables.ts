@@ -217,11 +217,22 @@ export interface ManualTrim {
   keepPauses?: boolean;
 }
 
+/**
+ * A stretch of a take cut out by hand, in source seconds — exact, not
+ * snapped to words: the clip jumps straight from `start` to `end`.
+ */
+export interface TimeCut {
+  start: number;
+  end: number;
+}
+
 export interface CutClipPlan {
   clipId: string;
   version: number;
   /** Set by the trim editor; absent = the auto-cut's own window. */
   manual?: ManualTrim | null;
+  /** Sections cut out by hand (trim editor); absent = none. */
+  sections?: TimeCut[] | null;
   /** Kept segments in source seconds. */
   segments: { start: number; end: number }[];
   overrides: CutOverride[];

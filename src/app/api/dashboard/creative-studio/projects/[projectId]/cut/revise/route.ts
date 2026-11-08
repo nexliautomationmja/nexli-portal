@@ -76,6 +76,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         // A re-rendered take gets new words, so its old fixes don't apply.
         overrides: rerenderIds.has(c.id) ? [] : next.overrides.get(i) ?? [],
         manual: rerenderIds.has(c.id) ? null : entryFor(base, c).manual,
+        sections: rerenderIds.has(c.id) ? [] : entryFor(base, c).sections,
         segments: [],
         sourceS: 0,
         keptS: 0,

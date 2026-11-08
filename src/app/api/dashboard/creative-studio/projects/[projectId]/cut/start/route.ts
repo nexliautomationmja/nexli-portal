@@ -41,6 +41,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
           version: c.version,
           overrides: prev.overrides,
           manual: prev.manual,
+          sections: prev.sections,
           segments: [],
           sourceS: 0,
           keptS: 0,
