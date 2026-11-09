@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ACCENT, LaunchPadStyles, SHIMMER_CONIC, SYNE, type Accent } from "@/components/launch-pad";
 import { LimeBadge, META_LIME, META_LIME_CONIC, META_LIME_FILL, MetaLogo } from "@/components/creative-studio/meta";
-import { studioHref } from "@/components/creative-studio/client";
+import { studioHref, type StudioTab } from "@/components/creative-studio/client";
 
 /**
  * Creative Studio visual foundation: a Launch Pad canvas (the dark navy,
@@ -390,6 +390,11 @@ const STUDIO_TABS = [
     sub: "Script → Kling → edit",
   },
   {
+    id: "photos",
+    label: "Photo Ads",
+    sub: "Prompt → Manus statics",
+  },
+  {
     id: "adcopy",
     label: "Meta Ad Copy",
     sub: "Drop creatives, get the copy",
@@ -397,18 +402,18 @@ const STUDIO_TABS = [
 ] as const;
 
 /**
- * The studio's two tabs — Videos and Meta Ad Copy — as a glass segmented
+ * The studio's tabs — Videos, Photo Ads and Meta Ad Copy — as a glass segmented
  * control in a shimmer frame, so it reads as navigation at a glance. Meta Ad
  * Copy wears the lime "Campaigns built and run on Meta" chip look from
  * nexli.net; the frame's shimmer follows the active tab.
  */
-export function StudioTabs({ active, studioKey }: { active: "videos" | "adcopy"; studioKey: string }) {
+export function StudioTabs({ active, studioKey }: { active: StudioTab; studioKey: string }) {
   const frame = active === "adcopy" ? META_LIME_CONIC : SHIMMER_CONIC;
   return (
-    <nav aria-label="Creative Studio" className="relative inline-flex w-full max-w-lg overflow-hidden rounded-[22px] p-[1.5px] sm:w-auto">
+    <nav aria-label="Creative Studio" className="relative inline-flex w-full max-w-2xl overflow-hidden rounded-[22px] p-[1.5px] sm:w-auto">
       <span aria-hidden="true" className="pointer-events-none absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-70" style={{ background: frame }} />
       <span aria-hidden="true" className="pointer-events-none absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-40 blur-md" style={{ background: frame }} />
-      <div className="relative z-10 grid w-full grid-cols-2 gap-1 rounded-[21px] bg-[#0b1220]/95 p-1 backdrop-blur-xl">
+      <div className="relative z-10 grid w-full grid-cols-3 gap-1 rounded-[21px] bg-[#0b1220]/95 p-1 backdrop-blur-xl">
         {STUDIO_TABS.map((t) => {
           const on = t.id === active;
           const meta = t.id === "adcopy";
@@ -440,11 +445,11 @@ export function StudioTabs({ active, studioKey }: { active: "videos" | "adcopy";
                       : "bg-white/5 text-neutral-400 group-hover:bg-blue-500/20 group-hover:text-blue-200"
                 }`}
               >
-                {meta ? <MetaLogo className="h-auto w-[19px]" /> : <SvgIcon d={SP.film} size={18} />}
+                {meta ? <MetaLogo className="h-auto w-[19px]" /> : <SvgIcon d={t.id === "photos" ? SP.image : SP.film} size={18} />}
               </span>
               <span className="min-w-0 flex-1 text-left">
                 <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-sm font-bold leading-tight" style={SYNE}>
-                  <span className="truncate sm:hidden">{meta ? "Ad Copy" : t.label}</span>
+                  <span className="truncate sm:hidden">{meta ? "Ad Copy" : t.id === "photos" ? "Photos" : t.label}</span>
                   <span className="hidden sm:inline">{t.label}</span>
                   {meta && on && <LimeBadge size={14} />}
                   {meta && !on && (

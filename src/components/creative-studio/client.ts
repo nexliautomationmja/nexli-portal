@@ -10,8 +10,10 @@ export function api(path: string) {
 export const inStudioQs = (key: string) => `?studio=${encodeURIComponent(key)}`;
 
 /** A studio's home page ("nexli" = Nexli's own studio). */
-export const studioHref = (key: string, tab: "videos" | "adcopy" = "videos") =>
-  `/dashboard/creative-studio/s/${encodeURIComponent(key)}${tab === "adcopy" ? "/ad-copy" : ""}`;
+export type StudioTab = "videos" | "photos" | "adcopy";
+
+export const studioHref = (key: string, tab: StudioTab = "videos") =>
+  `/dashboard/creative-studio/s/${encodeURIComponent(key)}${tab === "adcopy" ? "/ad-copy" : tab === "photos" ? "/photos" : ""}`;
 
 export async function send(
   url: string,

@@ -101,6 +101,29 @@ export async function startFrameTask(req: FrameRequest): Promise<{ taskId: strin
   return { taskId: res.task_id, taskUrl: res.task_url ?? null };
 }
 
+/** Start a Manus task from a prompt and attached files (photo ads). */
+export async function startManusTask(args: {
+  prompt: string;
+  files: { url: string; filename: string }[];
+  title: string;
+}): Promise<{ taskId: string; taskUrl: string | null }> {
+  const content: Record<string, unknown>[] = [{ type: "text", text: args.prompt }];
+  for (const f of args.files) content.push({ type: "file", file_url: f.url, filename: f.filename });
+  const res = await manus<{ task_id: string; task_url?: string }>("task.create", {
+    method: "POST",
+    body: JSON.stringify({
+      message: { content },
+      agent_profile: "standard",
+      interactive_mode: false,
+      hide_in_task_list: true,
+      share_visibility: "private",
+      title: args.title,
+    }),
+  });
+  if (!res.task_id) throw new ManusError("Manus didn't return a task id");
+  return { taskId: res.task_id, taskUrl: res.task_url ?? null };
+}
+
 import type { ManusActivitySnapshot } from "@/lib/creative-studio/tables";
 
 export interface ManusMessage {

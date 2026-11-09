@@ -366,6 +366,72 @@ export const creativeEdits = pgTable("creative_edits", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/**
+ * Photo ads (Nov 2026): one prompt → up to 20 concepts Claude plans and the
+ * user reviews; Manus then makes each concept as a finished static ad with
+ * Daniela, in a Story (1080×1920) and a Feed (1080×1350) version.
+ * studio_id null = Nexli's studio, like everything else.
+ */
+export const creativePhotoBatches = pgTable("creative_photo_batches", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  studioId: uuid("studio_id"),
+  createdBy: uuid("created_by"),
+  prompt: text("prompt").notNull(),
+  /** Claude's note on how it split the prompt. */
+  notes: text("notes"),
+  /** planned (in review) | started */
+  status: text("status").notNull().default("planned"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export interface PhotoAdWaiting {
+  kind: "question" | "confirm";
+  prompt: string;
+  options: string[];
+  eventId: string | null;
+  eventType: string | null;
+  key: string;
+}
+
+export const creativePhotoAds = pgTable("creative_photo_ads", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => creativePhotoBatches.id, { onDelete: "cascade" }),
+  ownerId: uuid("owner_id").notNull(),
+  idx: integer("idx").notNull(),
+  title: text("title").notNull(),
+  /** The angle / old belief it plays on (for the review). */
+  angle: text("angle").notNull().default(""),
+  /** The words on the image, exactly. */
+  headline: text("headline").notNull(),
+  /** Optional small line under the headline (often the call to action). */
+  subline: text("subline").notNull().default(""),
+  /** Daniela's photo: setting, pose, expression, framing. */
+  scene: text("scene").notNull(),
+  /** Type and color treatment. */
+  look: text("look").notNull().default(""),
+  /** A redo note from the user for the next Manus run. */
+  note: text("note"),
+  /** planned | queued | starting | running | waiting | saving | done | failed */
+  status: text("status").notNull().default("planned"),
+  manusTaskId: text("manus_task_id"),
+  taskUrl: text("task_url"),
+  activity: jsonb("activity").$type<ManusActivitySnapshot | null>(),
+  waiting: jsonb("waiting").$type<PhotoAdWaiting | null>(),
+  answeredKey: text("answered_key"),
+  autoReplies: integer("auto_replies").notNull().default(0),
+  storyPath: text("story_path"),
+  feedPath: text("feed_path"),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 /** Held in creative_edits.render_id while the Lambda launch call is in flight. */
 export const RENDER_STARTING = "starting";
 
@@ -559,6 +625,50 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
       await db.execute(sql`ALTER TABLE "creative_batches" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
       await db.execute(sql`ALTER TABLE "creative_assets" ADD COLUMN IF NOT EXISTS "studio_id" uuid`);
+      // Nov 2026: photo ads (prompt → concepts → Manus statics in Story + Feed).
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_photo_batches" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "studio_id" uuid,
+          "created_by" uuid,
+          "prompt" text NOT NULL,
+          "notes" text,
+          "status" text NOT NULL DEFAULT 'planned',
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_photo_batches_owner_idx" ON "creative_photo_batches" ("owner_id", "created_at")`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_photo_ads" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "batch_id" uuid NOT NULL REFERENCES "creative_photo_batches"("id") ON DELETE CASCADE,
+          "owner_id" uuid NOT NULL,
+          "idx" integer NOT NULL,
+          "title" text NOT NULL,
+          "angle" text NOT NULL DEFAULT '',
+          "headline" text NOT NULL,
+          "subline" text NOT NULL DEFAULT '',
+          "scene" text NOT NULL,
+          "look" text NOT NULL DEFAULT '',
+          "note" text,
+          "status" text NOT NULL DEFAULT 'planned',
+          "manus_task_id" text,
+          "task_url" text,
+          "activity" jsonb,
+          "waiting" jsonb,
+          "answered_key" text,
+          "auto_replies" integer NOT NULL DEFAULT 0,
+          "story_path" text,
+          "feed_path" text,
+          "error" text,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_photo_ads_batch_idx" ON "creative_photo_ads" ("batch_id", "idx")`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_photo_ads_owner_status_idx" ON "creative_photo_ads" ("owner_id", "status")`);
       // Nov 2026: renders queue for the AWS Lambda concurrency limit.
       await db.execute(sql`ALTER TABLE "creative_edits" ADD COLUMN IF NOT EXISTS "render_attempts" integer NOT NULL DEFAULT 0`);
       await db.execute(sql`
