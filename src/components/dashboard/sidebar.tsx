@@ -19,7 +19,6 @@ import {
   FormIcon,
   GearIcon,
   ChartIcon,
-  TrendingUpIcon,
   ShieldIcon,
   RocketIcon,
   ScanIcon,
@@ -80,6 +79,8 @@ interface NavItem {
   badge?: number;
   /** Word after the count in tooltips ("due", "unread"). */
   badgeNoun?: string;
+  /** Show the count on the icon's corner instead of after the label (keeps a long label whole). */
+  badgeOnIcon?: boolean;
 }
 
 /** Firm-side thread with the Nexli team; inserted right after Overview. */
@@ -155,7 +156,7 @@ const fullNav: NavItem[] = fullNavOrder
 /** Admin-only tools (Marcel and team members), shown right after Engagements. */
 const adminNav: NavItem[] = [
   { href: "/dashboard/creative-studio", label: "Creative Studio", icon: MetaLogo, accent: "meta" },
-  { href: "/dashboard/ads", label: "Ads", icon: TrendingUpIcon, accent: "amber", badgeNoun: "to review" },
+  { href: "/dashboard/ads", label: "Ads Command Center", icon: MetaLogo, accent: "meta", badgeNoun: "to review", badgeOnIcon: true },
 ];
 
 function withAdminTools(nav: NavItem[]): NavItem[] {
@@ -312,11 +313,21 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMess
                     aria-label={`${item.badge} ${item.badgeNoun ?? "due"}`}
                   />
                 ) : null}
+                {!collapsed && item.badge && item.badgeOnIcon ? (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none ring-2 ring-[var(--bg-main)]"
+                    style={{ background: "#fbbf24", color: "#451a03" }}
+                    title={`${item.badge} ${item.badgeNoun ?? "due"}`}
+                    aria-label={`${item.badge} ${item.badgeNoun ?? "due"}`}
+                  >
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                ) : null}
               </span>
               {!collapsed && (
                 <>
                   <span className="flex-1 min-w-0 truncate">{item.label}</span>
-                  {item.badge ? (
+                  {item.badge && !item.badgeOnIcon ? (
                     <span
                       className="badge badge-amber shrink-0 px-1.5 text-[10px] leading-4"
                       title={`${item.badge} ${item.badgeNoun ?? "due"}`}

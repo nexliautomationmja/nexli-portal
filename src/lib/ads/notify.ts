@@ -71,7 +71,7 @@ export async function notifyReady(row: Analysis): Promise<void> {
      <p style="margin:0 0 16px;color:#cfd2dc;font-size:14px;line-height:1.6;">${escapeHtml(headline)}</p>
      ${result?.summary ? `<p style="margin:0 0 16px;color:#9999a8;font-size:13px;line-height:1.6;">${escapeHtml(result.summary)}</p>` : ""}
      ${list ? `<p style="margin:0 0 8px;color:#fff;font-size:13px;font-weight:700;">Next steps</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>` : ""}
-     ${button("/dashboard/ads#next-steps", "Open the Ads tab")}`,
+     ${button("/dashboard/ads#next-steps", "Open the Ads Command Center")}`,
     "ads_analysis_ready",
     claimed.id
   );
@@ -95,7 +95,7 @@ export async function notifyNeedsInput(row: Analysis): Promise<void> {
   if (!settings.notifyEmail) return;
   await email(
     title,
-    `<h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;">${escapeHtml(title)}</h1><p style="margin:0;color:#cfd2dc;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(waiting.prompt.slice(0, 1500))}</p>${button(href, "Answer in the Ads tab")}`,
+    `<h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;">${escapeHtml(title)}</h1><p style="margin:0;color:#cfd2dc;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(waiting.prompt.slice(0, 1500))}</p>${button(href, "Answer in the Ads Command Center")}`,
     "ads_needs_input",
     row.id
   );
