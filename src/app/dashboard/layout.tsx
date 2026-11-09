@@ -9,6 +9,7 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { activeDrsClients, latestUpdateStatus } from "@/lib/client-success";
 import { getNexliAdminId } from "@/lib/foundation-project";
 import { countUnread } from "@/lib/portal-messages";
+import { adsBadgeCount } from "@/lib/ads/badge";
 import { NotificationProvider } from "@/components/dashboard/notification-provider";
 import { UpgradeBanner } from "@/components/dashboard/upgrade-banner";
 import {
@@ -92,6 +93,17 @@ export default async function DashboardLayout({
     }
   }
 
+  // Admin only: the Ads tab's "to review" count (new analysis, Manus waiting,
+  // check-backs due). One query; 0 on any error, including before its tables exist.
+  let adsDue = 0;
+  if (isAdmin) {
+    try {
+      adsDue = await adsBadgeCount(session.user.id);
+    } catch {
+      adsDue = 0;
+    }
+  }
+
   // Clients only: unread messages from Nexli in their thread (sidebar pill
   // on Messages). Same rule: never throw from the layout.
   let nexliUnread = 0;
@@ -147,6 +159,7 @@ export default async function DashboardLayout({
           badges={{
             "/dashboard/client-tracker": updatesDue,
             "/dashboard/nexli-messages": nexliUnread,
+            "/dashboard/ads": adsDue,
           }}
           showNexliMessages={isNexliClient}
         />

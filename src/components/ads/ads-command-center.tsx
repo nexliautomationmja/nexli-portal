@@ -1,17 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SHIMMER_CONIC, ShimmerPill, SYNE } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { ErrorStrip, GradientText, LaunchPadCanvas } from "@/components/creative-studio/canvas";
 import { MetaLogo } from "@/components/creative-studio/meta";
 import { shortDay } from "@/lib/ads/time";
 import { money } from "@/lib/ads/format";
-import { ADS_RANGES, type AdsRange, type AdsSnapshot, type Signal } from "@/lib/ads/types";
+import { ADS_RANGES, type AdRow, type AdsRange, type AdsSnapshot, type Signal } from "@/lib/ads/types";
+import type { AnalysisView } from "@/lib/ads/analysis-service";
+import type { ParsedEvidence } from "@/lib/ads/parse";
 import { Ico, SectionHead, Skeleton } from "@/components/ads/parts";
 import { KpiRow } from "@/components/ads/kpi-row";
 import { TrendCharts } from "@/components/ads/trend-charts";
-import { FatigueBoard } from "@/components/ads/fatigue-board";
+import { FatigueBoard, type CreativeVerdict } from "@/components/ads/fatigue-board";
+import { AnalysisPanel, type AnalysisState } from "@/components/ads/analysis-panel";
+import { NextSteps, type StepPatch } from "@/components/ads/next-steps";
+import { GoalsCard } from "@/components/ads/goals-card";
+import { History, ReportModal } from "@/components/ads/history";
+import { photosHref } from "@/components/ads/handoff";
 import { StructureTable } from "@/components/ads/structure-table";
 import { AudiencePlacements } from "@/components/ads/audience-placements";
 import { Funnel, SignalsCard, TrackingHealth } from "@/components/ads/funnel-tracking";
@@ -22,12 +30,15 @@ const RANGE_KEY = "nexli.ads.range";
 
 export const SECTIONS = [
   { id: "read", label: "The read" },
+  { id: "next-steps", label: "Next steps" },
   { id: "kpis", label: "KPIs" },
   { id: "trends", label: "Trends" },
   { id: "creatives", label: "Creatives" },
   { id: "structure", label: "Campaigns" },
   { id: "audience", label: "Audience" },
   { id: "funnel", label: "Funnel" },
+  { id: "goals", label: "Goals" },
+  { id: "history", label: "History" },
 ] as const;
 
 function useNow(ms = 30_000) {
@@ -255,54 +266,148 @@ export function jumpTo(sig: Signal, s: AdsSnapshot) {
   if (url) window.open(url, "_blank", "noopener,noreferrer");
 }
 
-export function SnapshotSections({ s, extraRead }: { s: AdsSnapshot; extraRead?: React.ReactNode }) {
-  return (
-    <>
-      <section className="lp-card mb-10">
-        <SectionHead id="read" eyebrow="The read" title="What the numbers say" sub="Flags straight from the data, refreshed every time you load the page." />
-        {extraRead}
-        <SignalsCard s={s} onJump={(sig) => jumpTo(sig, s)} />
-      </section>
-      <section className="lp-card mb-10" style={{ animationDelay: "0.05s" }}>
-        <SectionHead id="kpis" eyebrow="Scorecard" title={`The last ${s.range.days} days`} sub="Leads and booked calls come from GoHighLevel; spend and delivery from Meta." />
-        <KpiRow s={s} />
-      </section>
-      <section className="lp-card mb-10" style={{ animationDelay: "0.1s" }}>
-        <SectionHead id="trends" eyebrow="Trends" title="Day by day" sub="This period against the one before it, lined up day for day." />
-        <TrendCharts s={s} />
-      </section>
-      <section className="lp-card mb-10">
-        <SectionHead
-          id="creatives"
-          eyebrow="Creatives"
-          title="Fatigue board"
-          sub={`Every creative's last 7 days (${shortDay(s.fatigueWindow.l7[0])} – ${shortDay(s.fatigueWindow.l7[1])}) against the 14 before, plus 30-day results.`}
-        />
-        <FatigueBoard s={s} />
-      </section>
-      <section className="lp-card mb-10">
-        <SectionHead id="structure" eyebrow="Structure" title="Campaigns & ad sets" sub="Budgets, learning phase and results, with links straight into Ads Manager." />
-        <StructureTable s={s} />
-      </section>
-      <section className="lp-card mb-10">
-        <SectionHead id="audience" eyebrow="Audience" title="Platforms, placements & people" />
-        <AudiencePlacements s={s} />
-      </section>
-      <section className="lp-card mb-10">
-        <SectionHead id="funnel" eyebrow="Funnel" title="Funnel & tracking" sub="Where people drop off, and whether the tracking can be trusted." />
-        <div className="grid gap-3 lg:grid-cols-2">
-          <Funnel s={s} />
-          <TrackingHealth s={s} />
-        </div>
-      </section>
-    </>
-  );
-}
+const ACTIVE = ["queued", "building", "starting", "running", "waiting", "saving"];
 
 export function AdsCommandCenter() {
+  const router = useRouter();
   const { range, setRange, res, loading, error, setError, reload } = useSnapshot();
   const s = res && "configured" in res && res.configured ? res.snapshot : null;
   const notConfigured = res && "configured" in res && !res.configured;
+  const [an, setAn] = useState<AnalysisState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [report, setReport] = useState<string | null>(null);
+  const polling = useRef(false);
+  const seenSent = useRef<string | null>(null);
+  const verdictRef = useRef<HTMLDivElement>(null);
+
+  const loadAnalysis = useCallback(async () => {
+    try {
+      const r = await fetch("/api/dashboard/ads/analysis", { cache: "no-store" });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.configured) setAn(d as AnalysisState);
+    } catch {
+      /* the numbers still work without it */
+    }
+  }, []);
+  useEffect(() => {
+    void loadAnalysis();
+  }, [loadAnalysis]);
+
+  // Follow a run while it's in flight.
+  const activeId = an?.active && ACTIVE.includes(an.active.status) ? an.active.id : null;
+  useEffect(() => {
+    if (!activeId) return;
+    const tick = async () => {
+      if (polling.current || document.visibilityState === "hidden") return;
+      polling.current = true;
+      try {
+        const r = await fetch(`/api/dashboard/ads/analysis/${activeId}/poll`, { method: "POST" });
+        const d = await r.json().catch(() => null);
+        const a = d?.analysis as AnalysisView | undefined;
+        if (a) {
+          if (ACTIVE.includes(a.status)) setAn((cur) => (cur ? { ...cur, active: a } : cur));
+          else {
+            await loadAnalysis();
+            router.refresh();
+          }
+        }
+        if (!r.ok && d?.error) setError(d.error);
+      } finally {
+        polling.current = false;
+      }
+    };
+    const t = setInterval(tick, 8000);
+    void tick();
+    return () => clearInterval(t);
+  }, [activeId, loadAnalysis, router, setError]);
+
+  // A finished analysis counts as seen once its card is on screen (clears the sidebar badge).
+  const latestId = an?.latest && !an.latest.seen ? an.latest.id : null;
+  useEffect(() => {
+    if (!latestId || seenSent.current === latestId || !verdictRef.current) return;
+    const el = verdictRef.current;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && seenSent.current !== latestId) {
+        seenSent.current = latestId;
+        void fetch(`/api/dashboard/ads/analysis/${latestId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "seen" }) }).then(() => router.refresh());
+      }
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [latestId, router]);
+
+  // Arrived from an email link (#next-steps): scroll there once the page has content.
+  useEffect(() => {
+    if (!s || !an) return;
+    const hash = window.location.hash.slice(1);
+    if (hash) setTimeout(() => document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+  }, [Boolean(s), Boolean(an)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function analyzeNow() {
+    if (!window.confirm("Run a full Manus analysis of the ad account now? It takes about 5–15 minutes and uses Manus credits.")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/dashboard/ads/analysis", { method: "POST" });
+      const d = await r.json().catch(() => null);
+      if (d?.active) setAn((cur) => (cur ? { ...cur, active: d.active } : cur));
+      if (!r.ok && d?.error && r.status !== 409) setError(d.error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function act(id: string, action: "reply" | "allow" | "stop" | "retry", text?: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/dashboard/ads/analysis/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, text }) });
+      const d = await r.json().catch(() => null);
+      if (!r.ok && d?.error) setError(d.error);
+      await loadAnalysis();
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const patchStep = useCallback(
+    async (id: string, patch: StepPatch) => {
+      setBusy(true);
+      try {
+        const r = await fetch(`/api/dashboard/ads/steps/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+        const d = await r.json().catch(() => null);
+        if (!r.ok) {
+          setError(d?.error || "Couldn't update the step");
+          return;
+        }
+        if (d?.step) setAn((cur) => (cur ? { ...cur, steps: cur.steps.map((x) => (x.id === id ? d.step : x)) } : cur));
+        router.refresh();
+      } finally {
+        setBusy(false);
+      }
+    },
+    [router, setError]
+  );
+
+  const verdicts: Record<string, CreativeVerdict> = {};
+  for (const c of an?.latest?.result?.creatives ?? []) verdicts[c.adId] = { verdict: c.verdict, why: c.why, iterateIdea: c.iterateIdea };
+  const studioKey = an?.settings.studioKey ?? "nexli";
+  const tz = an?.timezone ?? s?.account.timezone ?? "America/Chicago";
+  const jumpEvidence = (e: ParsedEvidence) => {
+    if (e.refLevel === "ad" && e.refId) document.getElementById(`ad-${e.refId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+  const variations = (ad: AdRow, idea: string | null) => {
+    const brief = [
+      `Variations of the ad "${ad.name}"${ad.winner ? ", one of the account's winners" : ""}.`,
+      ad.creative.headline ? `Its headline: "${ad.creative.headline}".` : null,
+      ad.creative.primaryText ? `Its copy: "${ad.creative.primaryText.slice(0, 300)}"` : null,
+      idea ? `Idea: ${idea}` : "Keep the angle that works; change the hook, the scene and the look so the audience sees something new.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    window.location.href = photosHref(studioKey, brief, 4);
+  };
 
   return (
     <LaunchPadCanvas>
@@ -340,10 +445,97 @@ export function AdsCommandCenter() {
                 )}
               </div>
             )}
-            <SnapshotSections s={s} />
+
+            <section className="lp-card mb-10">
+              <SectionHead id="read" eyebrow="The read" title="Manus's verdict" sub="A full analysis of the whole account — every Monday, or whenever you ask." />
+              <div ref={verdictRef}>
+                {an ? (
+                  <AnalysisPanel
+                    state={an}
+                    busy={busy}
+                    onAnalyze={() => void analyzeNow()}
+                    onAct={(id, action, text) => void act(id, action, text)}
+                    onRetry={(id) => void act(id, "retry")}
+                    onOpenReport={setReport}
+                    onJump={jumpEvidence}
+                  />
+                ) : (
+                  <Skeleton className="h-48" />
+                )}
+              </div>
+              <h3 className="mb-2 mt-6 text-sm font-bold text-white" style={SYNE}>
+                What the numbers flag right now
+              </h3>
+              <SignalsCard s={s} onJump={(sig) => jumpTo(sig, s)} />
+            </section>
+
+            <section className="lp-card mb-10">
+              <SectionHead id="next-steps" eyebrow="Manus's plan" title="Next steps" sub="Make each change in Ads Manager, then tick it off. Manus checks what you did — and whether it worked — in the next analysis." />
+              {an ? (
+                <NextSteps steps={an.steps} tests={an.latest?.result?.tests ?? []} tz={tz} studioKey={studioKey} busy={busy} onPatch={patchStep} onJump={jumpEvidence} />
+              ) : (
+                <Skeleton className="h-32" />
+              )}
+            </section>
+
+            <section className="lp-card mb-10">
+              <SectionHead id="kpis" eyebrow="Scorecard" title={`The last ${s.range.days} days`} sub="Leads and booked calls come from GoHighLevel; spend and delivery from Meta." />
+              <KpiRow s={s} />
+            </section>
+            <section className="lp-card mb-10">
+              <SectionHead id="trends" eyebrow="Trends" title="Day by day" sub="This period against the one before it, lined up day for day." />
+              <TrendCharts s={s} />
+            </section>
+            <section className="lp-card mb-10">
+              <SectionHead
+                id="creatives"
+                eyebrow="Creatives"
+                title="Fatigue board"
+                sub={`Every creative's last 7 days (${shortDay(s.fatigueWindow.l7[0])} – ${shortDay(s.fatigueWindow.l7[1])}) against the 14 before, plus 30-day results.`}
+              />
+              <FatigueBoard s={s} verdicts={verdicts} onVariations={variations} />
+            </section>
+            <section className="lp-card mb-10">
+              <SectionHead id="structure" eyebrow="Structure" title="Campaigns & ad sets" sub="Budgets, learning phase and results, with links straight into Ads Manager." />
+              <StructureTable s={s} />
+            </section>
+            <section className="lp-card mb-10">
+              <SectionHead id="audience" eyebrow="Audience" title="Platforms, placements & people" />
+              <AudiencePlacements s={s} />
+            </section>
+            <section className="lp-card mb-10">
+              <SectionHead id="funnel" eyebrow="Funnel" title="Funnel & tracking" sub="Where people drop off, and whether the tracking can be trusted." />
+              <div className="grid gap-3 lg:grid-cols-2">
+                <Funnel s={s} />
+                <TrackingHealth s={s} />
+              </div>
+            </section>
+            <section className="lp-card mb-10">
+              <SectionHead id="goals" eyebrow="Goals" title="Goals & settings" sub="What good looks like, what Manus should know, and how often it checks in." />
+              {an ? (
+                <GoalsCard
+                  key={an.settings.lastCronAt ?? "goals"}
+                  settings={an.settings}
+                  assumedTargetCents={s.targetCpb.cents}
+                  assumedSource={s.targetCpb.source}
+                  onSaved={(v) => {
+                    setAn((cur) => (cur ? { ...cur, settings: v } : cur));
+                    void loadAnalysis();
+                    void reload();
+                  }}
+                />
+              ) : (
+                <Skeleton className="h-40" />
+              )}
+            </section>
+            <section className="lp-card mb-6">
+              <SectionHead id="history" eyebrow="History" title="Past analyses" />
+              {an ? <History rows={an.history} tz={tz} onOpen={setReport} /> : <Skeleton className="h-24" />}
+            </section>
           </div>
         )}
       </div>
+      {report && <ReportModal id={report} tz={tz} onClose={() => setReport(null)} />}
     </LaunchPadCanvas>
   );
 }

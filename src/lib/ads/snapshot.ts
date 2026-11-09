@@ -1,4 +1,8 @@
+import { and, desc, eq, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { analyticsSnapshots } from "@/db/schema";
 import { adsCache } from "@/lib/ads/cache";
+import type { EntityThen, SnapshotSummary } from "@/lib/ads/pack";
 import {
   accountStatusOf,
   adsCreds,
@@ -932,4 +936,53 @@ export async function buildAdsSnapshot(opts: {
     targetCpb,
   };
   return { configured: true, snapshot, cachedAt: snapshot.fetchedAt, stale: base.stale || range.stale };
+}
+
+/**
+ * How the account is set up right now, from the last cached structure (no
+ * Meta call) — for checking whether a step's change shows up in Meta.
+ */
+export async function cachedStructure(ownerId: string, accountId: string): Promise<SnapshotSummary | null> {
+  const [row] = await db
+    .select({ data: analyticsSnapshots.data })
+    .from(analyticsSnapshots)
+    .where(and(eq(analyticsSnapshots.userId, ownerId), eq(analyticsSnapshots.source, "ads-base"), sql`${analyticsSnapshots.data}->>'rangeKey' = ${`v1:${accountId}`}`))
+    .orderBy(desc(analyticsSnapshots.createdAt))
+    .limit(1);
+  const B = (row?.data as { result?: BaseLayer } | undefined)?.result;
+  if (!B) return null;
+  const ent = (o: { id: string; name?: string; effective_status?: string; daily_budget?: string; lifetime_budget?: string; created_time?: string }, parentId: string | null, hasUtm: boolean | null = null): EntityThen => ({
+    id: o.id,
+    name: o.name ?? o.id,
+    status: o.effective_status ?? "UNKNOWN",
+    parentId,
+    dailyBudgetCents: centsOrNull(o.daily_budget),
+    lifetimeBudgetCents: centsOrNull(o.lifetime_budget),
+    createdTime: o.created_time ?? null,
+    spend30Cents: null,
+    booked30: null,
+    cpb30Cents: null,
+    ctr7: null,
+    frequency7: null,
+    hasUtm,
+  });
+  return {
+    throughDate: B.until,
+    totals30: { spendCents: 0, booked: null, cpbCents: null, cplCents: null, ctr: null, cpmCents: null },
+    campaigns: B.campaigns.map((c) => ent(c, null)),
+    adsets: B.adsets.map((a) => ent(a, a.campaign_id ?? null)),
+    ads: B.ads.map((a) => ent(a, a.adset_id ?? null, adCreative(a).hasUtmContent)),
+  };
+}
+
+/** The ad account's timezone from the cached account info (no Meta call). */
+export async function cachedTimezone(ownerId: string, accountId: string): Promise<string> {
+  const [row] = await db
+    .select({ data: analyticsSnapshots.data })
+    .from(analyticsSnapshots)
+    .where(and(eq(analyticsSnapshots.userId, ownerId), eq(analyticsSnapshots.source, "ads-account"), sql`${analyticsSnapshots.data}->>'rangeKey' = ${`v1:${accountId}`}`))
+    .orderBy(desc(analyticsSnapshots.createdAt))
+    .limit(1);
+  const tz = (row?.data as { result?: AccountLayer | null } | undefined)?.result?.timezone;
+  return safeTz(tz);
 }

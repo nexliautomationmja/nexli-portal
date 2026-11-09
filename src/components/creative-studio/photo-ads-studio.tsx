@@ -69,6 +69,7 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState<{ ad: PhotoAdView; size: "story" | "feed" } | null>(null);
+  const [fromAds, setFromAds] = useState(false);
   const polling = useRef(false);
 
   const loadList = useCallback(() => {
@@ -96,7 +97,20 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
   // The list, and the batch in the URL (so a reload comes back to it).
   useEffect(() => {
     loadList();
-    const id = new URLSearchParams(window.location.search).get("batch");
+    // Sent from the Ads tab ("Make N photo ads"): the refresh brief and count, filled in once.
+    const q = new URLSearchParams(window.location.search);
+    const brief = q.get("brief");
+    if (brief) {
+      setPrompt(brief.slice(0, 4000));
+      setCount(Math.max(1, Math.min(PHOTO_MAX, Number(q.get("count")) || 4)));
+      setFromAds(q.get("from") === "ads");
+      try {
+        const u = new URL(window.location.href);
+        ["brief", "count", "from", "step"].forEach((k) => u.searchParams.delete(k));
+        window.history.replaceState(null, "", u.toString());
+      } catch {}
+    }
+    const id = q.get("batch");
     if (id) {
       call<{ batch: PhotoBatchView }>(`${BASE}/${id}`, "GET")
         .then((d) => {
@@ -231,7 +245,7 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
             </p>
           </div>
 
-          <AssistantCard accent="cyan" icon={SP.sparkles} title="What should the ads be about?">
+          <AssistantCard accent="cyan" icon={SP.sparkles} title="What should the ads be about?" right={fromAds ? <Chip tone="blue">From your Ads analysis</Chip> : null}>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

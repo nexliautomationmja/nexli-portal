@@ -104,6 +104,22 @@ export function StudioHome({ studio }: { studio: StudioView }) {
     setCount((n) => Math.min(n, BATCH_MAX[f]));
   }
 
+  // Sent from the Ads tab ("Make N videos"): the refresh brief and count, filled in once.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const brief = q.get("brief");
+    if (!brief) return;
+    const f = q.get("format") === "vsl_16x9" ? "vsl_16x9" : "ad_9x16";
+    const n = Math.max(1, Math.min(BATCH_MAX[f], Number(q.get("count")) || 1));
+    setFormat(f);
+    setCount(n);
+    setPrefill(brief.slice(0, 1800));
+    setSeed((x) => x + 1);
+    const u = new URL(window.location.href);
+    ["brief", "count", "format", "from", "step"].forEach((k) => u.searchParams.delete(k));
+    window.history.replaceState(null, "", u.toString());
+  }, []);
+
   /** Claude splits the idea into `n` videos; frames are handed out in order (Manus for the rest). */
   async function planBatch(brief: string, fmt: CreativeFormat, n: number, frames: BatchPlan["frames"], keep?: Pick<BatchPlan, "cover" | "random">) {
     setError(null);
