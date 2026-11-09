@@ -42,8 +42,9 @@ async function email(subject: string, inner: string, emailType: string, relatedI
   await sendEmailWithLog({ to: ADMIN_EMAIL, subject, html: emailWrapper(inner), recipientName: "Nexli Admin", emailType, relatedId });
 }
 
-/** "Your ads analysis is ready" — once per analysis. */
+/** "Your ads analysis is ready" — once per analysis (research runs get their own alert). */
 export async function notifyReady(row: Analysis): Promise<void> {
+  if (row.kind === "research") return notifyResearchReady(row);
   const [claimed] = await db
     .update(adAnalyses)
     .set({ notifiedAt: new Date() })
@@ -86,13 +87,15 @@ export async function notifyNeedsInput(row: Analysis): Promise<void> {
     .where(and(eq(adAnalyses.id, row.id), eq(adAnalyses.status, "waiting"), sql`${adAnalyses.waitingNotifiedKey} IS DISTINCT FROM ${waiting.key}`))
     .returning({ id: adAnalyses.id });
   if (!claimed) return;
-  const title = waiting.kind === "confirm" ? "Manus wants your OK on the ads analysis" : "Manus has a question about the ads analysis";
-  await bell(row.ownerId, "ads_needs_input", title, waiting.prompt.slice(0, 300), { analysisId: row.id, href: "/dashboard/ads" });
+  const what = row.kind === "research" ? "the Ad Library research" : "the ads analysis";
+  const href = row.kind === "research" ? "/dashboard/ads#research" : "/dashboard/ads";
+  const title = waiting.kind === "confirm" ? `Manus wants your OK on ${what}` : `Manus has a question about ${what}`;
+  await bell(row.ownerId, "ads_needs_input", title, waiting.prompt.slice(0, 300), { analysisId: row.id, href });
   const settings = await getSettings(row.ownerId, row.accountId);
   if (!settings.notifyEmail) return;
   await email(
     title,
-    `<h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;">${escapeHtml(title)}</h1><p style="margin:0;color:#cfd2dc;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(waiting.prompt.slice(0, 1500))}</p>${button("/dashboard/ads", "Answer in the Ads tab")}`,
+    `<h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;">${escapeHtml(title)}</h1><p style="margin:0;color:#cfd2dc;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(waiting.prompt.slice(0, 1500))}</p>${button(href, "Answer in the Ads tab")}`,
     "ads_needs_input",
     row.id
   );
@@ -139,4 +142,45 @@ export async function notifyCheckBacks(ownerId: string, accountId: string): Prom
     );
   }
   return claimed.length;
+}
+
+/** "Ad Library research is ready" — once per run. No screenshots in the email (they stay private). */
+export async function notifyResearchReady(row: Analysis): Promise<void> {
+  const [claimed] = await db
+    .update(adAnalyses)
+    .set({ notifiedAt: new Date() })
+    .where(and(eq(adAnalyses.id, row.id), isNull(adAnalyses.notifiedAt), eq(adAnalyses.status, "done")))
+    .returning();
+  if (!claimed) return;
+  const r = (claimed.result ?? {}) as {
+    summary?: string;
+    ads?: unknown[];
+    briefs?: { title?: string; format?: string; count?: number }[];
+    marketPatterns?: { title?: string; detail?: string }[];
+  };
+  const ads = r.ads?.length ?? 0;
+  const briefs = r.briefs ?? [];
+  const title = `Ad Library research: ${ads} ad${ads === 1 ? "" : "s"}, ${briefs.length} brief${briefs.length === 1 ? "" : "s"}`;
+  const headline = claimed.headline ?? "";
+  await bell(claimed.ownerId, "ads_research_ready", title, headline || "Manus finished the Ad Library research.", { analysisId: claimed.id, href: "/dashboard/ads#research" });
+  const settings = await getSettings(claimed.ownerId, claimed.accountId);
+  if (!settings.notifyEmail) return;
+  const patterns = (r.marketPatterns ?? [])
+    .slice(0, 3)
+    .map((p) => `<li style="margin:0 0 8px;"><strong style="color:#fff;">${escapeHtml(p.title ?? "")}</strong><br/><span style="color:#9999a8;">${escapeHtml((p.detail ?? "").slice(0, 220))}</span></li>`)
+    .join("");
+  const list = briefs
+    .slice(0, 8)
+    .map((b) => `<li style="margin:0 0 6px;color:#cfd2dc;">${escapeHtml(b.title ?? "")} <span style="color:#9999a8;">· ${escapeHtml(String(b.count ?? ""))} ${b.format === "video" ? "videos" : "photo ads"}</span></li>`)
+    .join("");
+  await email(
+    title,
+    `<h1 style="margin:0 0 8px;color:#fff;font-size:20px;font-weight:700;">${escapeHtml(headline || "Ad Library research is ready")}</h1>
+     ${r.summary ? `<p style="margin:0 0 16px;color:#9999a8;font-size:13px;line-height:1.6;">${escapeHtml(r.summary)}</p>` : ""}
+     ${patterns ? `<p style="margin:0 0 8px;color:#fff;font-size:13px;font-weight:700;">What's working in the market</p><ul style="margin:0 0 16px;padding-left:18px;font-size:13px;line-height:1.5;">${patterns}</ul>` : ""}
+     ${list ? `<p style="margin:0 0 8px;color:#fff;font-size:13px;font-weight:700;">Creatives to make next</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>` : ""}
+     ${button("/dashboard/ads#research", "Open the research")}`,
+    "ads_research_ready",
+    claimed.id
+  );
 }

@@ -5,6 +5,7 @@ import { decimal, money, pct } from "@/lib/ads/format";
 import type { AdRow, AdsSnapshot, Business, Compare, Metrics } from "@/lib/ads/types";
 import type { AdSettingsRow } from "@/lib/ads/settings";
 import type { PackIndex, RefLevel } from "@/lib/ads/parse";
+import type { ResearchPackSummary } from "@/lib/ads/research-pack";
 import type { MetricName, WindowName } from "@/lib/ads/schema";
 
 /**
@@ -15,7 +16,7 @@ import type { MetricName, WindowName } from "@/lib/ads/schema";
  * against, and the compact "what it looked like then" summary kept per run.
  */
 
-export const PACK_VERSION = "ads-pack-v1";
+export const PACK_VERSION = "ads-pack-v2";
 
 const usd = (c: number | null | undefined) => (c === null || c === undefined ? null : Math.round(c) / 100);
 const r4 = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v * 10000) / 10000);
@@ -186,7 +187,7 @@ export interface Still {
 
 export type DataPack = ReturnType<typeof buildPack>;
 
-export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnapshot | null; settings: AdSettingsRow; history: PackHistory }) {
+export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnapshot | null; settings: AdSettingsRow; history: PackHistory; research?: ResearchPackSummary | null }) {
   const { s7, s30, s90, settings, history } = src;
   // Ads that matter: live ones and anything that spent in the last 30 days (biggest first, max 60).
   const ads = s30.ads
@@ -295,6 +296,8 @@ export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnap
     tracking: s30.tracking.map((t) => ({ check: t.key, severity: t.severity, finding: t.label, detail: t.value, fix: t.fix })),
     signals: s30.signals.map((x) => ({ kind: x.kind, severity: x.severity, title: x.title, detail: x.detail, ref: x.ref })),
     history,
+    /** The latest Ad Library research (patterns, long-running competitor ads, briefs) — null when there's none from the last 60 days. */
+    market_research: src.research ?? null,
     notes,
   };
   return { pack, stills };
@@ -419,11 +422,19 @@ export const entityIn = (sum: SnapshotSummary | null | undefined, level: string,
   return list?.find((e) => e.id === id) ?? null;
 };
 
+/** The 30-day snapshot with the account's goals (null when Meta isn't connected). */
+export async function snapshot30(ownerId: string, accountId: string, settings: AdSettingsRow): Promise<AdsSnapshot | null> {
+  const targets = { cpbCents: settings.targetCpbCents, monthlyBudgetCents: settings.monthlyBudgetCents };
+  const r30 = await buildAdsSnapshot({ ownerId, accountId, range: "30", targets, budgetMs: 80_000 });
+  return r30.configured ? r30.snapshot : null;
+}
+
 /** The three snapshots the pack is built from (30 first: it warms the shared caches). */
 export async function gatherSnapshots(ownerId: string, accountId: string, settings: AdSettingsRow) {
   const targets = { cpbCents: settings.targetCpbCents, monthlyBudgetCents: settings.monthlyBudgetCents };
-  const r30 = await buildAdsSnapshot({ ownerId, accountId, range: "30", targets, budgetMs: 80_000 });
-  if (!r30.configured) return null;
+  const s30 = await snapshot30(ownerId, accountId, settings);
+  if (!s30) return null;
+  const r30 = { configured: true as const, snapshot: s30 };
   const [r7, r90] = await Promise.all([
     buildAdsSnapshot({ ownerId, accountId, range: "7", targets, budgetMs: 60_000 }),
     buildAdsSnapshot({ ownerId, accountId, range: "90", targets, budgetMs: 60_000 }),

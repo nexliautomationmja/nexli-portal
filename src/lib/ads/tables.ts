@@ -30,6 +30,10 @@ export const adSettings = pgTable(
     studioKey: text("studio_key").notNull().default("nexli"),
     lastWeeklyKey: text("last_weekly_key"),
     manusConnector: jsonb("manus_connector").$type<{ id: string | null; name: string | null; checkedAt: string } | null>(),
+    /** An Ad Library connector installed in Manus (for research), checked daily. */
+    libraryConnector: jsonb("library_connector").$type<{ id: string | null; name: string | null; checkedAt: string } | null>(),
+    /** Competitors Ad Library research always checks (one per line: name, page or library link). */
+    competitors: text("competitors").notNull().default(""),
     lastCronAt: timestamp("last_cron_at"),
     lastCronError: text("last_cron_error"),
     updatedBy: uuid("updated_by"),
@@ -39,6 +43,8 @@ export const adSettings = pgTable(
 );
 
 export type AnalysisStatus = "queued" | "building" | "starting" | "running" | "waiting" | "saving" | "done" | "failed" | "stopped";
+/** What a Manus run does: the account analysis, or Ad Library research. */
+export type RunKind = "analysis" | "research";
 export const ACTIVE_ANALYSIS: AnalysisStatus[] = ["queued", "building", "starting", "running", "waiting", "saving"];
 
 export const adAnalyses = pgTable("ad_analyses", {
@@ -47,6 +53,7 @@ export const adAnalyses = pgTable("ad_analyses", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   accountId: text("account_id").notNull(),
+  kind: text("kind").$type<RunKind>().notNull().default("analysis"),
   /** weekly | manual */
   trigger: text("trigger").notNull(),
   weekKey: text("week_key"),
@@ -163,6 +170,7 @@ export function ensureAdsTables(): Promise<void> {
           "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
           "account_id" text NOT NULL,
+          "kind" text NOT NULL DEFAULT 'analysis',
           "trigger" text NOT NULL,
           "week_key" text,
           "status" text NOT NULL DEFAULT 'queued',
@@ -199,13 +207,18 @@ export function ensureAdsTables(): Promise<void> {
         )
       `);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_analyses_owner_idx" ON "ad_analyses" ("owner_id", "account_id", "created_at" DESC)`);
-      await db.execute(
-        sql`CREATE UNIQUE INDEX IF NOT EXISTS "ad_analyses_week_uq" ON "ad_analyses" ("owner_id", "account_id", "week_key") WHERE "week_key" IS NOT NULL`
-      );
-      // One analysis in flight per ad account.
-      await db.execute(
-        sql`CREATE UNIQUE INDEX IF NOT EXISTS "ad_analyses_one_active" ON "ad_analyses" ("owner_id", "account_id") WHERE "status" IN ('queued','building','starting','running','waiting','saving')`
-      );
+      // Nov 2026: runs have a kind (analysis | research). One run in flight per kind;
+      // weekly keys per kind. New indexes first (the old, stricter ones guarantee no
+      // duplicates), then drop the old ones — logged, never fatal.
+      await db.execute(sql`ALTER TABLE "ad_analyses" ADD COLUMN IF NOT EXISTS "kind" text NOT NULL DEFAULT 'analysis'`);
+      for (const stmt of [
+        sql`CREATE UNIQUE INDEX IF NOT EXISTS "ad_analyses_week_kind_uq" ON "ad_analyses" ("owner_id", "account_id", "kind", "week_key") WHERE "week_key" IS NOT NULL`,
+        sql`DROP INDEX IF EXISTS "ad_analyses_week_uq"`,
+        sql`CREATE UNIQUE INDEX IF NOT EXISTS "ad_analyses_active_kind_uq" ON "ad_analyses" ("owner_id", "account_id", "kind") WHERE "status" IN ('queued','building','starting','running','waiting','saving')`,
+        sql`DROP INDEX IF EXISTS "ad_analyses_one_active"`,
+      ]) {
+        await db.execute(stmt).catch((err) => console.error("[ads] index update failed (continuing):", err instanceof Error ? err.message : err));
+      }
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "ad_steps" (
           "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -249,6 +262,8 @@ export function ensureAdsTables(): Promise<void> {
           "updated_at" timestamp NOT NULL DEFAULT now()
         )
       `);
+      await db.execute(sql`ALTER TABLE "ad_settings" ADD COLUMN IF NOT EXISTS "competitors" text NOT NULL DEFAULT ''`);
+      await db.execute(sql`ALTER TABLE "ad_settings" ADD COLUMN IF NOT EXISTS "library_connector" jsonb`);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_steps_analysis_idx" ON "ad_steps" ("analysis_id", "idx")`);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_steps_owner_status_idx" ON "ad_steps" ("owner_id", "account_id", "status")`);
       await db.execute(

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     if (body?.action === "retry") {
       if (row.status !== "failed" && row.status !== "stopped") return NextResponse.json({ error: "Only a failed or stopped run can be retried." }, { status: 400 });
       const settings = await getSettings(row.ownerId, row.accountId);
-      const { row: fresh, created } = await enqueueAnalysis({ ownerId: row.ownerId, accountId: row.accountId, trigger: "manual", startedBy: access.actorId, agentProfile: settings.agentProfile });
+      const { row: fresh, created } = await enqueueAnalysis({ ownerId: row.ownerId, accountId: row.accountId, kind: row.kind, trigger: "manual", startedBy: access.actorId, agentProfile: settings.agentProfile });
       const advanced = created ? await advanceAnalysis(fresh, { deadline: Date.now() + 270_000 }) : fresh;
       return NextResponse.json({ analysis: analysisView(advanced) });
     }

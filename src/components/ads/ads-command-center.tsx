@@ -16,6 +16,7 @@ import { KpiRow } from "@/components/ads/kpi-row";
 import { TrendCharts } from "@/components/ads/trend-charts";
 import { FatigueBoard, type CreativeVerdict } from "@/components/ads/fatigue-board";
 import { AnalysisPanel, type AnalysisState } from "@/components/ads/analysis-panel";
+import { ResearchPanel } from "@/components/ads/research-panel";
 import { NextSteps, type StepPatch } from "@/components/ads/next-steps";
 import { GoalsCard } from "@/components/ads/goals-card";
 import { History, ReportModal } from "@/components/ads/history";
@@ -31,6 +32,7 @@ const RANGE_KEY = "nexli.ads.range";
 export const SECTIONS = [
   { id: "read", label: "The read" },
   { id: "creatives", label: "Creatives" },
+  { id: "research", label: "Ad Library" },
   { id: "next-steps", label: "Next steps" },
   { id: "kpis", label: "Scorecard" },
   { id: "trends", label: "Trends" },
@@ -268,6 +270,59 @@ export function jumpTo(sig: Signal, s: AdsSnapshot) {
 
 const ACTIVE = ["queued", "building", "starting", "running", "waiting", "saving"];
 
+/** Follow a Manus run (analysis or research) while it's in flight; `done` runs once it has ended. */
+function useRunPoll(id: string | null, everyMs: number, apply: (a: AnalysisView) => void, done: () => Promise<void>, onError: (msg: string) => void) {
+  const polling = useRef(false);
+  const fns = useRef({ apply, done, onError });
+  useEffect(() => {
+    fns.current = { apply, done, onError };
+  });
+  useEffect(() => {
+    if (!id) return;
+    const tick = async () => {
+      if (polling.current || document.visibilityState === "hidden") return;
+      polling.current = true;
+      try {
+        const r = await fetch(`/api/dashboard/ads/analysis/${id}/poll`, { method: "POST" });
+        const d = await r.json().catch(() => null);
+        const a = d?.analysis as AnalysisView | undefined;
+        if (a) {
+          if (ACTIVE.includes(a.status)) fns.current.apply(a);
+          else await fns.current.done();
+        }
+        if (!r.ok && d?.error) fns.current.onError(d.error);
+      } catch {
+        /* offline for a moment — the next tick tries again */
+      } finally {
+        polling.current = false;
+      }
+    };
+    const t = setInterval(tick, everyMs);
+    void tick();
+    return () => clearInterval(t);
+  }, [id, everyMs]);
+}
+
+/** A finished run counts as seen once its card is on screen (clears the sidebar badge). */
+function useSeenOnScreen(id: string | null, ref: React.RefObject<HTMLDivElement | null>, ready: boolean, onSeen: () => void) {
+  const sent = useRef<string | null>(null);
+  const cb = useRef(onSeen);
+  useEffect(() => {
+    cb.current = onSeen;
+  });
+  useEffect(() => {
+    if (!id || !ready || sent.current === id || !ref.current) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && sent.current !== id) {
+        sent.current = id;
+        void fetch(`/api/dashboard/ads/analysis/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "seen" }) }).then(() => cb.current());
+      }
+    });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [id, ready, ref]);
+}
+
 export function AdsCommandCenter() {
   const router = useRouter();
   const { range, setRange, res, loading, error, setError, reload } = useSnapshot();
@@ -276,9 +331,9 @@ export function AdsCommandCenter() {
   const [an, setAn] = useState<AnalysisState | null>(null);
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<string | null>(null);
-  const polling = useRef(false);
-  const seenSent = useRef<string | null>(null);
+  const [startingResearch, setStartingResearch] = useState(false);
   const verdictRef = useRef<HTMLDivElement>(null);
+  const researchRef = useRef<HTMLDivElement>(null);
 
   const loadAnalysis = useCallback(async () => {
     try {
@@ -293,48 +348,23 @@ export function AdsCommandCenter() {
     void loadAnalysis();
   }, [loadAnalysis]);
 
-  // Follow a run while it's in flight.
+  // Follow runs while they're in flight (the analysis and the Ad Library research run side by side).
+  const finished = async () => {
+    await loadAnalysis();
+    router.refresh();
+  };
   const activeId = an?.active && ACTIVE.includes(an.active.status) ? an.active.id : null;
-  useEffect(() => {
-    if (!activeId) return;
-    const tick = async () => {
-      if (polling.current || document.visibilityState === "hidden") return;
-      polling.current = true;
-      try {
-        const r = await fetch(`/api/dashboard/ads/analysis/${activeId}/poll`, { method: "POST" });
-        const d = await r.json().catch(() => null);
-        const a = d?.analysis as AnalysisView | undefined;
-        if (a) {
-          if (ACTIVE.includes(a.status)) setAn((cur) => (cur ? { ...cur, active: a } : cur));
-          else {
-            await loadAnalysis();
-            router.refresh();
-          }
-        }
-        if (!r.ok && d?.error) setError(d.error);
-      } finally {
-        polling.current = false;
-      }
-    };
-    const t = setInterval(tick, 8000);
-    void tick();
-    return () => clearInterval(t);
-  }, [activeId, loadAnalysis, router, setError]);
+  useRunPoll(activeId, 8000, (a) => setAn((cur) => (cur ? { ...cur, active: a } : cur)), finished, setError);
+  const researchActive = an?.research?.active ?? null;
+  const researchActiveId = researchActive && ACTIVE.includes(researchActive.status) ? researchActive.id : null;
+  useRunPoll(researchActiveId, 15000, (a) => setAn((cur) => (cur ? { ...cur, research: { ...cur.research, active: a } } : cur)), finished, setError);
 
-  // A finished analysis counts as seen once its card is on screen (clears the sidebar badge).
+  // Finished runs count as seen once their card is on screen (clears the sidebar badge).
+  const ready = Boolean(s && an);
   const latestId = an?.latest && !an.latest.seen ? an.latest.id : null;
-  useEffect(() => {
-    if (!latestId || seenSent.current === latestId || !verdictRef.current) return;
-    const el = verdictRef.current;
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting) && seenSent.current !== latestId) {
-        seenSent.current = latestId;
-        void fetch(`/api/dashboard/ads/analysis/${latestId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "seen" }) }).then(() => router.refresh());
-      }
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [latestId, router]);
+  useSeenOnScreen(latestId, verdictRef, ready, () => router.refresh());
+  const researchLatestId = an?.research?.latest && !an.research.latest.seen ? an.research.latest.id : null;
+  useSeenOnScreen(researchLatestId, researchRef, ready, () => router.refresh());
 
   // Arrived from an email link (#next-steps): scroll there once the page has content.
   useEffect(() => {
@@ -354,6 +384,27 @@ export function AdsCommandCenter() {
       if (!r.ok && d?.error && r.status !== 409) setError(d.error);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function researchNow() {
+    const last = an?.research?.latest?.finishedAt;
+    const hours = last ? (Date.now() - new Date(last).getTime()) / 3600000 : null;
+    const recent = hours !== null && hours < 24 ? ` The last research finished ${hours < 1 ? "less than an hour" : `${Math.round(hours)} h`} ago.` : "";
+    if (!window.confirm(`Research the Meta Ad Library now? Manus browses competitors' ads for about 20–45 minutes and uses more credits than an analysis.${recent}`)) return;
+    setBusy(true);
+    setStartingResearch(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/dashboard/ads/research", { method: "POST" });
+      const d = await r.json().catch(() => null);
+      if (d?.active) setAn((cur) => (cur ? { ...cur, research: { ...cur.research, active: d.active } } : cur));
+      if (!r.ok && d?.error && r.status !== 409) setError(d.error);
+    } catch {
+      setError("Couldn't start the research — check your connection and try again.");
+    } finally {
+      setBusy(false);
+      setStartingResearch(false);
     }
   }
 
@@ -477,6 +528,34 @@ export function AdsCommandCenter() {
                 sub={`Uncropped at their real size — videos play muted while on screen; tap for sound. Last 7 days (${shortDay(s.fatigueWindow.l7[0])} – ${shortDay(s.fatigueWindow.l7[1])}) against the 14 before, plus 30-day results.`}
               />
               <FatigueBoard s={s} verdicts={verdicts} onVariations={variations} />
+              <div id="research" className="mt-10 scroll-mt-28 md:scroll-mt-20">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-violet-300">Ad Library research</p>
+                <h3 className="mb-1 mt-1 text-lg font-bold text-white sm:text-xl" style={SYNE}>
+                  What&apos;s working for others — and what to make next
+                </h3>
+                <p className="mb-4 text-xs text-neutral-400">Ads aimed at CPA firm owners and offers like yours — the long-running ones turned into briefs for Creative Studio.</p>
+                {an ? (
+                  <ResearchPanel
+                    state={an.research}
+                    manusConfigured={an.manus.configured}
+                    hasConnector={Boolean(an.manus.libraryConnector)}
+                    competitorsCount={an.settings.competitors.split("\n").filter((l) => l.trim()).length}
+                    s={s}
+                    studioKey={studioKey}
+                    busy={busy}
+                    starting={startingResearch}
+                    tz={tz}
+                    onResearch={() => void researchNow()}
+                    onAct={(id, action, text) => void act(id, action, text)}
+                    onRetry={(id) => void act(id, "retry")}
+                    onOpenReport={setReport}
+                    onVariations={variations}
+                    summaryRef={researchRef}
+                  />
+                ) : (
+                  <Skeleton className="h-40" />
+                )}
+              </div>
             </section>
 
             <section className="lp-card mb-10">

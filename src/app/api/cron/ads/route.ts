@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
         const [recent] = await db
           .select({ id: adAnalyses.id })
           .from(adAnalyses)
-          .where(and(eq(adAnalyses.ownerId, ownerId), eq(adAnalyses.accountId, accountId), eq(adAnalyses.status, "done"), gt(adAnalyses.finishedAt, new Date(Date.now() - 86400000))))
+          .where(and(eq(adAnalyses.ownerId, ownerId), eq(adAnalyses.accountId, accountId), eq(adAnalyses.kind, "analysis"), eq(adAnalyses.status, "done"), gt(adAnalyses.finishedAt, new Date(Date.now() - 86400000))))
           .limit(1);
         if (running || recent) out.weekly = "covered";
         else {

@@ -69,7 +69,7 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState<{ ad: PhotoAdView; size: "story" | "feed" } | null>(null);
-  const [fromAds, setFromAds] = useState(false);
+  const [fromAds, setFromAds] = useState<"analysis" | "research" | null>(null);
   const polling = useRef(false);
 
   const loadList = useCallback(() => {
@@ -103,7 +103,7 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
     if (brief) {
       setPrompt(brief.slice(0, 4000));
       setCount(Math.max(1, Math.min(PHOTO_MAX, Number(q.get("count")) || 4)));
-      setFromAds(q.get("from") === "ads");
+      setFromAds(q.get("from") === "ads-research" ? "research" : q.get("from") === "ads" ? "analysis" : null);
       try {
         const u = new URL(window.location.href);
         ["brief", "count", "from", "step"].forEach((k) => u.searchParams.delete(k));
@@ -245,7 +245,7 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
             </p>
           </div>
 
-          <AssistantCard accent="cyan" icon={SP.sparkles} title="What should the ads be about?" right={fromAds ? <Chip tone="blue">From your Ads analysis</Chip> : null}>
+          <AssistantCard accent="cyan" icon={SP.sparkles} title="What should the ads be about?" right={fromAds ? <Chip tone="blue">{fromAds === "research" ? "From your Ad Library research" : "From your Ads analysis"}</Chip> : null}>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

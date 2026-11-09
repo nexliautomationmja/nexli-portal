@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdsAdmin } from "@/lib/ads/access";
 import { advanceAnalysis, analysisState, analysisView, enqueueAnalysis } from "@/lib/ads/analysis-service";
+import { researchState } from "@/lib/ads/research-service";
 import { getSettings, settingsView } from "@/lib/ads/settings";
 import { cachedTimezone } from "@/lib/ads/snapshot";
 import { nextWeeklyAt, weekKey } from "@/lib/ads/time";
@@ -14,8 +15,9 @@ export async function GET() {
   const access = await requireAdsAdmin();
   if (!access.ok) return access.response;
   if (!access.accountId) return NextResponse.json({ configured: false });
-  const [state, settings, tz] = await Promise.all([
+  const [state, research, settings, tz] = await Promise.all([
     analysisState(access.ownerId, access.accountId),
+    researchState(access.ownerId, access.accountId),
     getSettings(access.ownerId, access.accountId),
     cachedTimezone(access.ownerId, access.accountId).catch(() => "America/Chicago"),
   ]);
@@ -26,8 +28,13 @@ export async function GET() {
   if (weekKey(next, tz) === thisWeek && (!settings.lastWeeklyKey || settings.lastWeeklyKey === thisWeek)) next = new Date(next.getTime() + 7 * 86400000);
   return NextResponse.json({
     configured: true,
-    manus: { configured: manusConfigured(), connector: view.connector?.id ? { id: view.connector.id, name: view.connector.name } : null },
+    manus: {
+      configured: manusConfigured(),
+      connector: view.connector?.id ? { id: view.connector.id, name: view.connector.name } : null,
+      libraryConnector: view.libraryConnector?.id ? { id: view.libraryConnector.id, name: view.libraryConnector.name } : null,
+    },
     ...state,
+    research,
     settings: view,
     timezone: tz,
     nextWeeklyAt: view.weeklyAuto ? next.toISOString() : null,

@@ -5,7 +5,7 @@
  * minimum-data and learning-phase rules, and what a good next step looks like.
  */
 
-export const PLAYBOOK_VERSION = "ads-playbook-v1";
+export const PLAYBOOK_VERSION = "ads-playbook-v2";
 
 export const ADS_AUTO_REPLY =
   "This request comes from an automated tool, so nobody can answer questions right now. Use your best judgment from the data pack and the playbook and finish the analysis now. Advise only — don't change anything in any account.";
@@ -15,7 +15,7 @@ export function promptText(opts: { trigger: "weekly" | "manual"; throughDate: st
     "You are a senior Meta ads strategist reviewing Nexli's ad account. Nexli sells the Digital Rainmaker System — paid-ads client acquisition — to owners of US CPA firms. The goal of the ads is the lowest cost per booked strategy call with qualified CPA firm owners, while keeping volume up.",
     `This is the ${opts.trigger === "weekly" ? "weekly" : "on-demand"} analysis, with data through ${opts.throughDate} (the ad account's own timezone).`,
     "Attached:",
-    "- ads-data-pack.json — the whole account: 7/30/90-day windows vs the previous period, every campaign, ad set and ad (with last-7-days vs the 14 days before for fatigue), placements, audience, tracking health, signals, goals, and the history of earlier analyses and what Marcel did with their steps. It is the source of truth. Leads, booked calls and clients come from GoHighLevel; delivery and spend from Meta.",
+    "- ads-data-pack.json — the whole account: 7/30/90-day windows vs the previous period, every campaign, ad set and ad (with last-7-days vs the 14 days before for fatigue), placements, audience, tracking health, signals, goals, the history of earlier analyses and what Marcel did with their steps, and market_research (the latest Meta Ad Library research: proven competitor patterns and creative briefs) when there is one. It is the source of truth. Leads, booked calls and clients come from GoHighLevel; delivery and spend from Meta.",
     "- playbook.md — the method to follow. Follow it.",
     opts.stills ? `- ${opts.stills} still image${opts.stills > 1 ? "s" : ""} of the top creatives (named creative-N-<ad id>.jpg).` : null,
     opts.hasConnector
@@ -76,6 +76,7 @@ export function playbookMarkdown(): string {
 - The brief must be paste-ready for Nexli's Creative Studio: who it's for, the pain, the angle, 2–3 hook lines, the call to action ("book a strategy call"), what to keep from the winner, what to avoid. Daniela stays the presenter.
 - No guarantees or promised results. Follow Meta's personal-attributes policy: don't imply you know the viewer's finances ("You're losing clients…" → "Most CPA firms lose…").
 - A fatigued ad that still books calls cheaply: refresh before pausing. A dead ad: pause.
+- When the pack has market_research, build creative_refresh briefs on its proven patterns (long-running competitor ads, gaps) and its briefs — borrow the angle, hook structure, format and offer framing, never competitors' words, names, logos or footage — and say which pattern a brief borrows.
 
 ## 8. Waits and check-backs
 - "Keep testing N more days, then check X" is a real step: kind wait_and_watch, wait_days N, and a success_check with the metric and the line it must clear.

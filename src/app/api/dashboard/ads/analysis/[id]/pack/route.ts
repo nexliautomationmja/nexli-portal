@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   return new NextResponse(JSON.stringify(pack, null, 2), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="nexli-ads-data-${row.throughDate ?? row.id}.json"`,
+      "Content-Disposition": `attachment; filename="nexli-ads-${row.kind === "research" ? "research" : "data"}-${row.throughDate ?? row.id}.json"`,
     },
   });
 }

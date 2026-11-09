@@ -17,6 +17,8 @@ export interface AdSettingsView {
   notifyEmail: boolean;
   studioKey: string;
   connector: { id: string | null; name: string | null; checkedAt: string } | null;
+  libraryConnector: { id: string | null; name: string | null; checkedAt: string } | null;
+  competitors: string;
   lastCronAt: string | null;
 }
 
@@ -49,6 +51,8 @@ export function settingsView(s: AdSettingsRow): AdSettingsView {
     notifyEmail: s.notifyEmail,
     studioKey: s.studioKey,
     connector: s.manusConnector ?? null,
+    libraryConnector: s.libraryConnector ?? null,
+    competitors: s.competitors,
     lastCronAt: s.lastCronAt ? s.lastCronAt.toISOString() : null,
   };
 }
@@ -75,5 +79,20 @@ export function settingsPatch(body: Record<string, unknown>): Partial<typeof adS
   if (typeof body.weeklyAuto === "boolean") p.weeklyAuto = body.weeklyAuto;
   if (body.agentProfile === "standard" || body.agentProfile === "max") p.agentProfile = body.agentProfile;
   if (typeof body.notifyEmail === "boolean") p.notifyEmail = body.notifyEmail;
+  if (typeof body.competitors === "string") p.competitors = cleanCompetitors(body.competitors);
   return p;
+}
+
+/** One competitor per line: trimmed, no blanks, no duplicates (any case), max 25 lines of 200 characters. */
+export function cleanCompetitors(text: string): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim().slice(0, 200);
+    if (!line || seen.has(line.toLowerCase())) continue;
+    seen.add(line.toLowerCase());
+    out.push(line);
+    if (out.length >= 25) break;
+  }
+  return out.join("\n");
 }

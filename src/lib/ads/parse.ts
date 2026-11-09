@@ -146,19 +146,19 @@ export interface ParsedAnalysis {
   reportMarkdown: string;
 }
 
-type Obj = Record<string, unknown>;
-const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {});
-const arr = (v: unknown, max: number): unknown[] => (Array.isArray(v) ? v.slice(0, max) : []);
-const str = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
-const strOrNull = (v: unknown, max: number): string | null => {
+export type Obj = Record<string, unknown>;
+export const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {});
+export const arr = (v: unknown, max: number): unknown[] => (Array.isArray(v) ? v.slice(0, max) : []);
+export const str = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
+export const strOrNull = (v: unknown, max: number): string | null => {
   const s = str(v, max);
   return s ? s : null;
 };
-function en<T extends string>(v: unknown, list: readonly T[], fallback: T): T {
+export function en<T extends string>(v: unknown, list: readonly T[], fallback: T): T {
   return typeof v === "string" && (list as readonly string[]).includes(v) ? (v as T) : fallback;
 }
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-const int = (v: unknown, min: number, max: number): number | null => {
+export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+export const int = (v: unknown, min: number, max: number): number | null => {
   const n = num(v);
   return n === null ? null : Math.max(min, Math.min(max, Math.round(n)));
 };

@@ -70,19 +70,20 @@ export function ReportModal({ id, tz, onClose }: { id: string; tz: string; onClo
   }, [id, onClose]);
 
   const a = data?.analysis;
+  const isResearch = a?.kind === "research";
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/80 sm:items-center sm:p-6" style={CANVAS_VARS} onClick={onClose} role="dialog" aria-modal="true" aria-label="Ads analysis report">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/80 sm:items-center sm:p-6" style={CANVAS_VARS} onClick={onClose} role="dialog" aria-modal="true" aria-label={isResearch ? "Ad Library research report" : "Ads analysis report"}>
       <div
         className="flex h-[100dvh] w-full flex-col overflow-hidden border border-white/10 bg-[#0b1220] text-white sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
         style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
-          {a && <ScoreRing score={a.healthScore} size={52} />}
+          {a && !isResearch && <ScoreRing score={a.healthScore} size={52} />}
           <div className="min-w-0 flex-1">
-            {a && <VerdictPill verdict={a.verdict} />}
+            {a && (isResearch ? <span className="inline-flex rounded-full border border-violet-400/30 bg-violet-500/15 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider text-violet-200">Ad Library research</span> : <VerdictPill verdict={a.verdict} />)}
             <p className="mt-1 truncate text-[11px] text-neutral-400" style={NUM_FONT}>
-              {a ? `${when(a.finishedAt, tz)} · data through ${a.throughDate ?? "—"}` : "Loading…"}
+              {a ? (isResearch ? `${when(a.finishedAt, tz)}${a.headline ? ` · ${a.headline}` : ""}` : `${when(a.finishedAt, tz)} · data through ${a.throughDate ?? "—"}`) : "Loading…"}
             </p>
           </div>
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white" aria-label="Close">
@@ -90,21 +91,21 @@ export function ReportModal({ id, tz, onClose }: { id: string; tz: string; onClo
           </button>
         </div>
         <div className="flex gap-1 border-b border-white/10 px-4 py-2">
-          {(["report", "steps"] as const).map((t) => (
+          {(isResearch ? (["report"] as const) : (["report", "steps"] as const)).map((t) => (
             <button key={t} type="button" onClick={() => setTab(t)} className={`min-h-9 rounded-full px-3 text-xs font-bold ${tab === t ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white"}`}>
               {t === "report" ? "Report" : `Steps${data ? ` · ${data.steps.length}` : ""}`}
             </button>
           ))}
           {a && (
             <a href={`/api/dashboard/ads/analysis/${a.id}/pack`} className="ml-auto inline-flex min-h-9 items-center gap-1 px-2 text-xs font-semibold text-cyan-300 hover:underline">
-              <SvgIcon d={SP.download} size={13} /> Data Manus saw
+              <SvgIcon d={SP.download} size={13} /> {isResearch ? "What Manus saw" : "Data Manus saw"}
             </a>
           )}
         </div>
         <div className="cs-scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6">
           {error && <p className="text-sm text-rose-300">{error}</p>}
           {!data && !error && <div className="h-40 animate-pulse rounded-2xl bg-white/5" />}
-          {data && tab === "report" && (data.report ? <ReportMarkdown text={data.report} /> : <p className="text-sm text-neutral-400">No written report for this analysis.</p>)}
+          {data && tab === "report" && (data.report ? <ReportMarkdown text={data.report} /> : <p className="text-sm text-neutral-400">No written report for this {isResearch ? "research" : "analysis"}.</p>)}
           {data && tab === "steps" && (
             <ul className="space-y-2">
               {data.steps.map((s) => (

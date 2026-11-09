@@ -5,14 +5,15 @@ import { studioHref } from "@/components/creative-studio/client";
  * (or a winner's variation) opens Photo Ads or the Videos batch composer with
  * the brief and count already filled in.
  */
-export function photosHref(studioKey: string, brief: string, count: number, stepId?: string) {
-  const q = new URLSearchParams({ brief: brief.slice(0, 1800), count: String(Math.max(1, Math.min(20, Math.round(count)))), from: "ads" });
+/** `from` labels the hand-off in Creative Studio ("ads" = the analysis, "ads-research" = Ad Library research). */
+export function photosHref(studioKey: string, brief: string, count: number, stepId?: string, from: "ads" | "ads-research" = "ads") {
+  const q = new URLSearchParams({ brief: brief.slice(0, 1800), count: String(Math.max(1, Math.min(20, Math.round(count)))), from });
   if (stepId) q.set("step", stepId);
   return `${studioHref(studioKey, "photos")}?${q}`;
 }
 
-export function videosHref(studioKey: string, brief: string, count: number) {
-  const q = new URLSearchParams({ brief: brief.slice(0, 1800), count: String(Math.max(1, Math.min(10, Math.round(count)))), format: "ad_9x16", from: "ads" });
+export function videosHref(studioKey: string, brief: string, count: number, from: "ads" | "ads-research" = "ads") {
+  const q = new URLSearchParams({ brief: brief.slice(0, 1800), count: String(Math.max(1, Math.min(10, Math.round(count)))), format: "ad_9x16", from });
   return `${studioHref(studioKey, "videos")}?${q}`;
 }
 

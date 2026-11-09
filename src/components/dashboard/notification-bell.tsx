@@ -46,6 +46,7 @@ const TYPE_ICONS: Record<string, string> = {
   ads_analysis_ready: "\u{1F4C8}",
   ads_needs_input: "\u270B",
   ads_check_back: "\u23F0",
+  ads_research_ready: "\u{1F50D}",
 };
 
 function formatTimeAgo(dateStr: string): string {

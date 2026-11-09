@@ -7,14 +7,46 @@ import { SP, SvgIcon } from "@/components/creative-studio/canvas";
 import { FeedRow, StepDot, toolIcon } from "@/components/creative-studio/manus-activity";
 import { money } from "@/lib/ads/format";
 import type { AnalysisSummaryRow, AnalysisView, StepView } from "@/lib/ads/analysis-service";
+import type { ResearchSummaryRow, ResearchView } from "@/lib/ads/research-service";
 import type { AdSettingsView } from "@/lib/ads/settings";
 import type { ParsedEvidence } from "@/lib/ads/parse";
 import { EvidenceChips, ScoreRing, VerdictPill, when } from "@/components/ads/analysis-bits";
 import { Glass, Ico } from "@/components/ads/parts";
 
+/** The words on the live / waiting panels (the analysis or Ad Library research). */
+export interface RunCopy {
+  title: string;
+  gathering: string;
+  reading: string;
+  saving: string;
+  eta: string;
+  confirmNote: string;
+  stopLabel: string;
+}
+
+export const ANALYSIS_COPY: RunCopy = {
+  title: "Manus is analyzing the ad account",
+  gathering: "Gathering the whole account — Meta, GoHighLevel and the history",
+  reading: "Reading the data pack and the playbook…",
+  saving: "Saving the analysis and the next steps",
+  eta: "Usually 5–15 minutes. You can leave this page — the ready email comes to mail@nexli.net.",
+  confirmNote: "Only allow it if it just reads data. The analysis is advise-only — nothing in Meta should change.",
+  stopLabel: "Stop the analysis",
+};
+
+export const RESEARCH_COPY: RunCopy = {
+  title: "Manus is researching the Ad Library",
+  gathering: "Packing up your top creatives, results and competitors to check",
+  reading: "Reading the research pack and the playbook…",
+  saving: "Saving the ads, screenshots and briefs",
+  eta: "Usually 20–45 minutes while Manus browses the Ad Library. You can leave this page — the ready email comes to mail@nexli.net.",
+  confirmNote: "Look only — allow it only if it's just opening a public page — never a login, form or message.",
+  stopLabel: "Stop the research",
+};
+
 export interface AnalysisState {
   configured: boolean;
-  manus: { configured: boolean; connector: { id: string; name: string | null } | null };
+  manus: { configured: boolean; connector: { id: string; name: string | null } | null; libraryConnector?: { id: string; name: string | null } | null };
   active: AnalysisView | null;
   latest: AnalysisView | null;
   steps: StepView[];
@@ -22,6 +54,7 @@ export interface AnalysisState {
   settings: AdSettingsView;
   timezone: string;
   nextWeeklyAt: string | null;
+  research: { active: AnalysisView | null; latest: ResearchView | null; history: ResearchSummaryRow[] };
 }
 
 function clock(ms: number) {
@@ -30,8 +63,8 @@ function clock(ms: number) {
   return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/** Manus at work on the account: what it's doing, its plan, its activity. */
-function LiveRun({ a, onStop, busy }: { a: AnalysisView; onStop: () => void; busy: boolean }) {
+/** Manus at work: what it's doing, its plan, its activity. */
+export function LiveRun({ a, onStop, busy, copy = ANALYSIS_COPY }: { a: AnalysisView; onStop: () => void; busy: boolean; copy?: RunCopy }) {
   const [now, setNow] = useState(() => Date.now());
   const stream = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -48,12 +81,7 @@ function LiveRun({ a, onStop, busy }: { a: AnalysisView; onStop: () => void; bus
   const plan = act?.plan ?? [];
   const doneSteps = plan.filter((s) => s.status === "done").length;
   const lastTool = [...(act?.feed ?? [])].reverse().find((f) => f.kind === "tool");
-  const phase =
-    a.status === "queued" || a.status === "building"
-      ? "Gathering the whole account — Meta, GoHighLevel and the history"
-      : a.status === "saving"
-        ? "Saving the analysis and the next steps"
-        : act?.now || lastTool?.title || "Reading the data pack and the playbook…";
+  const phase = a.status === "queued" || a.status === "building" ? copy.gathering : a.status === "saving" ? copy.saving : act?.now || lastTool?.title || copy.reading;
 
   return (
     <div className="overflow-hidden rounded-3xl border border-blue-400/25 bg-gradient-to-br from-blue-600/[0.12] via-[#0b1220] to-violet-600/[0.08]">
@@ -62,7 +90,7 @@ function LiveRun({ a, onStop, busy }: { a: AnalysisView; onStop: () => void; bus
           <SvgIcon d={SP.sparkles} size={17} />
         </span>
         <h3 className="text-[15px] font-bold text-white" style={SYNE}>
-          Manus is analyzing the ad account
+          {copy.title}
         </h3>
         <span className="ml-auto flex items-center gap-2">
           <span className="text-xs text-neutral-400" style={NUM_FONT}>
@@ -112,7 +140,7 @@ function LiveRun({ a, onStop, busy }: { a: AnalysisView; onStop: () => void; bus
             </div>
           </div>
         )}
-        <p className="text-xs text-neutral-400">Usually 5–15 minutes. You can leave this page — the ready email comes to mail@nexli.net.</p>
+        <p className="text-xs text-neutral-400">{copy.eta}</p>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-white/5 px-4 py-2.5 text-[11px] sm:px-5">
         {a.taskUrl ? (
@@ -130,7 +158,7 @@ function LiveRun({ a, onStop, busy }: { a: AnalysisView; onStop: () => void; bus
   );
 }
 
-function WaitingPanel({ a, busy, onAct }: { a: AnalysisView; busy: boolean; onAct: (action: "reply" | "allow" | "stop", text?: string) => void }) {
+export function WaitingPanel({ a, busy, onAct, copy = ANALYSIS_COPY }: { a: AnalysisView; busy: boolean; onAct: (action: "reply" | "allow" | "stop", text?: string) => void; copy?: RunCopy }) {
   const [text, setText] = useState("");
   const w = a.waiting;
   if (!w) return null;
@@ -140,13 +168,13 @@ function WaitingPanel({ a, busy, onAct }: { a: AnalysisView; busy: boolean; onAc
       <p className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap text-sm text-amber-50">{w.prompt}</p>
       {w.kind === "confirm" ? (
         <>
-          <p className="mt-2 text-xs text-amber-100/70">Only allow it if it just reads data. The analysis is advise-only — nothing in Meta should change.</p>
+          <p className="mt-2 text-xs text-amber-100/70">{copy.confirmNote}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" disabled={busy} onClick={() => onAct("allow")} className="min-h-10 rounded-full bg-amber-300 px-4 text-sm font-bold text-black disabled:opacity-50">
               Allow
             </button>
             <button type="button" disabled={busy} onClick={() => onAct("stop")} className="min-h-10 px-3 text-sm font-semibold text-amber-200">
-              Stop the analysis
+              {copy.stopLabel}
             </button>
           </div>
         </>

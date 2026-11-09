@@ -60,6 +60,7 @@ export function GoalsCard({
   const [weekly, setWeekly] = useState(settings.weeklyAuto);
   const [email, setEmail] = useState(settings.notifyEmail);
   const [profile, setProfile] = useState(settings.agentProfile);
+  const [competitors, setCompetitors] = useState(settings.competitors);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -79,11 +80,13 @@ export function GoalsCard({
           weeklyAuto: weekly,
           notifyEmail: email,
           agentProfile: profile,
+          competitors,
         }),
       });
       const d = await r.json().catch(() => null);
       if (!r.ok) throw new Error(d?.error || "Saving failed");
       onSaved(d.settings);
+      setCompetitors(d.settings.competitors);
       setMsg("Saved — Manus uses these from the next analysis.");
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Saving failed");
@@ -115,6 +118,17 @@ export function GoalsCard({
           className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[16px] text-white placeholder:text-neutral-600 focus:border-cyan-400/50 focus:outline-none sm:text-sm"
         />
       </label>
+      <label className="mt-4 block">
+        <span className={labelCls}>Competitors to always check</span>
+        <textarea
+          value={competitors}
+          onChange={(e) => setCompetitors(e.target.value.slice(0, 6000))}
+          rows={3}
+          placeholder={"One per line: a name, a Facebook page link or an Ad Library link\nAcme CPA Marketing\nhttps://www.facebook.com/ads/library/?view_all_page_id=…"}
+          className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[16px] text-white placeholder:text-neutral-600 focus:border-cyan-400/50 focus:outline-none sm:text-sm"
+        />
+        <span className="mt-1 block text-[11px] text-neutral-500">Ad Library research checks these first, every time. Up to 25.</span>
+      </label>
       <div className="mt-4 grid gap-2 md:grid-cols-2">
         <Toggle on={weekly} onChange={setWeekly} label="Weekly analysis" sub="Every Monday, 7:00 AM in the ad account's timezone" />
         <Toggle on={email} onChange={setEmail} label="Email me" sub="When an analysis is ready, Manus needs you, or a check-back is due" />
@@ -133,6 +147,13 @@ export function GoalsCard({
       <p className="mt-3 text-[11px] text-neutral-500">
         Meta Ads Manager connector in Manus:{" "}
         {settings.connector?.id ? <b className="text-emerald-300">connected{settings.connector.name ? ` (${settings.connector.name})` : ""}</b> : <span>not connected — connect it in Manus → Connectors and the next analysis uses it.</span>}
+        <br />
+        Ad Library connector in Manus:{" "}
+        {settings.libraryConnector?.id ? (
+          <b className="text-emerald-300">connected{settings.libraryConnector.name ? ` (${settings.libraryConnector.name})` : ""}</b>
+        ) : (
+          <span>optional — without one, Manus browses the public Ad Library site itself.</span>
+        )}
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => void save()} disabled={saving} className={CTA_CLASSES}>
