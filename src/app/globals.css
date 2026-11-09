@@ -471,6 +471,8 @@ html {
 .dark .icon-chip-amber { filter: drop-shadow(0 4px 10px rgba(245, 158, 11, 0.35)); }
 .dark .icon-chip-rose { filter: drop-shadow(0 4px 10px rgba(244, 63, 94, 0.35)); color: #fb7185; }
 .dark .icon-chip-meta { filter: drop-shadow(0 4px 10px rgba(163, 230, 53, 0.35)); }
+/* Ads Command Center: the Rainmaker shimmer ring (drawn in the sidebar) with a violet glow */
+.dark .icon-chip-shimmer { filter: drop-shadow(0 4px 10px rgba(139, 92, 246, 0.35)); }
 
 /* Floating chips — the Launch Pad hero bob, toned down for nav rails.
    Stagger per item via inline animation-delay. */

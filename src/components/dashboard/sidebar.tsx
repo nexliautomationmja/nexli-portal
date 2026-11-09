@@ -81,6 +81,27 @@ interface NavItem {
   badgeNoun?: string;
   /** Show the count on the icon's corner instead of after the label (keeps a long label whole). */
   badgeOnIcon?: boolean;
+  /** A rotating blue/violet ring around the icon, like the Digital Rainmaker badge. */
+  shimmer?: boolean;
+}
+
+/** The Digital Rainmaker shimmer in its cool colors (blue / violet / cyan). */
+const RING_CONIC = "conic-gradient(from 0deg at 50% 50%, #3B82F6, #8B5CF6, #06B6D4, #8B5CF6, #3B82F6)";
+
+/** An icon chip's ring drawn by the rotating shimmer (covers the chip's 1px border so the size matches its neighbours). */
+function ShimmerRing({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="absolute -inset-px overflow-hidden rounded-[0.625rem] p-[1.5px]">
+      <span className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-90 motion-reduce:animate-none" style={{ background: RING_CONIC }} />
+      <span className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] blur-md opacity-40 motion-reduce:animate-none" style={{ background: RING_CONIC }} />
+      <span
+        className="relative z-10 flex h-full w-full items-center justify-center rounded-[8.5px]"
+        style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(139,92,246,0.12)), var(--nav-bg)" }}
+      >
+        {children}
+      </span>
+    </span>
+  );
 }
 
 /** Firm-side thread with the Nexli team; inserted right after Overview. */
@@ -156,7 +177,7 @@ const fullNav: NavItem[] = fullNavOrder
 /** Admin-only tools (Marcel and team members), shown right after Engagements. */
 const adminNav: NavItem[] = [
   { href: "/dashboard/creative-studio", label: "Creative Studio", icon: MetaLogo, accent: "meta" },
-  { href: "/dashboard/ads", label: "Ads Command Center", icon: MetaLogo, accent: "meta", badgeNoun: "to review", badgeOnIcon: true },
+  { href: "/dashboard/ads", label: "Ads Command Center", icon: MetaLogo, accent: "meta", badgeNoun: "to review", badgeOnIcon: true, shimmer: true },
 ];
 
 function withAdminTools(nav: NavItem[]): NavItem[] {
@@ -302,10 +323,16 @@ export function Sidebar({ isAdmin, tier = "drs", userName, badges, showNexliMess
               }
             >
               <span
-                className={cn("relative icon-chip icon-chip-float w-8 h-8", `icon-chip-${item.accent}`)}
+                className={cn("relative icon-chip icon-chip-float w-8 h-8", item.shimmer ? "icon-chip-shimmer" : `icon-chip-${item.accent}`)}
                 style={{ animationDelay: `${(index % 8) * 0.4}s` }}
               >
-                <item.icon className="w-4 h-4" />
+                {item.shimmer ? (
+                  <ShimmerRing>
+                    <item.icon className="w-4 h-4" />
+                  </ShimmerRing>
+                ) : (
+                  <item.icon className="w-4 h-4" />
+                )}
                 {collapsed && item.badge ? (
                   <span
                     className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-[var(--bg-main)]"
