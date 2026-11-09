@@ -11,7 +11,7 @@ import { SP, SvgIcon } from "@/components/creative-studio/canvas";
 type ManusTask = ProjectDetail["manus"][number];
 type FeedItem = ManusActivitySnapshot["feed"][number];
 
-function toolIcon(tool: string | null): React.ReactNode {
+export function toolIcon(tool: string | null): React.ReactNode {
   const t = (tool ?? "").toLowerCase();
   if (/browser|web|url|page/.test(t)) return SP.globe;
   if (/code|shell|terminal|python|exec|command/.test(t)) return SP.terminal;
@@ -231,7 +231,7 @@ export function ManusActivity({
   );
 }
 
-function StepDot({ status }: { status: "todo" | "doing" | "done" | "failed" }) {
+export function StepDot({ status }: { status: "todo" | "doing" | "done" | "failed" }) {
   if (status === "done") {
     return (
       <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-white" style={{ animation: "lp-check-bounce 0.5s ease-out both" }}>
@@ -253,7 +253,7 @@ function StepDot({ status }: { status: "todo" | "doing" | "done" | "failed" }) {
   return <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border border-white/20" />;
 }
 
-function FeedRow({ item, now, latest }: { item: FeedItem; now: number; latest: boolean }) {
+export function FeedRow({ item, now, latest }: { item: FeedItem; now: number; latest: boolean }) {
   if (item.kind === "explanation" || item.kind === "message") {
     return (
       <div className="lp-card flex gap-2">

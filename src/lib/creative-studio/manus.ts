@@ -101,27 +101,82 @@ export async function startFrameTask(req: FrameRequest): Promise<{ taskId: strin
   return { taskId: res.task_id, taskUrl: res.task_url ?? null };
 }
 
-/** Start a Manus task from a prompt and attached files (photo ads). */
+export type ManusFile =
+  | { url: string; filename: string }
+  /** Sent inline (base64), up to 20 MB — doesn't count toward the prompt's text limit. */
+  | { data: string; filename: string; mimeType: string };
+
+/**
+ * Start a Manus task from a prompt and attached files (photo ads, ads analysis).
+ * Optional: a structured output schema (result arrives as a
+ * `structured_output_result` message), connector ids (or clear the account's
+ * default connectors), agent profile, locale, task-list visibility.
+ */
 export async function startManusTask(args: {
   prompt: string;
-  files: { url: string; filename: string }[];
+  files: ManusFile[];
   title: string;
+  schema?: Record<string, unknown>;
+  connectors?: string[];
+  clearConnectors?: boolean;
+  agentProfile?: string;
+  locale?: string;
+  hideInTaskList?: boolean;
 }): Promise<{ taskId: string; taskUrl: string | null }> {
   const content: Record<string, unknown>[] = [{ type: "text", text: args.prompt }];
-  for (const f of args.files) content.push({ type: "file", file_url: f.url, filename: f.filename });
+  for (const f of args.files) {
+    if ("data" in f) {
+      content.push({ type: "file", file_data: `data:${f.mimeType};base64,${f.data}`, filename: f.filename, mime_type: f.mimeType });
+    } else {
+      content.push({ type: "file", file_url: f.url, filename: f.filename });
+    }
+  }
+  const connectors = (args.connectors ?? []).filter(Boolean);
   const res = await manus<{ task_id: string; task_url?: string }>("task.create", {
     method: "POST",
     body: JSON.stringify({
-      message: { content },
-      agent_profile: "standard",
+      message: { content, ...(connectors.length ? { connectors } : {}) },
+      ...(args.clearConnectors && !connectors.length ? { clear_connectors: true } : {}),
+      ...(args.schema ? { structured_output_schema: args.schema } : {}),
+      ...(args.locale ? { locale: args.locale } : {}),
+      agent_profile: args.agentProfile ?? "standard",
       interactive_mode: false,
-      hide_in_task_list: true,
+      hide_in_task_list: args.hideInTaskList ?? true,
       share_visibility: "private",
       title: args.title,
     }),
   });
   if (!res.task_id) throw new ManusError("Manus didn't return a task id");
   return { taskId: res.task_id, taskUrl: res.task_url ?? null };
+}
+
+/** A task's messages (newest first by default). */
+export async function listTaskMessages(
+  taskId: string,
+  opts: { verbose?: boolean; limit?: number; order?: "asc" | "desc" } = {}
+): Promise<ManusMessage[]> {
+  const q = new URLSearchParams({
+    task_id: taskId,
+    order: opts.order ?? "desc",
+    limit: String(opts.limit ?? 100),
+    verbose: opts.verbose === false ? "false" : "true",
+  });
+  const res = await manus<{ messages?: ManusMessage[] }>(`task.listMessages?${q}`, { method: "GET" });
+  return res.messages ?? [];
+}
+
+export interface ManusConnector {
+  id: string;
+  name: string;
+  type?: string;
+  description?: string;
+  category?: string;
+}
+
+/** Connectors installed on the Manus account behind MANUS_API_KEY. */
+export async function listConnectors(): Promise<ManusConnector[]> {
+  const res = await manus<{ data?: ManusConnector[] }>("connector.list", { method: "GET" });
+  return (res.data ?? []).filter((c) => c && typeof c.id === "string");
 }
 
 import type { ManusActivitySnapshot } from "@/lib/creative-studio/tables";
@@ -151,6 +206,8 @@ export interface ManusMessage {
     question_expectation?: { options?: string[] };
   };
   error_message?: { message?: string; content?: string };
+  /** Present on the message of type "structured_output_result" (tasks created with a schema). */
+  structured_output_result?: { success?: boolean; value?: unknown; error?: string | null };
 }
 
 export type FrameTaskState =
@@ -168,13 +225,13 @@ export type FrameTaskState =
       options: string[];
     };
 
-const QUESTION_TYPES = new Set(["messageAskUser", "cascadeAskUser"]);
+export const QUESTION_TYPES = new Set(["messageAskUser", "cascadeAskUser"]);
 /**
  * Manus waiting on its own background sub-job (e.g. an image generation it
  * started). It resumes by itself and can't be confirmed ("Event type
  * 'cascadeJobCall' does not support confirmation"), so it counts as running.
  */
-const isBackgroundWait = (type: string | null) => Boolean(type && /JobCall$/i.test(type));
+export const isBackgroundWait = (type: string | null) => Boolean(type && /JobCall$/i.test(type));
 
 function imagesFrom(messages: ManusMessage[]): { url: string; filename: string | null }[] {
   const images: { url: string; filename: string | null }[] = [];

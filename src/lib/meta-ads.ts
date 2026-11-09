@@ -50,7 +50,7 @@ const LEAD_ACTIONS = new Set([
   "onsite_conversion.lead_grouped",
 ]);
 
-interface GraphAction {
+export interface GraphAction {
   action_type?: string;
   value?: string;
 }
@@ -65,7 +65,7 @@ interface GraphInsightRow {
   account_currency?: string;
 }
 
-interface GraphError {
+export interface GraphError {
   message?: string;
   type?: string;
   code?: number;
@@ -90,12 +90,12 @@ function platformKey(raw: string | undefined): MetaPlatformKey {
 }
 
 /** "123.45" (account currency) → 12345 cents. */
-function toCents(v: string | undefined): number {
+export function toCents(v: string | undefined): number {
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }
 
-function toInt(v: string | undefined): number {
+export function toInt(v: string | undefined): number {
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
@@ -114,14 +114,14 @@ export function graphDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-interface MetaCreds {
+export interface MetaCreds {
   token: string;
   /** Ad account id without the `act_` prefix. */
   account: string;
   version: string;
 }
 
-function metaCreds(): MetaCreds | null {
+export function metaCreds(): MetaCreds | null {
   const token = process.env.META_ADS_ACCESS_TOKEN?.trim() || "";
   const account = (process.env.META_AD_ACCOUNT_ID || "").trim().replace(/^act_/i, "");
   if (!token || !account) return null;
@@ -133,18 +133,18 @@ export function metaAdAccountId(): string | null {
   return metaCreds()?.account ?? null;
 }
 
-function graphUrl(creds: MetaCreds, path: string, params: Record<string, string>): string {
+export function graphUrl(creds: MetaCreds, path: string, params: Record<string, string>): string {
   const qs = new URLSearchParams({ ...params, access_token: creds.token });
   return `https://graph.facebook.com/${creds.version}/${path}?${qs}`;
 }
 
-type GraphResult<T> = { ok: true; body: T } | { ok: false; error: string };
+export type GraphResult<T> = { ok: true; body: T } | { ok: false; error: string };
 
 /**
  * GET a full Graph API URL. Never throws; errors carry Meta's own message
  * with the token scrubbed. `label` only goes into server logs.
  */
-async function graphGet<T extends { error?: GraphError }>(
+export async function graphGet<T extends { error?: GraphError }>(
   url: string,
   token: string,
   label: string
@@ -245,7 +245,7 @@ function leadsOf(actions: GraphAction[] | undefined): number {
   return n;
 }
 
-function actionCount(actions: GraphAction[] | undefined, type: string): number {
+export function actionCount(actions: GraphAction[] | undefined, type: string): number {
   let n = 0;
   for (const a of actions ?? []) if (a.action_type === type) n += toInt(a.value);
   return n;
@@ -544,7 +544,7 @@ function pageIdOf(c: GraphCreative | undefined): string | null {
   return first(c?.object_story_spec?.page_id, c?.actor_id, story && /^\d+$/.test(story) ? story : null);
 }
 
-function ctaLabelOf(type: string | null): string | null {
+export function ctaLabelOf(type: string | null): string | null {
   if (!type || type === "NO_BUTTON") return null;
   const special: Record<string, string> = {
     LEARN_MORE: "Learn more",

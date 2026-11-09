@@ -52,7 +52,8 @@ export interface AdLeadScan {
 export async function fetchContactsInWindow(
   locationId: string,
   since: Date,
-  until: Date
+  until: Date,
+  maxPages: number = MAX_PAGES
 ): Promise<{ contacts: GHLContact[]; mode: "search" | "list"; truncated: boolean }> {
   const byId = new Map<string, GHLContact>();
   const inWindow = (c: GHLContact) => {
@@ -62,12 +63,12 @@ export async function fetchContactsInWindow(
 
   try {
     let truncated = false;
-    for (let page = 1; page <= MAX_PAGES; page++) {
+    for (let page = 1; page <= maxPages; page++) {
       const res = await searchContactsAddedBetween(locationId, since, until, page, PAGE_LIMIT);
       const contacts = res.contacts ?? [];
       for (const c of contacts) if (inWindow(c)) byId.set(c.id, c);
       if (contacts.length < PAGE_LIMIT) break;
-      if (page === MAX_PAGES) truncated = true;
+      if (page === maxPages) truncated = true;
     }
     return { contacts: [...byId.values()], mode: "search", truncated };
   } catch (err) {
@@ -76,7 +77,7 @@ export async function fetchContactsInWindow(
 
   let cursor: string | undefined;
   let truncated = false;
-  for (let page = 0; page < MAX_PAGES; page++) {
+  for (let page = 0; page < maxPages; page++) {
     const res = await getContacts(locationId, PAGE_LIMIT, cursor);
     const contacts = res.contacts ?? [];
     if (contacts.length === 0) break;
@@ -84,7 +85,7 @@ export async function fetchContactsInWindow(
     const last = contacts[contacts.length - 1]?.id;
     if (!last || last === cursor || contacts.length < PAGE_LIMIT) break;
     cursor = last;
-    if (page === MAX_PAGES - 1) truncated = true;
+    if (page === maxPages - 1) truncated = true;
   }
   return { contacts: [...byId.values()], mode: "list", truncated };
 }
@@ -98,6 +99,8 @@ export async function scanAdLeads(opts: {
   locationId: string;
   since: Date;
   until: Date;
+  /** 100 contacts a page; defaults to 10 (1,000 contacts). */
+  maxPages?: number;
 }): Promise<AdLeadScan> {
   const { ownerId, locationId, since, until } = opts;
   await ensurePipelineTable();
@@ -116,7 +119,7 @@ export async function scanAdLeads(opts: {
       })
       .from(pipelineLeads)
       .where(and(eq(pipelineLeads.ownerId, ownerId), isNotNull(pipelineLeads.ghlContactId))),
-    fetchContactsInWindow(locationId, since, until),
+    fetchContactsInWindow(locationId, since, until, opts.maxPages ?? MAX_PAGES),
   ]);
 
   const fieldNames = new Map<string, string>();

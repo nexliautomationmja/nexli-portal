@@ -43,6 +43,9 @@ const TYPE_ICONS: Record<string, string> = {
   bank_transfer_sent: "\u{1F3E6}",
   bank_transfer_review: "\u{1F50E}",
   portal_message: "\u{1F4AC}",
+  ads_analysis_ready: "\u{1F4C8}",
+  ads_needs_input: "\u270B",
+  ads_check_back: "\u23F0",
 };
 
 function formatTimeAgo(dateStr: string): string {

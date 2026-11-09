@@ -19,6 +19,7 @@ import {
   FormIcon,
   GearIcon,
   ChartIcon,
+  TrendingUpIcon,
   ShieldIcon,
   RocketIcon,
   ScanIcon,
@@ -154,6 +155,7 @@ const fullNav: NavItem[] = fullNavOrder
 /** Admin-only tools (Marcel and team members), shown right after Engagements. */
 const adminNav: NavItem[] = [
   { href: "/dashboard/creative-studio", label: "Creative Studio", icon: MetaLogo, accent: "meta" },
+  { href: "/dashboard/ads", label: "Ads", icon: TrendingUpIcon, accent: "amber", badgeNoun: "to review" },
 ];
 
 function withAdminTools(nav: NavItem[]): NavItem[] {

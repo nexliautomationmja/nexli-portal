@@ -115,7 +115,7 @@ const PORTAL_URL = process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.nexli.n
 /** Default accent used for links / buttons when a firm has no brand color. */
 const DEFAULT_ACCENT = "#2563EB";
 
-function escapeHtml(input: string): string {
+export function escapeHtml(input: string): string {
   return input
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
