@@ -18,7 +18,9 @@ import {
   ShimmerCard,
   LaunchPadShell,
   useForceDark,
+  NexliLegalFooter,
 } from "@/components/launch-pad";
+import { nexliPaymentDisclosure } from "@/lib/nexli-legal";
 import {
   DrsAtAGlance,
   EngagementLetterView,
@@ -138,6 +140,20 @@ export function EngagePreviewClient() {
 
       {/* ─── The agreement ─── */}
       <EngagementLetterView content={letter} kind="drs" plan={plan} onReadProgress={setReadPct} />
+
+      {/* ─── Disclosures — same card as the real signing page ─── */}
+      <LpCard className="lp-card">
+        <div className="space-y-4">
+          <div>
+            <p className={labelCls}>How payments work</p>
+            <p className="text-xs leading-relaxed text-neutral-400">{nexliPaymentDisclosure("drs")}</p>
+          </div>
+          <div>
+            <p className={labelCls}>Who you&apos;re contracting with</p>
+            <NexliLegalFooter align="left" />
+          </div>
+        </div>
+      </LpCard>
 
       {/* ─── Signature ─── */}
       <div id="sign" ref={successRef} style={{ scrollMarginTop: 24 }}>
