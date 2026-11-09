@@ -61,9 +61,9 @@ export async function POST(
     return NextResponse.json({ error: "bank_transfer_only" }, { status: 400 });
   }
 
-  // ACH-only invoices (the Enterprise License fee and the DRS setup
-  // invoices) never accept card — the pay page hides the option, and this is
-  // the server-side guarantee.
+  // ACH-only invoices (the Enterprise License fee, and the DRS setup, annual
+  // and annual-renewal invoices — ACH_ONLY_DRS_ROLES) never accept card: the
+  // pay page hides the option, and this is the server-side guarantee.
   const achOnly = isAchOnlyInvoiceMeta(invoice.metadata);
   if (achOnly && method === "card") {
     return NextResponse.json({ error: "card_not_accepted" }, { status: 400 });

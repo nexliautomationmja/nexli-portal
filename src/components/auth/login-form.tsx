@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 const SUBSCRIPTION_INACTIVE_MESSAGE =
-  "Your subscription is paused. Contact support@nexli.net to reactivate.";
+  "Your subscription is paused. Contact mail@nexli.net to reactivate.";
 
 /** Map a NextAuth sign-in error code to the message shown under the form. */
 function messageForError(code: string | null | undefined): string {

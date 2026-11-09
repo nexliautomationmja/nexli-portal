@@ -197,7 +197,7 @@ Positioning lines that recur:
 
 - **Qualifier:** C-P-A firms doing 750K to 1 million a year, who know they can 10x their business.
 - **Investment:** $9,997 a month, of which $5,000 goes straight to ad spend.
-- **Terms:** a one-time setup fee and a contract, both walked through on the call. Not month-to-month.
+- **Terms:** a one-time setup fee (walked through on the call) and a signed agreement: a six-month minimum on the monthly plan, counted from launch and then month to month, or a 12-month annual plan that doesn't renew automatically. Never say "no contract" or "cancel anytime".
 - **Scarcity:** only taking on three more firms right now.
 - **Tax planning fees** prospects pay the firm: $15,000–$55,000.
 

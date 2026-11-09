@@ -69,10 +69,10 @@ const SAMPLES: Record<SampleKind, Sample> = {
         amountCents: DRS_PRICING.SETUP_FEE_CENTS,
       },
     ],
-    achOnly: false, // setup invoices accept ACH or card
+    achOnly: true, // setup and annual invoices: bank transfer (ACH or wire) only, never card
     chargebackWaived: true,
     notes:
-      "One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System, as itemized in Section 1 of your engagement letter. Due at signing; onboarding opens once it is paid. Non-refundable once work begins.",
+      "One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System, as itemized in Section 1 of your engagement letter. Due at signing; onboarding opens once it is paid. Non-refundable. Paid by bank transfer (ACH or wire); cards are not accepted.",
     terms: "Due on receipt.",
   },
   annual: {
@@ -90,10 +90,10 @@ const SAMPLES: Record<SampleKind, Sample> = {
         amountCents: DRS_PRICING.ANNUAL_CENTS,
       },
     ],
-    achOnly: false, // setup invoices accept ACH or card
+    achOnly: true, // setup and annual invoices: bank transfer (ACH or wire) only, never card
     chargebackWaived: true,
     notes:
-      "Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System, as itemized in Section 1 of your engagement letter, plus the annual platform investment for your first 12 months, paid in full. Due at signing; onboarding opens once it is paid. The Managed Advertising Budget is billed monthly once your build is complete.",
+      "Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System, as itemized in Section 1 of your engagement letter, plus the annual platform investment for your first 12 months from launch, paid in full. Due at signing; onboarding opens once it is paid. Non-refundable. Paid by bank transfer (ACH or wire); cards are not accepted. The Managed Advertising Budget is billed monthly once your build is complete.",
     terms: "Due on receipt.",
   },
   monthly: {
@@ -113,7 +113,7 @@ const SAMPLES: Record<SampleKind, Sample> = {
     ],
     achOnly: false,
     notes:
-      "Monthly investment for the Digital Rainmaker System: platform upkeep (hosting, maintenance, ad management, support, reporting, AI usage) + Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Billed automatically each month.",
+      "Monthly investment for the Digital Rainmaker System: platform upkeep (maintenance and support, ad management, reporting, AI usage) + Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Billed automatically each month.",
     terms: "Due on receipt. Billed automatically each month.",
   },
   enterprise: {

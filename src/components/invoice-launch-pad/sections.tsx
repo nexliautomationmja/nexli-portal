@@ -20,6 +20,7 @@ import {
   IconChip,
   Pill,
   ShimmerCard,
+  NexliLegalFooter,
 } from "@/components/launch-pad";
 import { NUM_FONT, READ_FONT } from "@/components/engagement-launch-pad/styles";
 import { INVOICE_PATHS as P } from "./icons";
@@ -269,7 +270,7 @@ export function CoversCard({
             accent="blue"
             label="Platform upkeep"
             amount={money(split.platformCents, currency)}
-            sub="Hosting, maintenance, ad management, support, reporting, AI usage"
+            sub="Maintenance and support, ad management, reporting, AI usage"
           />
           <SplitTile
             accent="emerald"
@@ -991,7 +992,8 @@ export function InvoiceFooter() {
       <p className="text-[11px] text-neutral-500">
         Questions about this invoice? Your Nexli team is one message away.
       </p>
-      <p className="text-[10px] text-neutral-600">Nexli Automation LLC • Powered by the Digital Rainmaker System</p>
+      {/* This Launch Pad pay page only renders Nexli's own invoices. */}
+      <NexliLegalFooter />
     </footer>
   );
 }

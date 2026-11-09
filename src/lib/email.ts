@@ -6,6 +6,7 @@ import {
   absoluteLogoUrl,
   type OwnerBranding,
 } from "@/lib/branding";
+import { NEXLI_LEGAL, NEXLI_POLICY_LINKS } from "@/lib/nexli-legal";
 
 let _resend: Resend | null = null;
 function getResend() {
@@ -42,14 +43,17 @@ interface SendEmailParams {
   html: string;
   /** Optional From display name; the address stays the verified sender. */
   fromName?: string;
+  /** Where replies go. Only Nexli's own client emails set it (mail@nexli.net); never on a firm's white-label email. */
+  replyTo?: string;
 }
 
-export async function sendEmail({ to, subject, html, fromName }: SendEmailParams) {
+export async function sendEmail({ to, subject, html, fromName, replyTo }: SendEmailParams) {
   const { data, error } = await getResend().emails.send({
     from: buildFrom(fromName),
     to,
     subject,
     html,
+    ...(replyTo ? { replyTo } : {}),
   });
 
   if (error) {
@@ -72,13 +76,14 @@ export async function sendEmailWithLog({
   subject,
   html,
   fromName,
+  replyTo,
   recipientName,
   emailType,
   relatedId,
   sentBy,
 }: SendEmailWithLogParams) {
   try {
-    const result = await sendEmail({ to, subject, html, fromName });
+    const result = await sendEmail({ to, subject, html, fromName, replyTo });
     await db.insert(emailLog).values({
       recipientEmail: to,
       recipientName,
@@ -127,6 +132,15 @@ export function escapeHtml(input: string): string {
  * Shared HTML shell for every outbound email. Pass the firm's branding to
  * swap the logo, footer attribution and accent color; defaults to Nexli.
  */
+/** Nexli's legal identity + nexli.net policies, under Nexli-branded emails only (never a firm's white-label email). */
+const NEXLI_LEGAL_FOOTER_ROW = `
+            <tr><td align="center" style="padding-top:8px;">
+              <p class="nxl-muted" style="margin:0;color:#4a4a5a;font-size:10px;line-height:1.6;">
+                ${NEXLI_LEGAL.name} &bull; ${NEXLI_LEGAL.street}, ${NEXLI_LEGAL.cityLine} &bull; ${NEXLI_LEGAL.phoneDisplay} &bull; ${NEXLI_LEGAL.email}<br />
+                ${NEXLI_POLICY_LINKS.map((l) => `<a href="${l.href}" style="color:#4a4a5a;text-decoration:underline;">${l.label}</a>`).join(" &middot; ")}
+              </p>
+            </td></tr>`;
+
 export const emailWrapper = (
   content: string,
   branding: OwnerBranding = NEXLI_BRANDING
@@ -219,7 +233,7 @@ export const emailWrapper = (
               <p class="nxl-muted" style="margin:0;color:#4a4a5a;font-size:11px;">
                 ${footerLine}
               </p>
-            </td></tr>
+            </td></tr>${branding.isNexli ? NEXLI_LEGAL_FOOTER_ROW : ""}
             <tr><td align="center" style="padding-top:12px;">
               <a href="${PORTAL_URL}/portal" class="nxl-link" style="color:${accent};font-size:11px;text-decoration:none;opacity:0.6;">
                 Sign in to your Client Portal

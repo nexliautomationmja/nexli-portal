@@ -55,7 +55,7 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
     accent: "blue",
     body: "scope",
     summary: () =>
-      `Nexli builds your complete system once (Phase 1, covered by the Setup Fee) — website, funnel, client portal, CRM, automations, launch ad creative and ad engineering — and launches it within ${LAUNCH_TARGET_DAYS} days of receiving your materials. After launch, Nexli hosts, maintains and runs it all every month (Phase 2).`,
+      `Nexli builds your complete system once (Phase 1, covered by the Setup Fee) — website, funnel, client portal, CRM, automations, launch ad creative and ad engineering — and launches it within ${LAUNCH_TARGET_DAYS} days of receiving your materials. After launch, Nexli maintains, supports and runs it all every month (Phase 2). Launch is the day the build is done and your first monthly invoice goes out; ads go live once it's paid. Hosting isn't part of Nexli's fees: you keep your own hosting provider.`,
   },
   "FEE STRUCTURE": {
     icon: PATHS.circleDollar,
@@ -63,8 +63,8 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
     body: "fee",
     summary: ({ plan }) =>
       plan === "annual"
-        ? `${annualUpfront} is due at signing on one invoice (${setup} one-time Setup Fee + ${annualPrepaid} for a prepaid year of platform operation). Separately, the ${adBudget}/month ad budget is billed monthly starting at launch, when Nexli finishes the build; ads go live once that first invoice is paid. Initial term: ${TERM_MONTHS.annual} months; the platform then renews at ${annualPrepaid}/yr, invoiced 30 days before each anniversary.`
-        : `A one-time ${setup} Setup Fee is due at signing. Then ${totalMonthly}/month (${upkeep} platform + ${adBudget} ad budget) on one invoice, starting at launch, when Nexli finishes the build; ads and ongoing services start once that first monthly invoice is paid. Initial term: ${TERM_MONTHS.monthly} months.`,
+        ? `${annualUpfront} is due at signing on one invoice (${setup} one-time Setup Fee + ${annualPrepaid} for twelve months of platform operation from launch). Separately, the ${adBudget}/month ad budget is billed monthly from launch, when Nexli finishes the build, through the end of those 12 months; ads go live once the first invoice is paid, and later months are charged automatically. Initial term: ${TERM_MONTHS.annual} months from launch. The annual plan does not renew automatically: nothing more is charged after the 12 months unless you agree in writing to continue.`
+        : `A one-time ${setup} Setup Fee is due at signing. Then ${totalMonthly}/month (${upkeep} platform + ${adBudget} ad budget) on one invoice, starting at launch, when Nexli finishes the build; ads and ongoing services start once that first monthly invoice is paid, and each month after is charged automatically. Initial term: ${TERM_MONTHS.monthly} months from launch, then month-to-month.`,
   },
   "AD MANAGEMENT": {
     icon: X.megaphone,
@@ -76,19 +76,19 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
     icon: X.creditCard,
     accent: "cyan",
     summary: ({ plan }) =>
-      `The ${plan === "annual" ? `${annualUpfront} up-front invoice` : `${setup} setup invoice`} is paid by bank transfer (ACH or wire) straight to Nexli's bank account, using the details on the invoice; cards aren't accepted for it.${plan === "annual" ? " Yearly renewals are paid the same way." : ""} It is non-refundable, and by signing you waive the right to dispute or reverse ${plan === "annual" ? `any of the ${annualUpfront}` : "the Setup Fee"} with your bank. Monthly invoices after launch can be paid by ACH or card and run on autopay. Fees are non-refundable. Work starts, and your Launch Pad opens, once ${plan === "annual" ? `the ${annualUpfront} invoice due at signing is` : `the ${setup} Setup Fee invoice is`} paid. The first monthly invoice goes out at launch, when the build is complete. You can give 30 days' notice any time, but it takes effect no earlier than the end of the ${TERM_MONTHS[plan]}-month initial term; after that the agreement ${plan === "annual" ? "renews annually" : "continues month-to-month"}.`,
+      `The ${plan === "annual" ? `${annualUpfront} up-front invoice` : `${setup} setup invoice`} is paid by bank transfer (ACH or wire) straight to Nexli's bank account, using the details on the invoice; cards aren't accepted for it.${plan === "annual" ? " Any further prepaid year you agree to is paid the same way." : ""} It is non-refundable, and by signing you waive the right to dispute or reverse ${plan === "annual" ? `any of the ${annualUpfront}` : "the Setup Fee"} with your bank. Monthly invoices after launch can be paid by ACH or card at the same price: you pay the first one once and later months are charged automatically. Fees are non-refundable, except that a duplicate or mistaken charge is refunded in full. The agreement takes effect, work starts and your Launch Pad opens once ${plan === "annual" ? `the ${annualUpfront} invoice due at signing is` : `the ${setup} Setup Fee invoice is`} paid. Your ${TERM_MONTHS[plan]}-month initial term runs from launch. You can give 30 days' written notice any time, but it takes effect no earlier than the end of the initial term; ${plan === "annual" ? "the annual plan then ends — it does not renew automatically unless you agree in writing to continue" : "after that the agreement continues month-to-month until either side gives 30 days' notice"}.`,
   },
   "PROJECT TIMELINE & CLIENT COOPERATION": {
     icon: X.calendar,
     accent: "amber",
     summary: () =>
-      `Submit your Launch Pad items within 5 days of getting the link. Launch is targeted ${LAUNCH_TARGET_DAYS} days after Nexli has everything, and setup wraps within 30 days of the agreement's effective date. If required access or materials aren't provided in that 30-day window, setup is treated as complete.`,
+      `Submit your Launch Pad items within 5 days of getting the link. Launch is targeted ${LAUNCH_TARGET_DAYS} days after Nexli has everything, and setup wraps within 30 days of the agreement's effective date (the day your up-front payment arrives). Third-party reviews — the carriers' review of your texting registration, the ad platforms' review of your ad accounts — move these dates by however long they take. If required access or materials aren't provided in the 30-day window, setup is treated as complete and launch can go ahead.`,
   },
   "INTELLECTUAL PROPERTY": {
     icon: X.shield,
     accent: "violet",
     summary: () =>
-      "Your website content, brand assets and domain stay yours. Nexli's software, automations and dashboard stay Nexli's — you get a license to use them while your subscription is active, and may not copy or resell them.",
+      "Your website, domain, content, brand, ad accounts, the ad creatives made for you and all your data are yours. Nexli builds your own portal, dashboard and automations on its platform, and your monthly upkeep keeps them running; Nexli's underlying software and templates stay Nexli's. When the agreement ends, the upkeep stops after your last paid month, and your portal, dashboard and automations stop with it. Within 30 days you can get an export of your data and a full copy of your website to host anywhere. Nexli may show your website in its portfolio unless you opt out.",
   },
   "ADDITIONAL SERVICES": {
     icon: X.plusCircle,
@@ -99,9 +99,8 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
   "LIMITATION OF LIABILITY": {
     icon: X.scale,
     accent: "amber",
-    collapsed: true,
     summary: () =>
-      "Nexli's liability is capped at the fees you paid in the prior 12 months and excludes indirect losses. Results (leads, revenue, ROI) are not guaranteed, and outages at third parties like Stripe or DNS providers aren't Nexli's liability.",
+      "Nexli's liability is capped at the fees you paid in the prior 12 months and excludes indirect losses. Results (leads, revenue, ROI) are not guaranteed, and outages at third parties like Stripe, your hosting provider or DNS providers aren't Nexli's liability.",
   },
   INDEMNIFICATION: {
     icon: X.shield,
@@ -113,22 +112,20 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
   CONFIDENTIALITY: {
     icon: PATHS.lock,
     accent: "emerald",
-    collapsed: true,
     summary: () =>
-      "Both sides keep each other's proprietary information confidential — including after the agreement ends.",
+      "Both sides keep each other's proprietary information confidential, including after the agreement ends. Your data, including your clients' documents and tax information, belongs to you: Nexli uses it only to run your system, never sells it or uses it for its own marketing, protects it with reasonable safeguards, tells you within 72 hours of confirming any unauthorized access, and deletes it after the 30-day export window (unless the law requires keeping it).",
   },
   TERMINATION: {
     icon: X.logOut,
     accent: "amber",
     summary: () =>
-      "Either side can end the agreement with 30 days' written notice, effective no earlier than the end of the initial term. Nexli can suspend access for non-payment or misuse. You keep your website and content; access to Nexli's systems ends.",
+      "Either side can end the agreement with 30 days' written notice (email to mail@nexli.net works), effective no earlier than the end of the initial term. Nexli can suspend or end access for non-payment, breach or misuse. Access runs through your last paid billing cycle; then the end-of-agreement terms in Section 6 apply — your data export and website copy within 30 days.",
   },
   "DISPUTE RESOLUTION": {
     icon: X.gavel,
     accent: "violet",
-    collapsed: true,
     summary: () =>
-      "Disputes go to binding arbitration in Florida under American Arbitration Association rules; each side pays its own costs and attorneys' fees.",
+      "Disputes go to binding arbitration in Florida under the American Arbitration Association's Commercial Arbitration Rules, and the award can be enforced in court. Each side pays its own costs and attorneys' fees, except that a client who wrongly disputes the non-refundable up-front payment also owes the collection costs (Section 2(a)). Either side may still go to court to protect its intellectual property or confidential information.",
   },
   "GOVERNING LAW": {
     icon: X.landmark,

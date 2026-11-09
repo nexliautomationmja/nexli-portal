@@ -81,39 +81,43 @@ function GlanceCard({ tiles, steps }: { tiles: Tile[]; steps: Step[] }) {
 export function DrsAtAGlance({ plan }: { plan: BillingPlan }) {
   const { setup, upkeep, adBudget, totalMonthly, annualPrepaid, annualUpfront } = DRS_FIGURES;
   const steps: Step[] = [
-    { n: 1, title: "Pay the setup invoice", sub: plan === "annual" ? `${annualUpfront} at signing` : `${setup} at signing` },
+    {
+      n: 1,
+      title: "Pay the setup invoice",
+      sub: `${plan === "annual" ? annualUpfront : setup} at signing · ACH or wire`,
+    },
     { n: 2, title: "Launch Pad opens, build begins", sub: "Opens once paid · submit your items within 5 days" },
     {
       n: 3,
-      title: "Launch: first monthly invoice, ads go live",
-      sub: `Live within ${LAUNCH_TARGET_DAYS} days of your materials`,
+      title: "Launch: first monthly invoice",
+      sub: `Ads go live once it's paid · ${LAUNCH_TARGET_DAYS} days after your materials`,
     },
   ];
   const tiles: Tile[] = [
-    { label: "Setup fee", value: setup, sub: "one-time · due at signing", accent: "blue" },
+    { label: "Setup fee", value: setup, sub: "one-time · due at signing · ACH or wire", accent: "blue" },
     plan === "annual"
       ? {
           label: "Due at signing",
           value: annualUpfront,
-          sub: `at signing (setup + ${annualPrepaid} prepaid year, one invoice) · then ${adBudget}/mo ad budget from launch`,
+          sub: `setup + ${annualPrepaid} for 12 months of upkeep, one invoice · then ${adBudget}/mo ad budget from launch`,
           accent: "emerald",
         }
       : {
           label: "Monthly",
           value: `${totalMonthly}/mo`,
-          sub: `starts at launch · ${upkeep} upkeep + ${adBudget} ad budget`,
+          sub: `from launch · ${upkeep} upkeep + ${adBudget} ad budget · autopay`,
           accent: "emerald",
         },
     {
       label: "Initial term",
       value: `${TERM_MONTHS[plan]} months`,
-      sub: plan === "annual" ? "then renews annually" : "then month-to-month",
+      sub: plan === "annual" ? "from launch · no automatic renewal" : "from launch · then month-to-month",
       accent: "violet",
     },
     {
       label: "Launch",
       value: `${LAUNCH_TARGET_DAYS} days`,
-      sub: "within 21 days of receiving your materials",
+      sub: `within ${LAUNCH_TARGET_DAYS} days of receiving your materials`,
       accent: "cyan",
     },
   ];

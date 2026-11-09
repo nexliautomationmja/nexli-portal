@@ -11,6 +11,7 @@ import {
   sendOnboardingWelcomeEmails,
 } from "@/lib/digital-rainmaker";
 import { initOnboarding } from "@/lib/onboarding";
+import { getNexliAdminId } from "@/lib/foundation-project";
 import {
   isEnterpriseEngagement,
   triggerEnterprisePostSign,
@@ -216,12 +217,24 @@ export async function POST(
       .set({ status: "signed", updatedAt: new Date() })
       .where(eq(engagements.id, engagement.id));
 
+    // Nexli's own letters (Enterprise, Digital Rainmaker) bill Nexli's prices
+    // to Nexli's accounts, so they only auto-invoice when Nexli owns the
+    // engagement — never for a firm tenant that somehow sent one. If the
+    // admin lookup fails, fall back to template detection alone.
+    let tenantOwned = false;
+    try {
+      const nexliAdminId = await getNexliAdminId();
+      tenantOwned = nexliAdminId !== null && engagement.ownerId !== nexliAdminId;
+    } catch (err) {
+      console.error("Nexli admin lookup failed:", err);
+    }
+
     // Nexli Enterprise License: one up-front ACH/wire-only invoice for the
     // tier's license fee. Enterprise clients get no Launch Pad/onboarding
     // (that's DRS-only) — the kickoff week is scheduled once funds clear.
     let enterprise = false;
     try {
-      enterprise = await isEnterpriseEngagement(engagement.templateId);
+      enterprise = !tenantOwned && (await isEnterpriseEngagement(engagement.templateId));
     } catch (err) {
       console.error("Enterprise template check failed:", err);
     }
@@ -231,7 +244,7 @@ export async function POST(
     // and the welcome email wait until that invoice is paid
     // (onDrsInvoicePaid in lib/digital-rainmaker.ts).
     let isDrs = false;
-    if (!enterprise) {
+    if (!enterprise && !tenantOwned) {
       try {
         isDrs = await isDigitalRainmakerEngagement(engagement.templateId);
       } catch (err) {

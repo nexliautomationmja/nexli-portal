@@ -37,6 +37,7 @@ const TYPE_ICONS: Record<string, string> = {
   autopay_canceled: "\u26D4",
   bank_transfer_sent: "\u{1F3E6}",
   bank_transfer_review: "\u{1F50E}",
+  annual_term_ending: "\u{1F4C5}",
 };
 
 export function NotificationToasts({

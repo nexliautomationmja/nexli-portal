@@ -35,8 +35,14 @@ export interface BookRow {
   startDate: string | null;
   /** Initial contract term snapshotted on the DRS engagement (6 monthly / 12 annual); null for engagements signed before terms existed. */
   termMonths: number | null;
-  /** End of the initial term (startDate + termMonths); null when unknown. */
+  /**
+   * End of the initial term: metadata.termEndsAt stamped at Build complete;
+   * otherwise (letters before Nov 9 2026, term from the effective date) the
+   * first payment + termMonths. Null when unknown or not launched yet.
+   */
   termEnd: string | null;
+  /** The latest letter's term runs from Launch and Launch hasn't happened yet. */
+  termStartsAtLaunch: boolean;
   dealsCount: number;
   /** Platform revenue actually collected — ad-budget pass-through excluded. */
   revenue: number;
@@ -133,6 +139,14 @@ export async function getBookOfBusiness(
       latestTerm: sql<
         number | null
       >`(ARRAY_AGG((${engagements.metadata}->>'termMonths')::int ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
+      // Stamped at Build complete (digital-rainmaker.ts triggerDrsLaunchBilling).
+      latestTermEndsAt: sql<
+        string | null
+      >`(ARRAY_AGG(${engagements.metadata}->>'termEndsAt' ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
+      // Letters from Nov 9 2026 count the term from Launch ("months from Launch").
+      latestLaunchTerm: sql<
+        boolean | null
+      >`(ARRAY_AGG(position('months from Launch' in COALESCE(${engagements.content}, '')) > 0 ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
       // Offer of the most recently signed engagement ("enterprise" for the
       // Nexli Enterprise License; DRS letters leave it unset).
       latestOffer: sql<
@@ -244,8 +258,13 @@ export async function getBookOfBusiness(
         sg.drsSignedAt || sg.firstSignedAt || inv?.firstPaymentAt || null;
       const termMonths =
         typeof sg.latestTerm === "number" && sg.latestTerm > 0 ? sg.latestTerm : null;
-      const termEnd =
-        startDate && termMonths ? addMonths(new Date(startDate), termMonths).toISOString() : null;
+      const termStartsAtLaunch = Boolean(sg.latestLaunchTerm) && !sg.latestTermEndsAt;
+      const legacyTermStart = inv?.firstPaymentAt || startDate;
+      const termEnd = sg.latestTermEndsAt
+        ? sg.latestTermEndsAt
+        : !termStartsAtLaunch && legacyTermStart && termMonths
+          ? addMonths(new Date(legacyTermStart), termMonths).toISOString()
+          : null;
       const billingPlan: BookRow["billingPlan"] =
         sg.latestOffer === "enterprise"
           ? "enterprise"
@@ -259,6 +278,7 @@ export async function getBookOfBusiness(
         startDate,
         termMonths,
         termEnd,
+        termStartsAtLaunch,
         dealsCount: sg.dealsCount,
         revenue: inv?.netPaid || 0,
         adSpendCollected: inv?.adSpendPaid || 0,

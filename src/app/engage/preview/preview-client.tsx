@@ -148,7 +148,8 @@ export function EngagePreviewClient() {
               Signed — welcome aboard
             </h2>
             <p className="text-sm mt-1 text-neutral-300">
-              Next: your {DRS_FIGURES.setup} setup invoice and your Launch Pad link arrive by email.
+              Next: your {plan === "annual" ? DRS_FIGURES.annualUpfront : DRS_FIGURES.setup} invoice arrives by
+              email. Pay it by bank transfer (ACH or wire) and your Launch Pad opens.
             </p>
             <p className="text-[11px] mt-3 text-amber-300/80">(Preview — nothing was saved)</p>
           </ShimmerCard>

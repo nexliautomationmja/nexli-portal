@@ -1,6 +1,7 @@
 "use client";
 
 import { NEXLI_BRANDING, type OwnerBranding } from "@/lib/branding";
+import { NEXLI_IDENTITY_LINE, NEXLI_POLICY_LINKS, nexliLetterKind, nexliPaymentDisclosure } from "@/lib/nexli-legal";
 
 interface DocumentPreviewProps {
   /** Firm branding for the letterhead; defaults to Nexli. */
@@ -47,6 +48,10 @@ export function DocumentPreview({
   clientSignedAt,
   clientSignedName,
 }: DocumentPreviewProps) {
+  // Nexli's own letters (DRS / Enterprise / Foundation) say how THEIR payments
+  // work and who the provider is; a firm's letter keeps the generic Stripe text.
+  const nexliKind = nexliLetterKind(content);
+
   const displayDate =
     date ||
     new Date().toLocaleDateString("en-US", {
@@ -248,7 +253,7 @@ export function DocumentPreview({
             fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
           }}
         >
-          Payment Processing Disclosure
+          {nexliKind ? "How Payments Work" : "Payment Processing Disclosure"}
         </p>
         <p
           style={{
@@ -258,17 +263,23 @@ export function DocumentPreview({
             color: "#6b7280",
           }}
         >
-          Payments for services rendered under this engagement are processed
-          through Stripe, Inc., a third-party payment processor. By executing
-          this agreement, you acknowledge and agree that{" "}
-          {fromCompany || fromName} is not responsible for any payment holds,
-          account freezes, processing delays, or disputes imposed by Stripe or
-          your financial institution. To minimize processing issues, we
-          recommend maintaining a complete and accurate business profile with
-          your payment provider. All payment data is handled directly by
-          Stripe in accordance with their security and privacy policies;{" "}
-          {fromCompany || fromName} does not store your full payment
-          credentials.
+          {nexliKind ? (
+            nexliPaymentDisclosure(nexliKind)
+          ) : (
+            <>
+              Payments for services rendered under this engagement are processed
+              through Stripe, Inc., a third-party payment processor. By executing
+              this agreement, you acknowledge and agree that{" "}
+              {fromCompany || fromName} is not responsible for any payment holds,
+              account freezes, processing delays, or disputes imposed by Stripe or
+              your financial institution. To minimize processing issues, we
+              recommend maintaining a complete and accurate business profile with
+              your payment provider. All payment data is handled directly by
+              Stripe in accordance with their security and privacy policies;{" "}
+              {fromCompany || fromName} does not store your full payment
+              credentials.
+            </>
+          )}
         </p>
         <p
           style={{
@@ -278,8 +289,25 @@ export function DocumentPreview({
             color: "#9ca3af",
           }}
         >
-          This document is delivered through the Nexli Portal platform. The
-          platform provider is not a party to this agreement.
+          {nexliKind ? (
+            <>
+              {NEXLI_IDENTITY_LINE}
+              <br />
+              {NEXLI_POLICY_LINKS.map((l, i) => (
+                <span key={l.href}>
+                  {i > 0 && " · "}
+                  <a href={l.href} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>
+                    {l.label}
+                  </a>
+                </span>
+              ))}
+            </>
+          ) : (
+            <>
+              This document is delivered through the Nexli Portal platform. The
+              platform provider is not a party to this agreement.
+            </>
+          )}
         </p>
       </div>
 

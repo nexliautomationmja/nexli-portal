@@ -29,10 +29,17 @@
  *      already-paid invoice (a receipt) and the recurring cron skips parents
  *      on autopay. State: invoices/engagements metadata.autopay.
  *
- *   4. ANNUAL RENEWAL (runAnnualRenewals, daily cron) — annual plan only: a
- *      one-time $42,000 "platform_annual_renewal" invoice is sent thirty days
- *      before each anniversary of the paid setup_annual invoice (the
- *      effective date), due on the anniversary (contract Section 2(b)).
+ *   4. END OF THE ANNUAL TERM (daily cron) — annual plan only.
+ *      - Letters signed from Nov 9 2026 do NOT renew automatically (Sections
+ *        2(b), 4(d)): runAnnualTermEndReminders tells Marcel thirty days
+ *        before the term ends (metadata.termEndsAt, stamped at Build
+ *        complete) to get the client's written agreement to continue, and
+ *        the ad-budget billing stops at the term's end (recurringEndDate on
+ *        the parent; cancel_at on its autopay subscription).
+ *      - Older annual letters that DO renew automatically (they contain
+ *        ANNUAL_AUTO_RENEW_MARKER) keep runAnnualRenewals: a one-time $42,000
+ *        "platform_annual_renewal" invoice thirty days before each
+ *        anniversary of the paid setup_annual invoice, due on the anniversary.
  *
  * Ad management is included in the platform price; the ad budget is
  * pass-through (deployed on the client's ad accounts, no markup). There is no
@@ -61,7 +68,7 @@ import {
   invoiceLineItems,
   users,
 } from "@/db/schema";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   generateInvoiceNumber,
   generateInvoiceToken,
@@ -88,8 +95,11 @@ import {
   SETUP_SCOPE,
   TOTAL_MONTHLY_CENTS,
   ANNUAL_UPFRONT_CENTS,
+  TERM_MONTHS,
   type BillingPlan,
 } from "./drs-pricing";
+import { drsAnnualAutoRenews, drsTermRunsFromLaunch } from "./engagement-defaults";
+import { NEXLI_LEGAL } from "./nexli-legal";
 
 export { DRS_PRICING } from "./drs-pricing";
 export type { BillingPlan } from "./drs-pricing";
@@ -132,6 +142,10 @@ interface EngagementMeta {
   clientCompany?: string | null;
   /** ISO timestamp the engagement was terminated (stops annual renewals). */
   terminatedAt?: string;
+  /** ISO end of the Initial Term (Section 4(d)), stamped at Build complete. */
+  termEndsAt?: string;
+  /** ISO timestamp Marcel was reminded that a non-renewing annual term is ending. */
+  termEndReminderAt?: string;
 }
 
 /**
@@ -140,7 +154,7 @@ interface EngagementMeta {
  * and lost it), falls back to the signed letter text, which only contains
  * "Annual Investment (Paid in Full)" on the annual plan.
  */
-function planOf(engagement: { metadata: unknown; content?: string | null }): BillingPlan {
+export function planOf(engagement: { metadata: unknown; content?: string | null }): BillingPlan {
   const meta = (engagement.metadata ?? {}) as EngagementMeta;
   if (meta.billingPlan === "annual" || meta.billingPlan === "monthly") return meta.billingPlan;
   return engagement.content?.includes("Annual Investment (Paid in Full)") ? "annual" : "monthly";
@@ -237,6 +251,7 @@ export async function emailInvoiceToClient(
       subject,
       html,
       fromName: branding.fromName,
+      ...(branding.isNexli ? { replyTo: NEXLI_LEGAL.email } : {}),
       recipientName: invoice.clientName,
       emailType: "invoice",
       relatedId: invoice.id,
@@ -288,7 +303,7 @@ export function drsSigningInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
         totalCents: ANNUAL_UPFRONT_CENTS,
         adSpendCents: 0,
         label: "Setup + annual platform",
-        notes: `Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System — ${scope} — as itemized in Section 1 of your engagement letter, plus the annual platform investment for your first 12 months, paid in full. Due at signing; onboarding opens once it is paid. The Managed Advertising Budget is billed monthly once your build is complete.`,
+        notes: `Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System — ${scope} — as itemized in Section 1 of your engagement letter, plus the annual platform investment for your first 12 months from launch, paid in full. Due at signing; onboarding opens once it is paid. Non-refundable. Paid by bank transfer (ACH or wire); cards are not accepted. The Managed Advertising Budget is billed monthly once your build is complete.`,
         lines: [
           SETUP_LINE,
           {
@@ -308,7 +323,7 @@ export function drsSigningInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
       totalCents: DRS_PRICING.SETUP_FEE_CENTS,
       adSpendCents: 0,
       label: "Setup Fee",
-      notes: `One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System — ${scope} — as itemized in Section 1 of your engagement letter. Due at signing; onboarding opens once it is paid. Non-refundable once work begins.`,
+      notes: `One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System — ${scope} — as itemized in Section 1 of your engagement letter. Due at signing; onboarding opens once it is paid. Non-refundable. Paid by bank transfer (ACH or wire); cards are not accepted.`,
       lines: [SETUP_LINE],
     },
   ];
@@ -349,7 +364,7 @@ export function drsLaunchInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
       totalCents: TOTAL_MONTHLY_CENTS,
       adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
       label: "Monthly",
-      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (hosting, maintenance, ad management, support, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).`,
+      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (maintenance and support, ad management, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).`,
       lines: [
         {
           description: "Digital Rainmaker System — Monthly Platform",
@@ -543,6 +558,7 @@ export async function sendOnboardingWelcomeEmails(engagementId: string): Promise
           to: s.email,
           subject,
           html,
+          replyTo: NEXLI_LEGAL.email,
           recipientName: s.name,
           emailType: "onboarding_welcome",
           relatedId: engagementId,
@@ -581,7 +597,7 @@ export async function triggerDrsLaunchBilling(
   }
 
   const [setup] = await db
-    .select({ status: invoices.status })
+    .select({ status: invoices.status, paidAt: invoices.paidAt })
     .from(invoices)
     .where(drsRoleCondition(engagementId, SETUP_ROLES))
     .orderBy(asc(invoices.createdAt))
@@ -634,6 +650,43 @@ export async function triggerDrsLaunchBilling(
   }
   if (created.length === 0) return { ok: false, error: "already_started" };
 
+  // When the Initial Term ends (Section 4(d)): the Client Tracker shows it,
+  // and annual letters that don't renew automatically stop billing there.
+  const plan = planOf(engagement);
+  const termEnd = drsTermEnd({
+    content: engagement.content,
+    plan,
+    termMonths: (engagement.metadata as EngagementMeta | null)?.termMonths ?? null,
+    launchAt: billingStartedAt,
+    effectiveAt: setup.paidAt,
+  });
+  if (termEnd) {
+    try {
+      await db
+        .update(engagements)
+        .set({
+          metadata: sql`jsonb_set(COALESCE(${engagements.metadata}, '{}'::jsonb), '{termEndsAt}', to_jsonb(${termEnd.toISOString()}::text), true)`,
+        })
+        .where(eq(engagements.id, engagementId));
+    } catch (err) {
+      console.error("DRS: termEndsAt stamp failed:", err);
+    }
+    // Annual plan with no automatic renewal: the monthly ad budget is billed
+    // from Launch through the end of the Initial Term only (Section 2(c)).
+    // The cron stops rolling a parent forward once its next date passes
+    // recurringEndDate; autopay subscriptions get cancel_at (lib/autopay.ts).
+    if (plan === "annual" && !drsAnnualAutoRenews(engagement.content)) {
+      try {
+        await db
+          .update(invoices)
+          .set({ recurringEndDate: new Date(termEnd.getTime() - DAY_MS), updatedAt: new Date() })
+          .where(inArray(invoices.id, created.map((c) => c.id)));
+      } catch (err) {
+        console.error("DRS: recurringEndDate cap failed:", err);
+      }
+    }
+  }
+
   try {
     await appendActivity(engagementId, {
       actor: "agency",
@@ -677,6 +730,26 @@ export function addMonthsClampedUtc(anchor: Date, months: number): Date {
       anchor.getUTCMilliseconds()
     )
   );
+}
+
+/**
+ * When the Initial Term ends: Launch + termMonths for letters whose term runs
+ * from Launch (Nov 9 2026 on), else the effective date (the up-front invoice
+ * paid) + termMonths, as each signed letter states. Null when unknown.
+ */
+export function drsTermEnd(args: {
+  content: string | null | undefined;
+  plan: BillingPlan;
+  termMonths?: number | null;
+  launchAt?: Date | string | null;
+  effectiveAt?: Date | string | null;
+}): Date | null {
+  const months = args.termMonths && args.termMonths > 0 ? args.termMonths : TERM_MONTHS[args.plan];
+  const startRaw = drsTermRunsFromLaunch(args.content) ? args.launchAt : args.effectiveAt;
+  if (!startRaw) return null;
+  const start = new Date(startRaw);
+  if (isNaN(start.getTime())) return null;
+  return addMonthsClampedUtc(start, months);
 }
 
 const fmtDay = (d: Date) =>
@@ -768,6 +841,12 @@ export async function runAnnualRenewals(
         skipped++;
         continue;
       }
+      // Only letters that say they renew automatically are invoiced. Annual
+      // letters from Nov 9 2026 don't — runAnnualTermEndReminders covers them.
+      if (!drsAnnualAutoRenews(engagement.content)) {
+        skipped++;
+        continue;
+      }
 
       const existing = await db
         .select({ metadata: invoices.metadata })
@@ -811,6 +890,74 @@ export async function runAnnualRenewals(
   }
 
   return { created, skipped };
+}
+
+/** Marcel hears this many days before a non-renewing annual term ends. */
+export const ANNUAL_TERM_END_NOTICE_DAYS = 30;
+
+/**
+ * Daily cron: annual letters signed from Nov 9 2026 don't renew
+ * automatically (Sections 2(b), 4(d)). Thirty days before the Initial Term
+ * ends (metadata.termEndsAt), Marcel gets a bell + email reminder to get the
+ * client's written agreement to continue — otherwise the engagement simply
+ * ends, and its ad-budget billing is already capped at the term's end.
+ * Claimed once per engagement (metadata.termEndReminderAt). Never throws per
+ * engagement.
+ */
+export async function runAnnualTermEndReminders(now: Date = new Date()): Promise<{ sent: number }> {
+  let sent = 0;
+  const rows = await db
+    .select({
+      id: engagements.id,
+      ownerId: engagements.ownerId,
+      content: engagements.content,
+      metadata: engagements.metadata,
+    })
+    .from(engagements)
+    .where(
+      and(
+        eq(engagements.status, "signed"),
+        sql`${engagements.metadata}->>'billingPlan' = 'annual'`,
+        sql`${engagements.metadata}->>'termEndsAt' IS NOT NULL`,
+        sql`${engagements.metadata}->'termEndReminderAt' IS NULL`,
+        sql`${engagements.metadata}->'terminatedAt' IS NULL`
+      )
+    );
+
+  for (const row of rows) {
+    try {
+      if (drsAnnualAutoRenews(row.content)) continue;
+      const meta = (row.metadata ?? {}) as EngagementMeta;
+      const end = new Date(meta.termEndsAt ?? "");
+      if (isNaN(end.getTime())) continue;
+      if (now.getTime() < end.getTime() - ANNUAL_TERM_END_NOTICE_DAYS * DAY_MS) continue;
+
+      const stamp = now.toISOString();
+      const claimed = await db
+        .update(engagements)
+        .set({
+          metadata: sql`jsonb_set(COALESCE(${engagements.metadata}, '{}'::jsonb), '{termEndReminderAt}', to_jsonb(${stamp}::text), true)`,
+        })
+        .where(and(eq(engagements.id, row.id), sql`${engagements.metadata}->'termEndReminderAt' IS NULL`))
+        .returning({ id: engagements.id });
+      if (claimed.length === 0) continue;
+
+      const signer = await getPrimaryClientSigner(row.id);
+      const who = meta.clientCompany || signer?.name || "A client";
+      const months = meta.termMonths && meta.termMonths > 0 ? meta.termMonths : TERM_MONTHS.annual;
+      await createNotification({
+        userId: row.ownerId,
+        type: "annual_term_ending",
+        title: "Annual term ending — no automatic renewal",
+        message: `${who}'s ${months}-month annual term ends ${fmtDay(new Date(end.getTime() - DAY_MS))}. Their plan doesn't renew automatically: get their written agreement to continue (monthly, or another prepaid year) before then, or the engagement ends and nothing more is billed.`,
+        metadata: { engagementId: row.id, termEndsAt: meta.termEndsAt },
+      });
+      sent++;
+    } catch (err) {
+      console.error("DRS: annual term-end reminder failed:", err);
+    }
+  }
+  return { sent };
 }
 
 // ── Status (admin onboarding view) ────────────────────────

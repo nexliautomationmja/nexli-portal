@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Subscription Paused | Nexli Dashboard",
 };
 
-const SUPPORT_EMAIL = "support@nexli.net";
+const SUPPORT_EMAIL = "mail@nexli.net";
 
 /**
  * Shown to Foundation-tier firms whose Stripe subscription is no longer

@@ -29,7 +29,9 @@ import {
   LpMessage,
   LaunchPadShell,
   useForceDark,
+  NexliLegalFooter,
 } from "@/components/launch-pad";
+import { NEXLI_LEGAL, nexliPaymentDisclosure } from "@/lib/nexli-legal";
 import {
   EngagementLetterView,
   LetterAtAGlance,
@@ -270,7 +272,7 @@ export function EngageLaunchPadClient({
         Questions before you sign? Your Nexli team is one message away.
       </p>
       <p className="text-[10px] text-neutral-600">
-        {company || "Nexli Automation LLC"} • Electronic signatures are legally binding under the
+        {NEXLI_LEGAL.name} • Electronic signatures are legally binding under the
         ESIGN Act and UETA
       </p>
     </footer>
@@ -311,7 +313,7 @@ export function EngageLaunchPadClient({
             <p className="text-sm mt-3 leading-relaxed text-neutral-300">
               Prepared for <span className="font-semibold text-white">{data.clientName}</span>
               {data.clientCompany ? `, ${data.clientCompany}` : ""} ·{" "}
-              {company || "Nexli Automation LLC"}
+              {NEXLI_LEGAL.name}
             </p>
             <p className="text-xs mt-2 text-neutral-500">
               {sections.length > 0 && `${sections.length} sections`}
@@ -335,31 +337,18 @@ export function EngageLaunchPadClient({
         onReadProgress={setReadPct}
       />
 
-      {/* ─── Disclosures (same text as the classic page) ─── */}
+      {/* ─── Disclosures — this page only renders Nexli's own letters, so it
+           says how THEIR payments work (letter Section 2/4) and who the
+           provider is, with the nexli.net policies. ─── */}
       <LpCard className="lp-card">
         <div className="space-y-4">
           <div>
-            <p className={labelCls}>Payment processing</p>
-            <p className="text-xs leading-relaxed text-neutral-400">
-              Payments for services rendered under this engagement are processed
-              through Stripe, Inc., a third-party payment processor. By executing
-              this agreement, you acknowledge and agree that{" "}
-              {providerName} is not responsible for any payment holds,
-              account freezes, processing delays, or disputes imposed by Stripe or
-              your financial institution. To minimize processing issues, we
-              recommend maintaining a complete and accurate business profile with
-              your payment provider. All payment data is handled directly by
-              Stripe in accordance with their security and privacy policies;{" "}
-              {providerName} does not store your full payment
-              credentials.
-            </p>
+            <p className={labelCls}>How payments work</p>
+            <p className="text-xs leading-relaxed text-neutral-400">{nexliPaymentDisclosure(kind)}</p>
           </div>
           <div>
-            <p className={labelCls}>About this platform</p>
-            <p className="text-xs leading-relaxed text-neutral-500">
-              This document is delivered through the Nexli Portal platform. The
-              platform provider is not a party to this agreement.
-            </p>
+            <p className={labelCls}>Who you&apos;re contracting with</p>
+            <NexliLegalFooter align="left" />
           </div>
         </div>
       </LpCard>

@@ -23,8 +23,10 @@ import {
 import { invoiceLineItems } from "@/db/schema";
 import { getStripe } from "@/lib/stripe";
 import { getOwnerBranding } from "@/lib/branding";
+import { NEXLI_LEGAL } from "@/lib/nexli-legal";
 import {
   autopayMetaOf,
+  capAnnualAutopay,
   mergeAutopayEverywhere,
   type AutopayMeta,
   type AutopayMethod,
@@ -579,6 +581,16 @@ export async function handleAutopayCheckoutCompleted(session: Stripe.Checkout.Se
       status: "active",
     });
 
+    // Annual plan without automatic renewal: the ad-budget autopay ends with
+    // the Initial Term (letter Section 2(c)).
+    const drsMeta = (invoice.metadata ?? {}) as { drsRole?: unknown; engagementId?: unknown };
+    if (subscriptionId && drsMeta.drsRole === "ad_spend_monthly") {
+      await capAnnualAutopay(
+        subscriptionId,
+        typeof drsMeta.engagementId === "string" ? drsMeta.engagementId : null
+      );
+    }
+
     const baseCents = Number(session.metadata?.baseAmountCents);
     if (session.payment_status === "paid") {
       const paymentIntentId = await firstPaymentIntentId(idOf(session.invoice));
@@ -802,6 +814,8 @@ async function emailClientAutopayProblem(
       subject,
       html,
       fromName: branding.fromName,
+      // DRS autopay is Nexli's own billing — "just reply" reaches mail@nexli.net.
+      ...(branding.isNexli ? { replyTo: NEXLI_LEGAL.email } : {}),
       recipientName: parent.clientName,
       emailType: reason === "failed" ? "autopay_failed" : "autopay_action_required",
       relatedId: parent.id,

@@ -12,7 +12,7 @@ import {
   generateInvoiceNumber,
   generateInvoiceToken,
 } from "@/lib/invoice-utils";
-import { runAnnualRenewals } from "@/lib/digital-rainmaker";
+import { runAnnualRenewals, runAnnualTermEndReminders } from "@/lib/digital-rainmaker";
 import { usesBankTransfer } from "@/lib/bank-transfer";
 
 export async function GET(req: NextRequest) {
@@ -266,12 +266,21 @@ export async function GET(req: NextRequest) {
     console.error("Failed to process recurring invoices:", err);
   }
 
-  // 4. Annual DRS renewals — $42,000 invoiced 30 days before each anniversary
+  // 4. Annual DRS renewals — $42,000 invoiced 30 days before each
+  //    anniversary, only for letters that say they renew automatically.
   try {
     const result = await runAnnualRenewals(now);
     renewalsCreated = result.created;
   } catch (err) {
     console.error("Failed to process annual DRS renewals:", err);
+  }
+
+  // 5. Annual letters without automatic renewal (Nov 9 2026 on): remind
+  //    Marcel 30 days before the term ends to get written agreement to continue.
+  try {
+    await runAnnualTermEndReminders(now);
+  } catch (err) {
+    console.error("Failed to process annual term-end reminders:", err);
   }
 
   return NextResponse.json({

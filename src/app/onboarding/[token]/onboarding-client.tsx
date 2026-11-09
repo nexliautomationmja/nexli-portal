@@ -22,6 +22,7 @@ import {
   LpMessage,
   ShimmerCard,
   LaunchPadShell,
+  NexliLegalFooter,
 } from "@/components/launch-pad";
 
 // ══════════════════════════════════════════════════════════
@@ -85,6 +86,8 @@ interface LaunchPadData {
   subject: string;
   signedAt: string | null;
   from: { name: string; company: string };
+  /** True when Nexli itself issued this engagement (shows Nexli's legal footer). */
+  nexli?: boolean;
   onboarding: {
     startedAt: string;
     targetLaunchDate: string | null;
@@ -619,10 +622,14 @@ export function OnboardingClient({ token }: { token: string }) {
         <p className="text-[11px] text-neutral-500">
           Questions? Your Nexli team is one message away.
         </p>
-        <p className="text-[10px] text-neutral-600">
-          {data.from.company || data.from.name} • Powered by the Digital
-          Rainmaker System
-        </p>
+        {data.nexli ? (
+          <NexliLegalFooter />
+        ) : (
+          <p className="text-[10px] text-neutral-600">
+            {data.from.company || data.from.name} • Powered by the Digital
+            Rainmaker System
+          </p>
+        )}
       </footer>
     </LaunchPadShell>
   );

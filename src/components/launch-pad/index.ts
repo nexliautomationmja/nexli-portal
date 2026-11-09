@@ -22,3 +22,4 @@ export {
 export type { Accent, PillTone } from "./primitives";
 export { LaunchPadShell } from "./shell";
 export { useForceDark } from "./use-force-dark";
+export { NexliLegalFooter } from "./legal-footer";

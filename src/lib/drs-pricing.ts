@@ -25,8 +25,10 @@
  * Nexli's upside is graduating them to the Enterprise tier
  * (enterprise-pricing.ts), not backend bonuses.
  *
- * Minimum term: 6 months on monthly, 12 on annual — ads need ~90 days to
- * mature; the goal is retention, not lock-in.
+ * Minimum term: 6 months on monthly, 12 on annual, counted from Launch —
+ * ads need ~90 days to mature; the goal is retention, not lock-in. Since
+ * Nov 9 2026 the annual plan does NOT renew automatically (letter 2(b),
+ * 4(d)); the monthly plan continues month to month on autopay.
  */
 
 export const DRS_PRICING = {
@@ -46,7 +48,7 @@ export const TOTAL_MONTHLY_CENTS =
 
 export type BillingPlan = "monthly" | "annual";
 
-/** Initial contract term per plan, in months. */
+/** Initial contract term per plan, in months, counted from Launch (letters from Nov 9 2026). */
 export const TERM_MONTHS: Record<BillingPlan, number> = {
   monthly: 6,
   annual: 12,
@@ -214,12 +216,14 @@ export function cardPriceCents(achPriceCents: number): number {
 }
 
 /**
- * DRS invoices that must be paid by bank transfer (ACH) or wire — never card.
- * Empty since Oct 26 2026: setup invoices accept card again (card price),
- * protected by the chargeback waiver in Section 2 of the letter. Enterprise
- * invoices stay bank/wire only via metadata.achOnly.
+ * DRS invoices that must be paid by bank transfer (ACH) or wire — never card
+ * (Nov 9 2026, Marcel; letter Sections 2(a), 2(b), 4(a) and nexli.net's
+ * policy pages). Normally the Mercury bank-transfer page handles them
+ * (BANK_TRANSFER_DRS_ROLES); listing them here makes every other path —
+ * Mercury off, a failed admin lookup, the classic invoice page — refuse card
+ * too (Stripe ACH only). Enterprise invoices carry metadata.achOnly.
  */
-export const ACH_ONLY_DRS_ROLES: readonly string[] = [];
+export const ACH_ONLY_DRS_ROLES: readonly string[] = ["setup_fee", "setup_annual", "platform_annual_renewal"];
 
 /** DRS invoices covered by the letter's chargeback waiver (paid at signing). */
 export const CHARGEBACK_WAIVED_DRS_ROLES = ["setup_fee", "setup_annual"] as const;

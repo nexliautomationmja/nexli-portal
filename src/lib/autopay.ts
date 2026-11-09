@@ -22,7 +22,9 @@ import { sql, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { engagements, invoices } from "@/db/schema";
 import { getStripe, resolveStripeAccountForOwner } from "@/lib/stripe";
-import { cardPriceCents } from "@/lib/drs-pricing";
+import { cardPriceCents, TERM_MONTHS } from "@/lib/drs-pricing";
+import { addMonthsClampedUtc, planOf } from "@/lib/digital-rainmaker";
+import { drsAnnualAutoRenews } from "@/lib/engagement-defaults";
 
 export const AUTOPAY_ROLES = ["platform_monthly", "ad_spend_monthly"] as const;
 export type AutopayRole = (typeof AUTOPAY_ROLES)[number];
@@ -254,5 +256,41 @@ export async function mergeAutopayEverywhere(
     }
   } catch (err) {
     console.error(`Autopay: metadata merge failed for invoice ${invoice.id}:`, err);
+  }
+}
+
+/**
+ * Annual-plan letters that don't renew automatically (Nov 9 2026 on) bill
+ * the ad budget from Launch through the end of the Initial Term only (letter
+ * Section 2(c)). Checkout's subscription_data has no cancel_at in stripe@21,
+ * so once the autopay subscription exists we set cancel_at at the end of its
+ * Nth monthly period (N = the term in months), with no proration. No-op for
+ * the monthly plan and for older annual letters that renew. Never throws.
+ */
+export async function capAnnualAutopay(
+  subscriptionId: string,
+  engagementId: string | null | undefined
+): Promise<void> {
+  if (!engagementId) return;
+  try {
+    const [eng] = await db
+      .select({ content: engagements.content, metadata: engagements.metadata })
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .limit(1);
+    if (!eng || planOf(eng) !== "annual" || drsAnnualAutoRenews(eng.content)) return;
+    const meta = (eng.metadata ?? {}) as { termMonths?: unknown };
+    const months =
+      typeof meta.termMonths === "number" && meta.termMonths > 0 ? meta.termMonths : TERM_MONTHS.annual;
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    if (sub.cancel_at || sub.status === "canceled") return;
+    const cancelAt = addMonthsClampedUtc(new Date(sub.billing_cycle_anchor * 1000), months);
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at: Math.floor(cancelAt.getTime() / 1000),
+      proration_behavior: "none",
+    });
+  } catch (err) {
+    console.error(`Autopay: could not cap annual subscription ${subscriptionId}:`, err);
   }
 }

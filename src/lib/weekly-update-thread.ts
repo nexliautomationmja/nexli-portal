@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { clientWeeklyUpdates, portalMessages, users } from "@/db/schema";
 import { sendEmailWithLog } from "@/lib/email";
 import { buildWeeklyUpdateEmail, FOUNDATION_SENDER_NAME } from "@/lib/email-foundation";
+import { NEXLI_LEGAL } from "@/lib/nexli-legal";
 import { getPortalUrl } from "@/lib/foundation-config";
 import { getNexliAdminId } from "@/lib/foundation-project";
 import { weekStartOf } from "@/lib/client-success-tables";
@@ -139,6 +140,8 @@ export async function emailWeeklyUpdate(params: {
       subject,
       html,
       fromName: FOUNDATION_SENDER_NAME,
+      // The email says replies go straight to Marcel.
+      replyTo: NEXLI_LEGAL.email,
       recipientName: client.name || undefined,
       emailType: "weekly_update",
       relatedId: update.id,

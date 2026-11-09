@@ -47,6 +47,8 @@ interface ClientRow {
   signedAt: string | null;
   startDate: string | null;
   termEnd?: string | null;
+  /** The term runs from launch and the client hasn't launched yet. */
+  termStartsAtLaunch?: boolean;
   dealsCount: number;
   revenue: number;
   adSpendCollected?: number;
@@ -504,9 +506,9 @@ export function ClientTrackerClient() {
                       <td
                         className="px-4 py-3 text-xs"
                         style={{ color: "var(--text-muted)" }}
-                        title="End of the current engagement term"
+                        title="End of the initial term (counted from launch on letters signed from Nov 9 2026)"
                       >
-                        {formatDate(c.termEnd ?? null)}
+                        {c.termStartsAtLaunch && !c.termEnd ? "Starts at launch" : formatDate(c.termEnd ?? null)}
                       </td>
                       <td className="px-4 py-3 text-sm" style={{ color: "var(--text-main)" }}>
                         {c.dealsCount}

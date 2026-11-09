@@ -17,6 +17,7 @@ import {
   isCurrentEnterpriseRevision,
 } from "@/lib/enterprise-engagement";
 import { ENTERPRISE_TEMPLATE_NAME } from "@/lib/enterprise-pricing";
+import { getNexliAdminId } from "@/lib/foundation-project";
 
 // Default templates auto-seeded for every user: the two flat all-in-one DRS
 // letters (Monthly + Annual) and the Nexli Enterprise License letter (seeded
@@ -88,41 +89,60 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Auto-seed the default templates if missing; overwrite in place any
-  // default-named row that still holds an older revision, so the Templates
-  // list always shows exactly the current letters. Only default-named rows
-  // (DRS + Enterprise) are ever touched.
-  for (const tmpl of DEFAULT_TEMPLATES) {
-    const [existing] = await db
-      .select({
-        id: engagementTemplates.id,
-        content: engagementTemplates.content,
-      })
-      .from(engagementTemplates)
-      .where(
-        and(
-          eq(engagementTemplates.ownerId, session.user.id),
-          eq(engagementTemplates.name, tmpl.name)
+  // Nexli's own letters (Digital Rainmaker + Enterprise) name Nexli
+  // Automation LLC as the provider and auto-invoice Nexli's prices on
+  // signing, so only the Nexli admin account (and its team logins, which
+  // share its user id) gets them. A firm tenant is never offered them, and
+  // default-named rows seeded into a tenant before this fix are removed.
+  // When the admin lookup fails, nothing is seeded or removed this time.
+  const nexliAdminId = await getNexliAdminId();
+  if (nexliAdminId && session.user.id === nexliAdminId) {
+    // Auto-seed the default templates if missing; overwrite in place any
+    // default-named row that still holds an older revision, so the Templates
+    // list always shows exactly the current letters. Only default-named rows
+    // (DRS + Enterprise) are ever touched.
+    for (const tmpl of DEFAULT_TEMPLATES) {
+      const [existing] = await db
+        .select({
+          id: engagementTemplates.id,
+          content: engagementTemplates.content,
+        })
+        .from(engagementTemplates)
+        .where(
+          and(
+            eq(engagementTemplates.ownerId, session.user.id),
+            eq(engagementTemplates.name, tmpl.name)
+          )
+        )
+        .limit(1);
+
+      if (!existing) {
+        await db.insert(engagementTemplates).values({
+          ownerId: session.user.id,
+          name: tmpl.name,
+          content: tmpl.content,
+        });
+      } else if (
+        existing.content !== tmpl.content &&
+        (isStaleOldPricing(existing.content) ||
+          isStaleShippedRevision(existing.content, tmpl))
+      ) {
+        await db
+          .update(engagementTemplates)
+          .set({ content: tmpl.content, updatedAt: new Date() })
+          .where(eq(engagementTemplates.id, existing.id));
+      }
+    }
+  } else if (nexliAdminId) {
+    await db.delete(engagementTemplates).where(
+      and(
+        eq(engagementTemplates.ownerId, session.user.id),
+        inArray(
+          engagementTemplates.name,
+          DEFAULT_TEMPLATES.map((t) => t.name)
         )
       )
-      .limit(1);
-
-    if (!existing) {
-      await db.insert(engagementTemplates).values({
-        ownerId: session.user.id,
-        name: tmpl.name,
-        content: tmpl.content,
-      });
-    } else if (
-      existing.content !== tmpl.content &&
-      (isStaleOldPricing(existing.content) ||
-        isStaleShippedRevision(existing.content, tmpl))
-    ) {
-      await db
-        .update(engagementTemplates)
-        .set({ content: tmpl.content, updatedAt: new Date() })
-        .where(eq(engagementTemplates.id, existing.id));
-    }
+    );
   }
 
   // Delete superseded DRS template rows (see SUPERSEDED_* above).

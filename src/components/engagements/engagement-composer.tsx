@@ -508,7 +508,7 @@ export function EngagementComposer() {
                     accent="from-blue-500/25 to-cyan-500/10"
                     title="Digital Rainmaker · Monthly"
                     price={`${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup`}
-                    sub={`+ ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo from build complete (${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} upkeep + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget) · ${TERM_MONTHS.monthly}-month term`}
+                    sub={`+ ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo from build complete (${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} upkeep + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget) · ${TERM_MONTHS.monthly}-month term from launch`}
                   />
                 )}
                 {drsAnnual && (
@@ -519,7 +519,7 @@ export function EngagementComposer() {
                     accent="from-cyan-500/25 to-emerald-500/10"
                     title="Digital Rainmaker · Annual"
                     price={`${fmtWhole(ANNUAL_UPFRONT_CENTS)} at signing`}
-                    sub={`Setup + a year of the platform paid in full · ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget from launch · ${TERM_MONTHS.annual}-month term`}
+                    sub={`Setup + a year of the platform paid in full · ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget from launch · ${TERM_MONTHS.annual}-month term from launch, no auto-renewal`}
                   />
                 )}
                 {enterprise && (

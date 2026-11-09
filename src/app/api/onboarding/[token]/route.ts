@@ -11,6 +11,7 @@ import {
 import { encryptSubmission } from "@/lib/onboarding-crypto";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { createNotification } from "@/lib/notifications";
+import { getNexliAdminId } from "@/lib/foundation-project";
 
 // Public Launch Pad API. The signer token in the URL is the credential.
 // serializePublicOnboarding is the security boundary: credential
@@ -34,6 +35,10 @@ export async function GET(
     return NextResponse.json({ error: "not_started" }, { status: 409 });
   }
 
+  // Nexli's own engagements show Nexli's legal identity + nexli.net policies
+  // in the footer; a firm's own onboarding never does.
+  const nexliAdminId = await getNexliAdminId();
+
   return NextResponse.json({
     clientName: ctx.signer.name,
     subject: ctx.engagement.subject,
@@ -42,6 +47,7 @@ export async function GET(
       name: ctx.owner?.name || "",
       company: ctx.owner?.companyName || "",
     },
+    nexli: Boolean(nexliAdminId) && ctx.engagement.ownerId === nexliAdminId,
     onboarding: serializePublicOnboarding(ctx.onboarding),
   });
 }
