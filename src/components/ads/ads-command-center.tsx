@@ -30,10 +30,10 @@ const RANGE_KEY = "nexli.ads.range";
 
 export const SECTIONS = [
   { id: "read", label: "The read" },
-  { id: "next-steps", label: "Next steps" },
-  { id: "kpis", label: "KPIs" },
-  { id: "trends", label: "Trends" },
   { id: "creatives", label: "Creatives" },
+  { id: "next-steps", label: "Next steps" },
+  { id: "kpis", label: "Scorecard" },
+  { id: "trends", label: "Trends" },
   { id: "structure", label: "Campaigns" },
   { id: "audience", label: "Audience" },
   { id: "funnel", label: "Funnel" },
@@ -470,6 +470,16 @@ export function AdsCommandCenter() {
             </section>
 
             <section className="lp-card mb-10">
+              <SectionHead
+                id="creatives"
+                eyebrow="Creatives"
+                title="Your creatives"
+                sub={`Uncropped at their real size — videos play muted while on screen; tap for sound. Last 7 days (${shortDay(s.fatigueWindow.l7[0])} – ${shortDay(s.fatigueWindow.l7[1])}) against the 14 before, plus 30-day results.`}
+              />
+              <FatigueBoard s={s} verdicts={verdicts} onVariations={variations} />
+            </section>
+
+            <section className="lp-card mb-10">
               <SectionHead id="next-steps" eyebrow="Manus's plan" title="Next steps" sub="Make each change in Ads Manager, then tick it off. Manus checks what you did — and whether it worked — in the next analysis." />
               {an ? (
                 <NextSteps steps={an.steps} tests={an.latest?.result?.tests ?? []} tz={tz} studioKey={studioKey} busy={busy} onPatch={patchStep} onJump={jumpEvidence} />
@@ -485,15 +495,6 @@ export function AdsCommandCenter() {
             <section className="lp-card mb-10">
               <SectionHead id="trends" eyebrow="Trends" title="Day by day" sub="This period against the one before it, lined up day for day." />
               <TrendCharts s={s} />
-            </section>
-            <section className="lp-card mb-10">
-              <SectionHead
-                id="creatives"
-                eyebrow="Creatives"
-                title="Fatigue board"
-                sub={`Every creative's last 7 days (${shortDay(s.fatigueWindow.l7[0])} – ${shortDay(s.fatigueWindow.l7[1])}) against the 14 before, plus 30-day results.`}
-              />
-              <FatigueBoard s={s} verdicts={verdicts} onVariations={variations} />
             </section>
             <section className="lp-card mb-10">
               <SectionHead id="structure" eyebrow="Structure" title="Campaigns & ad sets" sub="Budgets, learning phase and results, with links straight into Ads Manager." />

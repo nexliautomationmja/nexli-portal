@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
-import { CANVAS_VARS } from "@/components/creative-studio/canvas";
 import { change, count, decimal, money, pct } from "@/lib/ads/format";
 import { rel } from "@/lib/ads/math";
 import type { AdRow, AdsSnapshot, FatigueState } from "@/lib/ads/types";
 import { AdsManagerLink, Ico, Meter, Sparkline, StateBadge } from "@/components/ads/parts";
 import { FATIGUE, VIZ } from "@/components/ads/viz";
+import { MediaFrame, MediaLightbox } from "@/components/ads/media-frame";
 
 export interface CreativeVerdict {
   verdict: string;
@@ -105,7 +104,7 @@ export function FatigueBoard({
       {list.length === 0 ? (
         <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-6 text-center text-sm text-neutral-400">Nothing here for this period.</p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((a) => (
             <CreativeCard
               key={a.id}
@@ -173,30 +172,28 @@ function CreativeCard({
 
   return (
     <article id={`ad-${ad.id}`} className="flex scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] md:scroll-mt-20">
-      <button type="button" onClick={onOpen} className="group relative block aspect-[4/3] w-full overflow-hidden bg-black/40 text-left" aria-label={`Open ${ad.name}`}>
-        {img ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Meta CDN creative still
-          <img src={img} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
-        ) : (
-          <div className="flex h-full items-center justify-center text-neutral-600">
-            <Ico d={<path d="M3 5h18v14H3zM3 15l5-5 4 4 3-3 6 6" />} size={26} />
-          </div>
-        )}
-        <span className="absolute left-2 top-2">
-          <StateBadge state={ad.fatigue.state} />
-        </span>
-        {ad.winner && (
-          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-200">
-            <Ico d={<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6m12 5h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22m7-7.34V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z" />} size={11} />
-            Winner
+      {/* The creative at its real shape — a 9:16 video shows full height, nothing cropped. */}
+      <div className="bg-black/50 px-2 pt-2">
+        <MediaFrame
+          kind={isVideo ? "video" : "image"}
+          src={img}
+          videoUrl={media?.videoUrl ?? null}
+          trustImage={Boolean(media?.posterUrl)}
+          onOpen={onOpen}
+          label={`Open ${ad.name}`}
+        >
+          <span className="absolute left-2 top-2">
+            <StateBadge state={ad.fatigue.state} />
           </span>
-        )}
-        {isVideo && (
-          <span className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white">
-            <Ico d={<path d="m6 3 14 9-14 9V3Z" />} size={13} />
-          </span>
-        )}
-      </button>
+          {ad.winner && (
+            <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/30 px-2 py-0.5 text-[11px] font-bold text-emerald-100 backdrop-blur-sm">
+              <Ico d={<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6m12 5h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22m7-7.34V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z" />} size={11} />
+              Winner
+            </span>
+          )}
+        </MediaFrame>
+        <div className="h-2" />
+      </div>
 
       <div className="flex flex-1 flex-col gap-3 p-3.5">
         <div className="min-w-0">
@@ -267,68 +264,36 @@ function CreativeCard({
 }
 
 function Lightbox({ ad, media, onClose }: { ad: AdRow; media?: Media; onClose: () => void }) {
-  useEffect(() => {
-    const root = document.documentElement;
-    const prev = root.style.overflow;
-    root.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      root.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
   const poster = media?.posterUrl || media?.thumbnailUrl || ad.creative.thumbnailUrl;
   const text = media?.primaryText ?? ad.creative.primaryText;
   const headline = media?.headline ?? ad.creative.headline;
-  return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/85 sm:items-center sm:p-6" style={CANVAS_VARS} onClick={onClose} role="dialog" aria-modal="true" aria-label={ad.name}>
-      <div
-        className="flex max-h-[100dvh] w-full flex-col overflow-hidden border border-white/10 bg-[#0b1220] text-white sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
-          <StateBadge state={ad.fatigue.state as FatigueState} />
-          <p className="min-w-0 flex-1 truncate text-sm font-bold">{ad.name}</p>
-          <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white" aria-label="Close">
-            <Ico d={<path d="M18 6 6 18M6 6l12 12" />} size={18} />
-          </button>
-        </div>
-        <div className="cs-scroll grid flex-1 gap-4 overflow-y-auto p-4 sm:grid-cols-[1.1fr_1fr]">
-          <div className="overflow-hidden rounded-2xl bg-black">
-            {media?.videoUrl ? (
-              <video src={media.videoUrl} poster={poster ?? undefined} controls autoPlay muted playsInline className="max-h-[60dvh] w-full object-contain" />
-            ) : poster ? (
-              // eslint-disable-next-line @next/next/no-img-element -- Meta CDN creative still
-              <img src={poster} alt="" className="max-h-[60dvh] w-full object-contain" />
-            ) : (
-              <div className="flex aspect-square items-center justify-center text-sm text-neutral-500">No preview</div>
-            )}
+  const isVideo = (media?.mediaType ?? ad.creative.mediaType) === "video";
+  return (
+    <MediaLightbox
+      title={ad.name}
+      badge={<StateBadge state={ad.fatigue.state as FatigueState} />}
+      kind={isVideo ? "video" : "image"}
+      src={poster}
+      videoUrl={media?.videoUrl ?? null}
+      onClose={onClose}
+      side={
+        <>
+          {text && <p className="whitespace-pre-wrap text-neutral-200">{text}</p>}
+          {headline && <p className="font-bold">{headline}</p>}
+          {(media?.ctaLabel || media?.linkDomain) && <p className="text-xs text-neutral-400">{[media?.linkDomain, media?.ctaLabel].filter(Boolean).join(" · ")}</p>}
+          <ul className="space-y-1 border-t border-white/10 pt-3">
+            {ad.fatigue.reasons.map((r, i) => (
+              <li key={i} className="text-xs text-neutral-300">
+                • {r}
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-x-4">
+            <AdsManagerLink href={ad.adsManagerUrl} />
+            {media?.permalinkUrl && <AdsManagerLink href={media.permalinkUrl} label="View post" />}
           </div>
-          <div className="space-y-3 text-sm">
-            {text && <p className="whitespace-pre-wrap text-neutral-200">{text}</p>}
-            {headline && <p className="font-bold">{headline}</p>}
-            {(media?.ctaLabel || media?.linkDomain) && (
-              <p className="text-xs text-neutral-400">
-                {[media?.linkDomain, media?.ctaLabel].filter(Boolean).join(" · ")}
-              </p>
-            )}
-            <ul className="space-y-1 border-t border-white/10 pt-3">
-              {ad.fatigue.reasons.map((r, i) => (
-                <li key={i} className="text-xs text-neutral-300">
-                  • {r}
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap gap-x-4">
-              <AdsManagerLink href={ad.adsManagerUrl} />
-              {media?.permalinkUrl && <AdsManagerLink href={media.permalinkUrl} label="View post" />}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
+        </>
+      }
+    />
   );
 }
