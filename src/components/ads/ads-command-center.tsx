@@ -514,7 +514,6 @@ export function AdsCommandCenter() {
               <SectionHead id="goals" eyebrow="Goals" title="Goals & settings" sub="What good looks like, what Manus should know, and how often it checks in." />
               {an ? (
                 <GoalsCard
-                  key={an.settings.lastCronAt ?? "goals"}
                   settings={an.settings}
                   assumedTargetCents={s.targetCpb.cents}
                   assumedSource={s.targetCpb.source}

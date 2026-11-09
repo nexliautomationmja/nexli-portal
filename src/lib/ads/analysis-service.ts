@@ -253,7 +253,9 @@ async function buildAndStart(row: AnalysisRow, opts: { deadline: number }): Prom
       });
     } catch (err) {
       console.error("[ads] building the data pack failed:", errMsg(err));
-      return set(r.id, { status: "queued", attempts: r.attempts + 1, error: null });
+      const attempts = r.attempts + 1;
+      if (attempts >= MAX_ATTEMPTS) return set(r.id, { status: "failed", attempts, error: `Couldn't gather the account data: ${errMsg(err)}`.slice(0, 500) });
+      return set(r.id, { status: "queued", attempts, error: null });
     }
   }
   if (Date.now() > opts.deadline - 25_000) return set(r.id, { status: "queued" }); // next tick starts Manus
