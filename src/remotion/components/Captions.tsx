@@ -28,25 +28,44 @@ export function displayWord(w: string, mode: CaptionStyle["case"]): string {
 
 const HIGHLIGHT: Record<string, string> = { green: BRAND.money, yellow: "#FACC15" };
 
-export const Captions: React.FC<{ words: CaptionWord[]; size: number; vertical: boolean; at?: Anchor; look?: CaptionStyle }> = ({
-  words,
-  size,
-  vertical,
-  at,
-  look,
-}) => {
+export const Captions: React.FC<{
+  words: CaptionWord[];
+  size: number;
+  vertical: boolean;
+  at?: Anchor;
+  look?: CaptionStyle;
+  /** Spans (seconds) with no caption on screen: a reaction video's watch windows. Absence = always on. */
+  hide?: { start: number; end: number }[];
+  /** false = no scrim (a second caption track over the first one's). Absence = the scrim. */
+  scrim?: boolean;
+}> = ({ words, size, vertical, at, look, hide, scrim }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const t = frame / fps;
 
   const per = look?.perLine ?? 3;
+  // With pauses, words are chunked within each run between them, so no chunk
+  // straddles a pause (a reaction video's watch window). Without, one run.
+  const runs: CaptionWord[][] = [];
+  for (const w of words) {
+    const run = runs[runs.length - 1];
+    const prev = run?.[run.length - 1];
+    const paused = Boolean(prev && hide?.some((h) => h.start >= prev.start && h.start < w.start));
+    if (!run || paused) runs.push([w]);
+    else run.push(w);
+  }
   const chunks: CaptionWord[][] = [];
-  for (let i = 0; i < words.length; i += per) chunks.push(words.slice(i, i + per));
+  const lastOfRun = new Set<number>();
+  for (const run of runs) {
+    for (let i = 0; i < run.length; i += per) chunks.push(run.slice(i, i + per));
+    lastOfRun.add(chunks.length - 1);
+  }
   const idx = chunks.findIndex((c, i) => {
-    const next = chunks[i + 1];
+    const next = lastOfRun.has(i) ? undefined : chunks[i + 1];
     return t >= c[0].start - 0.05 && (next ? t < next[0].start - 0.05 : t <= c[c.length - 1].end + 0.6);
   });
-  const chunk = idx >= 0 ? chunks[idx] : null;
+  const hidden = hide ? hide.some((h) => t >= h.start && t < h.end) : false;
+  const chunk = idx >= 0 && !hidden ? chunks[idx] : null;
   const fontSize = look?.scale ? Math.round(size * look.scale) : size;
 
   // Vertical: sit on the bottom of the safe band. Landscape: lower third.
@@ -82,7 +101,7 @@ export const Captions: React.FC<{ words: CaptionWord[]; size: number; vertical: 
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
-      {look?.box ? null : at ? (
+      {look?.box || scrim === false ? null : at ? (
         <div
           style={{
             position: "absolute",

@@ -149,6 +149,8 @@ export interface EditContext {
   instruction?: string;
   /** A client studio's firm brief (studios.ts firmBrief); empty for Nexli. */
   firm?: string;
+  /** A reaction video: when the video in the corner plays, and what it is. Absent on every other edit. */
+  reaction?: { windows: { start: number; end: number }[]; summary: string };
 }
 
 const t2 = (n: number) => n.toFixed(2);
@@ -173,9 +175,20 @@ function contextText(c: EditContext): string {
     `Script${c.lines.some((l) => l.start !== null) ? " (with each clip's window on the cut)" : " (the cut was uploaded, so windows are unknown — use the words)"}:\n${lines || "(no script)"}`,
     `Caption words (start time, ALL CAPS):\n${words}`,
     c.instruction ? `How the user wants it edited, in their words:\n${c.instruction}` : "",
+    c.reaction ? reactionText(c.reaction) : "",
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/** Only for a reaction video: where the corner video sits and when it plays, so graphics stay clear of it. */
+function reactionText(r: NonNullable<EditContext["reaction"]>): string {
+  const when = r.windows.map((w) => `${t2(w.start)}–${t2(w.end)}s`).join(", ");
+  return [
+    `This is a reaction video. The presenter holds a phone and reacts to another video${r.summary ? ` (${r.summary})` : ""}, which the portal shows in a card in the top-right corner of the frame for the whole video.`,
+    `It plays with its own sound in these windows, while the presenter watches it silently: ${when || "(none)"}. Outside them it's paused. Her captions pause in those windows and the video's own words are captioned instead (they are not in the caption words above).`,
+    "Keep every graphic clear of the top-right corner. Prefer no title banner unless the user asks for one: the corner video is the hook's visual. Never restate what the video says.",
+  ].join("\n");
 }
 
 async function callClaude(content: string, firm = ""): Promise<RawLayout> {

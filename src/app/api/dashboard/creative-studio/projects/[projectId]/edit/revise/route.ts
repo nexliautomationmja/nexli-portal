@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   try {
     const { lines } = await captionWords(project, finalCut);
     const ctx = {
-      ...editContext(project, edit.style, edit.props.durationS, edit.props.words, lines),
+      ...editContext(project, edit.style, edit.props.durationS, edit.props.words, lines, edit.props.pip),
       instruction: edit.props.instruction,
       firm: firmBrief(await studioById(access.ownerId, project.studioId)),
     };

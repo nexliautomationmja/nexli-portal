@@ -55,7 +55,7 @@ export interface Anchor {
 }
 
 /** What can be moved by tapping on the preview (ladder rungs stay over their person). */
-export type MovableSlot = "title" | "qualifier" | "cta" | "captions" | "stickers" | "cards";
+export type MovableSlot = "title" | "qualifier" | "cta" | "captions" | "stickers" | "cards" | "pip";
 
 export type EditLayout = Partial<Record<MovableSlot, Anchor>>;
 
@@ -97,6 +97,39 @@ export interface EditOverlays {
   captionStyle?: CaptionStyle;
 }
 
+/** A reaction video: one part of the video in the corner that plays, placed on the cut. */
+export interface PipWindow {
+  /** When it plays, on the cut's timeline. */
+  start: number;
+  end: number;
+  /** The part of the video (seconds on its own timeline): it plays from `from` and holds on `to` if the window runs longer. */
+  from: number;
+  to: number;
+}
+
+export type PipSize = "s" | "m" | "l";
+
+/**
+ * A reaction video: the video the presenter reacts to, in the top-right
+ * corner. It plays with its own sound inside its windows (her track goes
+ * quiet, her captions pause and its own words are captioned) and is paused
+ * on a frame everywhere else. Absence = no corner video (every other edit).
+ */
+export interface PipTrack {
+  /** The light copy of the video (signed when the edit is previewed or rendered). */
+  src: string;
+  /** Width ÷ height. */
+  aspect: number;
+  /** In order, never overlapping. */
+  windows: PipWindow[];
+  /** Absence = m. */
+  size?: PipSize;
+  /** Caption its own words while it plays. Absence = on. */
+  captions?: boolean;
+  /** Its words on the cut's timeline (inside the windows only). */
+  words?: CaptionWord[];
+}
+
 // A type alias (not an interface) so it satisfies Remotion's Record<string, unknown> props constraint.
 export type EditProps = {
   style: EditStyle;
@@ -105,6 +138,8 @@ export type EditProps = {
   durationS: number;
   words: CaptionWord[];
   overlays: EditOverlays;
+  /** A reaction video's corner video. Absence = every rig renders exactly as before. */
+  pip?: PipTrack;
 };
 
 export const FPS = 60;

@@ -6,7 +6,7 @@ import { projectDetail } from "@/lib/creative-studio/service";
 import { claudeError } from "@/lib/creative-studio/script";
 import { proposeLayout } from "@/lib/creative-studio/edit";
 import { isEditStyle } from "@/lib/creative-studio/edit-styles";
-import { captionWords, durationOf, editContext, finalCutFor, latestEdit } from "@/lib/creative-studio/edit-service";
+import { captionWords, durationOf, editContext, finalCutFor, latestEdit, reactionTrack } from "@/lib/creative-studio/edit-service";
 import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 300;
@@ -44,8 +44,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const layout = sameCut ? prev.props.overlays.layout : undefined;
     const captionStyle = sameCut ? prev.props.overlays.captionStyle : undefined;
     const durationS = await durationOf(finalCut, body.durationS, words);
+    // A reaction video: the video she reacts to, in the corner (its size and captions carry over on the same cut).
+    const reaction = await reactionTrack(project, built.lines, sameCut ? prev.props.pip : undefined);
     const result = await proposeLayout({
-      ...editContext(project, style, durationS, words, built.lines),
+      ...editContext(project, style, durationS, words, built.lines, reaction.pip),
       instruction: instruction || undefined,
       firm: firmBrief(await studioById(access.ownerId, project.studioId)),
     });
@@ -63,8 +65,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         words,
         overlays: { ...result.overlays, ...(layout ? { layout } : {}), ...(captionStyle ? { captionStyle } : {}) },
         ...(instruction ? { instruction } : {}),
+        ...(reaction.pip ? { pip: reaction.pip } : {}),
       },
-      notes: `${result.notes}${unaligned}`.trim() || null,
+      notes: `${result.notes}${unaligned}${reaction.note}`.trim() || null,
       note: instruction || null,
     });
     return NextResponse.json(await projectDetail(project));

@@ -4,13 +4,15 @@ import {
   creativeAssets,
   creativeEdits,
   creativeProjects,
+  type StoredPip,
   type TranscriptWord,
 } from "@/lib/creative-studio/tables";
-import type { CaptionWord, EditProps, EditStyle } from "@/remotion/types";
+import type { CaptionWord, EditProps, EditStyle, PipTrack, PipWindow } from "@/remotion/types";
 import type { EditContext } from "@/lib/creative-studio/edit";
 import { clipsOf } from "@/lib/creative-studio/service";
 import { loadCut } from "@/lib/creative-studio/autocut-service";
-import { cutTimelineWords, wholeCutWords } from "@/lib/creative-studio/words";
+import { cutTimelineWords, placeSourceWords, wholeCutWords } from "@/lib/creative-studio/words";
+import { sourceMeta, sourceOf } from "@/lib/creative-studio/source";
 import { transcribeUrl } from "@/lib/creative-studio/transcribe";
 import { readStorage } from "@/lib/creative-studio/frames";
 import { signPaths } from "@/lib/creative-studio/storage";
@@ -113,7 +115,15 @@ export async function durationOf(finalCut: Asset, hint: unknown, words: CaptionW
   return last ? last.end + 0.5 : 1;
 }
 
-export function editContext(project: Project, style: EditStyle, durationS: number, words: CaptionWord[], lines: EditContext["lines"]): EditContext {
+export function editContext(
+  project: Project,
+  style: EditStyle,
+  durationS: number,
+  words: CaptionWord[],
+  lines: EditContext["lines"],
+  /** A reaction video's corner video (Claude keeps graphics clear of it). */
+  pip?: StoredPip
+): EditContext {
   return {
     style,
     format: project.format,
@@ -123,14 +133,71 @@ export function editContext(project: Project, style: EditStyle, durationS: numbe
     positions: project.frameSpec?.positions ?? [],
     lines,
     words,
+    ...(pip ? { reaction: { windows: pip.windows.map((w) => ({ start: w.start, end: w.end })), summary: pip.summary ?? "" } } : {}),
   };
 }
 
-/** The full Remotion props for an edit, with a fresh signed URL for its cut. */
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * A reaction video's corner video for a new edit: it plays in the watch
+ * clips' windows on the auto-cut, its words are placed in them, and the size
+ * and caption choice from the last edit carry over. With no corner video,
+ * `note` says why (added to Claude's notes).
+ */
+export async function reactionTrack(project: Project, lines: EditContext["lines"], prev?: StoredPip): Promise<{ pip?: StoredPip; note: string }> {
+  if (!project.reaction) return { note: "" };
+  const source = await sourceOf(project);
+  if (!source) return { note: " The video in the corner is missing, so this edit has none. Upload it again on the video page." };
+  const meta = sourceMeta(source);
+  if (!meta.proxyPath) throw new Error(meta.proxyError ?? "The video in the corner is still being prepared. Try again in a minute.");
+  if (lines.some((l) => l.start === null || l.end === null)) {
+    return { note: " The video in the corner follows the auto-cut's timing, so it isn't added to a final cut you uploaded yourself." };
+  }
+  const clips = await clipsOf(project.id);
+  const byNumber = new Map(clips.map((c) => [c.idx + 1, c]));
+  const windows: PipWindow[] = [];
+  for (const l of lines) {
+    const c = byNumber.get(l.number);
+    if (c?.kind !== "silent" || !c.watch || l.start === null || l.end === null || l.end <= l.start) continue;
+    windows.push({ start: r3(l.start), end: r3(l.end), from: c.watch.from, to: c.watch.to });
+  }
+  windows.sort((a, b) => a.start - b.start);
+  const aspect = source.width && source.height ? source.width / source.height : 9 / 16;
+  return {
+    pip: {
+      sourceId: source.id,
+      aspect: Math.round(aspect * 10_000) / 10_000,
+      windows,
+      size: prev?.size ?? "m",
+      // The video's own burned-in captions make a second set noise.
+      captions: prev?.captions ?? !meta.captioned,
+      words: placeSourceWords(meta.words ?? [], windows),
+      ...(meta.summary ? { summary: meta.summary } : {}),
+    },
+    note: windows.length ? "" : " No clip watches the video, so the corner video stays paused the whole time.",
+  };
+}
+
+/** The corner video as Remotion takes it: the source's light copy, freshly signed. */
+async function signedPip(stored: StoredPip, seconds: number): Promise<PipTrack> {
+  const [source] = await db.select().from(creativeAssets).where(eq(creativeAssets.id, stored.sourceId)).limit(1);
+  const path = source ? sourceMeta(source).proxyPath : undefined;
+  const src = path ? (await signPaths([path], seconds)).get(path) : undefined;
+  if (!src) throw new Error("The video in the corner is missing, so this edit can't render. Pick the style again to make the edit without it.");
+  const { sourceId: _id, summary: _summary, ...track } = stored;
+  void _id;
+  void _summary;
+  return { ...track, src };
+}
+
+/** The full Remotion props for an edit, with a fresh signed URL for its cut (and its corner video). */
 export async function renderProps(edit: Edit, seconds: number): Promise<EditProps> {
   const [cut] = await db.select().from(creativeAssets).where(eq(creativeAssets.id, edit.finalCutAssetId)).limit(1);
   if (!cut?.storagePath) throw new Error("The final cut for this edit is missing");
   const videoUrl = (await signPaths([cut.storagePath], seconds)).get(cut.storagePath);
   if (!videoUrl) throw new Error("Couldn't sign the final cut for the render");
-  return { style: edit.style, videoUrl, ...edit.props };
+  const { pip: stored, ...props } = edit.props;
+  const pip = stored ? await signedPip(stored, seconds) : undefined;
+  return { style: edit.style, videoUrl, ...props, ...(pip ? { pip } : {}) };
 }

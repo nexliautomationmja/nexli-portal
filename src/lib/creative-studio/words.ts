@@ -1,4 +1,4 @@
-import type { CaptionWord } from "@/remotion/types";
+import type { CaptionWord, PipWindow } from "@/remotion/types";
 import type { TranscriptWord } from "@/lib/creative-studio/tables";
 
 /**
@@ -168,6 +168,32 @@ export function applySwaps(words: CaptionWord[], swaps: { find: string; replace:
     out = next;
   }
   return { words: finalizeWords(mergeTokens(out)), applied };
+}
+
+/**
+ * A reaction video's corner video: its own words placed on the cut, inside
+ * each window it plays in (it plays at normal speed from `from`). Words
+ * outside the part played are left out. Same caption rules and checks.
+ */
+export function placeSourceWords(words: TranscriptWord[], windows: PipWindow[]): CaptionWord[] {
+  const out: CaptionWord[] = [];
+  for (const w of windows) {
+    const played = Math.min(w.end - w.start, w.to - w.from);
+    for (const x of words) {
+      const mid = (x.start + x.end) / 2;
+      if (mid < w.from || mid > w.from + played) continue;
+      const start = w.start + Math.max(0, x.start - w.from);
+      const end = Math.min(w.start + played, w.start + (x.end - w.from));
+      const word = normalizeWord(x.text);
+      if (word && end > start) out.push({ word, start: r3(start), end: r3(end) });
+    }
+  }
+  try {
+    return finalizeWords(mergeTokens(out));
+  } catch (err) {
+    console.warn("[creative-studio] the corner video's captions failed their checks:", err instanceof Error ? err.message : err);
+    return [];
+  }
 }
 
 /** Caption words for an uploaded cut transcribed as one file. */

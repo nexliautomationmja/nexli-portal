@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { sql } from "drizzle-orm";
 import { integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "@/db/schema";
-import type { CaptionWord, EditOverlays, EditStyle } from "@/remotion/types";
+import type { CaptionWord, EditOverlays, EditStyle, PipTrack } from "@/remotion/types";
 
 /**
  * Creative Studio tables (admin-only tab: frame → script → Kling clips →
@@ -488,6 +488,13 @@ export const creativeCuts = pgTable("creative_cuts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/** A reaction video's corner video as an edit stores it: the Remotion track, with the source's id instead of a signed URL. */
+export type StoredPip = Omit<PipTrack, "src"> & {
+  sourceId: string;
+  /** Claude's one-line read of the video (for the edit's context; not rendered). */
+  summary?: string;
+};
+
 /** What one edit version renders (the Remotion props minus the signed video URL). */
 export interface EditPropsStored {
   format: CreativeFormat;
@@ -496,6 +503,8 @@ export interface EditPropsStored {
   overlays: EditOverlays;
   /** "Your way": how the user described the edit, kept for later changes. */
   instruction?: string;
+  /** A reaction video's corner video (absent on every other edit). */
+  pip?: StoredPip;
 }
 
 /** Specs read off the delivered mp4 (rulebook § 7 gate 5). */

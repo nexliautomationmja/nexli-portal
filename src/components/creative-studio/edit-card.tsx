@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import type { CaptionStyle, EditLayout, EditOverlays, EditProps, EditStyle, MovableSlot } from "@/remotion/types";
+import type { CaptionStyle, EditLayout, EditOverlays, EditProps, EditStyle, MovableSlot, PipSize } from "@/remotion/types";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
 import { sameTarget, setText, setWindow, slotClashes, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
@@ -126,8 +126,8 @@ export function EditCard({
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState<{ label: string; detail?: string } | null>(null);
   const [seek, setSeek] = useState<{ t: number; n: number; still?: boolean } | null>(null);
-  // Move mode: tap or drag on the preview to place the picked element.
-  const [moving, setMoving] = useState<{ slot: MovableSlot; layout: EditLayout } | null>(null);
+  // Move mode: tap or drag on the preview to place the picked element (a reaction video's corner video also has a size and captions).
+  const [moving, setMoving] = useState<{ slot: MovableSlot; layout: EditLayout; pip?: { size: PipSize; captions: boolean } } | null>(null);
   const dragging = useRef(false);
   const [showWords, setShowWords] = useState(false);
   const [view, setView] = useState<"auto" | "preview" | "render">("auto");
@@ -153,12 +153,19 @@ export function EditCard({
     return () => clearInterval(t);
   }, [rendering, p.id, onChange, onError]);
 
+  // A reaction video: the corner video plays the light copy of the video she reacts to.
+  const sourceUrl = detail.reaction?.source?.proxyUrl ?? null;
   const props: EditProps | null = useMemo(() => {
     if (!latest?.props) return null;
     const cut = finalCuts.find((f) => f.id === latest.finalCutId);
     const videoUrl = cut ? stable(`cut:${cut.id}`, cut.url) : null;
-    return videoUrl ? { style: latest.style, videoUrl, ...latest.props } : null;
-  }, [latest, finalCuts]);
+    if (!videoUrl) return null;
+    const { pip: stored, ...rest } = latest.props;
+    if (!stored) return { style: latest.style, videoUrl, ...rest };
+    const { sourceId, summary: _summary, ...track } = stored;
+    void _summary;
+    return { style: latest.style, videoUrl, ...rest, pip: { ...track, src: stable(`pip:${sourceId}`, sourceUrl) ?? "" } };
+  }, [latest, finalCuts, sourceUrl]);
 
   const elements = useMemo(() => {
     const o = latest?.props?.overlays;
@@ -194,6 +201,8 @@ export function EditCard({
     if (latest.style !== "pov" && o.captions !== false && words.length) list.push({ slot: "captions", label: "Captions", t: words[0].start + 0.15 });
     if (o.stickers.length) list.push({ slot: "stickers", label: "Stickers", t: at(o.stickers[0]) });
     if (o.cards.length) list.push({ slot: "cards", label: "Cards", t: at(o.cards[0]) });
+    const pip = latest.props?.pip;
+    if (pip) list.push({ slot: "pip", label: "Corner video", t: (pip.windows[0]?.start ?? 0) + 0.5 });
     return list;
   }, [latest]);
 
@@ -261,7 +270,12 @@ export function EditCard({
     const first = movable[0];
     if (!first || !latest?.props) return;
     setView("preview");
-    setMoving({ slot: first.slot, layout: { ...(latest.props.overlays.layout ?? {}) } });
+    const pip = latest.props.pip;
+    setMoving({
+      slot: first.slot,
+      layout: { ...(latest.props.overlays.layout ?? {}) },
+      ...(pip ? { pip: { size: pip.size ?? "m", captions: pip.captions !== false } } : {}),
+    });
     still(first.t);
   }
   function pick(slot: MovableSlot) {
@@ -288,7 +302,7 @@ export function EditCard({
   async function saveLayout() {
     if (!moving) return;
     setBusy({ label: "Saving where everything sits…" });
-    const r = await send(api(`${p.id}/edit/layout`), "POST", { layout: moving.layout });
+    const r = await send(api(`${p.id}/edit/layout`), "POST", { layout: moving.layout, ...(moving.pip ? { pip: moving.pip } : {}) });
     setBusy(null);
     if (r.ok) {
       setMoving(null);
@@ -371,7 +385,10 @@ export function EditCard({
     } else onError(r.error);
   }
 
-  const withLayout = props && moving ? { ...props, overlays: { ...props.overlays, layout: moving.layout } } : props;
+  const withLayout =
+    props && moving
+      ? { ...props, overlays: { ...props.overlays, layout: moving.layout }, ...(props.pip && moving.pip ? { pip: { ...props.pip, ...moving.pip } } : {}) }
+      : props;
   const D = latest?.durationS ?? 0;
   // The draft window: whole video, or the typed From/To when it's readable and at least 0.5 s.
   const draftWindow = (() => {
@@ -651,6 +668,35 @@ export function EditCard({
                       </button>
                     ))}
                   </div>
+                  {moving.slot === "pip" && moving.pip && (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-neutral-400">Size</span>
+                        <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5 text-xs font-bold">
+                          {(["s", "m", "l"] as const).map((sz) => (
+                            <button
+                              key={sz}
+                              type="button"
+                              aria-pressed={moving.pip?.size === sz}
+                              onClick={() => setMoving((m) => (m?.pip ? { ...m, pip: { ...m.pip, size: sz } } : m))}
+                              className={`min-h-9 min-w-9 rounded-full px-3 ${moving.pip?.size === sz ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                            >
+                              {sz.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <label className="flex min-h-9 cursor-pointer items-center gap-2 text-xs font-semibold text-neutral-300">
+                        <input
+                          type="checkbox"
+                          checked={moving.pip.captions}
+                          onChange={(e) => setMoving((m) => (m?.pip ? { ...m, pip: { ...m.pip, captions: e.target.checked } } : m))}
+                          className="h-4 w-4 accent-cyan-500"
+                        />
+                        Caption its words while it plays
+                      </label>
+                    </div>
+                  )}
                   {outsideBand && (
                     <p className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                       That spot is outside the Feed-safe band: the 4:5 Feed crop or the Reels caption and buttons will cover it. It&apos;ll still go where you put it.
@@ -809,7 +855,7 @@ export function EditCard({
                 )}
                 {latest.status === "draft" && (
                   <p className="text-xs text-neutral-400">
-                    Watch it. To put the title, captions or qualifier somewhere else, use <span className="text-neutral-200">✥ Move things</span> and tap
+                    Watch it. To put the title, captions{latest.props?.pip ? ", the corner video" : " or qualifier"} somewhere else, use <span className="text-neutral-200">✥ Move things</span> and tap
                     where they should sit. For anything else, tell me in the box below, e.g. <span className="text-neutral-200">“shorter title”</span> or{" "}
                     <span className="text-neutral-200">“qualifier at 0:03”</span>.
                   </p>
