@@ -106,6 +106,7 @@ export type Column<T> = {
 const BREAK = {
   md: { table: "hidden md:block", cards: "md:hidden" },
   lg: { table: "hidden lg:block", cards: "lg:hidden" },
+  xl: { table: "hidden xl:block", cards: "xl:hidden" },
 } as const;
 const ALIGN = { left: "text-left", right: "text-right", center: "text-center" } as const;
 
@@ -125,6 +126,7 @@ export function DataTable<T>({
   minWidth,
   loading = false,
   empty,
+  cardGrid = false,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -136,6 +138,8 @@ export function DataTable<T>({
   minWidth?: number;
   loading?: boolean;
   empty?: React.ReactNode;
+  /** Two cards per row from sm up (for wide tables that switch to cards late). */
+  cardGrid?: boolean;
 }) {
   if (loading) {
     return (
@@ -159,7 +163,7 @@ export function DataTable<T>({
                 <th
                   key={c.key}
                   scope="col"
-                  className={`border-b border-white/10 px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-neutral-400 first:pl-4 last:pr-4 ${ALIGN[c.align ?? "left"]} ${
+                  className={`whitespace-nowrap border-b border-white/10 px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-neutral-400 first:pl-4 last:pr-4 ${ALIGN[c.align ?? "left"]} ${
                     c.sticky ? "sticky left-0 z-10 bg-[#0b1220]" : ""
                   }`}
                 >
@@ -190,10 +194,10 @@ export function DataTable<T>({
           </tbody>
         </table>
       </Surface>
-      <ul className={`space-y-2 ${b.cards}`} aria-label={caption}>
+      <ul className={`${cardGrid ? "grid gap-2 sm:grid-cols-2" : "space-y-2"} ${b.cards}`} aria-label={caption}>
         {rows.map((r) => (
-          <li key={rowKey(r)}>
-            <Surface className="p-3.5">{card(r)}</Surface>
+          <li key={rowKey(r)} className="min-w-0">
+            <Surface className="h-full p-3.5">{card(r)}</Surface>
           </li>
         ))}
       </ul>

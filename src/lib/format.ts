@@ -73,3 +73,13 @@ export function relativeDay(d: Date | string, now: Date = new Date()): string {
 export function weekdayDate(d: Date | string): string {
   return new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
+
+/** Whole dollars from cents: 1234567 → "$12,346". */
+export function moneyWhole(cents: number): string {
+  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+}
+
+/** "Nov 9, 2026", or "—" when there's no date. */
+export function dateOrDash(d: Date | string | null | undefined): string {
+  return d ? formatDateFull(d) : "—";
+}

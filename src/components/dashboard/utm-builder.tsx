@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CopyIcon, LinkIcon } from "@/components/ui/icons";
+import { CopyField, FIELD, Field, Surface } from "@/components/rainmaker";
+import { MetaLogo } from "@/components/creative-studio/meta";
 
 const SOURCE_PRESETS = ["{{site_source_name}}", "facebook", "instagram", "google", "email", "youtube", "tiktok"];
 
@@ -38,7 +39,8 @@ const META_AUTO = {
 /**
  * UTM link builder — assemble a tracked URL to paste into an ad, email, or
  * post. Pure client-side. Campaign = the angle, Content = the specific ad
- * (matches the Ad Analytics "By Campaign" / "By Creative" breakdowns).
+ * (matches the Ad analytics "By campaign" / "By creative" breakdowns).
+ * The section heading comes from the page.
  */
 export function UtmBuilder() {
   const [base, setBase] = useState("");
@@ -47,7 +49,6 @@ export function UtmBuilder() {
   const [campaign, setCampaign] = useState("");
   const [content, setContent] = useState("");
   const [term, setTerm] = useState("");
-  const [copied, setCopied] = useState(false);
 
   function buildParams(): URLSearchParams {
     const params = new URLSearchParams();
@@ -81,21 +82,6 @@ export function UtmBuilder() {
 
   const result = buildUrl();
   const paramsOnly = keepMacros(buildParams().toString());
-  const [copiedParams, setCopiedParams] = useState(false);
-
-  function copy() {
-    if (!result) return;
-    navigator.clipboard.writeText(result);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  }
-
-  function copyParams() {
-    if (!paramsOnly) return;
-    navigator.clipboard.writeText(paramsOnly);
-    setCopiedParams(true);
-    setTimeout(() => setCopiedParams(false), 1800);
-  }
 
   function applyMetaAuto() {
     setSource(META_AUTO.source);
@@ -105,175 +91,54 @@ export function UtmBuilder() {
     setTerm("");
   }
 
-  const labelCls = "block text-[10px] font-black uppercase tracking-[0.15em] mb-1";
-  const inputCls =
-    "w-full px-3 py-2 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors";
-  const inputStyle = {
-    background: "var(--input-bg)",
-    borderColor: "var(--card-border)",
-    color: "var(--text-main)",
-  };
-
   return (
-    <div className="glass-card p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <LinkIcon className="w-4 h-4 text-blue-500" />
-        <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
-          UTM Link Builder
-        </h2>
-      </div>
-      <p className="text-xs -mt-2" style={{ color: "var(--text-muted)" }}>
-        Build a tracked link for an ad or campaign. <b>Campaign</b> = the angle,
-        <b> Content</b> = the specific ad — they show up in Ad Analytics above.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-2">
+    <Surface className="space-y-5 p-4 sm:p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <button
           type="button"
           onClick={applyMetaAuto}
-          className="px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors hover:border-blue-500"
-          style={{ borderColor: "var(--card-border)", color: "var(--text-main)", background: "var(--input-bg)" }}
+          className="inline-flex min-h-10 shrink-0 items-center gap-2 self-start rounded-full border border-lime-400/30 bg-lime-400/10 px-4 text-xs font-bold text-lime-200 transition-colors hover:border-lime-300/60 hover:bg-lime-400/15"
         >
-          Meta (auto Facebook/Instagram)
+          <MetaLogo className="h-auto w-[16px]" />
+          Meta: auto Facebook / Instagram
         </button>
-        <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          One link for every placement — Meta fills in fb / ig, so the Overview can split them.
-        </span>
+        <span className="text-xs text-neutral-400">One link for every placement. Meta fills in fb / ig, so the Overview can split them.</span>
       </div>
 
-      <div>
-        <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-          Destination URL
-        </label>
-        <input
-          value={base}
-          onChange={(e) => setBase(e.target.value)}
-          placeholder="yourclient.com/tax-planning"
-          className={inputCls}
-          style={inputStyle}
-        />
+      <Field label="Destination URL">
+        {(id) => <input id={id} type="url" inputMode="url" value={base} onChange={(e) => setBase(e.target.value)} placeholder="yourclient.com/tax-planning" className={FIELD} />}
+      </Field>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Source">
+          {(id) => (
+            <>
+              <input id={id} value={source} onChange={(e) => setSource(e.target.value)} list="utm-sources" placeholder="facebook" className={FIELD} />
+              <datalist id="utm-sources">
+                {SOURCE_PRESETS.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </>
+          )}
+        </Field>
+        <Field label="Medium">{(id) => <input id={id} value={medium} onChange={(e) => setMedium(e.target.value)} placeholder="paid" className={FIELD} />}</Field>
+        <Field label="Campaign · the angle" hint="Shows up under By campaign">
+          {(id) => <input id={id} value={campaign} onChange={(e) => setCampaign(e.target.value)} placeholder="tax-planning-q3" className={FIELD} />}
+        </Field>
+        <Field label="Content · the specific ad" hint="Shows up under By creative">
+          {(id) => <input id={id} value={content} onChange={(e) => setContent(e.target.value)} placeholder="video-hook-a" className={FIELD} />}
+        </Field>
+        <Field label="Term" hint="Optional (search keywords)">
+          {(id) => <input id={id} value={term} onChange={(e) => setTerm(e.target.value)} placeholder="cpa near me" className={FIELD} />}
+        </Field>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-3">
-        <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Source
-          </label>
-          <input
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            list="utm-sources"
-            placeholder="facebook"
-            className={inputCls}
-            style={inputStyle}
-          />
-          <datalist id="utm-sources">
-            {SOURCE_PRESETS.map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
-        </div>
-        <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Medium
-          </label>
-          <input
-            value={medium}
-            onChange={(e) => setMedium(e.target.value)}
-            placeholder="paid"
-            className={inputCls}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Campaign (angle) *
-          </label>
-          <input
-            value={campaign}
-            onChange={(e) => setCampaign(e.target.value)}
-            placeholder="tax-planning-q3"
-            className={inputCls}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Content (ad/creative)
-          </label>
-          <input
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="video-hook-a"
-            className={inputCls}
-            style={inputStyle}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            Term (keyword, optional)
-          </label>
-          <input
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="cpa near me"
-            className={inputCls}
-            style={inputStyle}
-          />
-        </div>
+      <div className="space-y-4 border-t border-white/10 pt-4">
+        <CopyField label="Tracked link" value={result} />
+        {!result && base.trim() && <p className="-mt-2 text-xs text-amber-200">That doesn&apos;t look like a web address yet.</p>}
+        <CopyField label="URL parameters only (for Meta's URL parameters box)" value={paramsOnly} />
       </div>
-
-      {/* Result */}
-      <div>
-        <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-          Your tracked link
-        </label>
-        <div className="flex gap-2">
-          <div
-            className="flex-1 px-3 py-2 rounded-lg border text-xs break-all font-mono"
-            style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-          >
-            {result || (
-              <span style={{ color: "var(--text-muted)" }}>
-                Enter a destination URL and campaign to generate a link.
-              </span>
-            )}
-          </div>
-          <button
-            onClick={copy}
-            disabled={!result}
-            className="shrink-0 px-4 rounded-lg text-sm font-bold text-white transition-all active:scale-[0.98] disabled:opacity-40 flex items-center gap-2"
-            style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-          >
-            <CopyIcon className="w-4 h-4" />
-            {copied ? "Copied!" : "Copy"}
-          </button>
-        </div>
-      </div>
-
-      {paramsOnly && (
-        <div>
-          <label className={labelCls} style={{ color: "var(--text-muted)" }}>
-            URL parameters only (Meta ad → Tracking → URL parameters)
-          </label>
-          <div className="flex gap-2">
-            <div
-              className="flex-1 px-3 py-2 rounded-lg border text-xs break-all font-mono"
-              style={{ background: "var(--input-bg)", borderColor: "var(--card-border)", color: "var(--text-main)" }}
-            >
-              {paramsOnly}
-            </div>
-            <button
-              onClick={copyParams}
-              className="shrink-0 px-4 rounded-lg text-sm font-bold text-white transition-all active:scale-[0.98] flex items-center gap-2"
-              style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-            >
-              <CopyIcon className="w-4 h-4" />
-              {copiedParams ? "Copied!" : "Copy"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </Surface>
   );
 }
