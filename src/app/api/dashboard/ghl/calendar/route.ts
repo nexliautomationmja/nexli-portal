@@ -17,8 +17,10 @@ export async function GET(req: NextRequest) {
     .where(eq(users.id, session.user.id))
     .limit(1);
 
+  // `connected` / `error` let the page tell "not connected" from "GHL failed"
+  // from "nothing booked"; `events` is always there.
   if (!user?.ghlLocationId) {
-    return NextResponse.json({ events: [] });
+    return NextResponse.json({ events: [], connected: false });
   }
 
   const start = req.nextUrl.searchParams.get("start");
@@ -37,8 +39,9 @@ export async function GET(req: NextRequest) {
       start,
       end
     );
-    return NextResponse.json({ events });
-  } catch {
-    return NextResponse.json({ events: [] });
+    return NextResponse.json({ events, connected: true });
+  } catch (err) {
+    console.error("GHL calendar fetch failed:", err instanceof Error ? err.message.slice(0, 300) : err);
+    return NextResponse.json({ events: [], connected: true, error: "GoHighLevel didn't answer." });
   }
 }

@@ -17,12 +17,15 @@ export async function GET(req: NextRequest) {
     .where(eq(users.id, session.user.id))
     .limit(1);
 
+  // `connected` / `error` let pages tell "not connected" from "GHL failed"
+  // from "no contacts"; { contacts, total } is unchanged for ClientPicker.
   if (!user?.ghlLocationId) {
-    return NextResponse.json({ contacts: [], total: 0 });
+    return NextResponse.json({ contacts: [], total: 0, connected: false });
   }
 
   const search = req.nextUrl.searchParams.get("search");
-  const limit = parseInt(req.nextUrl.searchParams.get("limit") || "50");
+  const asked = parseInt(req.nextUrl.searchParams.get("limit") || "50", 10);
+  const limit = Number.isFinite(asked) ? Math.min(100, Math.max(1, asked)) : 50;
 
   try {
     const data = search
@@ -33,9 +36,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       contacts: data.contacts ?? [],
       total: contactsCount(data),
+      connected: true,
+      locationId: user.ghlLocationId,
     });
   } catch (err) {
-    console.error("GHL contacts fetch failed:", err);
-    return NextResponse.json({ contacts: [], total: 0 });
+    console.error("GHL contacts fetch failed:", err instanceof Error ? err.message.slice(0, 300) : err);
+    return NextResponse.json({ contacts: [], total: 0, connected: true, error: "GoHighLevel didn't answer." });
   }
 }

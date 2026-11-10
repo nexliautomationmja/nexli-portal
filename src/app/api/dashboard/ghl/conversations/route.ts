@@ -17,14 +17,17 @@ export async function GET() {
     .where(eq(users.id, session.user.id))
     .limit(1);
 
+  // `connected` / `error` let the page tell "not connected" from "GHL failed"
+  // from "no conversations"; the old fields are always there.
   if (!user?.ghlLocationId) {
-    return NextResponse.json({ conversations: [], total: 0 });
+    return NextResponse.json({ conversations: [], total: 0, connected: false });
   }
 
   try {
     const data = await searchConversations(user.ghlLocationId, 50);
-    return NextResponse.json(data);
-  } catch {
-    return NextResponse.json({ conversations: [], total: 0 });
+    return NextResponse.json({ ...data, connected: true });
+  } catch (err) {
+    console.error("GHL conversations fetch failed:", err instanceof Error ? err.message.slice(0, 300) : err);
+    return NextResponse.json({ conversations: [], total: 0, connected: true, error: "GoHighLevel didn't answer." });
   }
 }

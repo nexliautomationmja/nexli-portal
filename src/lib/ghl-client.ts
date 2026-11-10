@@ -327,10 +327,46 @@ export async function searchConversations(
   );
 }
 
+/**
+ * GHL ids are alphanumeric. Anything else (slashes, dots, "?", encoded "../")
+ * never reaches a GHL URL, so a crafted id can't point the agency-wide
+ * API key at another endpoint.
+ */
+export function isGhlId(id: unknown): id is string {
+  return typeof id === "string" && /^[A-Za-z0-9]{1,64}$/.test(id);
+}
+
+/** One conversation (Version 2021-04-15). Accepts a { conversation } wrapper too. */
+export async function getConversation(conversationId: string): Promise<Partial<GHLConversation> | null> {
+  if (!isGhlId(conversationId)) throw new Error("Invalid conversation id");
+  const raw = await ghlFetch<Partial<GHLConversation> & { conversation?: Partial<GHLConversation> }>(
+    `/conversations/${conversationId}`,
+    undefined,
+    { version: "2021-04-15" }
+  );
+  return raw?.conversation ?? raw ?? null;
+}
+
+/**
+ * Whether a conversation GHL returned belongs to this owner's location.
+ * Fails closed: an unknown shape (no locationId) is not theirs.
+ */
+export function conversationOwnership(
+  ownerLocationId: string | null | undefined,
+  conversation: Partial<GHLConversation> | null | undefined
+): { ok: true } | { ok: false; reason: string } {
+  if (!ownerLocationId) return { ok: false, reason: "no GHL location connected" };
+  const loc = conversation?.locationId;
+  if (!loc) return { ok: false, reason: "conversation has no locationId" };
+  if (loc !== ownerLocationId) return { ok: false, reason: "conversation belongs to another location" };
+  return { ok: true };
+}
+
 export async function getConversationMessages(
   conversationId: string,
   limit = 50
 ): Promise<{ messages: GHLMessage[] }> {
+  if (!isGhlId(conversationId)) throw new Error("Invalid conversation id");
   const raw = await ghlFetch<GHLConversationMessagesRawResponse>(
     `/conversations/${conversationId}/messages`,
     { limit: String(limit) }
@@ -396,6 +432,7 @@ export async function sendMessage(
   message: string,
   type: string = "SMS"
 ) {
+  if (!isGhlId(conversationId)) throw new Error("Invalid conversation id");
   const url = new URL(
     `/conversations/messages`,
     GHL_BASE_URL
