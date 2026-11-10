@@ -8,8 +8,10 @@ export type PhaseStatus = "pending" | "in_progress" | "done";
 export type TaskStatus = "todo" | "submitted" | "approved" | "needs_attention";
 
 export interface RawOnboardingState {
+  /** Template version: 2 = the Facebook question is required (src/lib/onboarding.ts). */
+  version?: number;
   phases?: Record<string, { status: PhaseStatus }>;
-  tasks?: Record<string, { status: TaskStatus }>;
+  tasks?: Record<string, { status: TaskStatus; submission?: unknown }>;
   targetLaunchDate?: string | null;
   clientDueAt?: string | null;
   campaignLaunchedAt?: string | null;
@@ -118,17 +120,18 @@ export function formatUsd(cents: number): string {
 
 /** The items a Launch Pad shows today, in order. */
 const TASK_IDS = ["payment_setup", "dns_access", "fb_ads_invite", "drivers_license"] as const;
-/** Mirrors TASK_INFO[id].optional in src/lib/onboarding.ts (server-only module). */
-const OPTIONAL_TASKS = new Set<string>(["fb_ads_invite"]);
+/** Mirrors taskOptional() in src/lib/onboarding.ts (server-only module): the
+ * Facebook question is optional only on Launch Pads started before version 2. */
+const isOptional = (state: RawOnboardingState, id: string) => id === "fb_ads_invite" && (state.version ?? 1) < 2;
 
 /**
  * The client's items with the server's rules: an old Stripe login stands in
  * for "How you get paid" until that's answered (tasksOf), and keys no Launch
  * Pad shows anymore are ignored.
  */
-export function rawTasks(state: RawOnboardingState): [string, { status: TaskStatus }][] {
+export function rawTasks(state: RawOnboardingState): [string, { status: TaskStatus; submission?: unknown }][] {
   const t = state.tasks || {};
-  const out: [string, { status: TaskStatus }][] = [];
+  const out: [string, { status: TaskStatus; submission?: unknown }][] = [];
   for (const id of TASK_IDS) {
     let task = t[id];
     if (id === "payment_setup" && !task && t.stripe_setup) {
@@ -144,7 +147,7 @@ export function rawTasks(state: RawOnboardingState): [string, { status: TaskStat
 export function itemsOutstanding(state: RawOnboardingState): number {
   return rawTasks(state).filter(([id, t]) => {
     if (t.status === "submitted" || t.status === "approved") return false;
-    if (OPTIONAL_TASKS.has(id) && t.status === "todo") return false;
+    if (isOptional(state, id) && t.status === "todo") return false;
     return true;
   }).length;
 }
@@ -164,7 +167,7 @@ export function progressPercent(state: RawOnboardingState): number {
     if (p.status === "done") earned += 2;
   }
   for (const [id, t] of rawTasks(state)) {
-    if (OPTIONAL_TASKS.has(id) && t.status === "todo") continue;
+    if (isOptional(state, id) && t.status === "todo") continue;
     total += 1;
     if (t.status === "submitted" || t.status === "approved") earned += 1;
   }
@@ -202,6 +205,13 @@ export function dueView(outstanding: number, days: number | null, hasDue: boolea
 
 export function rowDue(state: RawOnboardingState): DueView | null {
   return dueView(itemsOutstanding(state), state.clientDueAt ? daysUntil(state.clientDueAt) : null, Boolean(state.clientDueAt));
+}
+
+/** They told us they have no Facebook ad account and it isn't set up yet (approved = done). */
+export function adAccountToSetUp(state: RawOnboardingState): boolean {
+  const fb = state.tasks?.fb_ads_invite;
+  const sub = fb?.submission as { hasAccount?: unknown } | null | undefined;
+  return Boolean(fb && fb.status === "submitted" && sub && sub.hasAccount === false);
 }
 
 export const clientNameFor = (eng: EngagementRow) => eng.signers.find((s) => s.order > 0)?.name || "Unknown client";

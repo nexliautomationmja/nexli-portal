@@ -7,7 +7,6 @@ import {
   SYNE,
   SHIMMER_CONIC,
   CTA_CLASSES,
-  SECONDARY_BTN,
   labelCls,
   Icon,
   PATHS,
@@ -41,6 +40,7 @@ import {
   type AchMode,
   type WireMode,
 } from "@/lib/payment-setup";
+import { asFbAnswer, cleanFbAds, type FbAdsAnswer } from "@/lib/fb-ads-setup";
 
 // ══════════════════════════════════════════════════════════
 // Launch Pad — client-facing onboarding page, styled to match
@@ -79,12 +79,13 @@ interface TaskData {
     front: { fileName: string; uploadedAt: string } | null;
     back: { fileName: string; uploadedAt: string } | null;
   };
-  /** fb_ads_invite: confirmed / notApplicable. payment_setup: the answers, or legacyStripe. */
+  /** fb_ads_invite: FbAdsAnswer (older: confirmed / notApplicable). payment_setup: the answers, or legacyStripe. */
   submission?: ({
     confirmed?: boolean;
     notApplicable?: boolean;
     legacyStripe?: boolean;
-  } & Partial<PaymentSetup>) | null;
+  } & Partial<PaymentSetup> &
+    Partial<FbAdsAnswer>) | null;
 }
 
 interface ActivityEntry {
@@ -853,8 +854,8 @@ function TaskCard({
         {task.type === "form" && task.id === "payment_setup" && (
           <PaymentSetupForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
-        {task.type === "confirm" && (
-          <FbConfirm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
+        {task.type === "confirm" && task.id === "fb_ads_invite" && (
+          <FbAdsStep task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
         {task.type === "upload" && (
           <LicenseUpload task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
@@ -1384,9 +1385,9 @@ function PaymentSetupForm({
   );
 }
 
-// ── Facebook Ads invite confirm ──
+// ── Facebook ad account: yes (+ IDs, we request access) / no (we set one up) ──
 
-function FbConfirm({
+function FbAdsStep({
   task,
   token,
   onSubmitted,
@@ -1397,19 +1398,45 @@ function FbConfirm({
   onSubmitted: () => void;
   accent: Accent;
 }) {
+  // Sent back: start from what they told us last time.
+  const saved = asFbAnswer(task.submission);
+  const [has, setHas] = useState<boolean | null>(saved ? saved.hasAccount : null);
+  const [adAccountId, setAdAccountId] = useState(saved?.adAccountId ?? "");
+  const [businessId, setBusinessId] = useState(saved?.businessId ?? "");
+  const [pageUrl, setPageUrl] = useState(saved?.pageUrl ?? "");
+  const [notes, setNotes] = useState(saved?.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [localResult, setLocalResult] = useState<"confirmed" | "skipped" | null>(null);
+  const [justSent, setJustSent] = useState<FbAdsAnswer | null>(null);
 
-  const skipped =
-    localResult === "skipped" || Boolean(task.submission?.notApplicable);
-  const done =
-    localResult !== null ||
-    task.status === "submitted" ||
-    task.status === "approved";
-
+  const done = Boolean(justSent) || task.status === "submitted" || task.status === "approved";
   if (done) {
-    return skipped ? (
+    const answer = justSent ?? saved;
+    if (answer?.hasAccount === false) {
+      return (
+        <SubmittedNote accent={accent}>
+          No problem — we&apos;ll set up your ad account as part of your build.
+          Nothing else needed from you here.
+        </SubmittedNote>
+      );
+    }
+    if (answer?.hasAccount) {
+      return (
+        <div className="space-y-3">
+          <SubmittedNote accent={accent}>
+            Got it — we&apos;ll send an access request from Nexli&apos;s Business Manager.
+          </SubmittedNote>
+          <div className="rounded-xl px-4 py-3 bg-white/5 border border-white/10 text-xs text-neutral-300 leading-relaxed">
+            <span className="font-bold text-white">Your one step: </span>
+            when Meta notifies you, open{" "}
+            <span className="font-semibold text-white">Business Settings → Requests</span>{" "}
+            and tap <span className="font-semibold text-white">Approve</span>.
+          </div>
+        </div>
+      );
+    }
+    // Answers from before the yes/no question.
+    return task.submission?.notApplicable ? (
       <SubmittedNote accent={accent}>
         No problem — we&apos;ve marked this one as not applicable.
       </SubmittedNote>
@@ -1420,24 +1447,27 @@ function FbConfirm({
     );
   }
 
-  async function submit(notApplicable: boolean) {
+  async function send(hasAccount: boolean) {
+    const submission = hasAccount ? { hasAccount, adAccountId, businessId, pageUrl, notes } : { hasAccount };
+    const checked = cleanFbAds(submission);
+    if (!checked.ok) {
+      setError(checked.error);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const res = await fetch(`/api/onboarding/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taskId: "fb_ads_invite",
-          submission: notApplicable ? { notApplicable: true } : { confirmed: true },
-        }),
+        body: JSON.stringify({ taskId: "fb_ads_invite", submission }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error || "Something went wrong. Please try again.");
         return;
       }
-      setLocalResult(notApplicable ? "skipped" : "confirmed");
+      setJustSent(asFbAnswer(checked.value));
       onSubmitted();
     } catch {
       setError("Network error. Please try again.");
@@ -1447,44 +1477,106 @@ function FbConfirm({
   }
 
   return (
-    <div className="space-y-3">
-      <ol className="text-xs sm:text-[13px] space-y-1.5 pl-4 list-decimal leading-relaxed text-neutral-400">
-        <li>
-          Open{" "}
-          <span className="font-semibold text-white">
-            Meta Business Settings → Partners
-          </span>
-        </li>
-        <li>
-          Click{" "}
-          <span className="font-semibold text-white">
-            Add → Give a partner access to your assets
-          </span>
-        </li>
-        <li>
-          Enter our Business ID (from your welcome email) and grant access to
-          your ad account
-        </li>
-      </ol>
+    <div className="space-y-4">
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">
+          Do you have a Facebook ad account for your business?
+        </p>
+        <ChoicePills
+          label="Do you have a Facebook ad account?"
+          options={[
+            ["yes", "Yes, we have one"],
+            ["no", "No, not yet"],
+          ]}
+          value={has === null ? "" : has ? "yes" : "no"}
+          onChange={(v) => {
+            setHas(v === "yes");
+            setError(null);
+          }}
+        />
+      </div>
+
+      {has === true && (
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Ad account ID *</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={adAccountId}
+                onChange={(e) => setAdAccountId(e.target.value)}
+                placeholder="123456789012345"
+                className="lp-input"
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-neutral-400 mt-1.5 leading-relaxed">
+                In Ads Manager, it&apos;s the number next to your account name (or
+                Business Settings → Accounts → Ad accounts).
+              </p>
+            </div>
+            <div>
+              <label className={labelCls}>Business portfolio ID</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={businessId}
+                onChange={(e) => setBusinessId(e.target.value)}
+                placeholder="If you have Business Manager"
+                className="lp-input"
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-neutral-400 mt-1.5 leading-relaxed">
+                Business Settings → Business info. Skip it if you don&apos;t use
+                Business Manager.
+              </p>
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Your Facebook Page</label>
+            <input
+              type="text"
+              value={pageUrl}
+              onChange={(e) => setPageUrl(e.target.value)}
+              placeholder="facebook.com/yourfirm"
+              className="lp-input"
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-neutral-400 mt-1.5">The Page your ads run from, if you have one.</p>
+          </div>
+          <div>
+            <label className={labelCls}>Anything else we should know?</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Our old agency still has access, the account is under my partner's name, etc."
+              className="lp-input resize-none"
+            />
+          </div>
+          <div className="rounded-xl px-4 py-3 bg-white/5 border border-white/10 text-xs text-neutral-300 leading-relaxed">
+            <span className="font-bold text-white">What happens next: </span>
+            we send an access request from Nexli&apos;s Business Manager. You tap{" "}
+            <span className="font-semibold text-white">Approve</span> in Meta, and that&apos;s it.
+          </div>
+        </div>
+      )}
+
+      {has === false && (
+        <div className="rounded-xl px-4 py-3 bg-white/5 border border-white/10 text-xs text-neutral-300 leading-relaxed">
+          <span className="font-bold text-white">No problem: </span>
+          we&apos;ll set up your ad account as part of your build. Nothing else
+          needed from you here.
+        </div>
+      )}
 
       {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
 
-      <div className="flex flex-wrap gap-3">
-        <button
-          onClick={() => submit(false)}
-          disabled={submitting}
-          className={CTA_CLASSES}
-        >
-          I sent the invite ✓
+      {has !== null && (
+        <button onClick={() => send(has)} disabled={submitting} className={CTA_CLASSES}>
+          {submitting ? "Sending…" : has ? "Send my ad account details →" : "Sounds good, set it up for me →"}
         </button>
-        <button
-          onClick={() => submit(true)}
-          disabled={submitting}
-          className={SECONDARY_BTN}
-        >
-          I don&apos;t run Facebook Ads
-        </button>
-      </div>
+      )}
     </div>
   );
 }

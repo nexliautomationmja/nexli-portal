@@ -34,6 +34,7 @@ import {
   processorName,
   wireLine,
 } from "@/lib/payment-setup";
+import { asFbAnswer, pageHref } from "@/lib/fb-ads-setup";
 import {
   TASK_STATUS,
   dueView,
@@ -425,6 +426,65 @@ function PaymentAnswers({ task, onCopied }: { task: AdminTask; onCopied: (w: str
   );
 }
 
+/** Facebook ad account: their IDs (request access with them) or "set one up". */
+function FbAdsAnswers({ task, onCopied }: { task: AdminTask; onCopied: (w: string) => void }) {
+  const a = asFbAnswer(task.submission);
+  if (!a) {
+    const old = task.submission as { notApplicable?: boolean } | null;
+    return (
+      <p className="text-xs text-neutral-300">
+        {old?.notApplicable ? "They don't run Facebook Ads, so this was marked not applicable." : "They say the partner invite is sent. Accept it in Business Manager."}
+      </p>
+    );
+  }
+  if (!a.hasAccount) {
+    return (
+      <div className="space-y-1.5">
+        <p className="text-sm font-semibold text-amber-300">No ad account yet: Nexli sets one up.</p>
+        <p className="text-xs leading-relaxed text-neutral-400">Approve this item once their ad account exists and Nexli has access.</p>
+        {a.notes && <p className="text-xs leading-relaxed text-neutral-300">“{a.notes}”</p>}
+      </div>
+    );
+  }
+  const href = pageHref(a.pageUrl);
+  return (
+    <div className="space-y-2">
+      <div className="space-y-0.5">
+        <Row label="Ad account ID">
+          <span className="truncate font-mono">{a.adAccountId}</span>
+          {a.adAccountId && <CopyButton value={a.adAccountId} what="Ad account ID" onCopied={onCopied} />}
+        </Row>
+        {a.businessId && (
+          <Row label="Business portfolio ID">
+            <span className="truncate font-mono">{a.businessId}</span>
+            <CopyButton value={a.businessId} what="Business ID" onCopied={onCopied} />
+          </Row>
+        )}
+        {a.pageUrl && (
+          <Row label="Page">
+            {href ? (
+              <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1 text-cyan-300 hover:underline">
+                <span className="truncate">{a.pageUrl}</span>
+                <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+              </a>
+            ) : (
+              <span className="truncate">{a.pageUrl}</span>
+            )}
+          </Row>
+        )}
+      </div>
+      {a.notes && <p className="text-xs leading-relaxed text-neutral-300">“{a.notes}”</p>}
+      <p className="text-[11px] leading-relaxed text-neutral-400">
+        Request access from Nexli&apos;s{" "}
+        <a href="https://business.facebook.com/settings/ad-accounts" target="_blank" rel="noopener noreferrer" className="font-semibold text-cyan-300 hover:underline">
+          Business Settings → Ad accounts
+        </a>{" "}
+        → Add → Request access, with the ad account ID. They approve it; then approve this item.
+      </p>
+    </div>
+  );
+}
+
 function LicenseFiles({ task }: { task: AdminTask }) {
   const files = (task.submission as { files?: Record<string, { fileName: string; signedUrl: string | null; mimeType: string } | null> } | null)?.files;
   return (
@@ -533,7 +593,6 @@ function ReviewActions({ task, onPatch }: { task: AdminTask; onPatch: LaunchPadS
 function TaskCard({ task, onPatch, onCopied }: { task: AdminTask; onPatch: LaunchPadSheetProps["onPatch"]; onCopied: (w: string) => void }) {
   const st = TASK_STATUS[task.status];
   const creds = task.type === "credentials" ? (task.submission as Creds) : null;
-  const confirm = task.type === "confirm" ? (task.submission as { confirmed?: boolean; notApplicable?: boolean } | null) : null;
   return (
     <Surface className="space-y-3 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -562,10 +621,8 @@ function TaskCard({ task, onPatch, onCopied }: { task: AdminTask; onPatch: Launc
             ) : (
               <p className="text-xs text-neutral-400">This submission couldn&apos;t be read (missing or wrong encryption key). Ask the client to send it again, or check ONBOARDING_ENCRYPTION_KEY in Vercel.</p>
             )
-          ) : task.type === "confirm" ? (
-            <p className="text-xs text-neutral-300">
-              {confirm?.notApplicable ? "They don't run Facebook Ads, so this was marked not applicable." : "They say the partner invite is sent. Accept it in Business Manager."}
-            </p>
+          ) : task.id === "fb_ads_invite" ? (
+            <FbAdsAnswers task={task} onCopied={onCopied} />
           ) : task.type === "upload" ? (
             <LicenseFiles task={task} />
           ) : null}

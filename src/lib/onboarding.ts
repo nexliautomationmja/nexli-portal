@@ -51,6 +51,8 @@ export interface OnboardingTaskState {
   // upload      → { files: { front: LicenseFileMeta|null, back: ... } }
   // form        → payment_setup: PaymentSetup (lib/payment-setup.ts), or
   //               { legacyStripe: true } while it stands in for a Stripe login
+  // fb_ads_invite → FbAdsAnswer (lib/fb-ads-setup.ts), or the older
+  //               { confirmed: true } | { notApplicable: true }
   submission: unknown;
 }
 
@@ -62,7 +64,12 @@ export interface OnboardingActivityEntry {
 }
 
 export interface OnboardingState {
-  version: 1;
+  /**
+   * Template version. 2 (Nov 10 2026): the Facebook ad account question is
+   * required (see TASK_INFO requiredFrom); records started before keep it
+   * optional so they don't get a new outstanding item.
+   */
+  version: 1 | 2;
   startedAt: string;
   startedBy: "auto_sign" | "admin";
   targetLaunchDate: string | null;
@@ -238,6 +245,8 @@ export const TASK_INFO: Record<
     description: string;
     type: "credentials" | "confirm" | "upload" | "form";
     optional: boolean;
+    /** An optional task that's required on records of this template version and up. */
+    requiredFrom?: number;
     emoji: string;
   }
 > = {
@@ -267,12 +276,15 @@ export const TASK_INFO: Record<
       "Tell us where your domain lives (GoDaddy, Namecheap, etc.) and share the login so we can connect your new website. Your info is sent securely and only visible to your Nexli team.",
   },
   fb_ads_invite: {
-    title: "Facebook Ads Account Invite",
+    title: "Facebook Ads Account",
     emoji: "📣",
     type: "confirm",
+    // Required on Launch Pads started from Nov 10 2026 (version 2); "No, not
+    // yet" is a full answer (Nexli sets the account up).
     optional: true,
+    requiredFrom: 2,
     description:
-      "If you already run Facebook Ads, invite our agency as a partner so we can manage campaigns from your account.",
+      "Does your business already have a Facebook (Meta) ad account? If it does, share its ID and we'll request access from our Business Manager — you just tap Approve. If not, we'll set one up for you.",
   },
   drivers_license: {
     title: "Driver's License — Front & Back",
@@ -283,6 +295,12 @@ export const TASK_INFO: Record<
       "Required for A2P texting compliance: it registers your business phone number to YOUR business — your number, fully verified, never ours.",
   },
 };
+
+/** Optional on this record? (requiredFrom makes an optional task required on newer records.) */
+export function taskOptional(state: Pick<OnboardingState, "version">, id: TaskId): boolean {
+  const info = TASK_INFO[id];
+  return info.optional && !(info.requiredFrom && (state.version ?? 1) >= info.requiredFrom);
+}
 
 /**
  * Fresh task state. Also used to backfill task keys onto onboardings created
@@ -313,7 +331,7 @@ export function defaultOnboardingState(
     note: null,
   });
   return {
-    version: 1,
+    version: 2,
     startedAt: now,
     startedBy,
     targetLaunchDate: null,
@@ -491,7 +509,7 @@ export function computeProgress(state: OnboardingState): number {
   const tasks = tasksOf(state);
   for (const id of taskIdsFor(state)) {
     const t = tasks[id];
-    const optional = TASK_INFO[id].optional;
+    const optional = taskOptional(state, id);
     // needs_attention was sent back to the client — not complete
     const counted = t?.status === "submitted" || t?.status === "approved";
     const touched = t && t.status !== "todo";
@@ -516,7 +534,7 @@ export function clientItemsOutstanding(state: OnboardingState): TaskId[] {
     const done = t?.status === "submitted" || t?.status === "approved";
     if (done) return false;
     const touched = t && t.status !== "todo";
-    if (TASK_INFO[id].optional && !touched) return false;
+    if (taskOptional(state, id) && !touched) return false;
     return true;
   });
 }
@@ -592,7 +610,7 @@ export function serializePublicOnboarding(state: OnboardingState) {
         description: info.description,
         emoji: info.emoji,
         type: info.type,
-        optional: info.optional,
+        optional: taskOptional(state, id),
         status: t?.status ?? "todo",
         submittedAt: t?.submittedAt ?? null,
         adminNote: t?.adminNote ?? null,
@@ -641,7 +659,7 @@ export function serializeAdminOnboarding(state: OnboardingState) {
         title: info.title,
         emoji: info.emoji,
         type: info.type,
-        optional: info.optional,
+        optional: taskOptional(state, id),
         status: t?.status ?? "todo",
         submittedAt: t?.submittedAt ?? null,
         reviewedAt: t?.reviewedAt ?? null,

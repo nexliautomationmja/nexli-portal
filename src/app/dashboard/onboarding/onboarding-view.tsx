@@ -20,6 +20,7 @@ import {
   type Column,
 } from "@/components/rainmaker";
 import {
+  adAccountToSetUp,
   clientNameFor,
   formatDate,
   itemsOutstanding,
@@ -84,6 +85,11 @@ function ItemsCell({ e }: { e: EngagementRow }) {
       {review > 0 && (
         <Chip tone="amber" size="xs" dot>
           {review} to review
+        </Chip>
+      )}
+      {adAccountToSetUp(s) && (
+        <Chip tone="amber" size="xs" dot>
+          Set up ad account
         </Chip>
       )}
       {owed > 0 ? (

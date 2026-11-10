@@ -821,7 +821,7 @@ export function buildOnboardingWelcomeEmail(params: {
       <p style="margin:0 0 12px;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">What we need from you</p>
       <p style="margin:4px 0;color:${C.body};font-size:13px;">${emailEmoji("&#x1F4B3;")} How you get paid — your payment processor, and which invoice amounts go by card, ACH or wire</p>
       <p style="margin:4px 0;color:${C.body};font-size:13px;">${emailEmoji("&#x1F310;")} Domain &amp; DNS login (GoDaddy, Namecheap, etc.)</p>
-      <p style="margin:4px 0;color:${C.body};font-size:13px;">${emailEmoji("&#x1F4E3;")} Facebook Ads partner invite (if you run ads)</p>
+      <p style="margin:4px 0;color:${C.body};font-size:13px;">${emailEmoji("&#x1F4E3;")} Your Facebook ad account ID — or tell us you don't have one and we'll set it up</p>
       <p style="margin:4px 0;color:${C.body};font-size:13px;">${emailEmoji("&#x1FAAA;")} Driver's license front &amp; back (phone number verification)</p>
       ${dueLine}
     </div>

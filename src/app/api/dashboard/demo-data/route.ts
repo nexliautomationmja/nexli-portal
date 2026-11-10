@@ -28,6 +28,7 @@ import {
   appendActivity,
 } from "@/lib/onboarding";
 import type { PaymentSetup } from "@/lib/payment-setup";
+import type { FbAdsAnswer } from "@/lib/fb-ads-setup";
 
 /**
  * Demo data — creates a cast of fake clients wired through the WHOLE system:
@@ -51,6 +52,15 @@ const DEMO_PAYMENT_SETUP: PaymentSetup = {
   ach: { mode: "any", min: null, max: null },
   wire: { mode: "over", min: 25000 },
   notes: "Retainers always go by ACH.",
+};
+
+/** A "Facebook Ads Account" answer for the demo Launch Pads. */
+const DEMO_FB_ADS: FbAdsAnswer = {
+  hasAccount: true,
+  adAccountId: "1234567890123",
+  businessId: "998877665544332",
+  pageUrl: "facebook.com/demofirm",
+  notes: "",
 };
 
 interface DemoClient {
@@ -458,7 +468,7 @@ async function seedOnboardingProgress(
       { segments: ["tasks", "dns_access", "submittedAt"], value: iso(daysAgo(12)) },
       { segments: ["tasks", "fb_ads_invite", "status"], value: "submitted" },
       { segments: ["tasks", "fb_ads_invite", "submittedAt"], value: iso(daysAgo(11)) },
-      { segments: ["tasks", "fb_ads_invite", "submission"], value: { confirmed: true } },
+      { segments: ["tasks", "fb_ads_invite", "submission"], value: DEMO_FB_ADS },
     ]);
     await appendActivity(engagementId, {
       actor: "agency",
@@ -496,7 +506,7 @@ async function seedOnboardingProgress(
     { segments: ["tasks", "dns_access", "status"], value: "approved" },
     { segments: ["tasks", "dns_access", "submittedAt"], value: iso(daysAgo(41)) },
     { segments: ["tasks", "fb_ads_invite", "status"], value: "approved" },
-    { segments: ["tasks", "fb_ads_invite", "submission"], value: { confirmed: true } },
+    { segments: ["tasks", "fb_ads_invite", "submission"], value: DEMO_FB_ADS },
     { segments: ["tasks", "fb_ads_invite", "submittedAt"], value: iso(daysAgo(40)) },
     { segments: ["tasks", "drivers_license", "status"], value: "approved" },
     { segments: ["tasks", "drivers_license", "submittedAt"], value: iso(daysAgo(39)) },

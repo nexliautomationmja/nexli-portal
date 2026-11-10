@@ -11,6 +11,7 @@ import {
 } from "@/lib/onboarding";
 import { encryptSubmission } from "@/lib/onboarding-crypto";
 import { cleanPaymentSetup, processorName } from "@/lib/payment-setup";
+import { cleanFbAds } from "@/lib/fb-ads-setup";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { getNexliAdminId } from "@/lib/foundation-project";
@@ -136,14 +137,22 @@ export async function POST(
     submissionValue = { ...cleaned.value, submittedAt: now };
     activityMessage = `${ctx.signer.name} told us how they get paid (${processorName(cleaned.value)}) 💳`;
   } else {
-    const raw = (body.submission || {}) as Record<string, unknown>;
-    const submission = raw.notApplicable
-      ? { notApplicable: true }
-      : { confirmed: true };
-    submissionValue = submission;
-    activityMessage = submission.notApplicable
-      ? `${ctx.signer.name} doesn't run Facebook Ads — item skipped`
-      : `${ctx.signer.name} sent the Facebook Ads partner invite 📣`;
+    // Facebook ad account: yes (+ its IDs, so Nexli requests access) or no
+    // (Nexli sets one up). IDs aren't secrets, so it's stored as-is.
+    const cleaned = cleanFbAds(body.submission);
+    if (!cleaned.ok) {
+      return NextResponse.json({ error: cleaned.error }, { status: 400 });
+    }
+    const v = cleaned.value;
+    submissionValue = v;
+    activityMessage =
+      "hasAccount" in v
+        ? v.hasAccount
+          ? `${ctx.signer.name} sent their Facebook ad account details 📣`
+          : `${ctx.signer.name} doesn't have a Facebook ad account yet — we'll set one up 📣`
+        : "notApplicable" in v
+          ? `${ctx.signer.name} doesn't run Facebook Ads — item skipped`
+          : `${ctx.signer.name} sent the Facebook Ads partner invite 📣`;
   }
 
   if (!ctx.onboarding.tasks[taskId]) {
