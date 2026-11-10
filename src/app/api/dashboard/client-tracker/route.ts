@@ -32,7 +32,7 @@ export async function GET() {
 
   // Cross-tenant enrichment (linked dashboards + their revenue) is admin-only.
   const isAdmin = session.user.role === "admin";
-  const linkByEmail = new Map<string, { id: string; websiteUrl: string | null }>();
+  const linkByEmail = new Map<string, { id: string; websiteUrl: string | null; tier: string | null }>();
   const theirRevenueByOwner = new Map<string, number>();
   let npsByAccount = new Map<string, SurveyStatus>();
   let updateByAccount = new Map<string, UpdateStatus>();
@@ -43,7 +43,7 @@ export async function GET() {
     const bookEmails = new Set(book.map((c) => c.email.toLowerCase()));
     const accounts = (
       await db
-        .select({ id: users.id, email: users.email, websiteUrl: users.websiteUrl })
+        .select({ id: users.id, email: users.email, websiteUrl: users.websiteUrl, tier: users.tier })
         .from(users)
         .where(eq(users.role, "client"))
     ).filter((a) => bookEmails.has(a.email.toLowerCase()));
@@ -122,7 +122,9 @@ export async function GET() {
     };
   });
 
+  // Same rule as the sidebar badge (activeDrsClients): active clients only, never Foundation accounts.
   const dueClients = clients
+    .filter((c) => c.status === "active" && linkByEmail.get(c.email.toLowerCase())?.tier !== "foundation")
     .filter((c) => c.update && (c.update.state === "due" || c.update.state === "overdue" || c.update.state === "never"))
     .map((c) => ({ name: c.company || c.name || c.email, clientUserId: c.clientUserId as string }));
 

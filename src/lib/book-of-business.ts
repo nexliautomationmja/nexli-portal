@@ -124,7 +124,8 @@ export async function getBookOfBusiness(
   //    term from the most recently signed engagement.
   const signedRows = await db
     .select({
-      email: engagementSigners.email,
+      // Lowercased: the same mailbox typed with different capitals is one client.
+      email: sql<string>`LOWER(TRIM(${engagementSigners.email}))`,
       name: sql<string>`MAX(${engagementSigners.name})`,
       dealsCount: sql<number>`COUNT(DISTINCT ${engagementSigners.engagementId})::int`,
       firstSignedAt: sql<string | null>`MIN(${engagementSigners.signedAt})`,
@@ -162,7 +163,7 @@ export async function getBookOfBusiness(
         eq(engagementSigners.status, "signed")
       )
     )
-    .groupBy(engagementSigners.email);
+    .groupBy(sql`LOWER(TRIM(${engagementSigners.email}))`);
 
   // 2. Every invoice for this owner, rolled up per client email in JS so the
   //    ad-budget portion of each invoice can be split out pro rata.
@@ -186,8 +187,9 @@ export async function getBookOfBusiness(
 
   const invoiceMap = new Map<string, InvoiceRollup>();
   for (const r of invoiceRows) {
+    const key = (r.email || "").trim().toLowerCase();
     const roll =
-      invoiceMap.get(r.email) ??
+      invoiceMap.get(key) ??
       ({
         name: null,
         company: null,
@@ -207,7 +209,11 @@ export async function getBookOfBusiness(
     const adPaid = Math.round(adSpend * paidRatio);
     roll.adSpendPaid += adPaid;
     roll.netPaid += (r.amountPaid || 0) - adPaid;
-    roll.outstanding += r.balanceDue || 0;
+    // Only what's still open (same statuses as the Overview's Outstanding):
+    // voided or canceled invoices keep their balanceDue but aren't owed.
+    if (r.status === "sent" || r.status === "viewed" || r.status === "overdue" || r.status === "partial") {
+      roll.outstanding += r.balanceDue || 0;
+    }
 
     const paidAt = iso(r.paidAt);
     if (paidAt) {
@@ -246,7 +252,7 @@ export async function getBookOfBusiness(
         roll.mrr += Math.round(DRS_PRICING.ANNUAL_CENTS / 12);
       }
     }
-    invoiceMap.set(r.email, roll);
+    invoiceMap.set(key, roll);
   }
 
   // A client = has a signed engagement AND at least one paid invoice.
