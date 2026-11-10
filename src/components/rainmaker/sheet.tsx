@@ -2,22 +2,46 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { ChevronLeft, X } from "lucide-react";
 import { RainmakerStyles } from "./canvas";
 import { CANVAS_VARS, SYNE } from "./tokens";
 
 const WIDTH = { md: "sm:max-w-lg", lg: "sm:max-w-3xl", xl: "sm:max-w-5xl" } as const;
 
+// Sheets can open on top of each other: only the top one answers Escape,
+// and the page stays scroll-locked until the last one closes.
+const openSheets: symbol[] = [];
+let scrollLocks = 0;
+let savedOverflow = "";
+
+function lockScroll() {
+  const html = document.documentElement;
+  if (scrollLocks === 0) {
+    savedOverflow = html.style.overflow;
+    html.style.overflow = "hidden";
+  }
+  scrollLocks += 1;
+}
+
+function unlockScroll() {
+  scrollLocks = Math.max(0, scrollLocks - 1);
+  if (scrollLocks === 0) document.documentElement.style.overflow = savedOverflow;
+}
+
 /**
  * Dialog that slides up from the bottom on phones and sits centered from sm up.
  * Portaled to <body> (so nothing on the page can trap it), always dark, Esc
- * closes it, scrolling is locked on <html>, and focus returns where it was.
+ * closes it (only the top one when sheets stack; an inner control can keep Esc
+ * by calling preventDefault), scrolling is locked on <html>, and focus returns
+ * where it was. `back` shows a back button above the title for views inside
+ * one sheet (e.g. invoice → client history).
  */
 export function Sheet({
   open,
   onClose,
   title,
   sub,
+  back,
   size = "lg",
   fullOnPhone = false,
   footer,
@@ -27,6 +51,7 @@ export function Sheet({
   onClose: () => void;
   title: React.ReactNode;
   sub?: React.ReactNode;
+  back?: { label: string; onClick: () => void };
   size?: keyof typeof WIDTH;
   fullOnPhone?: boolean;
   footer?: React.ReactNode;
@@ -45,18 +70,22 @@ export function Sheet({
 
   useEffect(() => {
     if (!open) return;
+    const me = Symbol("sheet");
+    openSheets.push(me);
     const before = document.activeElement as HTMLElement | null;
-    const html = document.documentElement;
-    const prevOverflow = html.style.overflow;
-    html.style.overflow = "hidden";
+    lockScroll();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeRef.current();
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (openSheets[openSheets.length - 1] !== me) return;
+      closeRef.current();
     };
     window.addEventListener("keydown", onKey);
     requestAnimationFrame(() => panel.current?.focus());
     return () => {
       window.removeEventListener("keydown", onKey);
-      html.style.overflow = prevOverflow;
+      const at = openSheets.indexOf(me);
+      if (at >= 0) openSheets.splice(at, 1);
+      unlockScroll();
       before?.focus?.();
     };
   }, [open]);
@@ -83,6 +112,16 @@ export function Sheet({
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-4">
           <div className="min-w-0">
+            {back && (
+              <button
+                type="button"
+                onClick={back.onClick}
+                className="-ml-1 mb-1 inline-flex min-h-8 items-center gap-0.5 rounded-full pr-2 text-xs font-semibold text-cyan-300 hover:text-cyan-200"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                {back.label}
+              </button>
+            )}
             <h2 id={titleId} className="truncate text-lg font-bold text-white" style={SYNE}>
               {title}
             </h2>

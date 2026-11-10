@@ -26,7 +26,10 @@ export function buttonCls(variant: ButtonVariant = "primary", size: "md" | "sm" 
   return `inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 ${FOCUS_RING} ${VARIANT[variant]} ${s}`;
 }
 
-const Spinner = () => <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />;
+/** The small busy spinner buttons use (inherits the text color). */
+export const Spinner = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
+  <span className={`${className} inline-block animate-spin rounded-full border-2 border-current border-t-transparent`} aria-hidden="true" />
+);
 
 export function Button({
   variant = "primary",

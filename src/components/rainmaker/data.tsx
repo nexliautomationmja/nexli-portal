@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Skeleton } from "./feedback";
 import { Surface } from "./surfaces";
-import { BIG_NUM, ICON_TONE, NUM_FONT, TEXT_TONE, labelCls, type Tone } from "./tokens";
+import { BIG_NUM, FOCUS_RING, ICON_TONE, NUM_FONT, TEXT_TONE, labelCls, type Tone } from "./tokens";
 
 // ─── KPI tiles ─────────────────────────────────────────────
 
@@ -211,7 +211,11 @@ export function List({ className = "", children }: { className?: string; childre
   return <Surface className={`divide-y divide-white/5 overflow-hidden ${className}`}>{children}</Surface>;
 }
 
-/** One line in a List: icon tile, title + sub, and a right-hand value. Becomes a link with `href`. */
+/**
+ * One line in a List: icon tile, title + sub, and a right-hand value. Becomes a
+ * link with `href`, or a button with `onClick`; `selected` marks the row that's
+ * open next to the list ("you are here": blue bar + tint).
+ */
 export function ListRow({
   icon,
   tone = "neutral",
@@ -220,6 +224,9 @@ export function ListRow({
   right,
   href,
   external = false,
+  onClick,
+  selected = false,
+  chevron,
 }: {
   icon?: React.ReactNode;
   tone?: Tone;
@@ -228,6 +235,10 @@ export function ListRow({
   right?: React.ReactNode;
   href?: string;
   external?: boolean;
+  onClick?: () => void;
+  selected?: boolean;
+  /** Show the › (default: when it's a link). */
+  chevron?: boolean;
 }) {
   const body = (
     <>
@@ -241,10 +252,22 @@ export function ListRow({
           {right}
         </div>
       )}
-      {href && <ChevronRight className="h-4 w-4 shrink-0 text-neutral-500 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />}
+      {(chevron ?? Boolean(href)) && <ChevronRight className="h-4 w-4 shrink-0 text-neutral-500 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />}
     </>
   );
-  const cls = "group flex min-h-14 items-center gap-3 px-4 py-3";
+  const cls = `group flex min-h-14 items-center gap-3 px-4 py-3 ${selected ? "bg-blue-500/10 shadow-[inset_3px_0_0_0_#3b82f6]" : ""}`;
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-current={selected ? "true" : undefined}
+        className={`${cls} w-full text-left transition-colors ${selected ? "" : "hover:bg-white/[0.03]"} ${FOCUS_RING}`}
+      >
+        {body}
+      </button>
+    );
+  }
   if (!href) return <div className={cls}>{body}</div>;
   return external ? (
     <a href={href} target="_blank" rel="noopener noreferrer" className={`${cls} transition-colors hover:bg-white/[0.03]`}>

@@ -1,27 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { CANVAS_VARS } from "@/components/rainmaker";
+import { Toast, useToast } from "@/components/rainmaker";
 import { OnboardingView } from "./onboarding-view";
 import { LaunchPadSheet } from "./launch-pad-sheet";
 import { clientNameFor, type AdminDetail, type EngagementRow } from "./onboarding-types";
-
-/** A short confirmation at the bottom of the screen, above any open sheet. */
-function Toast({ message }: { message: string | null }) {
-  const [mounted, setMounted] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- portal target exists only after mount
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-  return createPortal(
-    <div aria-live="polite" role="status" className="pointer-events-none fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-[120] flex justify-center px-4" style={CANVAS_VARS}>
-      {message && (
-        <div className="rounded-full border border-white/10 bg-[#0b1220] px-4 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-black/60">{message}</div>
-      )}
-    </div>,
-    document.body
-  );
-}
 
 /**
  * Admin Onboarding page: loads the Launch Pads and runs every action;
@@ -36,7 +19,7 @@ export function OnboardingDashboardClient() {
   const [detailState, setDetailState] = useState<"loading" | "error" | "ready">("loading");
   const [billingBusy, setBillingBusy] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast } = useToast();
   const [origin, setOrigin] = useState("");
   const openRef = useRef<string | null>(null);
 
@@ -72,12 +55,6 @@ export function OnboardingDashboardClient() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2500);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   const open = useCallback(
     (id: string) => {
       openRef.current = id;
@@ -101,14 +78,14 @@ export function OnboardingDashboardClient() {
       const res = await fetch(`/api/dashboard/engagements/${id}/onboarding`, { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setToast(body.error || "Couldn't start onboarding");
+        showToast(body.error || "Couldn't start onboarding", "error");
         return;
       }
       await load();
       open(id);
-      setToast("Launch Pad started 🚀");
+      showToast("Launch Pad started 🚀", "success");
     } catch {
-      setToast("Network error. Please try again.");
+      showToast("Network error. Please try again.", "error");
     } finally {
       setStarting(null);
     }
@@ -125,17 +102,17 @@ export function OnboardingDashboardClient() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setToast(data.error || "That didn't save. Please try again.");
+        showToast(data.error || "That didn't save. Please try again.", "error");
         return false;
       }
       if (openRef.current === id) setDetail(data as AdminDetail);
-      if (body.action === "post_update") setToast("Update posted 📡");
+      if (body.action === "post_update") showToast("Update posted 📡", "success");
       return true;
     } catch {
-      setToast("Network error. That didn't save.");
+      showToast("Network error. That didn't save.", "error");
       return false;
     }
-  }, []);
+  }, [showToast]);
 
   async function startMonthly() {
     const id = openRef.current;
@@ -191,9 +168,9 @@ export function OnboardingDashboardClient() {
         onRetry={() => openId && void loadDetail(openId)}
         onPatch={patch}
         onStartMonthly={startMonthly}
-        onCopied={(what) => setToast(`${what} copied 📋`)}
+        onCopied={(what) => showToast(`${what} copied 📋`)}
       />
-      <Toast message={toast} />
+      <Toast toast={toast} />
     </>
   );
 }

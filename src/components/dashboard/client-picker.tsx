@@ -118,7 +118,7 @@ export function ClientPicker({
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={handleFocus}
           placeholder={placeholder}
-          className="w-full pl-9 pr-3 py-2.5 rounded-lg border text-sm outline-none focus:border-blue-500 transition-colors"
+          className="w-full pl-9 pr-3 py-2.5 rounded-lg border text-[16px] sm:text-sm outline-none focus:border-blue-500 transition-colors"
           style={{
             background: "var(--input-bg)",
             borderColor: "var(--card-border)",
