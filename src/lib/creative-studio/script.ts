@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { KLING_FRAMEWORK, STORY_RULES } from "@/lib/creative-studio/rules.generated";
 import { withoutNexliSections } from "@/lib/creative-studio/framework-sections";
-import { FORMAT_LABEL, RIG_LABEL } from "@/lib/creative-studio/prompts";
+import { FORMAT_LABEL, RIG_LABEL, hasSetVoice } from "@/lib/creative-studio/prompts";
 import {
   CLIP_KINDS,
   type ClipFields,
@@ -125,7 +125,7 @@ const REWRITE_SCHEMA = {
 const STORY_PERSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["position", "presenter", "who", "look", "shortName", "pronoun", "voice"],
+  required: ["position", "presenter", "who", "look", "shortName", "pronoun"],
   properties: {
     position: { type: "string", enum: ["ONLY", "LEFT", "CENTER", "RIGHT"] },
     presenter: { type: "boolean" },
@@ -133,7 +133,6 @@ const STORY_PERSON_SCHEMA = {
     look: STR,
     shortName: STR,
     pronoun: { type: "string", enum: ["she", "he"] },
-    voice: STR,
   },
 } as const;
 
@@ -193,7 +192,6 @@ interface RawStoryPerson {
   look: string;
   shortName: string;
   pronoun: "she" | "he";
-  voice: string;
 }
 interface RawStoryScene {
   scene: number;
@@ -241,7 +239,8 @@ function cleanPeople(raw: unknown): ScenePerson[] {
         look: t(r.look),
         shortName: t(r.shortName) || t(r.who),
         pronoun: r.pronoun === "he" ? "he" : "she",
-        voice: presenter ? "" : t(r.voice),
+        // Kling picks every voice from the frame (only Daniela's is set, by the portal).
+        voice: "",
       },
     ];
   });
@@ -319,7 +318,15 @@ function storyScriptJson(frame: FrameSpec | null, clips: ClipFields[], input: Sc
   return {
     scenes: slots.map((slot, i) => {
       const spec = frame?.scenes?.find((x) => x.frameId === slot.frameId);
-      return { scene: i + 1, label: slot.label, camera: spec?.camera ?? "locked", setting: spec?.setting ?? "", people: spec?.people ?? [] };
+      const people = (spec?.people ?? []).map((p) => ({
+        position: p.position,
+        presenter: p.presenter,
+        who: p.who,
+        look: p.look,
+        shortName: p.shortName,
+        pronoun: p.pronoun,
+      }));
+      return { scene: i + 1, label: slot.label, camera: spec?.camera ?? "locked", setting: spec?.setting ?? "", people };
     }),
     clips: clips.map((c) => ({
       scene: number(c.frameId),
@@ -340,7 +347,10 @@ function presenterLine(p: PresenterInfo | undefined): string {
   if (!p) return "";
   const pron = p.pronoun === "he" ? "he/him" : "she/her";
   if (!p.name) return `The presenter: the person in the frames (${pron}). Don't name them unless the user does.`;
-  return `The presenter: ${p.name} (${pron}). Describe ${p.name} from the frames; the portal adds ${p.pronoun === "he" ? "his" : "her"} voice to every clip.`;
+  const voice = hasSetVoice(p)
+    ? `the portal adds ${p.pronoun === "he" ? "his" : "her"} voice to every clip`
+    : `Kling gives ${p.pronoun === "he" ? "him" : "her"} a voice that fits the frame`;
+  return `The presenter: ${p.name} (${pron}). Describe ${p.name} from the frames; ${voice}.`;
 }
 
 function storyBriefText(input: ScriptInput): string {

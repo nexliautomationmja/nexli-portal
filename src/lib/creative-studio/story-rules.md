@@ -26,7 +26,7 @@ The portal assembles every clip's complete Kling prompt from the fields you retu
     - `look`: in the §5 Subject style. The presenter's starts with their name, e.g. "Marcus, the man with …". Then outfit, seat and pose, ending with how they move naturally from the pose (not "as they talk", since some clips are silent).
     - `shortName`: for listener directions.
     - `pronoun`: she or he.
-    - `voice`: for anyone **other than the presenter** who talks, a few words (age, tone, accent), worded identically every time that person talks. Empty for everyone else; the presenter's voice is set by the portal.
+- Don't describe anyone's voice. Kling gives each person the voice that fits how they look in the frame.
 
 ## Kinds of shot (one per clip)
 - `to_camera`: the person talks into the lens (the §7 talking head).
@@ -36,7 +36,7 @@ The portal assembles every clip's complete Kling prompt from the fields you retu
 
 ## Who speaks
 - `speaker` = `PRESENTER` for the presenter.
-- In a scene with several people, someone else in the frame may talk when the story calls for it. Give their position (`LEFT`, `CENTER` or `RIGHT`) and their voice in that scene's people.
+- In a scene with several people, someone else in the frame may talk when the story calls for it. Give their position (`LEFT`, `CENTER` or `RIGHT`).
 - One speaker per clip. Everyone else in the frame listens, with small, specific `listenerReactions` (§7) by short name.
 - A voiceover is the presenter's voice unless the user's direction says someone in the frame narrates; then give that person's position.
 

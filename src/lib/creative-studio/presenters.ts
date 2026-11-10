@@ -3,23 +3,22 @@ import { db } from "@/db";
 import { creativeAssets, creativePresenters, type PresenterInfo, type Pronoun } from "@/lib/creative-studio/tables";
 import { inStudio, type Studio } from "@/lib/creative-studio/studios";
 import { signPaths } from "@/lib/creative-studio/storage";
-import { defaultVoice } from "@/lib/creative-studio/prompts";
 
 type PresenterRow = typeof creativePresenters.$inferSelect;
 
 /**
  * Presenters other than the studio's default (Daniela in Nexli's studio):
- * each has a name, a pronoun, a voice described in plain words and a look,
- * plus their own reference photos (creative_assets kind "reference" with
+ * each has a name, a pronoun and a look, plus their own reference photos (creative_assets kind "reference" with
  * presenter_id). Videos keep a snapshot (creative_projects.presenter).
+ * They have no set voice: Kling picks it from the person in the frame (the
+ * old `voice` column is no longer used).
  */
 
 
-/** The snapshot a video keeps: the voice line is worded identically in every clip. */
-export function presenterInfo(row: Pick<PresenterRow, "id" | "name" | "pronoun" | "voice" | "look">, client = false): PresenterInfo {
+/** The snapshot a video keeps (no voice line: Kling picks the voice from the frame). */
+export function presenterInfo(row: Pick<PresenterRow, "id" | "name" | "pronoun" | "look">): PresenterInfo {
   const pronoun: Pronoun = row.pronoun === "he" ? "he" : "she";
-  const how = row.voice.trim().replace(/[.]+$/, "") || defaultVoice(pronoun, client);
-  return { id: row.id, name: row.name.trim(), pronoun, voice: `${row.name.trim()}'s voice, the same in every clip: ${how}`, look: row.look.trim() };
+  return { id: row.id, name: row.name.trim(), pronoun, voice: "", look: row.look.trim() };
 }
 
 export async function loadPresenter(ownerId: string, id: string): Promise<PresenterRow | null> {
@@ -96,5 +95,5 @@ export async function presenterForStudio(ownerId: string, studioId: string | nul
   if (typeof id !== "string") return undefined;
   const row = await loadPresenter(ownerId, id);
   if (!row || row.archivedAt || (row.studioId ?? null) !== (studioId ?? null)) return undefined;
-  return presenterInfo(row, Boolean(studioId));
+  return presenterInfo(row);
 }

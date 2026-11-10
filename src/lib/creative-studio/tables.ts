@@ -33,7 +33,7 @@ export type Pronoun = "she" | "he";
 export interface ScenePerson {
   /** ONLY when they're alone in the frame. */
   position: "ONLY" | "LEFT" | "CENTER" | "RIGHT";
-  /** The video's presenter (speaks with the presenter's voice). */
+  /** The video's presenter. */
   presenter: boolean;
   /** "the man on the LEFT in the navy suit" */
   who: string;
@@ -42,7 +42,7 @@ export interface ScenePerson {
   /** "The man in navy" — for listener directions. */
   shortName: string;
   pronoun: Pronoun;
-  /** Anyone but the presenter who talks: their voice, worded the same every time. */
+  /** No longer written (always ""): Kling picks every voice from the frame; only Daniela's is set. */
   voice: string;
 }
 
@@ -86,7 +86,7 @@ export interface PresenterInfo {
   id: string;
   name: string;
   pronoun: Pronoun;
-  /** The voice line, worded identically in every clip. */
+  /** Daniela's set voice line; "" for anyone else (Kling picks the voice from the frame). */
   voice: string;
   /** What they look like (Manus uses it when there are no photos). */
   look: string;
@@ -207,7 +207,7 @@ export const creativePresenters = pgTable("creative_presenters", {
   studioId: uuid("studio_id"),
   name: text("name").notNull(),
   pronoun: text("pronoun").$type<Pronoun>().notNull().default("she"),
-  /** How they sound, in plain words (the portal adds "{name}'s voice, the same in every clip: …"). */
+  /** No longer used: Kling picks a presenter's voice from the frame (kept for old rows). */
   voice: text("voice").notNull().default(""),
   /** How they look (Manus works from this when there are no photos). */
   look: text("look").notNull().default(""),

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeProjects } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
+import { clipsOf, projectDetail, rebuildPrompts } from "@/lib/creative-studio/service";
 import { scriptPresenterMismatch } from "@/lib/creative-studio/prompts";
 
 type Ctx = { params: Promise<{ projectId: string }> };
@@ -24,6 +24,8 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
       { status: 400 }
     );
   }
+  // Kling gets prompts built by today's rules (e.g. a script written before only Daniela had a set voice).
+  await rebuildPrompts(project);
   const [updated] = await db
     .update(creativeProjects)
     .set({ status: "approved", approvedAt: new Date(), updatedAt: new Date() })

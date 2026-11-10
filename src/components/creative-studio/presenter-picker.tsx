@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PresenterInfo, Pronoun } from "@/lib/creative-studio/tables";
-import { defaultVoice } from "@/lib/creative-studio/prompts";
 import { Button, FIELD, Segmented, Sheet } from "@/components/rainmaker";
 import { inStudioQs } from "@/components/creative-studio/client";
 import { uploadReferenceFile } from "@/components/creative-studio/upload";
@@ -219,11 +218,9 @@ export function PresenterSheet({
   onSaved: (presenters: PresenterOption[], id: string, created: boolean) => void | Promise<void>;
   onArchived: (presenters: PresenterOption[], id: string) => void | Promise<void>;
 }) {
-  const client = studio.kind === "client";
   const [id, setId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [pronoun, setPronoun] = useState<Pronoun>("she");
-  const [voice, setVoice] = useState("");
   const [look, setLook] = useState("");
   const [photos, setPhotos] = useState<{ id: string; url: string | null }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -240,12 +237,11 @@ export function PresenterSheet({
     setId(p?.id ?? null);
     setName(p?.name ?? "");
     setPronoun(p?.pronoun ?? "she");
-    setVoice(p?.voice || defaultVoice(p?.pronoun ?? "she", client));
     setLook(p?.look ?? "");
     setPhotos([]);
     setError(null);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [editing, client]);
+  }, [editing]);
 
   // Their photos.
   useEffect(() => {
@@ -294,12 +290,6 @@ export function PresenterSheet({
     return () => document.removeEventListener("paste", onPaste);
   }, [zone]);
 
-  function switchPronoun(next: Pronoun) {
-    // Keep a voice they wrote; swap the default wording to match.
-    if (voice.trim() === defaultVoice(pronoun, client)) setVoice(defaultVoice(next, client));
-    setPronoun(next);
-  }
-
   async function save() {
     if (!name.trim()) {
       setError("Give the presenter a name.");
@@ -313,7 +303,7 @@ export function PresenterSheet({
     const r = await fetch(url, {
       method: id ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, pronoun, voice, look }),
+      body: JSON.stringify({ name, pronoun, look }),
     }).catch(() => null);
     const b = await r?.json().catch(() => null);
     setBusy(null);
@@ -382,25 +372,20 @@ export function PresenterSheet({
         </label>
 
         <div>
-          <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">Voice</span>
+          <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">Man or woman</span>
           <Segmented<Pronoun>
             value={pronoun}
-            onChange={switchPronoun}
-            ariaLabel="Voice"
+            onChange={setPronoun}
+            ariaLabel="Man or woman"
             options={[
               { value: "she", label: "Woman · she" },
               { value: "he", label: "Man · he" },
             ]}
           />
-        </div>
-
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">How they sound</span>
-          <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={3} maxLength={600} className={`${FIELD} resize-y`} />
           <span className="mt-1 block text-[11px] text-neutral-400">
-            Kling gets this word for word in every clip, as &ldquo;{name.trim() || "Name"}&apos;s voice, the same in every clip: …&rdquo;. Keeping it identical keeps the voice steady.
+            Kling picks their voice from how they look in the frame, so a man sounds like a man and every person in a shot gets their own voice.
           </span>
-        </label>
+        </div>
 
         <label className="block">
           <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">How they look</span>
