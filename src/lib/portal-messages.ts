@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { clientWeeklyUpdates, portalMessages, users } from "@/db/schema";
 import { getSupabase } from "@/lib/supabase";
-import { sendEmailWithLog, emailWrapper } from "@/lib/email";
+import { sendEmailWithLog, emailWrapper, emailButton, emailEmoji, EMAIL_COLORS as C } from "@/lib/email";
 import { getOwnerBranding } from "@/lib/branding";
 import { createNotification } from "@/lib/notifications";
 import { getNexliAdminId } from "@/lib/foundation-project";
@@ -571,18 +571,18 @@ export async function notifyClientOfMessage(params: {
 
     const html = emailWrapper(
       `
-      <p style="margin:0 0 6px;color:#9999a8;font-size:14px;">${greeting}</p>
-      <h1 style="margin:0 0 16px;color:#fff;font-size:20px;font-weight:800;">${isVoice ? "&#127897; " : ""}${lead}</h1>
+      <p style="margin:0 0 6px;color:${C.body};font-size:14px;">${greeting}</p>
+      <h1 style="margin:0 0 16px;color:${C.ink};font-size:20px;font-weight:800;">${isVoice ? `${emailEmoji("&#127897;")} ` : ""}${lead}</h1>
       ${
         quote
-          ? `<div style="margin:0 0 24px;padding:14px 16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
-              ${isVoice ? `<p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Transcript</p>` : ""}
-              <p style="margin:0;color:#ccccda;font-size:14px;line-height:1.7;">${escapeHtml(quote)}</p>
+          ? `<div style="margin:0 0 24px;padding:14px 16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;">
+              ${isVoice ? `<p style="margin:0 0 6px;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Transcript</p>` : ""}
+              <p style="margin:0;color:${C.body};font-size:14px;line-height:1.7;">${escapeHtml(quote)}</p>
             </div>`
           : ""
       }
       <div style="text-align:center;margin:24px 0;">
-        <a href="${ctaUrl}" style="display:inline-block;background-color:#2563EB;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;">Open messages</a>
+        ${emailButton(ctaUrl, "Open messages", branding)}
       </div>
     `,
       branding

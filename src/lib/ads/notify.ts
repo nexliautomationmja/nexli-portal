@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
-import { emailWrapper, escapeHtml, sendEmailWithLog } from "@/lib/email";
+import { emailButton, emailWrapper, escapeHtml, sendEmailWithLog, EMAIL_COLORS as C } from "@/lib/email";
 import { adAnalyses, adSteps } from "@/lib/ads/tables";
 import { getSettings } from "@/lib/ads/settings";
 import type { ParsedAnalysis } from "@/lib/ads/parse";
@@ -35,7 +35,7 @@ async function bell(userId: string, type: string, title: string, message: string
 }
 
 function button(href: string, label: string) {
-  return `<div style="text-align:center;margin-top:20px;"><a href="${PORTAL_URL}${href}" style="display:inline-block;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-size:13px;font-weight:700;">${escapeHtml(label)}</a></div>`;
+  return `<div style="text-align:center;margin-top:20px;">${emailButton(`${PORTAL_URL}${href}`, escapeHtml(label), undefined, "sm")}</div>`;
 }
 
 async function email(subject: string, inner: string, emailType: string, relatedId: string) {
@@ -62,15 +62,15 @@ export async function notifyReady(row: Analysis): Promise<void> {
   const list = top
     .map(
       (s) =>
-        `<li style="margin:0 0 10px;"><span style="color:#67e8f9;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">${escapeHtml(PRIORITY_LABEL[s.priority] ?? s.priority)}</span><br/><strong style="color:#fff;">${escapeHtml(s.title)}</strong><br/><span style="color:#9999a8;">${escapeHtml(s.why.slice(0, 220))}</span></li>`
+        `<li style="margin:0 0 10px;"><span class="gb-mono" style="color:#67e8f9;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">${escapeHtml(PRIORITY_LABEL[s.priority] ?? s.priority)}</span><br/><strong style="color:${C.ink};">${escapeHtml(s.title)}</strong><br/><span style="color:${C.body};">${escapeHtml(s.why.slice(0, 220))}</span></li>`
     )
     .join("");
   await email(
     title,
-    `<h1 style="margin:0 0 8px;color:#fff;font-size:20px;font-weight:700;">${escapeHtml(verdictLabel(claimed.verdict))}${claimed.healthScore !== null ? ` · health ${claimed.healthScore}/100` : ""}</h1>
-     <p style="margin:0 0 16px;color:#cfd2dc;font-size:14px;line-height:1.6;">${escapeHtml(headline)}</p>
-     ${result?.summary ? `<p style="margin:0 0 16px;color:#9999a8;font-size:13px;line-height:1.6;">${escapeHtml(result.summary)}</p>` : ""}
-     ${list ? `<p style="margin:0 0 8px;color:#fff;font-size:13px;font-weight:700;">Next steps</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>` : ""}
+    `<h1 style="margin:0 0 8px;color:${C.ink};font-size:20px;font-weight:700;">${escapeHtml(verdictLabel(claimed.verdict))}${claimed.healthScore !== null ? ` · health ${claimed.healthScore}/100` : ""}</h1>
+     <p style="margin:0 0 16px;color:${C.body};font-size:14px;line-height:1.6;">${escapeHtml(headline)}</p>
+     ${result?.summary ? `<p style="margin:0 0 16px;color:${C.body};font-size:13px;line-height:1.6;">${escapeHtml(result.summary)}</p>` : ""}
+     ${list ? `<p style="margin:0 0 8px;color:${C.ink};font-size:13px;font-weight:700;">Next steps</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>` : ""}
      ${button("/dashboard/ads#next-steps", "Open the Ads Command Center")}`,
     "ads_analysis_ready",
     claimed.id
@@ -95,7 +95,7 @@ export async function notifyNeedsInput(row: Analysis): Promise<void> {
   if (!settings.notifyEmail) return;
   await email(
     title,
-    `<h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;">${escapeHtml(title)}</h1><p style="margin:0;color:#cfd2dc;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(waiting.prompt.slice(0, 1500))}</p>${button(href, "Answer in the Ads Command Center")}`,
+    `<h1 style="margin:0 0 8px;color:${C.ink};font-size:18px;font-weight:700;">${escapeHtml(title)}</h1><p style="margin:0;color:${C.body};font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(waiting.prompt.slice(0, 1500))}</p>${button(href, "Answer in the Ads Command Center")}`,
     "ads_needs_input",
     row.id
   );
@@ -131,12 +131,12 @@ export async function notifyCheckBacks(ownerId: string, accountId: string): Prom
     const list = claimed
       .map((s) => {
         const sc = s.successCheck as { targetDisplay?: string } | null;
-        return `<li style="margin:0 0 10px;"><strong style="color:#fff;">${escapeHtml(s.title)}</strong>${sc?.targetDisplay ? `<br/><span style="color:#9999a8;">Look for: ${escapeHtml(sc.targetDisplay)}</span>` : ""}</li>`;
+        return `<li style="margin:0 0 10px;"><strong style="color:${C.ink};">${escapeHtml(s.title)}</strong>${sc?.targetDisplay ? `<br/><span style="color:${C.body};">Look for: ${escapeHtml(sc.targetDisplay)}</span>` : ""}</li>`;
       })
       .join("");
     await email(
       title,
-      `<h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;">Check-back time</h1><p style="margin:0 0 12px;color:#cfd2dc;font-size:14px;">Manus asked you to look at these again today:</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>${button("/dashboard/ads#next-steps", "Open the next steps")}`,
+      `<h1 style="margin:0 0 8px;color:${C.ink};font-size:18px;font-weight:700;">Check-back time</h1><p style="margin:0 0 12px;color:${C.body};font-size:14px;">Manus asked you to look at these again today:</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>${button("/dashboard/ads#next-steps", "Open the next steps")}`,
       "ads_check_back",
       claimed[0].id
     );
@@ -167,18 +167,18 @@ export async function notifyResearchReady(row: Analysis): Promise<void> {
   if (!settings.notifyEmail) return;
   const patterns = (r.marketPatterns ?? [])
     .slice(0, 3)
-    .map((p) => `<li style="margin:0 0 8px;"><strong style="color:#fff;">${escapeHtml(p.title ?? "")}</strong><br/><span style="color:#9999a8;">${escapeHtml((p.detail ?? "").slice(0, 220))}</span></li>`)
+    .map((p) => `<li style="margin:0 0 8px;"><strong style="color:${C.ink};">${escapeHtml(p.title ?? "")}</strong><br/><span style="color:${C.body};">${escapeHtml((p.detail ?? "").slice(0, 220))}</span></li>`)
     .join("");
   const list = briefs
     .slice(0, 8)
-    .map((b) => `<li style="margin:0 0 6px;color:#cfd2dc;">${escapeHtml(b.title ?? "")} <span style="color:#9999a8;">· ${escapeHtml(String(b.count ?? ""))} ${b.format === "video" ? "videos" : "photo ads"}</span></li>`)
+    .map((b) => `<li style="margin:0 0 6px;color:${C.body};">${escapeHtml(b.title ?? "")} <span style="color:${C.body};">· ${escapeHtml(String(b.count ?? ""))} ${b.format === "video" ? "videos" : "photo ads"}</span></li>`)
     .join("");
   await email(
     title,
-    `<h1 style="margin:0 0 8px;color:#fff;font-size:20px;font-weight:700;">${escapeHtml(headline || "Ad Library research is ready")}</h1>
-     ${r.summary ? `<p style="margin:0 0 16px;color:#9999a8;font-size:13px;line-height:1.6;">${escapeHtml(r.summary)}</p>` : ""}
-     ${patterns ? `<p style="margin:0 0 8px;color:#fff;font-size:13px;font-weight:700;">What's working in the market</p><ul style="margin:0 0 16px;padding-left:18px;font-size:13px;line-height:1.5;">${patterns}</ul>` : ""}
-     ${list ? `<p style="margin:0 0 8px;color:#fff;font-size:13px;font-weight:700;">Creatives to make next</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>` : ""}
+    `<h1 style="margin:0 0 8px;color:${C.ink};font-size:20px;font-weight:700;">${escapeHtml(headline || "Ad Library research is ready")}</h1>
+     ${r.summary ? `<p style="margin:0 0 16px;color:${C.body};font-size:13px;line-height:1.6;">${escapeHtml(r.summary)}</p>` : ""}
+     ${patterns ? `<p style="margin:0 0 8px;color:${C.ink};font-size:13px;font-weight:700;">What's working in the market</p><ul style="margin:0 0 16px;padding-left:18px;font-size:13px;line-height:1.5;">${patterns}</ul>` : ""}
+     ${list ? `<p style="margin:0 0 8px;color:${C.ink};font-size:13px;font-weight:700;">Creatives to make next</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>` : ""}
      ${button("/dashboard/ads#research", "Open the research")}`,
     "ads_research_ready",
     claimed.id

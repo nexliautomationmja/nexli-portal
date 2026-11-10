@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
-import { sendEmailWithLog, emailWrapper } from "@/lib/email";
+import { sendEmailWithLog, emailWrapper, emailButton, emailEmoji, EMAIL_COLORS as C } from "@/lib/email";
 import { getOwnerBranding } from "@/lib/branding";
 
 export type NotificationType =
@@ -101,21 +101,19 @@ async function sendNotificationEmail(params: {
 
   const html = emailWrapper(`
     <div style="text-align:center;margin-bottom:20px;">
-      <span style="font-size:32px;">${emoji}</span>
+      <span style="font-size:32px;">${emailEmoji(emoji)}</span>
     </div>
-    <h1 style="margin:0 0 8px;color:#fff;font-size:18px;font-weight:700;text-align:center;">
+    <h1 style="margin:0 0 8px;color:${C.ink};font-size:18px;font-weight:700;text-align:center;">
       ${title}
     </h1>
-    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;text-align:center;line-height:1.5;">
+    <p style="margin:0 0 24px;color:${C.body};font-size:14px;text-align:center;line-height:1.5;">
       ${message}
     </p>
     <div style="text-align:center;">
-      <a href="${PORTAL_URL}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-size:13px;font-weight:700;">
-        Open Dashboard
-      </a>
+      ${emailButton(`${PORTAL_URL}/dashboard`, "Open Dashboard", branding, "sm")}
     </div>
-    <p style="margin:20px 0 0;color:#4a4a5a;font-size:10px;text-align:center;">
-      <span style="color:${color};">${type.replace(/_/g, " ")}</span>
+    <p style="margin:20px 0 0;color:${C.fine};font-size:10px;text-align:center;">
+      <span class="gb-mono" style="color:${color};">${type.replace(/_/g, " ")}</span>
     </p>
   `, branding);
 

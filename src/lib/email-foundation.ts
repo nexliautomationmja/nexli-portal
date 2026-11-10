@@ -4,13 +4,12 @@
  * per-firm branding.
  */
 
-import { emailWrapper } from "@/lib/email";
+import { emailWrapper, emailButton, emailEmoji, EMAIL_COLORS as C } from "@/lib/email";
 import { SURVEY_QUESTIONS, SURVEY_QUESTION_COUNT, SURVEY_ESTIMATED_SECONDS } from "@/lib/survey-questions";
 import { getPortalUrl } from "@/lib/foundation-config";
 
-const buttonStyle = `display:inline-block;background-color:#2563EB;background:linear-gradient(135deg,#2563EB,#06B6D4);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:14px;font-weight:700;`;
-
-const secondaryButtonStyle = `display:inline-block;background-color:#1e1e2a;color:#ffffff;text-decoration:none;padding:12px 28px;border:1px solid #2a2a3a;border-radius:12px;font-size:13px;font-weight:700;`;
+/** A quieter button (gray tile), for second actions. Neutral, so it needs no Gmail layers. */
+const secondaryButtonStyle = `display:inline-block;background-color:${C.tile};color:${C.ink};text-decoration:none;padding:12px 28px;border:1px solid ${C.tileBorder};border-radius:12px;font-size:13px;font-weight:700;`;
 
 function escapeHtml(s: string): string {
   return s
@@ -65,9 +64,9 @@ export function buildWelcomeEmail(params: {
 
   const agreementBlock = agreementUrl
     ? `
-    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
-      <p style="margin:0 0 8px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Service Agreement</p>
-      <p style="margin:0 0 14px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+    <div style="margin:20px 0;padding:16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;">
+      <p style="margin:0 0 8px;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Service Agreement</p>
+      <p style="margin:0 0 14px;color:${C.body};font-size:13px;line-height:1.6;">
         We&rsquo;ve also sent your Firm Foundation Service Agreement for e-signature. It takes about two minutes and we can&rsquo;t begin your build until it&rsquo;s signed.
       </p>
       <div style="text-align:center;">
@@ -77,54 +76,54 @@ export function buildWelcomeEmail(params: {
     : "";
 
   const html = emailWrapper(`
-    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Welcome to ${product}</h1>
-    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
-      ${greeting}, your subscription for <strong style="color:#fff;">${firm}</strong> is active. Let&rsquo;s get your portal set up.
+    <h1 style="margin:0 0 8px;color:${C.ink};font-size:22px;font-weight:800;">Welcome to ${product}</h1>
+    <p style="margin:0 0 24px;color:${C.body};font-size:14px;">
+      ${greeting}, your subscription for <strong style="color:${C.ink};">${firm}</strong> is active. Let&rsquo;s get your portal set up.
     </p>
-    <div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
-      <p style="margin:0 0 12px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">What happens next</p>
-      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; <strong style="color:#fff;">Set your password</strong> using the button below.</p>
-      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; <strong style="color:#fff;">Sign your service agreement</strong> (sent in a separate email).</p>
-      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; <strong style="color:#fff;">Upload your logo and content</strong> in the dashboard so we can start your build.</p>
-      <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; <strong style="color:#fff;">Go live within ${liveInDays} days</strong> of us receiving your assets.</p>
+    <div style="margin:20px 0;padding:16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;">
+      <p style="margin:0 0 12px;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">What happens next</p>
+      <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; <strong style="color:${C.ink};">Set your password</strong> using the button below.</p>
+      <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; <strong style="color:${C.ink};">Sign your service agreement</strong> (sent in a separate email).</p>
+      <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; <strong style="color:${C.ink};">Upload your logo and content</strong> in the dashboard so we can start your build.</p>
+      <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; <strong style="color:${C.ink};">Go live within ${liveInDays} days</strong> of us receiving your assets.</p>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${setupUrl}" style="${buttonStyle}">Set Your Password</a>
+      ${emailButton(setupUrl, "Set Your Password")}
     </div>
     ${agreementBlock}
     <div style="margin:24px 0 20px;">
-      <p style="margin:0 0 6px;color:#fff;font-size:15px;font-weight:800;">Your two logins</p>
-      <p style="margin:0 0 14px;color:#9999a8;font-size:13px;line-height:1.6;">
+      <p style="margin:0 0 6px;color:${C.ink};font-size:15px;font-weight:800;">Your two logins</p>
+      <p style="margin:0 0 14px;color:${C.body};font-size:13px;line-height:1.6;">
         You&rsquo;ll use two separate sign-ins with Nexli. Keep this email handy.
       </p>
-      <div style="margin:0 0 12px;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
-        <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">1 &middot; Your firm dashboard</p>
-        <p style="margin:0 0 10px;color:#b3b3c0;font-size:13px;line-height:1.6;">
+      <div style="margin:0 0 12px;padding:16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;">
+        <p style="margin:0 0 6px;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">1 &middot; Your firm dashboard</p>
+        <p style="margin:0 0 10px;color:${C.body};font-size:13px;line-height:1.6;">
           Set your password with the button above, then sign in any time at
-          <a href="${dashboardUrl}" class="nxl-link" style="color:#2563EB;text-decoration:none;">${escapeHtml(dashboardUrl)}</a>.
-          This is where you run <strong style="color:#fff;">${firm}</strong>:
+          <a href="${dashboardUrl}" class="nxl-link gb-mono" style="color:${C.link};text-decoration:underline;">${escapeHtml(dashboardUrl)}</a>.
+          This is where you run <strong style="color:${C.ink};">${firm}</strong>:
         </p>
-        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Your branded client portal</p>
-        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Engagement letters and e-signatures</p>
-        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Invoices and payments</p>
-        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Document collection</p>
+        <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; Your branded client portal</p>
+        <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; Engagement letters and e-signatures</p>
+        <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; Invoices and payments</p>
+        <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; Document collection</p>
       </div>
-      <div style="padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
-        <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">2 &middot; Your Nexli client portal</p>
-        <p style="margin:0 0 10px;color:#b3b3c0;font-size:13px;line-height:1.6;">
-          Go to <a href="${portalUrl}" class="nxl-link" style="color:#2563EB;text-decoration:none;">${escapeHtml(portalUrl)}</a>,
+      <div style="padding:16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;">
+        <p style="margin:0 0 6px;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">2 &middot; Your Nexli client portal</p>
+        <p style="margin:0 0 10px;color:${C.body};font-size:13px;line-height:1.6;">
+          Go to <a href="${portalUrl}" class="nxl-link gb-mono" style="color:${C.link};text-decoration:underline;">${escapeHtml(portalUrl)}</a>,
           enter this email address and we&rsquo;ll send you a one-click sign-in link. No password needed. This is where you are <em>our</em> client:
         </p>
-        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Your ${product} project status and website preview</p>
-        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Your service agreement</p>
-        <p style="margin:4px 0;color:#ccccda;font-size:13px;">&#x2022; Messages and files from the Nexli team</p>
+        <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; Your ${product} project status and website preview</p>
+        <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; Your service agreement</p>
+        <p style="margin:4px 0;color:${C.body};font-size:13px;">&#x2022; Messages and files from the Nexli team</p>
       </div>
     </div>
     <div style="text-align:center;">
-      <p style="margin:0;color:#4a4a5a;font-size:11px;">
-        ${expiryNote} Once set, sign in any time at <a href="${dashboardUrl}" class="nxl-link" style="color:#2563EB;text-decoration:none;">${escapeHtml(dashboardUrl)}</a>
+      <p style="margin:0;color:${C.fine};font-size:11px;">
+        ${expiryNote} Once set, sign in any time at <a href="${dashboardUrl}" class="nxl-link gb-mono" style="color:${C.link};text-decoration:underline;">${escapeHtml(dashboardUrl)}</a>
       </p>
-      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
+      <p style="margin:8px 0 0;color:${C.fine};font-size:10px;word-break:break-all;">
         ${setupUrl}
       </p>
     </div>
@@ -153,18 +152,18 @@ export function buildAgreementReminderEmail(params: {
   });
 
   const html = emailWrapper(`
-    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Your Service Agreement Is Waiting</h1>
-    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;">
-      ${greeting}, the Firm Foundation Service Agreement for <strong style="color:#fff;">${escapeHtml(firmName)}</strong> still needs your signature. We can&rsquo;t begin your website and portal build until it&rsquo;s signed.
+    <h1 style="margin:0 0 8px;color:${C.ink};font-size:22px;font-weight:800;">Your Service Agreement Is Waiting</h1>
+    <p style="margin:0 0 24px;color:${C.body};font-size:14px;">
+      ${greeting}, the Firm Foundation Service Agreement for <strong style="color:${C.ink};">${escapeHtml(firmName)}</strong> still needs your signature. We can&rsquo;t begin your website and portal build until it&rsquo;s signed.
     </p>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${engageUrl}" style="${buttonStyle}">Review &amp; Sign</a>
+      ${emailButton(engageUrl, "Review &amp; Sign")}
     </div>
     <div style="text-align:center;">
-      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+      <p style="margin:0;color:${C.fine};font-size:11px;">
         This link expires ${expDate} &bull; No account required
       </p>
-      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
+      <p style="margin:8px 0 0;color:${C.fine};font-size:10px;word-break:break-all;">
         ${engageUrl}
       </p>
     </div>
@@ -203,37 +202,37 @@ export function buildWeeklySurveyEmail(params: {
   const q1 = SURVEY_QUESTIONS[0];
   const scoreButton = (n: number) =>
     `<td align="center" style="padding:0 4px;">
-      <a href="${surveyUrl}?overall=${n}" style="display:block;width:44px;height:44px;line-height:44px;border-radius:12px;background-color:#1e1e2a;border:1px solid #2a2a3a;color:#ffffff;font-size:18px;font-weight:800;text-decoration:none;text-align:center;">${n}</a>
+      <a href="${surveyUrl}?overall=${n}" style="display:block;width:44px;height:44px;line-height:44px;border-radius:12px;background-color:${C.tile};border:1px solid ${C.tileBorder};color:${C.ink};font-size:18px;font-weight:800;text-decoration:none;text-align:center;">${n}</a>
     </td>`;
 
   const html = emailWrapper(`
-    <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Week of ${formatWeekOf(weekStart)}</p>
-    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Quick pulse check</h1>
-    <p style="margin:0 0 24px;color:#9999a8;font-size:14px;line-height:1.6;">
-      ${greeting}, Marcel here. Every two weeks I ask a few quick questions so we catch anything early. Start with this one: <strong style="color:#fff;">${escapeHtml(q1.prompt)}</strong>
+    <p style="margin:0 0 6px;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Week of ${formatWeekOf(weekStart)}</p>
+    <h1 style="margin:0 0 8px;color:${C.ink};font-size:22px;font-weight:800;">Quick pulse check</h1>
+    <p style="margin:0 0 24px;color:${C.body};font-size:14px;line-height:1.6;">
+      ${greeting}, Marcel here. Every two weeks I ask a few quick questions so we catch anything early. Start with this one: <strong style="color:${C.ink};">${escapeHtml(q1.prompt)}</strong>
     </p>
-    <div style="margin:20px 0;padding:20px 16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
+    <div style="margin:20px 0;padding:20px 16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
         <tr>${[1, 2, 3, 4, 5].map(scoreButton).join("")}</tr>
       </table>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:10px;">
         <tr>
-          <td style="color:#808090;font-size:11px;text-align:left;">${escapeHtml(q1.lowLabel ?? "")}</td>
-          <td style="color:#808090;font-size:11px;text-align:right;">${escapeHtml(q1.highLabel ?? "")}</td>
+          <td style="color:${C.label};font-size:11px;text-align:left;">${escapeHtml(q1.lowLabel ?? "")}</td>
+          <td style="color:${C.label};font-size:11px;text-align:right;">${escapeHtml(q1.highLabel ?? "")}</td>
         </tr>
       </table>
     </div>
-    <p style="margin:0 0 20px;color:#9999a8;font-size:13px;line-height:1.6;text-align:center;">
+    <p style="margin:0 0 20px;color:${C.body};font-size:13px;line-height:1.6;text-align:center;">
       Tap a number and the rest takes about ${Math.round(SURVEY_ESTIMATED_SECONDS / 30) * 30} seconds &mdash; ${SURVEY_QUESTION_COUNT} short questions, including how likely you&rsquo;d be to recommend us. I read every one personally.
     </p>
     <div style="text-align:center;margin:20px 0 28px;">
       <a href="${surveyUrl}" style="${secondaryButtonStyle}">Open the full survey</a>
     </div>
     <div style="text-align:center;">
-      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+      <p style="margin:0;color:${C.fine};font-size:11px;">
         Your answers go straight to Marcel. Link is private to you.
       </p>
-      <p style="margin:8px 0 0;color:#333340;font-size:10px;word-break:break-all;">
+      <p style="margin:8px 0 0;color:${C.fine};font-size:10px;word-break:break-all;">
         ${surveyUrl}
       </p>
     </div>
@@ -272,9 +271,9 @@ export function buildWeeklyUpdateEmail(params: {
   const title = headline?.trim() ? escapeHtml(headline.trim()) : "This week on your account";
 
   const voiceBlock = voice
-    ? `<div style="margin:0 0 16px;padding:14px 16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
-        <p style="margin:0 0 6px;color:#06B6D4;font-size:12px;font-weight:700;">&#127897; Voice update</p>
-        <p style="margin:0;color:#ccccda;font-size:14px;line-height:1.7;">${
+    ? `<div style="margin:0 0 16px;padding:14px 16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;">
+        <p class="gb-mono" style="margin:0 0 6px;color:#06B6D4;font-size:12px;font-weight:700;">${emailEmoji("&#127897;")} Voice update</p>
+        <p style="margin:0;color:${C.body};font-size:14px;line-height:1.7;">${
           voice.transcriptExcerpt
             ? `&ldquo;${escapeHtml(voice.transcriptExcerpt)}&rdquo;`
             : "Tap below to listen to this week&rsquo;s update."
@@ -290,38 +289,38 @@ export function buildWeeklyUpdateEmail(params: {
     .filter(Boolean)
     .map(
       (p) =>
-        `<p style="margin:0 0 12px;color:#ccccda;font-size:14px;line-height:1.7;">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`
+        `<p style="margin:0 0 12px;color:${C.body};font-size:14px;line-height:1.7;">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`
     )
     .join("");
 
   const adSpendBlock =
     adSpendCents != null && adSpendCents > 0
-      ? `<div style="margin:20px 0;padding:14px 16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;">
-          <p style="margin:0;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Ad budget deployed this week</p>
-          <p style="margin:6px 0 0;color:#fff;font-size:20px;font-weight:800;">$${Math.round(adSpendCents / 100).toLocaleString("en-US")}</p>
+      ? `<div style="margin:20px 0;padding:14px 16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;">
+          <p style="margin:0;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Ad budget deployed this week</p>
+          <p style="margin:6px 0 0;color:${C.ink};font-size:20px;font-weight:800;">$${Math.round(adSpendCents / 100).toLocaleString("en-US")}</p>
         </div>`
       : "";
 
   const surveyBlock = surveyUrl
-    ? `<div style="margin:20px 0;padding:16px;background-color:#131319;border:1px solid #1e1e2a;border-radius:12px;text-align:center;">
-        <p style="margin:0 0 10px;color:#b3b3c0;font-size:13px;line-height:1.6;">How are we doing? It takes less than a minute.</p>
+    ? `<div style="margin:20px 0;padding:16px;background-color:${C.box};border:1px solid ${C.border};border-radius:12px;text-align:center;">
+        <p style="margin:0 0 10px;color:${C.body};font-size:13px;line-height:1.6;">How are we doing? It takes less than a minute.</p>
         <a href="${surveyUrl}" style="${secondaryButtonStyle}">Take this week&rsquo;s 60-second pulse check</a>
       </div>`
     : "";
 
   const html = emailWrapper(`
-    <p style="margin:0 0 6px;color:#808090;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">${weekLabel} &middot; From your Nexli team</p>
-    <h1 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">${title}</h1>
-    <p style="margin:0 0 20px;color:#9999a8;font-size:14px;">${greeting}, here&rsquo;s what we worked on for you this week.</p>
+    <p style="margin:0 0 6px;color:${C.label};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">${weekLabel} &middot; From your Nexli team</p>
+    <h1 style="margin:0 0 8px;color:${C.ink};font-size:22px;font-weight:800;">${title}</h1>
+    <p style="margin:0 0 20px;color:${C.body};font-size:14px;">${greeting}, here&rsquo;s what we worked on for you this week.</p>
     ${voiceBlock}
     <div style="margin:0 0 8px;">${paragraphs}</div>
     ${adSpendBlock}
     <div style="text-align:center;margin:28px 0;">
-      <a href="${dashboardUrl}" style="${buttonStyle}">${escapeHtml(ctaLabel)}</a>
+      ${emailButton(dashboardUrl, escapeHtml(ctaLabel))}
     </div>
     ${surveyBlock}
     <div style="text-align:center;">
-      <p style="margin:0;color:#4a4a5a;font-size:11px;">
+      <p style="margin:0;color:${C.fine};font-size:11px;">
         Questions? Just reply to this email &mdash; it goes straight to Marcel.
       </p>
     </div>
