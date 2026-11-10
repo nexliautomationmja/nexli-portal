@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Notice, Segmented, Skeleton } from "@/components/rainmaker";
 import { FacebookLogo, InstagramLogo } from "@/components/launch-pad/icons";
 import type { TopCreative, TopCreativesData } from "@/app/api/dashboard/ads-overview/top-creatives/route";
 
@@ -63,10 +64,10 @@ function StatusPill({ status }: { status: string | null }) {
     s === "ACTIVE"
       ? ["Active", "bg-emerald-500/15 text-emerald-500 border-emerald-500/30"]
       : s.includes("PAUSED")
-        ? ["Paused", "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"]
+        ? ["Paused", "bg-amber-500/15 text-amber-300 border-amber-500/30"]
         : [
             s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " ") : "Unknown",
-            "bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--card-border)]",
+            "bg-white/5 text-neutral-300 border-white/10",
           ];
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>
@@ -410,7 +411,7 @@ function CreativeCard({
   const pageName = c.pageName || "Nexli";
 
   return (
-    <article className="glass-card overflow-hidden flex flex-col min-w-0 !p-0">
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
       {/* Rank · ad name · status */}
       <div className="flex items-center gap-2 px-3 pt-3">
         <RankBadge rank={c.rank} />
@@ -611,56 +612,37 @@ export function TopCreatives({ range }: { range: Range }) {
 
   return (
     <section className="pt-2" aria-labelledby="top-creatives-title">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <h3 id="top-creatives-title" className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 id="top-creatives-title" className="text-sm font-bold text-white">
           Top 4 creatives by spend
         </h3>
-        <div className="inline-flex rounded-xl border border-[var(--glass-border)] overflow-hidden" role="group" aria-label="Preview platform">
-          {PLATFORMS.map(({ value, label, Icon }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setPlatform(value)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold transition-all duration-200 ${
-                platform === value ? "bg-blue-500/20 text-blue-400" : "text-[var(--text-muted)] hover:bg-[var(--input-bg)]"
-              }`}
-              aria-pressed={platform === value}
-            >
-              <Icon size={14} />
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          size="sm"
+          value={platform}
+          onChange={setPlatform}
+          ariaLabel="Preview platform"
+          options={PLATFORMS.map(({ value, label, Icon }) => ({ value, label, icon: <Icon size={14} /> }))}
+        />
       </div>
 
       {loading && !data ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-3 animate-pulse" aria-busy="true" aria-label="Loading top creatives">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4" aria-busy="true" aria-label="Loading top creatives">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="glass-card p-4 space-y-3">
-              <div className="h-7 w-12 rounded-full" style={{ background: "var(--input-bg)" }} />
-              <div className="h-[360px] w-full rounded-xl" style={{ background: "var(--input-bg)" }} />
-              <div className="h-4 w-3/4 rounded" style={{ background: "var(--input-bg)" }} />
-            </div>
+            <Skeleton key={i} className="h-[460px]" />
           ))}
         </div>
       ) : failed && !data ? (
-        <div className="rounded-xl border px-4 py-3 text-xs border-rose-500/30 bg-rose-500/10 text-rose-500">
-          Couldn’t load top creatives: {failed}
-        </div>
+        <Notice tone="error">Couldn’t load top creatives: {failed}</Notice>
       ) : data?.error ? (
-        <div className="rounded-xl border px-4 py-3 text-xs border-rose-500/30 bg-rose-500/10 text-rose-500">
-          <b>Meta API error:</b> {data.error}
-        </div>
+        <Notice tone="error" title="Meta API error">
+          {data.error}
+        </Notice>
       ) : creatives.length === 0 ? (
-        <div className="glass-card p-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-          No ad spend in this period
-        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-neutral-400">No ad spend in this period</div>
       ) : (
         <div className={`space-y-3 transition-opacity ${loading ? "opacity-60" : ""}`}>
           {data?.leadsError && (
-            <div className="rounded-xl border px-4 py-3 text-xs border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              {data.leadsError}
-            </div>
+            <Notice tone="warn">{data.leadsError}</Notice>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-3 items-start">
             {creatives.map((c) => (

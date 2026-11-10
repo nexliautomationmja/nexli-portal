@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FacebookLogo, InstagramLogo } from "@/components/launch-pad/icons";
 import { TopCreatives } from "@/components/dashboard/top-creatives";
+import { ChevronDown } from "lucide-react";
+import { Button, KpiGrid, KpiTile, NUM_FONT, Notice, SectionHead, Segmented, Skeleton, Surface } from "@/components/rainmaker";
 import type { AdsOverviewData, PlatformRow } from "@/app/api/dashboard/ads-overview/route";
 
 /**
@@ -52,8 +54,8 @@ function PlatformIcon({ k, size = 22 }: { k: PlatformRow["key"]; size?: number }
   if (k === "instagram") return <InstagramLogo size={size} />;
   return (
     <span
-      className="rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-      style={{ width: size, height: size, background: "var(--input-bg)", color: "var(--text-muted)", border: "1px solid var(--card-border)" }}
+      className="flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[10px] font-bold text-neutral-300"
+      style={{ width: size, height: size }}
       aria-hidden="true"
     >
       {k === "total" ? "Σ" : "M"}
@@ -81,25 +83,27 @@ function HeadlineTiles({ data }: { data: AdsOverviewData }) {
   const split = data.platforms.filter((p) => p.key === "facebook" || p.key === "instagram");
   const lpByClicks = data.totals.lpBasis === "link_clicks";
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <KpiGrid>
       {HEADLINES.map((h) => (
-        <div key={h.label} className="glass-card p-4 sm:p-5 flex flex-col">
-          <p className="stat-label">{h.label}</p>
-          <p className="stat-value mt-1 tabular-nums">{h.get(data.totals, data.currency)}</p>
-          <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
-            {h.label === "Landing page conversion" && lpByClicks ? "Leads ÷ link clicks (no page views reported)" : h.help}
-          </p>
-          <div className="mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t" style={{ borderColor: "var(--card-border)" }}>
-            {split.map((p) => (
-              <span key={p.key} className="inline-flex items-center gap-1.5 text-xs font-semibold tabular-nums" style={{ color: "var(--text-main)" }}>
-                <PlatformIcon k={p.key} size={14} />
-                {h.get(p, data.currency)}
-              </span>
-            ))}
-          </div>
-        </div>
+        <KpiTile
+          key={h.label}
+          label={h.label}
+          value={h.get(data.totals, data.currency)}
+          sub={h.label === "Landing page conversion" && lpByClicks ? "Leads ÷ link clicks (no page views reported)" : h.help}
+          footer={
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t border-white/10 pt-3">
+              {split.map((p) => (
+                <span key={p.key} className="inline-flex items-center gap-1.5 text-xs font-semibold text-white" style={NUM_FONT}>
+                  <PlatformIcon k={p.key} size={14} />
+                  <span className="sr-only">{p.label}: </span>
+                  {h.get(p, data.currency)}
+                </span>
+              ))}
+            </div>
+          }
+        />
       ))}
-    </div>
+    </KpiGrid>
   );
 }
 
@@ -124,49 +128,45 @@ const DETAIL_ROWS: { label: string; get: (r: PlatformRow, cur: string | null) =>
 function DetailTable({ data }: { data: AdsOverviewData }) {
   const cols = [...data.platforms, data.totals];
   return (
-    <div className="glass-card p-0 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-sm tabular-nums">
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
-              <th className="text-left px-4 sm:px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.05em]" style={{ color: "var(--text-muted)" }}>
-                Metric
+    <Surface elevated className="cs-scroll overflow-x-auto">
+      <table className="w-full min-w-[520px] text-sm" style={NUM_FONT}>
+        <caption className="sr-only">Meta ads, every metric by platform</caption>
+        <thead>
+          <tr>
+            <th scope="col" className="border-b border-white/10 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-neutral-400 sm:px-5">
+              Metric
+            </th>
+            {cols.map((c) => (
+              <th
+                key={c.key}
+                scope="col"
+                className={`border-b border-white/10 px-4 py-3 text-right text-[10px] font-bold uppercase tracking-widest text-neutral-400 sm:px-5 ${c.key === "total" ? "bg-white/[0.04]" : ""}`}
+              >
+                <span className="inline-flex items-center justify-end gap-1.5">
+                  <PlatformIcon k={c.key} size={16} />
+                  {c.label}
+                </span>
               </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {DETAIL_ROWS.map((r) => (
+            <tr key={r.label} className="transition-colors hover:bg-white/[0.02]">
+              <td className={`border-t border-white/5 px-4 py-2.5 sm:px-5 ${r.strong ? "font-bold text-white" : "text-neutral-400"}`}>{r.label}</td>
               {cols.map((c) => (
-                <th
+                <td
                   key={c.key}
-                  className="text-right px-4 sm:px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.05em]"
-                  style={{ color: "var(--text-muted)", background: c.key === "total" ? "var(--input-bg)" : undefined }}
+                  className={`border-t border-white/5 px-4 py-2.5 text-right sm:px-5 ${r.strong || c.key === "total" ? "font-bold text-white" : "font-medium text-neutral-200"} ${c.key === "total" ? "bg-white/[0.04]" : ""}`}
                 >
-                  <span className="inline-flex items-center gap-1.5 justify-end">
-                    <PlatformIcon k={c.key} size={16} />
-                    {c.label}
-                  </span>
-                </th>
+                  {r.get(c, data.currency)}
+                </td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {DETAIL_ROWS.map((r) => (
-              <tr key={r.label} style={{ borderTop: "1px solid var(--card-border)" }}>
-                <td className={`px-4 sm:px-5 py-2.5 ${r.strong ? "font-bold" : ""}`} style={{ color: r.strong ? "var(--text-main)" : "var(--text-muted)" }}>
-                  {r.label}
-                </td>
-                {cols.map((c) => (
-                  <td
-                    key={c.key}
-                    className={`px-4 sm:px-5 py-2.5 text-right ${r.strong || c.key === "total" ? "font-bold" : "font-medium"}`}
-                    style={{ color: "var(--text-main)", background: c.key === "total" ? "var(--input-bg)" : undefined }}
-                  >
-                    {r.get(c, data.currency)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          ))}
+        </tbody>
+      </table>
+    </Surface>
   );
 }
 
@@ -176,123 +176,76 @@ function BusinessTiles({ data }: { data: AdsOverviewData }) {
   const b = data.business;
   const coverage = b.setupCoverage;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div className="glass-card p-4">
-        <p className="stat-label">New clients</p>
-        <p className="stat-value mt-1">{b.newClients}</p>
-        <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
-          DRS start date in period
-        </p>
-      </div>
-      <div className="glass-card p-4">
-        <p className="stat-label">Close rate</p>
-        <p className="stat-value mt-1">{pct(b.closeRate, true)}</p>
-        <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
-          {b.newClients} of {b.bookedCalls} booked calls
-        </p>
-      </div>
-      <div className="glass-card p-4">
-        <p className="stat-label">CAC</p>
-        <p className="stat-value mt-1">{money(b.cacCents, data.currency)}</p>
-        <p
-          className={`text-xs mt-1.5 font-semibold ${
-            coverage === null ? "" : coverage >= 1 ? "text-emerald-500" : "text-rose-500"
-          }`}
-          style={coverage === null ? { color: "var(--text-muted)" } : undefined}
-        >
-          {coverage === null ? "Setup covers it —" : `Setup covers it ${multiple(coverage)}`}
-        </p>
-      </div>
-      <div className="glass-card p-4">
-        <p className="stat-label">Cash ROAS</p>
-        <p className="stat-value mt-1">{multiple(b.cashRoas)}</p>
-        <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
-          {money(b.cashCollectedCents, null)} collected from new clients
-        </p>
-      </div>
-    </div>
+    <KpiGrid>
+      <KpiTile label="New clients" value={b.newClients} sub="DRS start date in period" />
+      <KpiTile label="Close rate" value={pct(b.closeRate, true)} sub={`${b.newClients} of ${b.bookedCalls} booked calls`} />
+      <KpiTile
+        label="CAC"
+        value={money(b.cacCents, data.currency)}
+        sub={
+          coverage === null ? (
+            "Setup covers it —"
+          ) : (
+            <span className={`font-semibold ${coverage >= 1 ? "text-emerald-300" : "text-rose-300"}`}>Setup covers it {multiple(coverage)}</span>
+          )
+        }
+      />
+      <KpiTile label="Cash ROAS" value={multiple(b.cashRoas)} sub={`${money(b.cashCollectedCents, null)} collected from new clients`} />
+    </KpiGrid>
   );
 }
 
 function ConnectCard() {
   const steps = [
     <>
-      In Meta <b>Business Settings → Users → System users</b>, add one (Admin or Employee), use{" "}
-      <b>Assign assets</b> to give it your ad account with “View performance”, then{" "}
-      <b>Generate token</b> with the <code>ads_read</code> permission (no expiry).
+      In Meta <b className="text-white">Business Settings → Users → System users</b>, add one (Admin or Employee), use <b className="text-white">Assign assets</b> to give it your ad
+      account with “View performance”, then <b className="text-white">Generate token</b> with the <code className="rounded bg-white/10 px-1">ads_read</code> permission (no expiry).
     </>,
     <>
-      Copy your <b>Ad account ID</b> from Ads Manager — the number after <code>act_</code>.
+      Copy your <b className="text-white">Ad account ID</b> from Ads Manager: the number after <code className="rounded bg-white/10 px-1">act_</code>.
     </>,
     <>
-      In <b>Vercel → nexli-portal → Settings → Environment Variables</b> (Production), add{" "}
-      <code>META_ADS_ACCESS_TOKEN</code> and <code>META_AD_ACCOUNT_ID</code>, then redeploy.
+      In <b className="text-white">Vercel → nexli-portal → Settings → Environment Variables</b> (Production), add <code className="rounded bg-white/10 px-1">META_ADS_ACCESS_TOKEN</code> and{" "}
+      <code className="rounded bg-white/10 px-1">META_AD_ACCOUNT_ID</code>, then redeploy.
     </>,
     <>
-      In each ad’s <b>URL parameters</b>, paste{" "}
-      <code className="break-all">
+      In each ad’s <b className="text-white">URL parameters</b>, paste{" "}
+      <code className="break-all rounded bg-white/10 px-1">
         utm_source={"{{site_source_name}}"}&amp;utm_medium=paid_social&amp;utm_campaign=
         {"{{campaign.name}}"}&amp;utm_content={"{{ad.name}}"}
       </code>{" "}
-      — this is what splits Facebook from Instagram leads.
+      : this is what splits Facebook from Instagram leads.
     </>,
   ];
   return (
-    <div className="glass-card p-5">
-      <div className="flex items-center gap-2 mb-1">
+    <Surface className="p-5">
+      <div className="mb-1 flex items-center gap-2">
         <FacebookLogo size={20} />
         <InstagramLogo size={20} />
-        <h3 className="text-sm font-semibold ml-1" style={{ color: "var(--text-main)" }}>
-          Connect your Meta ad account
-        </h3>
+        <h3 className="ml-1 text-sm font-bold text-white">Connect your Meta ad account</h3>
       </div>
-      <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
-        See spend, cost per lead and cost per booked call for Facebook and Instagram right here.
-      </p>
+      <p className="mb-4 text-xs text-neutral-400">See spend, cost per lead and cost per booked call for Facebook and Instagram right here.</p>
       <ol className="space-y-3">
-        {steps.map((s, i) => (
-          <li key={i} className="flex gap-3 text-sm" style={{ color: "var(--text-main)" }}>
-            <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-blue-500/15 text-blue-500">
-              {i + 1}
-            </span>
-            <span className="leading-relaxed">{s}</span>
+        {steps.map((step, i) => (
+          <li key={i} className="flex gap-3 text-sm text-neutral-300">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/15 text-xs font-bold text-cyan-200">{i + 1}</span>
+            <span className="leading-relaxed">{step}</span>
           </li>
         ))}
       </ol>
-    </div>
+    </Surface>
   );
 }
 
-function Skeleton() {
+function LoadingBlocks() {
   return (
-    <div className="space-y-3 animate-pulse" aria-busy="true" aria-label="Loading Meta ads">
-      <div className="glass-card p-5 space-y-3">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-6 rounded-md" style={{ background: "var(--input-bg)" }} />
-        ))}
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="space-y-3" aria-busy="true" aria-label="Loading Meta ads">
+      <KpiGrid>
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="glass-card p-4 h-[104px]">
-            <div className="h-3 w-20 rounded mb-3" style={{ background: "var(--input-bg)" }} />
-            <div className="h-7 w-24 rounded" style={{ background: "var(--input-bg)" }} />
-          </div>
+          <Skeleton key={i} className="h-[150px]" />
         ))}
-      </div>
-    </div>
-  );
-}
-
-function Note({ tone, children }: { tone: "warn" | "error"; children: React.ReactNode }) {
-  return (
-    <div
-      className={`rounded-xl border px-4 py-3 text-xs leading-relaxed ${
-        tone === "error"
-          ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
-          : "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-      }`}
-    >
-      {children}
+      </KpiGrid>
+      <Skeleton className="h-64" />
     </div>
   );
 }
@@ -348,86 +301,64 @@ export function AdsOverview() {
   const days = RANGES.find((r) => r.value === range)?.value ?? "30";
   const full = data && data.configured ? (data as AdsOverviewData) : null;
 
+  const rangeOptions = RANGES.map((r) => ({ value: r.value, label: r.label.toUpperCase() }));
+
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <p className="section-header !mb-0">Meta ads · last {days} days</p>
-        {data?.configured !== false && (
-          <div className="inline-flex rounded-xl border border-[var(--glass-border)] overflow-hidden">
-            {RANGES.map((r) => (
-              <button
-                key={r.value}
-                type="button"
-                onClick={() => {
-                  if (r.value === range) return;
-                  setLoading(true);
-                  setFailed(null);
-                  setRange(r.value);
-                }}
-                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-[0.1em] transition-all duration-200 ${
-                  range === r.value
-                    ? "bg-blue-500/20 text-blue-400"
-                    : "text-[var(--text-muted)] hover:bg-[var(--input-bg)]"
-                }`}
-                aria-pressed={range === r.value}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <SectionHead
+        eyebrow="Meta ads"
+        tone="lime"
+        title={`Ads · last ${days} days`}
+        sub="Facebook vs Instagram: what a click, a lead and a booked call cost you."
+        right={
+          data?.configured !== false ? (
+            <Segmented
+              value={range}
+              options={rangeOptions}
+              ariaLabel="Meta ads date range"
+              busyValue={loading && data ? range : null}
+              numeric
+              onChange={(v) => {
+                if (v === range) return;
+                setLoading(true);
+                setFailed(null);
+                setRange(v);
+              }}
+            />
+          ) : undefined
+        }
+      />
 
       {loading && !data ? (
-        <Skeleton />
+        <LoadingBlocks />
       ) : failed && !data ? (
-        <Note tone="error">Couldn’t load Meta ads performance: {failed}</Note>
+        <Notice tone="error">Couldn’t load Meta ads performance: {failed}</Notice>
       ) : data && !data.configured ? (
         <ConnectCard />
       ) : full ? (
         <div className={`space-y-3 transition-opacity ${loading ? "opacity-60" : ""}`}>
           {full.metaError && (
-            <Note tone="error">
-              <b>Meta API error:</b> {full.metaError} — Check the token’s <code>ads_read</code> access.
-            </Note>
+            <Notice tone="error" title="Meta API error">
+              {full.metaError}. Check the token’s <code className="rounded bg-white/10 px-1">ads_read</code> access.
+            </Notice>
           )}
-          {full.leadsError && <Note tone="warn">{full.leadsError}</Note>}
+          {full.leadsError && <Notice tone="warn">{full.leadsError}</Notice>}
           <HeadlineTiles data={full} />
           <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={toggleExtended}
-              aria-expanded={extended}
-              className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold transition-colors hover:bg-[var(--input-bg)]"
-              style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
-            >
+            <Button variant="secondary" size="sm" onClick={toggleExtended} aria-expanded={extended}>
               {extended ? "Collapse the view" : "Extend the view"}
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`transition-transform ${extended ? "rotate-180" : ""}`}
-                aria-hidden="true"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </button>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${extended ? "rotate-180" : ""}`} aria-hidden="true" />
+            </Button>
           </div>
           {full.unattributedLeads > 0 && (
-            <Note tone="warn">
-              {full.unattributedLeads} Meta lead{full.unattributedLeads === 1 ? "" : "s"} couldn’t be
-              attributed to Facebook or Instagram (counted in Total) — add{" "}
-              <code>utm_source={"{{site_source_name}}"}</code> to your ads’ URL parameters. Build it in{" "}
-              <Link href="/dashboard/client-tracker" className="underline font-semibold">
+            <Notice tone="warn">
+              {full.unattributedLeads} Meta lead{full.unattributedLeads === 1 ? "" : "s"} couldn’t be attributed to Facebook or Instagram (counted in Total). Add{" "}
+              <code className="rounded bg-white/10 px-1">utm_source={"{{site_source_name}}"}</code> to your ads’ URL parameters. Build it in{" "}
+              <Link href="/dashboard/client-tracker#utm" className="font-semibold underline">
                 the UTM builder
               </Link>
               .
-            </Note>
+            </Notice>
           )}
           {extended && (
             <div className="space-y-3">
@@ -435,11 +366,7 @@ export function AdsOverview() {
               <BusinessTiles data={full} />
             </div>
           )}
-          {full.truncated && (
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-              Lead counts are capped at the first 1,000 GoHighLevel contacts in this period.
-            </p>
-          )}
+          {full.truncated && <p className="text-[11px] text-neutral-400">Lead counts are capped at the first 1,000 GoHighLevel contacts in this period.</p>}
           <TopCreatives range={range} />
         </div>
       ) : null}
