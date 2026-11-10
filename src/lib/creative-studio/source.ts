@@ -9,7 +9,7 @@ import { extractStills, makeSourceProxy, probeSpecs, tempDir } from "@/lib/creat
 import { transcribeUrl } from "@/lib/creative-studio/transcribe";
 import { writeStorage } from "@/lib/creative-studio/frames";
 import { removePaths, signPaths } from "@/lib/creative-studio/storage";
-import { CLAIM_STALE_S, SOURCE_MAX_SECONDS, clock, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
+import { CLAIM_STALE_S, SOURCE_MAX_SECONDS, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
 
 /**
  * Reaction videos (Nov 2026): the video the presenter reacts to. Uploaded
@@ -190,15 +190,16 @@ export async function runSourceStep(source: Asset, step: SourceStep, deadline: n
 }
 
 /**
- * The words as Claude reads them: phrases with their times on the video,
- * broken at sentence ends, pauses over half a second, or 14 words.
+ * The words as Claude reads them: phrases with their times in seconds on the
+ * video (the unit Claude answers in), broken at sentence ends, pauses over
+ * half a second, or 14 words.
  */
 export function sourceTranscriptLines(words: TranscriptWord[]): string[] {
   const lines: string[] = [];
   let run: TranscriptWord[] = [];
   const flush = () => {
     if (run.length === 0) return;
-    lines.push(`[${clock(run[0].start, true)}–${clock(run[run.length - 1].end, true)}] ${run.map((w) => w.text).join(" ")}`);
+    lines.push(`[${run[0].start.toFixed(1)}–${run[run.length - 1].end.toFixed(1)} s] ${run.map((w) => w.text).join(" ")}`);
     run = [];
   };
   words.forEach((w, i) => {

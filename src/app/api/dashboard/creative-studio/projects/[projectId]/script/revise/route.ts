@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipFieldsOf, clipsOf, projectDetail, replaceScript, scriptInputFor } from "@/lib/creative-studio/service";
 import { reviseScript } from "@/lib/creative-studio/script";
+import { markReactionWritten, reactionInputFor, readySource, reviseReactionScript } from "@/lib/creative-studio/reaction";
 
 export const maxDuration = 300;
 
@@ -21,18 +22,36 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const clips = await clipsOf(project.id);
   if (clips.length === 0) return NextResponse.json({ error: "There's no script yet" }, { status: 400 });
 
+  const ready = project.reaction ? await readySource(project) : null;
+  if (ready && "error" in ready) return NextResponse.json({ error: ready.error }, { status: ready.status });
+
   try {
-    const result = await reviseScript({
-      input: await scriptInputFor(project, "change"),
-      frame: project.frameSpec,
-      clips: clips.map(clipFieldsOf),
-      note,
-    });
-    await replaceScript(
-      project,
-      { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig },
-      `Before: "${note.slice(0, 80)}"`
-    );
+    if (ready) {
+      const result = await reviseReactionScript({
+        input: await reactionInputFor(project, ready.source),
+        frame: project.frameSpec,
+        clips: clips.map(clipFieldsOf),
+        note,
+      });
+      await replaceScript(
+        project,
+        { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig },
+        `Before: "${note.slice(0, 80)}"`
+      );
+      await markReactionWritten(project, ready.source, result.source);
+    } else {
+      const result = await reviseScript({
+        input: await scriptInputFor(project, "change"),
+        frame: project.frameSpec,
+        clips: clips.map(clipFieldsOf),
+        note,
+      });
+      await replaceScript(
+        project,
+        { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig },
+        `Before: "${note.slice(0, 80)}"`
+      );
+    }
   } catch (err) {
     console.error("[creative-studio] revise failed:", err);
     const message =

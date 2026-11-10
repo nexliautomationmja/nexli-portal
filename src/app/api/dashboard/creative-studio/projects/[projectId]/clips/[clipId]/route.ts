@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { CLIP_KINDS, creativeClips, type ClipFields, type ClipKind } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipColumns, clipFieldsOf, derivedClip, framesOf, projectDetail, scenesOf, touchProject } from "@/lib/creative-studio/service";
+import { sourceOf } from "@/lib/creative-studio/source";
+import { readWatch, watchProblem } from "@/lib/creative-studio/reaction-shared";
 
 type Ctx = { params: Promise<{ projectId: string; clipId: string }> };
 
@@ -41,6 +43,16 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     frameId = body.frameId;
   }
   const kind: ClipKind = CLIP_KINDS.includes(body?.kind as ClipKind) ? (body?.kind as ClipKind) : current.kind ?? "to_camera";
+  // A reaction video's watch clip: the part of the video watched (kept unless a new one is sent).
+  let watch = kind === "silent" ? current.watch ?? null : null;
+  if (body && "watch" in body && kind === "silent" && project.reaction) {
+    const asked = readWatch(body.watch);
+    if (!asked) return NextResponse.json({ error: "Give the part watched as a start and end time." }, { status: 400 });
+    const source = await sourceOf(project);
+    const problem = watchProblem(asked, source?.durationMs ? source.durationMs / 1000 : null);
+    if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+    watch = asked;
+  }
   const next: ClipFields = {
     section: s(body?.section, current.section).trim() || current.section,
     speaker:
@@ -60,6 +72,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       : current.listenerReactions,
     kind,
     frameId,
+    ...(watch ? { watch } : {}),
   };
 
   await db

@@ -1,3 +1,5 @@
+import { WATCH_MAX_S, WATCH_MIN_S } from "@/lib/creative-studio/prompts";
+
 /**
  * Reaction videos (Nov 2026), the parts the browser and the server share:
  * limits on the video she reacts to and how its times are written. No server
@@ -41,4 +43,23 @@ export function claimLive(at: string | null | undefined, now = Date.now()): bool
 /** The video is too long to react to. */
 export function tooLongMessage(durationS: number): string {
   return `This video is ${clock(durationS)} long. Trim it to ${clock(SOURCE_MAX_SECONDS)} or less and upload it again.`;
+}
+
+/** A watch window from untrusted input ({ from, to } in seconds), to the tenth; null when it isn't one. */
+export function readWatch(v: unknown): { from: number; to: number } | null {
+  if (!v || typeof v !== "object") return null;
+  const { from, to } = v as Record<string, unknown>;
+  if (typeof from !== "number" || typeof to !== "number" || !Number.isFinite(from) || !Number.isFinite(to)) return null;
+  return { from: Math.round(from * 10) / 10, to: Math.round(to * 10) / 10 };
+}
+
+/** Why a part of the video can't be watched as one clip (null = it can). */
+export function watchProblem(w: { from: number; to: number }, durationS: number | null): string | null {
+  if (w.from < 0) return "A part can't start before the video does.";
+  if (w.to <= w.from) return "A part has to end after it starts.";
+  const len = w.to - w.from;
+  if (len < WATCH_MIN_S - 0.05) return `Each part watched is at least ${WATCH_MIN_S} seconds.`;
+  if (len > WATCH_MAX_S + 0.05) return `Each part watched is ${WATCH_MAX_S} seconds at most (one Kling clip). Split a longer stretch into two watch clips.`;
+  if (durationS && w.to > durationS + 0.05) return `The video is only ${clock(durationS, true)} long.`;
+  return null;
 }

@@ -6,6 +6,7 @@ import { creativeClips, creativeProjects } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipColumns, clipFieldsOf, clipsOf, derivedClip, projectDetail, scriptInputFor, snapshotOf } from "@/lib/creative-studio/service";
 import { rewriteClip } from "@/lib/creative-studio/script";
+import { reactionInputFor, readySource, rewriteReactionClip } from "@/lib/creative-studio/reaction";
 
 export const maxDuration = 120;
 
@@ -24,15 +25,26 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const body = (await req.json().catch(() => null)) as { instruction?: string } | null;
   const instruction = typeof body?.instruction === "string" ? body.instruction.slice(0, 1000) : "";
 
+  const ready = project.reaction ? await readySource(project) : null;
+  if (ready && "error" in ready) return NextResponse.json({ error: ready.error }, { status: ready.status });
+
   let result;
   try {
-    result = await rewriteClip({
-      input: await scriptInputFor(project, "change"),
-      frame: project.frameSpec,
-      clips: clips.map(clipFieldsOf),
-      index,
-      instruction,
-    });
+    result = ready
+      ? await rewriteReactionClip({
+          input: await reactionInputFor(project, ready.source),
+          frame: project.frameSpec,
+          clips: clips.map(clipFieldsOf),
+          index,
+          instruction,
+        })
+      : await rewriteClip({
+          input: await scriptInputFor(project, "change"),
+          frame: project.frameSpec,
+          clips: clips.map(clipFieldsOf),
+          index,
+          instruction,
+        });
   } catch (err) {
     console.error("[creative-studio] clip rewrite failed:", err);
     const message =

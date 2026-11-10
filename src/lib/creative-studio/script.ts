@@ -136,7 +136,7 @@ const STORY_PERSON_SCHEMA = {
   },
 } as const;
 
-const STORY_SCENE_SCHEMA = {
+export const STORY_SCENE_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["scene", "camera", "setting", "people"],
@@ -148,7 +148,7 @@ const STORY_SCENE_SCHEMA = {
   },
 } as const;
 
-const STORY_CLIP_SCHEMA = {
+export const STORY_CLIP_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["scene", "kind", "speaker", "section", "line", "register", "action", "editNote", "cues", "listenerReactions"],
@@ -199,7 +199,7 @@ interface RawStoryScene {
   setting: string;
   people: RawStoryPerson[];
 }
-interface RawStoryClip {
+export interface RawStoryClip {
   scene: number;
   kind: ClipKind;
   speaker: "PRESENTER" | "LEFT" | "CENTER" | "RIGHT";
@@ -252,7 +252,7 @@ const sceneIndex = (n: unknown, count: number) => {
   return Number.isFinite(i) ? Math.min(count - 1, Math.max(0, i)) : 0;
 };
 
-function toStoryClip(c: RawStoryClip, scene: SceneSpec): ClipFields {
+export function toStoryClip(c: RawStoryClip, scene: SceneSpec): ClipFields {
   const kind: ClipKind = CLIP_KINDS.includes(c.kind) ? c.kind : "to_camera";
   // Someone other than the presenter speaks only if they're in that scene's frame.
   const speaker =
@@ -312,7 +312,7 @@ export function toStoryResult(raw: RawStory, input: ScriptInput): ScriptResult {
 }
 
 /** The current story script as Claude reads it back (scene numbers, not frame ids). */
-function storyScriptJson(frame: FrameSpec | null, clips: ClipFields[], input: ScriptInput) {
+export function storyScriptJson(frame: FrameSpec | null, clips: ClipFields[], input: ScriptInput) {
   const slots = input.story?.scenes ?? [];
   const number = (frameId: string | null | undefined) => Math.max(0, slots.findIndex((s) => s.frameId === frameId)) + 1;
   return {
@@ -343,7 +343,7 @@ function storyScriptJson(frame: FrameSpec | null, clips: ClipFields[], input: Sc
   };
 }
 
-function presenterLine(p: PresenterInfo | undefined): string {
+export function presenterLine(p: PresenterInfo | undefined): string {
   if (!p) return "";
   const pron = p.pronoun === "he" ? "he/him" : "she/her";
   if (!p.name) return `The presenter: the person in the frames (${pron}). Don't name them unless the user does.`;

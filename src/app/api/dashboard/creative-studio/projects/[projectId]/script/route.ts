@@ -7,6 +7,7 @@ import { framesOf, projectDetail, replaceScript, scenesOf, scriptInputFor } from
 import { claudeError, generateScript } from "@/lib/creative-studio/script";
 import { cleanFormatRig } from "@/lib/creative-studio/validate";
 import { presenterForStudio } from "@/lib/creative-studio/presenters";
+import { generateReactionScript, markReactionWritten, reactionInputFor, readySource } from "@/lib/creative-studio/reaction";
 
 // A full VSL script (30–50 clips) can take a couple of minutes.
 export const maxDuration = 300;
@@ -35,7 +36,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       .returning();
     project = updated;
   }
-  if (!project.brief?.direction?.trim() && !project.brief?.oldBelief?.trim()) {
+  // A reaction video can go without: Claude decides the take from the video.
+  if (!project.reaction && !project.brief?.direction?.trim() && !project.brief?.oldBelief?.trim()) {
     return NextResponse.json({ error: "Tell it what the video is about first." }, { status: 400 });
   }
 
@@ -57,13 +59,27 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     }
   }
 
+  // A reaction video: Claude watches the video first (its stills and words must be ready).
+  const ready = project.reaction ? await readySource(project) : null;
+  if (ready && "error" in ready) return NextResponse.json({ error: ready.error }, { status: ready.status });
+
   try {
-    const result = await generateScript(await scriptInputFor(project, "write"));
-    await replaceScript(
-      project,
-      { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig, title: result.title },
-      "Replaced by a new script"
-    );
+    if (ready) {
+      const result = await generateReactionScript(await reactionInputFor(project, ready.source));
+      await replaceScript(
+        project,
+        { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig, title: result.title },
+        "Replaced by a new script"
+      );
+      await markReactionWritten(project, ready.source, result.source);
+    } else {
+      const result = await generateScript(await scriptInputFor(project, "write"));
+      await replaceScript(
+        project,
+        { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig, title: result.title },
+        "Replaced by a new script"
+      );
+    }
   } catch (err) {
     console.error("[creative-studio] script generation failed:", err);
     return NextResponse.json({ error: claudeError(err, "Script generation failed") }, { status: 502 });
