@@ -15,7 +15,7 @@ import type { CSSProperties } from "react";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 
 export { NUM_FONT };
-export { SYNE, SHIMMER_CONIC, SHIMMER_CONIC_WARM, CTA_CLASSES, SECONDARY_BTN, labelCls, ACCENT, type Accent } from "@/components/launch-pad";
+export { SYNE, SHIMMER_CONIC, SHIMMER_CONIC_WARM, CTA_CLASSES, SECONDARY_BTN, labelCls, ACCENT, type Accent } from "@/components/launch-pad/primitives";
 
 /** Big standalone numbers: proportional figures (tabular only in columns). */
 export const BIG_NUM: CSSProperties = { ...NUM_FONT, fontVariantNumeric: "lining-nums proportional-nums" };

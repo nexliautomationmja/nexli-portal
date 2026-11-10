@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { ShimmerPill } from "@/components/launch-pad";
+import { ShimmerPill } from "@/components/launch-pad/primitives";
 import { NUM_FONT, SHIMMER_CONIC, SHIMMER_CONIC_WARM, SYNE } from "./tokens";
 
 /**

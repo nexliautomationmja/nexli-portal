@@ -1,6 +1,6 @@
 "use client";
 
-import { LaunchPadStyles } from "@/components/launch-pad";
+import { LaunchPadStyles } from "@/components/launch-pad/styles";
 import { CANVAS_VARS } from "./tokens";
 
 // Canvas-only CSS: chat/thinking effects, scrollbars, the entrance animation,
