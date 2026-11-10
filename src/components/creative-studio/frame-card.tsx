@@ -71,7 +71,8 @@ export function FrameCard({
   const lastFailed = newest?.status === "failed" && newest.error !== "Cancelled" ? newest : undefined;
   const aspect = p.format === "vsl_16x9" ? "16 / 9" : "9 / 16";
   const vertical = p.format === "ad_9x16";
-  const full = scenes.filter((s) => s.frameId).length >= MAX_SCENES;
+  // Planned scenes (no frame yet) count toward the limit too.
+  const full = scenes.length >= MAX_SCENES;
 
   useEffect(() => {
     let cancelled = false;
@@ -140,7 +141,7 @@ export function FrameCard({
     async (list: File[], to: Target) => {
       const images = list.filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type));
       if (images.length === 0) return;
-      const room = MAX_SCENES - scenes.filter((s) => s.frameId).length;
+      const room = MAX_SCENES - scenes.length;
       const files = to.kind === "new" ? images.slice(0, Math.max(0, room)) : images.slice(0, 1);
       if (files.length === 0) {
         onError(`A video can have up to ${MAX_SCENES} scenes.`);

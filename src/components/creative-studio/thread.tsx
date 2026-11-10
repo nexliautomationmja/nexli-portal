@@ -231,8 +231,8 @@ export function StudioThread({ projectId }: { projectId: string }) {
       const sceneCount = d.scenes.filter((sc) => sc.frameId).length;
       if (images.length > 1 || (images.length > 0 && sceneCount > 1)) {
         const hadScript = d.clips.length > 0;
-        if (sceneCount + images.length > MAX_SCENES) {
-          setError(`A video can have up to ${MAX_SCENES} scenes. It has ${sceneCount}, so add up to ${Math.max(0, MAX_SCENES - sceneCount)} more.`);
+        if (d.scenes.length + images.length > MAX_SCENES) {
+          setError(`A video can have up to ${MAX_SCENES} scenes. It has ${d.scenes.length}, so add up to ${Math.max(0, MAX_SCENES - d.scenes.length)} more.`);
           return false;
         }
         if (hadScript && !confirm(`Add ${images.length === 1 ? "this image as a new scene" : `these ${images.length} images as new scenes`}? The script can work ${images.length === 1 ? "it" : "them"} in afterwards.`)) return false;
