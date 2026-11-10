@@ -1,200 +1,75 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { GlassCard } from "@/components/ui/glass-card";
-import { RocketIcon, CopyIcon, XIcon } from "@/components/ui/icons";
-import { DRS_PRICING, TOTAL_MONTHLY_CENTS } from "@/lib/drs-pricing";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { CANVAS_VARS } from "@/components/rainmaker";
+import { OnboardingView } from "./onboarding-view";
+import { LaunchPadSheet } from "./launch-pad-sheet";
+import { clientNameFor, type AdminDetail, type EngagementRow } from "./onboarding-types";
 
-// ─── Types ─────────────────────────────────────────────────
-
-interface RawPhaseState {
-  status: "pending" | "in_progress" | "done";
+/** A short confirmation at the bottom of the screen, above any open sheet. */
+function Toast({ message }: { message: string | null }) {
+  const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- portal target exists only after mount
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(
+    <div aria-live="polite" role="status" className="pointer-events-none fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-[120] flex justify-center px-4" style={CANVAS_VARS}>
+      {message && (
+        <div className="rounded-full border border-white/10 bg-[#0b1220] px-4 py-2.5 text-sm font-semibold text-white shadow-2xl shadow-black/60">{message}</div>
+      )}
+    </div>,
+    document.body
+  );
 }
 
-interface RawTaskState {
-  status: "todo" | "submitted" | "approved" | "needs_attention";
-}
-
-interface RawOnboardingState {
-  phases?: Record<string, RawPhaseState>;
-  tasks?: Record<string, RawTaskState>;
-  targetLaunchDate?: string | null;
-  clientDueAt?: string | null;
-  campaignLaunchedAt?: string | null;
-}
-
-interface EngagementRow {
-  id: string;
-  subject: string;
-  status: string;
-  createdAt: string;
-  metadata?: { onboarding?: RawOnboardingState; billingPlan?: string } | null;
-  signers: {
-    id: string;
-    name: string;
-    email: string;
-    order: number;
-    status: string;
-    signedAt?: string | null;
-  }[];
-}
-
-interface AdminPhase {
-  id: string;
-  title: string;
-  emoji: string;
-  description: string;
-  status: "pending" | "in_progress" | "done";
-  targetDate: string | null;
-  note: string | null;
-}
-
-interface AdminTask {
-  id: string;
-  title: string;
-  emoji: string;
-  type: "credentials" | "confirm" | "upload" | "form";
-  optional: boolean;
-  status: "todo" | "submitted" | "approved" | "needs_attention";
-  submittedAt: string | null;
-  reviewedAt: string | null;
-  adminNote: string | null;
-  submission: unknown;
-}
-
-interface AdminDetail {
-  engagementId: string;
-  subject: string;
-  onboarding: {
-    startedAt: string;
-    targetLaunchDate: string | null;
-    clientDueAt: string | null;
-    campaignLaunchedAt: string | null;
-    daysUntilDue: number | null;
-    isOverdue: boolean;
-    clientItemsComplete: boolean;
-    progressPercent: number;
-    phases: AdminPhase[];
-    tasks: AdminTask[];
-    activity: { at: string; actor: string; type: string; message: string }[];
-  };
-  clientSigners: { id: string; name: string; email: string; token: string; order: number }[];
-  billing?: AdminBilling | null;
-}
-
-interface BillingInvoiceRef {
-  invoiceId: string;
-  invoiceNumber: string;
-  status: string;
-  total: number; // cents
-  paidAt: string | null;
-}
-
-interface AdminBilling {
-  isDrs: boolean;
-  plan: "monthly" | "annual";
-  setup: BillingInvoiceRef | null;
-  firstMonthly: (BillingInvoiceRef & { createdAt: string }) | null;
-  billingStartedAt: string | null;
-}
-
-// ─── Helpers ───────────────────────────────────────────────
-
-function clientNameFor(eng: EngagementRow): string {
-  const client = eng.signers.find((s) => s.order > 0);
-  return client?.name || "Unknown client";
-}
-
-function roughProgress(state: RawOnboardingState): {
-  phasesDone: number;
-  phaseCount: number;
-  pendingReview: number;
-} {
-  const phases = Object.values(state.phases || {});
-  const tasks = Object.values(state.tasks || {});
-  return {
-    phasesDone: phases.filter((p) => p.status === "done").length,
-    phaseCount: phases.length,
-    pendingReview: tasks.filter((t) => t.status === "submitted").length,
-  };
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function formatShortDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatUsd(cents: number): string {
-  return `$${(cents / 100).toLocaleString("en-US", {
-    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-// Mirrors TASK_INFO[id].optional in src/lib/onboarding.ts (server-only module).
-const OPTIONAL_TASKS = new Set(["fb_ads_invite"]);
-
-/** Client items still owed — same rule as clientItemsOutstanding() server-side. */
-function rawItemsOutstanding(state: RawOnboardingState): number {
-  return Object.entries(state.tasks || {}).filter(([id, t]) => {
-    if (t.status === "submitted" || t.status === "approved") return false;
-    if (OPTIONAL_TASKS.has(id) && t.status === "todo") return false;
-    return true;
-  }).length;
-}
-
-/** Whole local-calendar days until a YYYY-MM-DD date (0 = today, negative = past). */
-function daysUntil(dateOnly: string): number {
-  const due = new Date(`${dateOnly}T12:00:00`);
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
-}
-
-function dueStatusFor(state: RawOnboardingState): {
-  label: string | null;
-  badge: "badge-rose" | "badge-amber" | "badge-emerald" | null;
-} {
-  if (!state.clientDueAt) return { label: null, badge: null };
-  const outstanding = rawItemsOutstanding(state);
-  if (outstanding === 0) return { label: "All in", badge: "badge-emerald" };
-  const days = daysUntil(state.clientDueAt);
-  if (days < 0) return { label: "Overdue", badge: "badge-rose" };
-  if (days <= 2) {
-    return { label: days === 0 ? "Due today" : `${days}d left`, badge: "badge-amber" };
-  }
-  return { label: null, badge: null };
-}
-
-// ─── Main ──────────────────────────────────────────────────
-
+/**
+ * Admin Onboarding page: loads the Launch Pads and runs every action;
+ * OnboardingView draws the list, LaunchPadSheet one client's Launch Pad.
+ */
 export function OnboardingDashboardClient() {
   const [engagements, setEngagements] = useState<EngagementRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [listState, setListState] = useState<"loading" | "error" | "ready">("loading");
   const [starting, setStarting] = useState<string | null>(null);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<AdminDetail | null>(null);
+  const [detailState, setDetailState] = useState<"loading" | "error" | "ready">("loading");
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
+  const openRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/dashboard/engagements");
-      if (res.ok) {
-        const body = await res.json();
-        setEngagements(body.engagements || []);
+      if (!res.ok) throw new Error(String(res.status));
+      const body = await res.json();
+      setEngagements(body.engagements || []);
+      setListState("ready");
+    } catch {
+      setListState((s) => (s === "ready" ? s : "error"));
+    }
+  }, []);
+
+  const loadDetail = useCallback(async (id: string) => {
+    setDetailState("loading");
+    try {
+      const res = await fetch(`/api/dashboard/engagements/${id}/onboarding`);
+      if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json()) as AdminDetail;
+      if (openRef.current === id) {
+        setDetail(body);
+        setDetailState("ready");
       }
-    } finally {
-      setLoading(false);
+    } catch {
+      if (openRef.current === id) setDetailState("error");
     }
   }, []);
 
   useEffect(() => {
-    load();
+    setOrigin(window.location.origin);
+    void load();
   }, [load]);
 
   useEffect(() => {
@@ -203,1059 +78,122 @@ export function OnboardingDashboardClient() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const active = engagements.filter((e) => e.metadata?.onboarding);
-  const startable = engagements.filter(
-    (e) => e.status === "signed" && !e.metadata?.onboarding
+  const open = useCallback(
+    (id: string) => {
+      openRef.current = id;
+      setOpenId(id);
+      setDetail(null);
+      setBillingError(null);
+      void loadDetail(id);
+    },
+    [loadDetail]
   );
 
-  async function startOnboarding(engagementId: string) {
-    setStarting(engagementId);
+  const close = useCallback(() => {
+    openRef.current = null;
+    setOpenId(null);
+    void load();
+  }, [load]);
+
+  async function start(id: string) {
+    setStarting(id);
     try {
-      const res = await fetch(
-        `/api/dashboard/engagements/${engagementId}/onboarding`,
-        { method: "POST" }
-      );
+      const res = await fetch(`/api/dashboard/engagements/${id}/onboarding`, { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setToast(body.error || "Failed to start onboarding");
+        setToast(body.error || "Couldn't start onboarding");
         return;
       }
       await load();
-      setDetailId(engagementId);
-      setToast("Onboarding started 🚀");
+      open(id);
+      setToast("Launch Pad started 🚀");
+    } catch {
+      setToast("Network error. Please try again.");
     } finally {
       setStarting(null);
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--text-main)" }}>
-            Onboarding
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Client Launch Pads — track build-outs and review submitted items
-          </p>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="glass-card h-24 animate-pulse" />
-          ))}
-        </div>
-      ) : (
-        <>
-          {/* ─── Active launch pads ─── */}
-          <section>
-            <p className="section-header">Active Launch Pads</p>
-            {active.length === 0 ? (
-              <GlassCard>
-                <div className="empty-state py-8">
-                  <RocketIcon className="empty-state-icon" />
-                  <p className="text-sm font-medium">No active onboardings yet</p>
-                  <p className="text-xs mt-1">
-                    Start one from a signed engagement below.
-                  </p>
-                </div>
-              </GlassCard>
-            ) : (
-              <div className="space-y-3">
-                {active.map((eng) => {
-                  const state = eng.metadata!.onboarding!;
-                  const { phasesDone, phaseCount, pendingReview } =
-                    roughProgress(state);
-                  const due = dueStatusFor(state);
-                  return (
-                    <button
-                      key={eng.id}
-                      onClick={() => setDetailId(eng.id)}
-                      className="glass-card w-full p-5 text-left hover:border-blue-500/40 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-4 flex-wrap">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span
-                              className="text-sm font-bold"
-                              style={{ color: "var(--text-main)" }}
-                            >
-                              {clientNameFor(eng)}
-                            </span>
-                            {pendingReview > 0 && (
-                              <span className="badge badge-amber">
-                                {pendingReview} to review
-                              </span>
-                            )}
-                            {state.campaignLaunchedAt && (
-                              <span className="badge badge-emerald">
-                                Live since {formatDate(state.campaignLaunchedAt)}
-                              </span>
-                            )}
-                          </div>
-                          <p
-                            className="text-xs mt-0.5 truncate"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {eng.subject}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <span
-                              className="text-[10px] font-black uppercase tracking-[0.15em] block"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              Launch
-                            </span>
-                            <span
-                              className="text-xs font-semibold"
-                              style={{ color: "var(--text-main)" }}
-                            >
-                              {formatDate(state.targetLaunchDate)}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <span
-                              className="text-[10px] font-black uppercase tracking-[0.15em] block"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              Due
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span
-                                className="text-xs font-semibold"
-                                style={{ color: "var(--text-main)" }}
-                              >
-                                {formatDate(state.clientDueAt)}
-                              </span>
-                              {due.badge && (
-                                <span className={`badge ${due.badge}`}>{due.label}</span>
-                              )}
-                            </span>
-                          </div>
-                          <div className="w-28">
-                            <div className="flex justify-between mb-1">
-                              <span
-                                className="text-[10px] font-bold"
-                                style={{ color: "var(--text-muted)" }}
-                              >
-                                {phasesDone}/{phaseCount} phases
-                              </span>
-                            </div>
-                            <div
-                              className="h-1.5 rounded-full overflow-hidden"
-                              style={{ background: "var(--input-bg)" }}
-                            >
-                              <div
-                                className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 transition-all duration-700"
-                                style={{
-                                  width: `${
-                                    phaseCount
-                                      ? Math.round((phasesDone / phaseCount) * 100)
-                                      : 0
-                                  }%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          {/* ─── Signed, not yet started ─── */}
-          {startable.length > 0 && (
-            <section>
-              <p className="section-header">Signed — Ready to Onboard</p>
-              <div className="space-y-3">
-                {startable.map((eng) => (
-                  <GlassCard key={eng.id} className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="min-w-0">
-                      <span className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
-                        {clientNameFor(eng)}
-                      </span>
-                      <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
-                        {eng.subject}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-wrap justify-end">
-                      {(eng.metadata?.billingPlan === "monthly" ||
-                        eng.metadata?.billingPlan === "annual") && (
-                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          Onboarding opens automatically when the setup invoice is paid
-                        </span>
-                      )}
-                      <button
-                        onClick={() => startOnboarding(eng.id)}
-                        disabled={starting === eng.id}
-                        className="px-5 py-2.5 rounded-full text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] disabled:opacity-50 shrink-0"
-                        style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-                      >
-                        {starting === eng.id ? "Starting…" : "Start Onboarding 🚀"}
-                      </button>
-                    </div>
-                  </GlassCard>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
-      )}
-
-      {/* ─── Detail slide-over ─── */}
-      {detailId && (
-        <OnboardingDetail
-          engagementId={detailId}
-          onClose={() => {
-            setDetailId(null);
-            load();
-          }}
-          onToast={setToast}
-        />
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] px-4 py-2.5 rounded-full text-sm font-semibold text-white shadow-xl"
-          style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-        >
-          {toast}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Detail slide-over ─────────────────────────────────────
-
-function OnboardingDetail({
-  engagementId,
-  onClose,
-  onToast,
-}: {
-  engagementId: string;
-  onClose: () => void;
-  onToast: (msg: string) => void;
-}) {
-  const [detail, setDetail] = useState<AdminDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [updateMsg, setUpdateMsg] = useState("");
-  const [posting, setPosting] = useState(false);
-
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/dashboard/engagements/${engagementId}/onboarding`);
-    if (res.ok) setDetail(await res.json());
-    setLoading(false);
-  }, [engagementId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const patch = useCallback(
-    async (body: Record<string, unknown>) => {
-      const res = await fetch(
-        `/api/dashboard/engagements/${engagementId}/onboarding`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      );
-      if (res.ok) {
-        setDetail(await res.json());
-      } else {
-        const err = await res.json().catch(() => ({}));
-        onToast(err.error || "Update failed");
-      }
-    },
-    [engagementId, onToast]
-  );
-
-  function copyClientLink(token: string) {
-    const url = `${window.location.origin}/onboarding/${token}`;
-    navigator.clipboard.writeText(url);
-    onToast("Client link copied 📋");
-  }
-
-  const ob = detail?.onboarding;
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/40 z-[70]" onClick={onClose} />
-      <div
-        className="fixed top-0 right-0 h-full w-full sm:w-[560px] z-[80] overflow-y-auto animate-slideInRight"
-        style={{ background: "var(--bg-main)", borderLeft: "1px solid var(--card-border)" }}
-      >
-        <div
-          className="sticky top-0 z-10 flex items-center justify-between px-6 py-4"
-          style={{
-            background: "var(--nav-bg)",
-            borderBottom: "1px solid var(--card-border)",
-          }}
-        >
-          <div className="min-w-0">
-            <h2 className="text-base font-bold truncate" style={{ color: "var(--text-main)" }}>
-              {detail ? detail.clientSigners[0]?.name || detail.subject : "Loading…"}
-            </h2>
-            <p className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
-              Launch Pad management
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--input-bg)] transition-colors shrink-0"
-            style={{ color: "var(--text-muted)" }}
-          >
-            <XIcon className="w-4 h-4" />
-          </button>
-        </div>
-
-        {loading || !detail || !ob ? (
-          <div className="p-6 space-y-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="glass-card h-24 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="p-6 space-y-6">
-            {/* Progress + client links */}
-            <GlassCard className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="stat-label">Overall progress</span>
-                <span className="stat-value text-xl">{ob.progressPercent}%</span>
-              </div>
-              <div
-                className="h-2 rounded-full overflow-hidden"
-                style={{ background: "var(--input-bg)" }}
-              >
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 transition-all duration-700"
-                  style={{ width: `${ob.progressPercent}%` }}
-                />
-              </div>
-              {detail.clientSigners.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => copyClientLink(s.token)}
-                  className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors hover:border-blue-500/40"
-                  style={{
-                    background: "var(--input-bg)",
-                    border: "1px solid var(--card-border)",
-                    color: "var(--text-main)",
-                  }}
-                >
-                  <span className="truncate">
-                    Copy Launch Pad link — {s.name}
-                  </span>
-                  <span className="shrink-0" style={{ color: "var(--text-muted)" }}>
-                    <CopyIcon className="w-4 h-4" />
-                  </span>
-                </button>
-              ))}
-              <div>
-                <label
-                  className="block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Estimated launch date (shown to client)
-                </label>
-                <input
-                  type="date"
-                  defaultValue={ob.targetLaunchDate || ""}
-                  onChange={(e) =>
-                    patch({
-                      action: "set_launch_date",
-                      targetLaunchDate: e.target.value || null,
-                    })
-                  }
-                  className="glass-input"
-                />
-              </div>
-              <div>
-                <label
-                  className="block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Client items due (shown to client)
-                </label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <input
-                    type="date"
-                    defaultValue={ob.clientDueAt || ""}
-                    onChange={(e) =>
-                      patch({
-                        action: "set_client_due_date",
-                        clientDueAt: e.target.value || null,
-                      })
-                    }
-                    className="glass-input"
-                  />
-                  {ob.clientItemsComplete ? (
-                    <span className="badge badge-emerald">All in</span>
-                  ) : ob.isOverdue ? (
-                    <span className="badge badge-rose">Overdue</span>
-                  ) : ob.daysUntilDue !== null && ob.daysUntilDue <= 2 ? (
-                    <span className="badge badge-amber">
-                      {ob.daysUntilDue === 0
-                        ? "Due today"
-                        : `${ob.daysUntilDue}d left`}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              <div>
-                <label
-                  className="block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Campaign launched (ads live)
-                </label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <input
-                    type="date"
-                    defaultValue={ob.campaignLaunchedAt || ""}
-                    onChange={(e) =>
-                      patch({
-                        action: "set_campaign_launched",
-                        campaignLaunchedAt: e.target.value || null,
-                      })
-                    }
-                    className="glass-input"
-                  />
-                  {ob.campaignLaunchedAt ? (
-                    <span className="badge badge-emerald">
-                      Live since {formatDate(ob.campaignLaunchedAt)}
-                    </span>
-                  ) : (
-                    <span className="badge badge-gray">Not launched</span>
-                  )}
-                </div>
-              </div>
-            </GlassCard>
-
-            {detail.billing?.isDrs && (
-              <BillingCard
-                engagementId={engagementId}
-                billing={detail.billing}
-                onUpdated={setDetail}
-              />
-            )}
-
-            {/* Phases */}
-            <section>
-              <p className="section-header">Build Phases</p>
-              <div className="space-y-3">
-                {ob.phases.map((phase) => (
-                  <GlassCard key={phase.id} variant="compact" className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
-                        {phase.emoji} {phase.title}
-                      </span>
-                      <select
-                        value={phase.status}
-                        onChange={(e) =>
-                          patch({
-                            action: "set_phase",
-                            phaseId: phase.id,
-                            status: e.target.value,
-                          })
-                        }
-                        className="glass-input w-auto! py-1.5! px-3! text-xs font-semibold"
-                      >
-                        <option value="pending">Queued</option>
-                        <option value="in_progress">In progress</option>
-                        <option value="done">Done</option>
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label
-                          className="block text-[10px] font-black uppercase tracking-[0.15em] mb-1"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Target date
-                        </label>
-                        <input
-                          type="date"
-                          defaultValue={phase.targetDate || ""}
-                          onChange={(e) =>
-                            patch({
-                              action: "set_phase",
-                              phaseId: phase.id,
-                              targetDate: e.target.value || null,
-                            })
-                          }
-                          className="glass-input py-1.5!"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="block text-[10px] font-black uppercase tracking-[0.15em] mb-1"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Client-visible note
-                        </label>
-                        <input
-                          type="text"
-                          defaultValue={phase.note || ""}
-                          placeholder="Homepage draft in review…"
-                          onBlur={(e) => {
-                            if ((phase.note || "") !== e.target.value.trim()) {
-                              patch({
-                                action: "set_phase",
-                                phaseId: phase.id,
-                                note: e.target.value.trim(),
-                              });
-                            }
-                          }}
-                          className="glass-input py-1.5!"
-                        />
-                      </div>
-                    </div>
-                  </GlassCard>
-                ))}
-              </div>
-            </section>
-
-            {/* Client tasks */}
-            <section>
-              <p className="section-header">Client Items</p>
-              <div className="space-y-3">
-                {ob.tasks.map((task) => (
-                  <AdminTaskCard key={task.id} task={task} patch={patch} onToast={onToast} />
-                ))}
-              </div>
-            </section>
-
-            {/* Post update */}
-            <section>
-              <p className="section-header">Post an Update (client sees this)</p>
-              <GlassCard variant="compact" className="space-y-2">
-                <textarea
-                  value={updateMsg}
-                  onChange={(e) => setUpdateMsg(e.target.value)}
-                  rows={2}
-                  maxLength={500}
-                  placeholder="Your homepage design is looking sharp — first preview coming Friday! 🎨"
-                  className="glass-input resize-none"
-                />
-                <button
-                  onClick={async () => {
-                    if (!updateMsg.trim()) return;
-                    setPosting(true);
-                    await patch({ action: "post_update", message: updateMsg.trim() });
-                    setUpdateMsg("");
-                    setPosting(false);
-                    onToast("Update posted 📡");
-                  }}
-                  disabled={posting || !updateMsg.trim()}
-                  className="px-5 py-2 rounded-full text-xs font-bold text-white transition-all active:scale-[0.98] disabled:opacity-50"
-                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-                >
-                  {posting ? "Posting…" : "Post to Mission Log"}
-                </button>
-              </GlassCard>
-            </section>
-
-            {/* Activity */}
-            <section>
-              <p className="section-header">Mission Log</p>
-              <GlassCard variant="compact">
-                {ob.activity.length === 0 ? (
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    No activity yet.
-                  </p>
-                ) : (
-                  <div className="space-y-2.5">
-                    {[...ob.activity].reverse().map((entry, i) => (
-                      <div key={`${entry.at}-${i}`} className="flex gap-2.5 items-start">
-                        <div
-                          className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
-                          style={{
-                            background:
-                              entry.actor === "client"
-                                ? "#06B6D4"
-                                : entry.actor === "agency"
-                                ? "#2563EB"
-                                : "#10B981",
-                          }}
-                        />
-                        <div className="min-w-0">
-                          <p className="text-xs leading-snug" style={{ color: "var(--text-main)" }}>
-                            {entry.message}
-                          </p>
-                          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                            {formatDate(entry.at)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </GlassCard>
-            </section>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-// ─── Task review card ──────────────────────────────────────
-
-const TASK_STATUS_BADGE: Record<AdminTask["status"], { label: string; cls: string }> = {
-  todo: { label: "Waiting on client", cls: "badge-gray" },
-  submitted: { label: "Needs review", cls: "badge-amber" },
-  approved: { label: "Approved", cls: "badge-emerald" },
-  needs_attention: { label: "Sent back", cls: "badge-rose" },
-};
-
-function AdminTaskCard({
-  task,
-  patch,
-  onToast,
-}: {
-  task: AdminTask;
-  patch: (body: Record<string, unknown>) => Promise<void>;
-  onToast: (msg: string) => void;
-}) {
-  const [note, setNote] = useState("");
-  const [showNote, setShowNote] = useState(false);
-  const [revealPassword, setRevealPassword] = useState(false);
-  const badge = TASK_STATUS_BADGE[task.status];
-
-  function copy(value: string, label: string) {
-    navigator.clipboard.writeText(value);
-    onToast(`${label} copied 📋`);
-  }
-
-  const creds =
-    task.type === "credentials"
-      ? (task.submission as {
-          registrar?: string;
-          loginUrl?: string;
-          username?: string;
-          email?: string;
-          password?: string;
-          notes?: string;
-          confirmed?: boolean;
-        } | null)
-      : null;
-
-  const confirmSub =
-    task.type === "confirm"
-      ? (task.submission as { confirmed?: boolean; notApplicable?: boolean } | null)
-      : null;
-
-  const formSub =
-    task.type === "form"
-      ? (task.submission as {
-          client1?: string;
-          client2?: string;
-          client3?: string;
-          commonality?: string;
-          avatar?: string;
-          notes?: string;
-        } | null)
-      : null;
-
-  const files =
-    task.type === "upload"
-      ? (task.submission as {
-          files?: Record<
-            string,
-            { fileName: string; signedUrl: string | null; mimeType: string } | null
-          >;
-        } | null)?.files
-      : null;
-
-  return (
-    <GlassCard variant="compact" className="space-y-3">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
-          {task.emoji} {task.title}
-        </span>
-        <span className={`badge ${badge.cls}`}>{badge.label}</span>
-      </div>
-
-      {/* Submission detail */}
-      {task.status !== "todo" && (
-        <div
-          className="rounded-lg p-3 space-y-2 text-xs"
-          style={{ background: "var(--input-bg)", border: "1px solid var(--card-border)" }}
-        >
-          {task.type === "credentials" && !creds && (
-            <p style={{ color: "var(--text-muted)" }}>
-              Submission couldn&apos;t be read (missing or invalid encryption
-              key). Ask the client to resubmit, or check
-              ONBOARDING_ENCRYPTION_KEY in Vercel.
-            </p>
-          )}
-          {creds && (
-            <>
-              {creds.confirmed && !creds.email && (
-                <p style={{ color: "var(--text-muted)" }}>
-                  Client confirmed their account is set up but hasn&apos;t
-                  submitted the login yet — send this item back to request it.
-                </p>
-              )}
-              {[
-                ["Registrar", creds.registrar],
-                ["Login URL", creds.loginUrl],
-                ["Username", creds.username],
-                ["Email", creds.email],
-              ]
-                .filter(([, v]) => v)
-                .map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between gap-2">
-                    <span style={{ color: "var(--text-muted)" }}>{label}</span>
-                    <button
-                      onClick={() => copy(value!, label!)}
-                      className="font-semibold truncate max-w-[60%] hover:text-blue-400"
-                      style={{ color: "var(--text-main)" }}
-                      title="Click to copy"
-                    >
-                      {value}
-                    </button>
-                  </div>
-                ))}
-              {creds.password && (
-                <div className="flex items-center justify-between gap-2">
-                  <span style={{ color: "var(--text-muted)" }}>Password</span>
-                  <span className="flex items-center gap-2">
-                    <button
-                      onClick={() => copy(creds.password!, "Password")}
-                      className="font-mono font-semibold hover:text-blue-400"
-                      style={{ color: "var(--text-main)" }}
-                      title="Click to copy"
-                    >
-                      {revealPassword ? creds.password : "••••••••"}
-                    </button>
-                    <button
-                      onClick={() => setRevealPassword((s) => !s)}
-                      className="text-[10px] font-bold uppercase"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {revealPassword ? "Hide" : "Show"}
-                    </button>
-                  </span>
-                </div>
-              )}
-              {creds.notes && (
-                <p style={{ color: "var(--text-muted)" }}>
-                  <span className="font-bold">Notes: </span>
-                  {creds.notes}
-                </p>
-              )}
-            </>
-          )}
-
-          {confirmSub &&
-            (confirmSub.notApplicable ? (
-              <p style={{ color: "var(--text-muted)" }}>
-                Client doesn&apos;t run Facebook Ads — marked not applicable.
-              </p>
-            ) : (
-              <p style={{ color: "var(--text-muted)" }}>
-                Client confirmed the partner invite was sent — check Business
-                Manager to accept it.
-              </p>
-            ))}
-
-          {formSub && (
-            <div className="space-y-2">
-              <p
-                className="text-[10px] font-black uppercase tracking-[0.15em]"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Dream-client profile (build the tax-planning offer around this)
-              </p>
-              {formSub.avatar && (
-                <p className="text-xs" style={{ color: "var(--text-main)" }}>
-                  <span className="font-bold">⭐ The avatar: </span>
-                  {formSub.avatar}
-                </p>
-              )}
-              <ol className="list-decimal pl-4 space-y-1">
-                {[formSub.client1, formSub.client2, formSub.client3]
-                  .filter(Boolean)
-                  .map((c, i) => (
-                    <li key={i} className="text-xs" style={{ color: "var(--text-main)" }}>
-                      {c}
-                    </li>
-                  ))}
-              </ol>
-              {formSub.commonality && (
-                <p className="text-xs" style={{ color: "var(--text-main)" }}>
-                  <span className="font-bold">In common: </span>
-                  {formSub.commonality}
-                </p>
-              )}
-              {formSub.notes && (
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  <span className="font-bold">Notes: </span>
-                  {formSub.notes}
-                </p>
-              )}
-            </div>
-          )}
-
-          {files && (
-            <div className="grid grid-cols-2 gap-2">
-              {(["front", "back"] as const).map((side) => {
-                const f = files[side];
-                return (
-                  <div key={side} className="text-center">
-                    <span
-                      className="block text-[10px] font-black uppercase tracking-[0.15em] mb-1"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {side}
-                    </span>
-                    {f?.signedUrl ? (
-                      <a href={f.signedUrl} target="_blank" rel="noreferrer" className="block">
-                        {f.mimeType === "application/pdf" ? (
-                          <span
-                            className="block py-4 rounded-md text-xs font-semibold"
-                            style={{
-                              border: "1px solid var(--card-border)",
-                              color: "var(--text-main)",
-                            }}
-                          >
-                            📄 {f.fileName}
-                          </span>
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={f.signedUrl}
-                            alt={`License ${side}`}
-                            className="w-full h-24 object-cover rounded-md"
-                            style={{ border: "1px solid var(--card-border)" }}
-                          />
-                        )}
-                      </a>
-                    ) : (
-                      <span
-                        className="block py-4 rounded-md text-xs"
-                        style={{
-                          border: "1px dashed var(--card-border)",
-                          color: "var(--text-muted)",
-                        }}
-                      >
-                        Not uploaded
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Review actions */}
-      {(task.status === "submitted" || task.status === "needs_attention") && (
-        <div className="space-y-2">
-          {showNote && (
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={500}
-              placeholder="What should the client fix? (they'll see this)"
-              className="glass-input py-2! text-xs"
-              autoFocus
-            />
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={() => patch({ action: "review_task", taskId: task.id, status: "approved" })}
-              className="px-4 py-2 rounded-full text-xs font-bold text-white transition-all active:scale-[0.98]"
-              style={{ background: "linear-gradient(135deg, #10B981, #06B6D4)" }}
-            >
-              Approve ✓
-            </button>
-            {showNote ? (
-              <button
-                onClick={() => {
-                  patch({
-                    action: "review_task",
-                    taskId: task.id,
-                    status: "needs_attention",
-                    adminNote: note.trim(),
-                  });
-                  setShowNote(false);
-                  setNote("");
-                }}
-                disabled={!note.trim()}
-                className="px-4 py-2 rounded-full text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 transition-all active:scale-[0.98] disabled:opacity-50"
-              >
-                Send back with note
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowNote(true)}
-                className="px-4 py-2 rounded-full text-xs font-semibold transition-colors"
-                style={{
-                  color: "var(--text-muted)",
-                  border: "1px solid var(--card-border)",
-                }}
-              >
-                Needs attention
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {task.adminNote && task.status === "needs_attention" && (
-        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Note sent to client: &ldquo;{task.adminNote}&rdquo;
-        </p>
-      )}
-    </GlassCard>
-  );
-}
-
-// ─── DRS billing (setup invoice → Build complete → first monthly) ────────
-
-function InvoiceStatusBadge({ inv }: { inv: BillingInvoiceRef }) {
-  return inv.status === "paid" ? (
-    <span className="badge badge-emerald">Paid ✓ {formatShortDate(inv.paidAt)}</span>
-  ) : (
-    <span className="badge badge-amber">Awaiting payment</span>
-  );
-}
-
-function BillingCard({
-  engagementId,
-  billing,
-  onUpdated,
-}: {
-  engagementId: string;
-  billing: AdminBilling;
-  onUpdated: (d: AdminDetail) => void;
-}) {
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { setup, firstMonthly, plan } = billing;
-  const setupPaid = setup?.status === "paid";
-  const monthlyLabel =
-    plan === "annual"
-      ? `(${formatUsd(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget)`
-      : `(${formatUsd(TOTAL_MONTHLY_CENTS)})`;
-
-  async function startMonthlyBilling() {
-    if (!window.confirm("Send the first monthly invoice now? Do this once the build is finished.")) {
-      return;
-    }
-    setSending(true);
-    setError(null);
+  const patch = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    const id = openRef.current;
+    if (!id) return false;
     try {
-      const res = await fetch(`/api/dashboard/engagements/${engagementId}/onboarding`, {
+      const res = await fetch(`/api/dashboard/engagements/${id}/onboarding`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setToast(data.error || "That didn't save. Please try again.");
+        return false;
+      }
+      if (openRef.current === id) setDetail(data as AdminDetail);
+      if (body.action === "post_update") setToast("Update posted 📡");
+      return true;
+    } catch {
+      setToast("Network error. That didn't save.");
+      return false;
+    }
+  }, []);
+
+  async function startMonthly() {
+    const id = openRef.current;
+    if (!id || !window.confirm("Send the first monthly invoice now? Do this once the build is finished.")) return;
+    setBillingBusy(true);
+    setBillingError(null);
+    try {
+      const res = await fetch(`/api/dashboard/engagements/${id}/onboarding`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "start_monthly_billing" }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error || "Couldn't send the first monthly invoice");
+        setBillingError(body.error || "Couldn't send the first monthly invoice");
         return;
       }
-      onUpdated(body as AdminDetail);
+      if (openRef.current === id) setDetail(body as AdminDetail);
     } catch {
-      setError("Network error — please try again");
+      setBillingError("Network error. Please try again.");
     } finally {
-      setSending(false);
+      setBillingBusy(false);
     }
   }
 
-  const linkStyle = { color: "#2563EB" };
+  const active = engagements.filter((e) => e.metadata?.onboarding);
+  const startable = engagements.filter((e) => e.status === "signed" && !e.metadata?.onboarding);
+  const openRow = engagements.find((e) => e.id === openId);
 
   return (
-    <GlassCard className="space-y-3">
-      <p
-        className="text-[10px] font-black uppercase tracking-[0.2em]"
-        style={{ color: "var(--text-muted)" }}
-      >
-        Billing
-      </p>
-
-      {/* Row 1 — the up-front invoice sent at signing */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        {setup ? (
-          <>
-            <span className="text-sm" style={{ color: "var(--text-main)" }}>
-              Setup invoice{" "}
-              <a href={`/dashboard/invoices?id=${setup.invoiceId}`} className="font-semibold underline" style={linkStyle}>
-                {setup.invoiceNumber}
-              </a>{" "}
-              · {formatUsd(setup.total)}
-            </span>
-            <InvoiceStatusBadge inv={setup} />
-          </>
-        ) : (
-          <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-            No setup invoice found for this engagement.
-          </span>
-        )}
-      </div>
-
-      {/* Row 2 — first recurring invoice, sent on "Build complete" */}
-      {firstMonthly ? (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-sm" style={{ color: "var(--text-main)" }}>
-              First monthly{" "}
-              <a
-                href={`/dashboard/invoices?id=${firstMonthly.invoiceId}`}
-                className="font-semibold underline"
-                style={linkStyle}
-              >
-                {firstMonthly.invoiceNumber}
-              </a>{" "}
-              · {formatUsd(firstMonthly.total)} · sent {formatShortDate(firstMonthly.createdAt)}
-            </span>
-            <InvoiceStatusBadge inv={firstMonthly} />
-          </div>
-          {firstMonthly.status === "paid" && (
-            <p className="text-xs font-semibold" style={{ color: "#10B981" }}>
-              Clear to launch ads.
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          <button
-            type="button"
-            onClick={startMonthlyBilling}
-            disabled={!setupPaid || sending}
-            className="btn-primary"
-          >
-            {sending ? "Sending…" : `Build complete — send first monthly invoice ${monthlyLabel}`}
-          </button>
-          {!setupPaid && (
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Unlocks once the setup invoice is paid
-            </p>
-          )}
-        </div>
-      )}
-
-      {error && (
-        <p className="text-xs font-semibold" style={{ color: "#F43F5E" }}>
-          {error}
-        </p>
-      )}
-    </GlassCard>
+    <>
+      <OnboardingView
+        state={listState}
+        active={active}
+        startable={startable}
+        starting={starting}
+        onOpen={open}
+        onStart={start}
+        onRetry={() => {
+          setListState("loading");
+          void load();
+        }}
+      />
+      <LaunchPadSheet
+        open={Boolean(openId)}
+        state={detailState}
+        detail={detail}
+        name={openRow ? clientNameFor(openRow) : ""}
+        origin={origin}
+        billingBusy={billingBusy}
+        billingError={billingError}
+        onClose={close}
+        onRetry={() => openId && void loadDetail(openId)}
+        onPatch={patch}
+        onStartMonthly={startMonthly}
+        onCopied={(what) => setToast(`${what} copied 📋`)}
+      />
+      <Toast message={toast} />
+    </>
   );
 }

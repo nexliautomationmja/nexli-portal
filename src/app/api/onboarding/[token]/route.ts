@@ -5,10 +5,12 @@ import {
   setOnboardingValues,
   appendActivity,
   defaultTaskState,
+  tasksOf,
   TASK_INFO,
   type TaskId,
 } from "@/lib/onboarding";
 import { encryptSubmission } from "@/lib/onboarding-crypto";
+import { cleanPaymentSetup, processorName } from "@/lib/payment-setup";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { getNexliAdminId } from "@/lib/foundation-project";
@@ -83,16 +85,17 @@ export async function POST(
   }
 
   const taskId = body.taskId as TaskId;
-  // drivers_license goes through the /upload route, not JSON submissions
+  // drivers_license goes through the /upload route, not JSON submissions.
+  // stripe_setup is gone (Nov 2026): payment_setup asked instead.
   if (
     taskId !== "dns_access" &&
     taskId !== "fb_ads_invite" &&
-    taskId !== "stripe_setup"
+    taskId !== "payment_setup"
   ) {
     return NextResponse.json({ error: "Invalid task" }, { status: 400 });
   }
 
-  const current = ctx.onboarding.tasks[taskId];
+  const current = tasksOf(ctx.onboarding)[taskId];
   if (current?.status === "approved") {
     return NextResponse.json(
       { error: "This item has already been approved." },
@@ -123,25 +126,15 @@ export async function POST(
     }
     submissionValue = encryptSubmission(submission);
     activityMessage = `${ctx.signer.name} sent over their domain & DNS access 🌐`;
-  } else if (taskId === "stripe_setup") {
-    // Required — the client submits their Stripe login once the account is
-    // set up (or right away if it already exists). Encrypted like DNS creds.
-    const raw = (body.submission || {}) as Record<string, unknown>;
-    const submission = {
-      email: str(raw.email, 320),
-      password: str(raw.password, 500),
-      notes: str(raw.notes, 2000),
-      submittedIp: getClientIp(req),
-      submittedAt: now,
-    };
-    if (!submission.email || !submission.password) {
-      return NextResponse.json(
-        { error: "Stripe login email and password are required." },
-        { status: 400 }
-      );
+  } else if (taskId === "payment_setup") {
+    // Who processes their payments + which amounts go by card / ACH / wire.
+    // No secrets, so it's stored as-is (the client sees their answers back).
+    const cleaned = cleanPaymentSetup(body.submission);
+    if (!cleaned.ok) {
+      return NextResponse.json({ error: cleaned.error }, { status: 400 });
     }
-    submissionValue = encryptSubmission(submission);
-    activityMessage = `${ctx.signer.name} set up Stripe and sent over their login 💳`;
+    submissionValue = { ...cleaned.value, submittedAt: now };
+    activityMessage = `${ctx.signer.name} told us how they get paid (${processorName(cleaned.value)}) 💳`;
   } else {
     const raw = (body.submission || {}) as Record<string, unknown>;
     const submission = raw.notApplicable

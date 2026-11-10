@@ -15,10 +15,12 @@ import { decryptSubmission } from "./onboarding-crypto";
 
 export type PhaseId = "website" | "automations" | "portal";
 export type TaskId =
-  | "stripe_setup"
+  | "payment_setup"
   | "dns_access"
   | "fb_ads_invite"
-  | "drivers_license";
+  | "drivers_license"
+  /** Legacy (before Nov 2026): the Stripe login. payment_setup took its place. */
+  | "stripe_setup";
 export type PhaseStatus = "pending" | "in_progress" | "done";
 export type TaskStatus = "todo" | "submitted" | "approved" | "needs_attention";
 export type LicenseSide = "front" | "back";
@@ -47,6 +49,8 @@ export interface OnboardingTaskState {
   // credentials → encrypted string (or plain object w/o env key)
   // confirm     → { confirmed: true } | { notApplicable: true }
   // upload      → { files: { front: LicenseFileMeta|null, back: ... } }
+  // form        → payment_setup: PaymentSetup (lib/payment-setup.ts), or
+  //               { legacyStripe: true } while it stands in for a Stripe login
   submission: unknown;
 }
 
@@ -118,13 +122,40 @@ const TIER_PHASES: Record<OnboardingTier, PhaseId[]> = {
 };
 
 const TIER_TASKS: Record<OnboardingTier, TaskId[]> = {
-  foundation: ["stripe_setup", "dns_access"],
+  foundation: ["payment_setup", "dns_access"],
   // Oct 2026: the "top 3 best clients" questionnaire was dropped — the ad
   // offer targets 6–8 figure business owners / taxpayers across the board.
   // Legacy records that still carry a dream_clients key are simply ignored
   // (taskIdsFor only yields ids present in TASK_ORDER).
-  drs: ["stripe_setup", "dns_access", "fb_ads_invite", "drivers_license"],
+  // Nov 2026: "How you get paid" (payment_setup) replaced the Stripe login.
+  drs: ["payment_setup", "dns_access", "fb_ads_invite", "drivers_license"],
 };
+
+/**
+ * The tasks as they count today. Records seeded before Nov 2026 carry
+ * stripe_setup instead of payment_setup; until payment_setup is written, it
+ * stands in for the Stripe item with the same standing: still to do → the
+ * new question is to do; already sent or approved → done (shown as "Stripe
+ * login on file"), so nobody gets a new outstanding item or overdue reminders.
+ */
+export function tasksOf(state: OnboardingState): Partial<Record<TaskId, OnboardingTaskState>> {
+  const tasks = state.tasks || {};
+  if (tasks.payment_setup || !tasks.stripe_setup) return tasks;
+  const stripe = tasks.stripe_setup;
+  const done = stripe.status === "submitted" || stripe.status === "approved";
+  return {
+    ...tasks,
+    payment_setup: done
+      ? {
+          status: stripe.status,
+          submittedAt: stripe.submittedAt,
+          reviewedAt: stripe.reviewedAt,
+          adminNote: null,
+          submission: { legacyStripe: true },
+        }
+      : defaultTaskState("payment_setup"),
+  };
+}
 
 /**
  * Which phases/tasks this particular engagement has, in canonical order.
@@ -140,7 +171,8 @@ export function phaseIdsFor(state: OnboardingState): PhaseId[] {
 }
 
 export function taskIdsFor(state: OnboardingState): TaskId[] {
-  const present = TASK_ORDER.filter((id) => state.tasks?.[id]);
+  const tasks = tasksOf(state);
+  const present = TASK_ORDER.filter((id) => tasks[id]);
   return present.length ? present : TASK_ORDER;
 }
 
@@ -193,7 +225,7 @@ export const PHASE_INFO: Record<
 };
 
 export const TASK_ORDER: TaskId[] = [
-  "stripe_setup",
+  "payment_setup",
   "dns_access",
   "fb_ads_invite",
   "drivers_license",
@@ -209,13 +241,22 @@ export const TASK_INFO: Record<
     emoji: string;
   }
 > = {
+  payment_setup: {
+    title: "How You Get Paid",
+    emoji: "💳",
+    type: "form",
+    optional: false,
+    description:
+      "Tell us who processes your payments today and how you want each invoice paid — by card, ACH or wire. We'll check what your processor connects to and build your invoicing around it.",
+  },
   stripe_setup: {
+    // Legacy only (never seeded since Nov 2026, not in TASK_ORDER): kept so
+    // old activity and the admin's view of a Stripe login still read.
     title: "Stripe Account Setup",
     emoji: "💳",
     type: "credentials",
     optional: false,
-    description:
-      "Want to collect payments seamlessly? Set up (or connect) the Stripe account for your business — it's how our platform invoices, collects, and routes payments for you. Once it's ready (or if you already have one), share the login below so we can wire everything up. Without it, there's no efficient way to collect.",
+    description: "Your Stripe login (an earlier step).",
   },
   dns_access: {
     title: "Domain & DNS Access",
@@ -447,8 +488,9 @@ export function computeProgress(state: OnboardingState): number {
     if (p?.status === "in_progress") earned += 1;
     if (p?.status === "done") earned += 2;
   }
+  const tasks = tasksOf(state);
   for (const id of taskIdsFor(state)) {
-    const t = state.tasks[id];
+    const t = tasks[id];
     const optional = TASK_INFO[id].optional;
     // needs_attention was sent back to the client — not complete
     const counted = t?.status === "submitted" || t?.status === "approved";
@@ -468,8 +510,9 @@ export function computeProgress(state: OnboardingState): number {
  * owed (but an optional task sent back as needs_attention is).
  */
 export function clientItemsOutstanding(state: OnboardingState): TaskId[] {
+  const tasks = tasksOf(state);
   return taskIdsFor(state).filter((id) => {
-    const t = state.tasks[id];
+    const t = tasks[id];
     const done = t?.status === "submitted" || t?.status === "approved";
     if (done) return false;
     const touched = t && t.status !== "todo";
@@ -518,6 +561,7 @@ const ACTIVITY_LIMIT = 50;
  * through so the UI can distinguish "sent" from "not applicable".
  */
 export function serializePublicOnboarding(state: OnboardingState) {
+  const tasks = tasksOf(state);
   return {
     startedAt: state.startedAt,
     targetLaunchDate: state.targetLaunchDate,
@@ -540,7 +584,7 @@ export function serializePublicOnboarding(state: OnboardingState) {
       };
     }),
     tasks: taskIdsFor(state).map((id) => {
-      const t = state.tasks[id];
+      const t = tasks[id];
       const info = TASK_INFO[id];
       const base = {
         id,
@@ -581,13 +625,18 @@ export function serializePublicOnboarding(state: OnboardingState) {
 
 /** Admin shape — full state with credential submissions decrypted. */
 export function serializeAdminOnboarding(state: OnboardingState) {
+  const tasks = tasksOf(state);
+  // A Stripe login sent before payment_setup existed stays readable on that item.
+  const stripe = state.tasks?.stripe_setup;
+  const legacyStripe = stripe && stripe.status !== "todo" && stripe.submission ? decryptSubmission(stripe.submission) : null;
   return {
     ...serializePublicOnboarding(state),
     startedBy: state.startedBy,
     tasks: taskIdsFor(state).map((id) => {
-      const t = state.tasks[id];
+      const t = tasks[id];
       const info = TASK_INFO[id];
       return {
+        ...(id === "payment_setup" && legacyStripe ? { legacyStripe } : {}),
         id,
         title: info.title,
         emoji: info.emoji,

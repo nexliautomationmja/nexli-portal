@@ -12,7 +12,6 @@ import {
   Icon,
   PATHS,
   FacebookLogo,
-  StripeLogo,
   GoogleGLogo,
   ProgressRing,
   SubmittedNote,
@@ -24,6 +23,24 @@ import {
   LaunchPadShell,
   NexliLegalFooter,
 } from "@/components/launch-pad";
+import {
+  PROCESSORS,
+  OTHER_PROCESSOR,
+  NO_PROCESSOR,
+  asPaymentSetup,
+  cleanPaymentSetup,
+  coverageGaps,
+  gapLine,
+  cardLine,
+  achLine,
+  wireLine,
+  processorName,
+  parseAmount,
+  type PaymentSetup,
+  type CardMode,
+  type AchMode,
+  type WireMode,
+} from "@/lib/payment-setup";
 
 // ══════════════════════════════════════════════════════════
 // Launch Pad — client-facing onboarding page, styled to match
@@ -62,16 +79,12 @@ interface TaskData {
     front: { fileName: string; uploadedAt: string } | null;
     back: { fileName: string; uploadedAt: string } | null;
   };
-  submission?: {
+  /** fb_ads_invite: confirmed / notApplicable. payment_setup: the answers, or legacyStripe. */
+  submission?: ({
     confirmed?: boolean;
     notApplicable?: boolean;
-    client1?: string;
-    client2?: string;
-    client3?: string;
-    commonality?: string;
-    avatar?: string;
-    notes?: string;
-  } | null;
+    legacyStripe?: boolean;
+  } & Partial<PaymentSetup>) | null;
 }
 
 interface ActivityEntry {
@@ -186,7 +199,7 @@ const PHASE_ACCENT: Record<string, Accent> = {
 };
 
 const TASK_ACCENT: Record<string, Accent> = {
-  stripe_setup: "stripe",
+  payment_setup: "cyan",
   dns_access: "blue",
   fb_ads_invite: "emerald",
   drivers_license: "amber",
@@ -199,6 +212,7 @@ const PHASE_ICON: Record<string, React.ReactNode> = {
 };
 
 const TASK_ICON: Record<string, React.ReactNode> = {
+  payment_setup: PATHS.creditCard,
   dns_access: PATHS.globe,
   drivers_license: PATHS.idCard,
 };
@@ -420,7 +434,7 @@ export function OnboardingClient({ token }: { token: string }) {
                   ["cyan", <Icon key="c" d={PATHS.layoutDashboard} size={28} className={ACCENT.cyan.icon} />],
                   ["amber", <GoogleGLogo key="g" size={26} />],
                   ["emerald", <FacebookLogo key="f" size={26} />],
-                  ["stripe", <StripeLogo key="s" size={26} />],
+                  ["stripe", <Icon key="s" d={PATHS.creditCard} size={26} className="text-white" />],
                 ] as [Accent, React.ReactNode][]
               ).map(([accent, icon], i) => (
                 <div
@@ -811,8 +825,6 @@ function TaskCard({
         <IconChip accent={accent}>
           {task.id === "fb_ads_invite" ? (
             <FacebookLogo size={24} />
-          ) : task.id === "stripe_setup" ? (
-            <StripeLogo size={24} />
           ) : (
             <Icon d={TASK_ICON[task.id] || PATHS.globe} size={24} className={a.icon} />
           )}
@@ -835,12 +847,12 @@ function TaskCard({
       </div>
 
       <div className="mt-4">
-        {task.type === "credentials" &&
-          (task.id === "stripe_setup" ? (
-            <StripeSetup task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
-          ) : (
-            <DnsForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
-          ))}
+        {task.type === "credentials" && (
+          <DnsForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
+        )}
+        {task.type === "form" && task.id === "payment_setup" && (
+          <PaymentSetupForm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
+        )}
         {task.type === "confirm" && (
           <FbConfirm task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
         )}
@@ -1007,16 +1019,156 @@ function DnsForm({
   );
 }
 
-// ── Stripe account setup (guided + confirm) ──
+// ── How you get paid (processor + card / ACH / wire amounts) ──
 
-const STRIPE_GROUND_RULES = [
-  "Legal business name & address",
-  "EIN (or SSN for sole proprietors)",
-  "Business bank account & routing number for payouts",
-  "Government-issued ID for identity verification",
+const CARD_OPTIONS: [CardMode, string][] = [
+  ["limit", "Up to an amount"],
+  ["any", "Any amount"],
+  ["none", "No cards"],
+];
+const ACH_OPTIONS: [AchMode, string][] = [
+  ["any", "Any amount"],
+  ["range", "Set amounts"],
+  ["none", "No ACH"],
+];
+const WIRE_OPTIONS: [WireMode, string][] = [
+  ["over", "Over an amount"],
+  ["any", "Any amount"],
+  ["none", "No wires"],
 ];
 
-function StripeSetup({
+/** "2500" → "2,500" once the field loses focus (what's typed stays if it isn't a number). */
+const tidyAmount = (v: string) => {
+  const n = parseAmount(v);
+  return n ? n.toLocaleString("en-US") : v;
+};
+const amountText = (n: number | null | undefined) => (n ? n.toLocaleString("en-US") : "");
+
+function ChoicePills<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: [T, string][];
+  value: T;
+  onChange: (v: T) => void;
+  label: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+      {options.map(([v, text]) => {
+        const on = v === value;
+        return (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(v)}
+            className={`min-h-9 px-3.5 rounded-full text-xs font-bold transition-all ${
+              on
+                ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/25"
+                : "bg-white/5 border border-white/10 text-neutral-300 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            {text}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AmountInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  suffix,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  suffix?: string;
+}) {
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-[220px]">
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-400">$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={(e) => onChange(tidyAmount(e.target.value))}
+            placeholder={placeholder}
+            className="lp-input"
+            // Inline: .lp-input's own padding would beat a pl-* utility.
+            style={{ paddingLeft: "1.85rem" }}
+            autoComplete="off"
+          />
+        </div>
+        {suffix && <span className="text-xs text-neutral-400">{suffix}</span>}
+      </div>
+    </div>
+  );
+}
+
+function MethodBox({
+  icon,
+  title,
+  sub,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl p-3.5 sm:p-4 bg-white/[0.03] border border-white/10 space-y-3">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-cyan-500/15 border border-cyan-500/25">
+          <Icon d={icon} size={18} className="text-cyan-300" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-white">{title}</p>
+          <p className="text-[11px] sm:text-xs text-neutral-400 leading-relaxed">{sub}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** What the firm told us, read back (submitted state). */
+function PaymentSummary({ p }: { p: PaymentSetup }) {
+  const rows: [string, string][] = [
+    ["Processor", processorName(p)],
+    ["Cards", cardLine(p)],
+    ["ACH", achLine(p)],
+    ["Wire", wireLine(p)],
+  ];
+  return (
+    <div className="rounded-xl px-4 py-3 bg-white/5 border border-white/10">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex items-baseline justify-between gap-3 sm:block">
+            <dt className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">{k}</dt>
+            <dd className="text-[13px] font-semibold text-white sm:mt-0.5">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {p.notes && <p className="text-xs text-neutral-400 mt-3 leading-relaxed">“{p.notes}”</p>}
+    </div>
+  );
+}
+
+function PaymentSetupForm({
   task,
   token,
   onSubmitted,
@@ -1027,30 +1179,60 @@ function StripeSetup({
   onSubmitted: () => void;
   accent: Accent;
 }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [notes, setNotes] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  // Sent back (needs attention): start from what they told us last time.
+  const saved = asPaymentSetup(task.submission);
+  const [processor, setProcessor] = useState(saved?.processor ?? "");
+  const [processorOther, setProcessorOther] = useState(saved?.processorOther ?? "");
+  const [cardMode, setCardMode] = useState<CardMode>(saved?.card.mode ?? "limit");
+  const [cardMax, setCardMax] = useState(amountText(saved?.card.max));
+  const [achMode, setAchMode] = useState<AchMode>(saved?.ach.mode ?? "any");
+  const [achMin, setAchMin] = useState(amountText(saved?.ach.min));
+  const [achMax, setAchMax] = useState(amountText(saved?.ach.max));
+  const [wireMode, setWireMode] = useState<WireMode>(saved?.wire.mode ?? "over");
+  const [wireMin, setWireMin] = useState(amountText(saved?.wire.min));
+  const [notes, setNotes] = useState(saved?.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Local flag so the just-typed login vanishes immediately on success
-  const [justSent, setJustSent] = useState(false);
+  const [justSent, setJustSent] = useState<PaymentSetup | null>(null);
 
-  const done =
-    justSent || task.status === "submitted" || task.status === "approved";
-
+  const done = Boolean(justSent) || task.status === "submitted" || task.status === "approved";
   if (done) {
+    const answers = justSent ?? saved;
+    if (!answers) {
+      // Onboardings from before this question: the Stripe login stands in.
+      return (
+        <SubmittedNote accent={accent}>
+          You already sent us your Stripe login — we&apos;re all set here.
+        </SubmittedNote>
+      );
+    }
     return (
-      <SubmittedNote accent={accent}>
-        Stripe is live — your payment rails are connected. Your login is locked
-        away and only visible to your Nexli team. 🎉
-      </SubmittedNote>
+      <div className="space-y-3">
+        <SubmittedNote accent={accent}>
+          Got it — we&apos;ll check what {processorName(answers)} connects to and
+          set up your invoicing around these amounts.
+        </SubmittedNote>
+        <PaymentSummary p={answers} />
+      </div>
     );
   }
 
+  const payload = {
+    processor,
+    processorOther,
+    card: { mode: cardMode, max: cardMax },
+    ach: { mode: achMode, min: achMin, max: achMax },
+    wire: { mode: wireMode, min: wireMin },
+    notes,
+  };
+  // Live check for amounts no method would cover (only once each amount is filled in).
+  const draft = cleanPaymentSetup({ ...payload, processor: processor || NO_PROCESSOR, processorOther: processorOther || "—" });
+  const gaps = draft.ok ? coverageGaps(draft.value) : [];
+
   async function handleSubmit() {
-    if (!email.trim() || !password) {
-      setError("Your Stripe login email and password are required.");
+    const checked = cleanPaymentSetup(payload);
+    if (!checked.ok) {
+      setError(checked.error);
       return;
     }
     setSubmitting(true);
@@ -1059,18 +1241,14 @@ function StripeSetup({
       const res = await fetch(`/api/onboarding/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taskId: "stripe_setup",
-          submission: { email, password, notes },
-        }),
+        body: JSON.stringify({ taskId: "payment_setup", submission: payload }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error || "Something went wrong. Please try again.");
         return;
       }
-      setJustSent(true);
-      setPassword("");
+      setJustSent(checked.value);
       onSubmitted();
     } catch {
       setError("Network error. Please try again.");
@@ -1079,103 +1257,112 @@ function StripeSetup({
     }
   }
 
-  const a = ACCENT[accent];
   return (
-    <div className="space-y-4">
-      {/* Ground rules — have these ready */}
+    <div className="space-y-5">
+      {/* Who processes payments */}
+      <div className="space-y-2">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Who processes your payments today? *</label>
+            <select value={processor} onChange={(e) => setProcessor(e.target.value)} className="lp-input">
+              <option value="">Select your processor…</option>
+              {PROCESSORS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+              <option value={OTHER_PROCESSOR}>Other</option>
+              <option value={NO_PROCESSOR}>{NO_PROCESSOR}</option>
+            </select>
+          </div>
+          {processor === OTHER_PROCESSOR && (
+            <div>
+              <label className={labelCls}>Which one? *</label>
+              <input
+                type="text"
+                value={processorOther}
+                onChange={(e) => setProcessorOther(e.target.value)}
+                placeholder="e.g. Heartland, Payroll, Chase"
+                className="lp-input"
+                autoComplete="off"
+              />
+            </div>
+          )}
+        </div>
+        <p className="text-[11px] text-neutral-400 leading-relaxed">
+          Not sure? It&apos;s whoever runs your card payments today — often your
+          accounting software or your bank. We&apos;ll check whether it connects
+          to your new portal so clients can pay invoices right there.
+        </p>
+      </div>
+
+      {/* Card / ACH / wire */}
       <div>
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">
-          Have these ready
+          How should clients pay each invoice?
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {STRIPE_GROUND_RULES.map((rule) => (
-            <div key={rule} className="flex items-start gap-2 text-sm">
-              <Icon
-                d={PATHS.circleCheck}
-                size={16}
-                className={`${a.check} shrink-0 mt-0.5`}
+        <div className="space-y-3">
+          <MethodBox
+            icon={PATHS.creditCard}
+            title="Credit & debit cards"
+            sub="Quickest for clients to pay, but card fees come out of what you collect."
+          >
+            <ChoicePills label="Card payments" options={CARD_OPTIONS} value={cardMode} onChange={setCardMode} />
+            {cardMode === "limit" && (
+              <AmountInput
+                label="Most you'll take by card *"
+                value={cardMax}
+                onChange={setCardMax}
+                placeholder="2,500"
+                suffix="per invoice"
               />
-              <span className="text-neutral-300 text-[13px]">{rule}</span>
-            </div>
-          ))}
-        </div>
-        <p className="text-[11px] text-neutral-400 mt-2">
-          Stripe verifies your identity (KYC) — answer their prompts exactly as
-          your business is registered.
-        </p>
-      </div>
+            )}
+          </MethodBox>
 
-      {/* Steps */}
-      <ol className="text-xs sm:text-[13px] space-y-1.5 pl-4 list-decimal leading-relaxed text-neutral-400">
-        <li>
-          <span className="font-semibold text-white">Create your account</span>{" "}
-          at stripe.com — or sign in if your business already has one
-        </li>
-        <li>
-          Complete the <span className="font-semibold text-white">business profile</span>{" "}
-          with the info above
-        </li>
-        <li>
-          Finish Stripe&apos;s{" "}
-          <span className="font-semibold text-white">identity (KYC) verification</span>
-        </li>
-        <li>
-          Come back and{" "}
-          <span className="font-semibold text-white">share your login below</span>{" "}
-          — already have a Stripe account? Just drop the login now
-        </li>
-      </ol>
+          <MethodBox
+            icon={PATHS.landmark}
+            title="ACH bank transfer"
+            sub="Low fees, straight from your client's bank account. Takes a few business days to clear."
+          >
+            <ChoicePills label="ACH payments" options={ACH_OPTIONS} value={achMode} onChange={setAchMode} />
+            {achMode === "range" && (
+              <div className="grid grid-cols-2 gap-3">
+                <AmountInput label="From" value={achMin} onChange={setAchMin} placeholder="0" />
+                <AmountInput label="Up to" value={achMax} onChange={setAchMax} placeholder="No limit" />
+              </div>
+            )}
+          </MethodBox>
 
-      {/* The frame: why this matters */}
-      <div className="rounded-xl px-4 py-3 bg-white/5 border border-white/15">
-        <p className="text-xs text-neutral-300">
-          <span className="font-bold text-white">Heads up: </span>
-          no Stripe account = no way for us to collect payments for you. This
-          one unlocks everything else.
-        </p>
-      </div>
-
-      {/* Stripe login handoff */}
-      <div className="grid sm:grid-cols-2 gap-3">
-        <div>
-          <label className={labelCls}>Stripe login email *</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@business.com"
-            className="lp-input"
-            autoComplete="off"
-          />
-        </div>
-        <div>
-          <label className={labelCls}>Stripe password *</label>
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="lp-input pr-16"
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((s) => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300"
-            >
-              {showPassword ? "Hide" : "Show"}
-            </button>
-          </div>
+          <MethodBox
+            icon={PATHS.arrowLeftRight}
+            title="Wire transfer"
+            sub="For your biggest invoices: same-day, and the bank charges a flat fee instead of a percentage."
+          >
+            <ChoicePills label="Wire payments" options={WIRE_OPTIONS} value={wireMode} onChange={setWireMode} />
+            {wireMode === "over" && (
+              <AmountInput label="Wire for invoices over *" value={wireMin} onChange={setWireMin} placeholder="25,000" />
+            )}
+          </MethodBox>
         </div>
       </div>
+
+      {gaps.length > 0 && (
+        <div className="rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/25">
+          <p className="text-xs text-neutral-200 leading-relaxed">
+            <span className="font-bold text-amber-300">Heads up: </span>
+            invoices {gaps.map(gapLine).join(" and ")} wouldn&apos;t have a way to
+            pay. Change an amount above, or tell us below how you handle them.
+          </p>
+        </div>
+      )}
+
       <div>
         <label className={labelCls}>Anything else we should know?</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          placeholder="2FA codes go to my cell, account is under my partner's email, etc."
+          placeholder="We add a 3% card fee, retainers always go by ACH, etc."
           className="lp-input resize-none"
         />
       </div>
@@ -1183,23 +1370,13 @@ function StripeSetup({
       {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex flex-wrap gap-3">
-          <a
-            href="https://dashboard.stripe.com/register"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-center gap-2 bg-[#635BFF] text-white px-6 py-3 rounded-full text-sm font-bold no-underline hover:bg-[#7a73ff] hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#635BFF]/25"
-          >
-            Open Stripe →
-          </a>
-          <button onClick={handleSubmit} disabled={submitting} className={CTA_CLASSES}>
-            {submitting ? "Sending securely…" : "Send my Stripe login securely →"}
-          </button>
-        </div>
+        <button onClick={handleSubmit} disabled={submitting} className={CTA_CLASSES}>
+          {submitting ? "Sending…" : "Send how I get paid →"}
+        </button>
         <div className="flex items-center gap-1.5">
           <Icon d={PATHS.lock} size={14} className="text-emerald-400 shrink-0" />
           <span className="text-[11px] text-neutral-500">
-            Encrypted — visible only to your Nexli team
+            Only your Nexli team sees this — no logins or card numbers needed
           </span>
         </div>
       </div>

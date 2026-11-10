@@ -27,6 +27,7 @@ import {
   setOnboardingValues,
   appendActivity,
 } from "@/lib/onboarding";
+import type { PaymentSetup } from "@/lib/payment-setup";
 
 /**
  * Demo data — creates a cast of fake clients wired through the WHOLE system:
@@ -41,6 +42,16 @@ const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 const daysAhead = (n: number) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
 const iso = (d: Date) => d.toISOString();
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+
+/** A "How you get paid" answer for the demo Launch Pads. */
+const DEMO_PAYMENT_SETUP: PaymentSetup = {
+  processor: "Square",
+  processorOther: null,
+  card: { mode: "limit", max: 2500 },
+  ach: { mode: "any", min: null, max: null },
+  wire: { mode: "over", min: 25000 },
+  notes: "Retainers always go by ACH.",
+};
 
 interface DemoClient {
   name: string;
@@ -412,8 +423,9 @@ async function seedOnboardingProgress(
       { segments: ["phases", "website", "status"], value: "in_progress" },
       { segments: ["phases", "website", "startedAt"], value: iso(daysAgo(7)) },
       { segments: ["phases", "website", "targetDate"], value: isoDate(daysAhead(10)) },
-      { segments: ["tasks", "stripe_setup", "status"], value: "submitted" },
-      { segments: ["tasks", "stripe_setup", "submittedAt"], value: iso(daysAgo(6)) },
+      { segments: ["tasks", "payment_setup", "status"], value: "submitted" },
+      { segments: ["tasks", "payment_setup", "submittedAt"], value: iso(daysAgo(6)) },
+      { segments: ["tasks", "payment_setup", "submission"], value: DEMO_PAYMENT_SETUP },
     ]);
     await appendActivity(engagementId, {
       actor: "agency",
@@ -423,7 +435,7 @@ async function seedOnboardingProgress(
     await appendActivity(engagementId, {
       actor: "client",
       type: "task_submitted",
-      message: `${clientName} set up Stripe and sent over their login 💳`,
+      message: `${clientName} told us how they get paid (Square) 💳`,
     });
     return;
   }
@@ -438,9 +450,10 @@ async function seedOnboardingProgress(
       { segments: ["phases", "automations", "startedAt"], value: iso(daysAgo(5)) },
       { segments: ["phases", "automations", "targetDate"], value: isoDate(daysAhead(5)) },
       { segments: ["phases", "automations", "note"], value: "Missed-call textback live; review engine next." },
-      { segments: ["tasks", "stripe_setup", "status"], value: "approved" },
-      { segments: ["tasks", "stripe_setup", "submittedAt"], value: iso(daysAgo(16)) },
-      { segments: ["tasks", "stripe_setup", "reviewedAt"], value: iso(daysAgo(15)) },
+      { segments: ["tasks", "payment_setup", "status"], value: "approved" },
+      { segments: ["tasks", "payment_setup", "submittedAt"], value: iso(daysAgo(16)) },
+      { segments: ["tasks", "payment_setup", "reviewedAt"], value: iso(daysAgo(15)) },
+      { segments: ["tasks", "payment_setup", "submission"], value: DEMO_PAYMENT_SETUP },
       { segments: ["tasks", "dns_access", "status"], value: "submitted" },
       { segments: ["tasks", "dns_access", "submittedAt"], value: iso(daysAgo(12)) },
       { segments: ["tasks", "fb_ads_invite", "status"], value: "submitted" },
@@ -477,8 +490,9 @@ async function seedOnboardingProgress(
     { segments: ["phases", "portal", "status"], value: "done" },
     { segments: ["phases", "portal", "startedAt"], value: iso(daysAgo(20)) },
     { segments: ["phases", "portal", "completedAt"], value: iso(daysAgo(15)) },
-    { segments: ["tasks", "stripe_setup", "status"], value: "approved" },
-    { segments: ["tasks", "stripe_setup", "submittedAt"], value: iso(daysAgo(42)) },
+    { segments: ["tasks", "payment_setup", "status"], value: "approved" },
+    { segments: ["tasks", "payment_setup", "submittedAt"], value: iso(daysAgo(42)) },
+    { segments: ["tasks", "payment_setup", "submission"], value: DEMO_PAYMENT_SETUP },
     { segments: ["tasks", "dns_access", "status"], value: "approved" },
     { segments: ["tasks", "dns_access", "submittedAt"], value: iso(daysAgo(41)) },
     { segments: ["tasks", "fb_ads_invite", "status"], value: "approved" },
