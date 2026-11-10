@@ -242,6 +242,21 @@ export function EditCard({
       onChange(r.data);
     } else onError(r.error);
   }
+  // The clips changed after this edit was made (re-made clips → a newer final cut).
+  const newestCut = finalCuts[finalCuts.length - 1];
+  const onOldCut = Boolean(latest && newestCut && latest.finalCutId !== newestCut.id);
+  /** The same edit on the newest cut: same style and instruction, hand placements and caption look kept. */
+  async function moveToNewCut() {
+    if (!latest || !newestCut) return;
+    setView("auto");
+    setBusy({ label: "Claude is putting your edit on the new cut…", detail: `${STYLE_LABEL[latest.style]}, with your placements and caption look. About a minute.` });
+    const durationS = newestCut.url ? await measureDuration(newestCut.url) : null;
+    const instruction = latest.props?.instruction ?? (latest.style === "custom" ? latest.note ?? undefined : undefined);
+    const r = await send(api(`${p.id}/edit/start`), "POST", { style: latest.style, instruction, finalCutId: newestCut.id, durationS, keepLook: true });
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
   async function render() {
     setBusy({ label: "Sending the edit to Remotion Lambda…" });
     const r = await send(api(`${p.id}/edit/render`), "POST");
@@ -562,6 +577,16 @@ export function EditCard({
 
         {latest && !picking && (
           <>
+            {onOldCut && !rendering && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-500/[0.07] px-3.5 py-3">
+                <p className="min-w-0 flex-1 text-sm text-amber-50">
+                  <b className="text-white">Your clips changed.</b> This edit is on the old cut. Put it on the new one, with the same style, placements and caption look?
+                </p>
+                <button type="button" onClick={() => void moveToNewCut()} disabled={Boolean(busy)} className="min-h-10 rounded-full bg-amber-500 px-4 text-xs font-bold text-black hover:bg-amber-400 disabled:opacity-50">
+                  Put this edit on the new cut
+                </button>
+              </div>
+            )}
             <div
               className={
                 vertical ? `grid gap-4 ${moving ? "sm:grid-cols-[minmax(0,340px)_1fr]" : "sm:grid-cols-[minmax(0,260px)_1fr]"}` : "space-y-4"

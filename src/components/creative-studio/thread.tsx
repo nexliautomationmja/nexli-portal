@@ -149,6 +149,8 @@ export function StudioThread({ projectId }: { projectId: string }) {
   const [format, setFormat] = useState<CreativeFormat>("ad_9x16");
   const [frameChanged, setFrameChanged] = useState(false);
   const [cutSummary, setCutSummary] = useState<string | null>(null);
+  // A plain note from Claude after a step that has no card of its own (the frame re-described).
+  const [info, setInfo] = useState<string | null>(null);
   // A suggestion dropped into the chat box (remounts the composer with that text).
   const [seed, setSeed] = useState<{ key: number; text: string } | null>(null);
   const [reading, setReading] = useState(false);
@@ -318,13 +320,23 @@ export function StudioThread({ projectId }: { projectId: string }) {
       } else if (images[0]) {
         // A pasted image is the frame.
         const hadScript = d.clips.length > 0;
-        if (hadScript && !confirm("Use this image as the new frame? You can rewrite the script for it afterwards.")) return false;
+        if (
+          hadScript &&
+          !confirm(
+            locked
+              ? "Use this image as the new frame? Then re-make the clips from it (the script stays as it is)."
+              : "Use this image as the new frame? You can rewrite the script for it afterwards."
+          )
+        )
+          return false;
         setWorking({ label: p.presenter?.name ? `Setting ${p.presenter.name}'s frame…` : p.studio.kind === "client" ? "Setting the frame…" : "Setting Daniela's frame…", accent: "blue" });
         const fresh = await uploadFrameFile(p.id, images[0], (hadScript ? d.project.format : fmt) === "ad_9x16");
         d = fresh as ProjectDetail;
         apply(d);
         setWorking(null);
-        if (hadScript) setFrameChanged(true);
+        // Clips already made: the clips card offers to re-make them from it. Before that: update or rewrite the script.
+        if (hadScript && locked) showClips();
+        else if (hadScript) setFrameChanged(true);
         else if (!text) setAutoWrite(true); // with text, the direction branch below writes it
       }
 
@@ -440,6 +452,25 @@ export function StudioThread({ projectId }: { projectId: string }) {
     else setError(r.error);
   }
 
+  /** Bring the clips card into view (a new frame on a video whose clips are made: re-make them from it). */
+  function showClips() {
+    setTimeout(() => document.getElementById("stage-clips")?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+  }
+
+  /** New frame, same script: Claude re-describes the frame for Kling and adjusts only actions it can't support. */
+  async function keepScript() {
+    if (!detail) return;
+    setError(null);
+    setWorking({ label: "Claude is describing the new frame…", detail: "Every line stays as written. Only an action the new pose can't do changes.", accent: "blue" });
+    const stale = (detail.project.frameSpec?.scenes ?? []).filter((sc) => sc.stale).map((sc) => sc.frameId);
+    const r = await send(api(`${detail.project.id}/frame/describe`), "POST", stale.length ? { frameIds: stale } : {});
+    setWorking(null);
+    if (!r.ok) return setError(r.error);
+    apply(r.data);
+    setFrameChanged(false);
+    setInfo((r.data as unknown as { describeNotes?: string }).describeNotes || "The frame description now matches the new frame. Your script is unchanged.");
+  }
+
   async function remove() {
     if (!confirm(`Delete "${p.title}" and everything in it? This can't be undone.`)) return;
     const r = await send(api(p.id), "DELETE");
@@ -514,7 +545,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
 
           {detail.reaction && <SourceCard detail={detail} onChange={apply} onError={fail} />}
 
-          <FrameCard key={detail.frames[0]?.id ?? "none"} detail={detail} onChange={apply} onError={fail} onFrameChosen={() => (detail.clips.length > 0 ? setFrameChanged(true) : setAutoWrite(true))} />
+          <FrameCard key={detail.frames[0]?.id ?? "none"} detail={detail} onChange={apply} onError={fail} onFrameChosen={() => (detail.clips.length === 0 ? setAutoWrite(true) : locked ? showClips() : setFrameChanged(true))} />
 
           {stage === "direction" && (() => {
             const ask = detail.project.brief?.ask;
@@ -674,10 +705,17 @@ export function StudioThread({ projectId }: { projectId: string }) {
           {frameChanged && stage === "review" && (
             <AssistantCard accent="blue" icon={SP.image} title="New frame set">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-neutral-300">The script was written for the old frame. Rewrite it so the actions and descriptions match?</p>
-                <button type="button" onClick={() => void writeScript()} className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500">
-                  Rewrite for this frame
-                </button>
+                <p className="text-sm text-neutral-300">
+                  The script was written for the old frame. Keep the script and update how the frame is described for Kling (only actions the new pose can&apos;t do change), or rewrite it?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void keepScript()} className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500">
+                    Keep the script
+                  </button>
+                  <button type="button" onClick={() => void writeScript()} className="rounded-full border border-white/15 px-4 py-2 text-xs font-bold text-neutral-200 hover:bg-white/10 hover:text-white">
+                    Rewrite for this frame
+                  </button>
+                </div>
               </div>
             </AssistantCard>
           )}
@@ -691,6 +729,16 @@ export function StudioThread({ projectId }: { projectId: string }) {
           {locked && detail.finalCuts.length > 0 && p.format === "ad_9x16" && <AdCopyCard detail={detail} onChange={apply} onError={fail} />}
 
           {working && <ThinkingCard accent={working.accent} label={working.label} detail={working.detail} />}
+          {info && (
+            <AssistantCard accent="blue" icon={SP.image} title="Frame updated">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm text-neutral-300">{info}</p>
+                <button type="button" onClick={() => setInfo(null)} className="shrink-0 text-xs font-semibold text-neutral-500 hover:text-white">
+                  OK
+                </button>
+              </div>
+            </AssistantCard>
+          )}
           {error && <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>}
         </div>
 

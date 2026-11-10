@@ -40,6 +40,9 @@ export function ClipsCard({
   const [kling, setKling] = useState<{ connected: boolean; credits: number | null; error?: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [report, setReport] = useState<string | null>(null);
+  // Re-making clips: the open picker (null = closed) and the step running.
+  const [picker, setPicker] = useState<"any" | null>(null);
+  const [remaking, setRemaking] = useState<string | null>(null);
   const polling = useRef(false);
   // Confetti once, when the last clip lands while you're on the page.
   const [doneOnLoad] = useState(() => p.status === "clips_ready");
@@ -100,6 +103,54 @@ export function ClipsCard({
     loadKling();
   }
 
+  /**
+   * Re-make clips that already have a take: a new frame is described for
+   * Kling first (its own request, lines kept), then the clips go to Kling.
+   */
+  async function remake(ids: string[]) {
+    const chosen = detail.clips.filter((c) => ids.includes(c.id));
+    if (chosen.length === 0) return;
+    const credits = chosen.reduce((s, c) => s + c.durationS * CREDITS_PER_SECOND, 0);
+    const n = chosen.length;
+    if (!confirm(`Re-make ${n} clip${n === 1 ? "" : "s"} on Kling? About ${credits.toLocaleString("en-US")} credits. The current takes are kept.`)) return;
+    setReport(null);
+    const frames = [...new Set(chosen.filter((c) => c.outdated && c.frameId).map((c) => c.frameId as string))].filter((f) => detail.redescribe.includes(f));
+    let notes = "";
+    if (frames.length) {
+      setRemaking("Claude is describing the new frame for Kling (your lines stay as written)…");
+      const d = await send(api(`${p.id}/frame/describe`), "POST", { frameIds: frames });
+      if (!d.ok) {
+        setRemaking(null);
+        return onError(d.error);
+      }
+      onChange(d.data);
+      notes = (d.data as unknown as { describeNotes?: string }).describeNotes ?? "";
+    }
+    setRemaking(`Sending ${n} clip${n === 1 ? "" : "s"} to Kling…`);
+    const r = await send(api(`${p.id}/clips/remake`), "POST", { clipIds: ids });
+    setRemaking(null);
+    if (!r.ok) return onError(r.error);
+    onChange(r.data);
+    setPicker(null);
+    const rep = (r.data as unknown as { report?: { submitted: number; failed: number; queued: number; message: string | null } }).report;
+    setReport(
+      [
+        rep ? `Sent ${rep.submitted}.` : "",
+        rep?.failed ? `${rep.failed} failed.` : "",
+        rep?.queued ? `${rep.queued} still queued.` : "",
+        rep?.message ?? "",
+        notes,
+        cutsExist ? "When they're done, a new auto-cut starts by itself." : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+    loadKling();
+  }
+
+  const outdated = detail.clips.filter((c) => c.outdated && !["rendering", "queued"].includes(c.status));
+  const remakeable = detail.clips.filter((c) => ["done", "failed", "blocked"].includes(c.status));
+  const cutsExist = detail.cuts.length > 0;
   const aspect = p.format === "vsl_16x9" ? "16 / 9" : "9 / 16";
   const numberClips = detail.clips.filter((c) => /\$|\d/.test(c.line)).map((c) => c.idx + 1);
 
@@ -158,9 +209,49 @@ export function ClipsCard({
                 {sending ? "Sending to Kling…" : `Send ${unsent.length} to Kling`}
               </button>
             )}
+            {kling?.connected && remakeable.length > 0 && outdated.length === 0 && !picker && !remaking && (
+              <button
+                type="button"
+                onClick={() => setPicker("any")}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3.5 text-xs font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+              >
+                <SvgIcon d={SP.undo} size={13} /> Re-make clips…
+              </button>
+            )}
             {report && <p className="text-xs text-neutral-300">{report}</p>}
           </div>
         </div>
+
+        {remaking ? (
+          <div className="mt-4 flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-sm text-neutral-200">
+            <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-cyan-300/30 border-t-cyan-300" aria-hidden="true" />
+            {remaking}
+          </div>
+        ) : outdated.length > 0 && kling?.connected ? (
+          <RemakePicker
+            key={outdated.map((c) => c.id).join()}
+            tone="amber"
+            title="New frame"
+            sub={`${outdated.length === 1 ? "Clip " + (outdated[0].idx + 1) + " was" : `${outdated.length} clips were`} made from the old frame. Re-make ${outdated.length === 1 ? "it" : "them"} from the new one: Claude first updates how the frame is described for Kling, keeping every line exactly as written. The old takes are kept.`}
+            clips={detail.clips.filter((c) => remakeable.includes(c) || outdated.includes(c))}
+            initial={outdated.map((c) => c.id)}
+            onRemake={(ids) => void remake(ids)}
+          />
+        ) : outdated.length > 0 ? (
+          <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/[0.07] px-3.5 py-3 text-xs text-amber-100">
+            New frame: {outdated.length} clip{outdated.length === 1 ? " was" : "s were"} made from the old one. Connect Kling to re-make {outdated.length === 1 ? "it" : "them"}.
+          </p>
+        ) : picker ? (
+          <RemakePicker
+            tone="neutral"
+            title="Re-make clips"
+            sub="Tick the clips to make again, with the same script. The old takes are kept."
+            clips={remakeable}
+            initial={[]}
+            onRemake={(ids) => void remake(ids)}
+            onCancel={() => setPicker(null)}
+          />
+        ) : null}
 
         <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
           {detail.clips.map((c) => (
@@ -235,8 +326,9 @@ function ClipTile({
         <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white" style={NUM_FONT}>
           #{clip.idx + 1} · {clip.durationS}s{clip.version > 1 ? ` · v${clip.version}` : ""}
         </span>
-        <span className="absolute left-2 top-9 sm:left-auto sm:right-2 sm:top-2">
+        <span className="absolute left-2 top-9 flex flex-col items-start gap-1 sm:left-auto sm:right-2 sm:top-2 sm:items-end">
           <Chip tone={pill.tone}>{pill.label}</Chip>
+          {clip.outdated && <Chip tone="amber">Old frame</Chip>}
         </span>
       </div>
       <div className="space-y-2 p-3">
@@ -273,6 +365,73 @@ function ClipTile({
               {busy ? "Sending…" : note.trim() ? "Fix and redo" : "Redo as-is"}
             </button>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Pick clips to re-make: each with its length, and the Kling credits for the ticked ones. */
+function RemakePicker({
+  tone,
+  title,
+  sub,
+  clips,
+  initial,
+  onRemake,
+  onCancel,
+}: {
+  tone: "amber" | "neutral";
+  title: string;
+  sub: string;
+  clips: Clip[];
+  initial: string[];
+  onRemake: (ids: string[]) => void;
+  onCancel?: () => void;
+}) {
+  const [ticked, setTicked] = useState(() => new Set(initial));
+  const chosen = clips.filter((c) => ticked.has(c.id));
+  const credits = chosen.reduce((s, c) => s + c.durationS * CREDITS_PER_SECOND, 0);
+  const toggle = (id: string) =>
+    setTicked((t) => {
+      const next = new Set(t);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  return (
+    <div className={`mt-4 rounded-2xl border p-3.5 ${tone === "amber" ? "border-amber-400/30 bg-amber-500/[0.07]" : "border-white/10 bg-white/[0.03]"}`}>
+      <p className="text-sm font-bold text-white">{title}</p>
+      <p className={`mt-0.5 text-xs leading-relaxed ${tone === "amber" ? "text-amber-100/90" : "text-neutral-400"}`}>{sub}</p>
+      <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto pr-1">
+        {clips.map((c) => (
+          <li key={c.id}>
+            <label className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/5">
+              <input type="checkbox" checked={ticked.has(c.id)} onChange={() => toggle(c.id)} className="h-4 w-4 shrink-0 accent-cyan-500" />
+              <span className="w-8 shrink-0 text-xs font-bold text-neutral-400" style={NUM_FONT}>
+                #{c.idx + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs text-neutral-200">{c.kind === "silent" ? `🎬 ${c.action}` : c.line}</span>
+              {c.outdated && <Chip tone="amber">Old frame</Chip>}
+              <span className="shrink-0 text-[11px] text-neutral-500" style={NUM_FONT}>
+                {c.durationS}s
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => onRemake(chosen.map((c) => c.id))} disabled={chosen.length === 0} className={`${CTA_CLASSES} !inline-flex disabled:opacity-50`}>
+          Re-make {chosen.length || ""} clip{chosen.length === 1 ? "" : "s"}
+          {tone === "amber" ? " from the new frame" : ""}
+        </button>
+        <span className="text-xs text-neutral-400" style={NUM_FONT}>
+          {chosen.length ? `≈ ${credits.toLocaleString("en-US")} credits` : "Tick at least one"}
+        </span>
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="min-h-9 px-2 text-xs font-semibold text-neutral-500 hover:text-white">
+            Cancel
+          </button>
         )}
       </div>
     </div>
