@@ -17,23 +17,31 @@ export async function transcribeClip(video: Buffer, version: number): Promise<Cl
  * signed URL (no download through the function); if it can't, the file is
  * sent the same way as a clip.
  */
-export async function transcribeUrl(url: string, fallback: () => Promise<Buffer>): Promise<ClipTranscript> {
-  const form = scribeForm();
+export async function transcribeUrl(
+  url: string,
+  fallback: () => Promise<Buffer>,
+  /** language null = let Scribe detect it (a reaction video's source can be in any language). */
+  opts: { language?: string | null } = {}
+): Promise<ClipTranscript> {
+  const language = opts.language === undefined ? "en" : opts.language;
+  const form = scribeForm(language);
   form.append("cloud_storage_url", url);
   try {
     return toTranscript(await scribe(form), 1);
   } catch (err) {
     console.warn("[creative-studio] Scribe by URL failed, sending the file:", err instanceof Error ? err.message : err);
-    return transcribeClip(await fallback(), 1);
+    const retry = scribeForm(language);
+    retry.append("file", new Blob([new Uint8Array(await fallback())], { type: "video/mp4" }), "clip.mp4");
+    return toTranscript(await scribe(retry), 1);
   }
 }
 
-function scribeForm(): FormData {
+function scribeForm(language: string | null = "en"): FormData {
   const form = new FormData();
   form.append("model_id", "scribe_v1");
   form.append("timestamps_granularity", "word");
   form.append("tag_audio_events", "false");
-  form.append("language_code", "en");
+  if (language) form.append("language_code", language);
   return form;
 }
 

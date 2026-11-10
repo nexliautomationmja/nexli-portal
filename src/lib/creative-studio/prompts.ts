@@ -20,6 +20,7 @@ import type {
   ScenePerson,
   SceneSpec,
 } from "@/lib/creative-studio/tables";
+import { DEFAULT_CUT } from "@/lib/creative-studio/cutplan";
 
 export const EMPTY_BRIEF: CreativeBrief = {
   oldBelief: "",
@@ -104,6 +105,20 @@ export function clipDuration(line: string): number {
   const words = wordCount(line);
   const base = Math.ceil(words / 2.4 + 1.5) + (line.includes("$") ? 1 : 0);
   return Math.min(12, Math.max(4, base));
+}
+
+/** A reaction video's watch parts: 2–10 s of the source each (one Kling clip at the cut's speed). */
+export const WATCH_MIN_S = 2;
+export const WATCH_MAX_S = 10;
+
+/**
+ * A reaction video's watch clip lasts as long as the part of the video she
+ * watches: the auto-cut keeps a silent clip whole and plays it at 1.2×, so
+ * the clip is made 1.2× as long (plus a little), within Kling's 3–12 s.
+ */
+export function watchClipDuration(w: { from: number; to: number }): number {
+  const part = Math.max(0, w.to - w.from);
+  return Math.min(12, Math.max(3, Math.ceil(part * DEFAULT_CUT.speed + 0.4)));
 }
 
 const sentence = (s: string) => {

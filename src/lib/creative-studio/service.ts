@@ -11,9 +11,11 @@ import {
   type ManusActivitySnapshot,
   type SceneSlot,
   type ScriptSnapshot,
+  type SourceMeta,
 } from "@/lib/creative-studio/tables";
-import { buildKlingPrompt, clipDuration, isStory, klingModelForClip, presenterOf } from "@/lib/creative-studio/prompts";
+import { buildKlingPrompt, clipDuration, isStory, klingModelForClip, presenterOf, watchClipDuration } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
+import { claimLive } from "@/lib/creative-studio/reaction-shared";
 import { normalizeCopy } from "@/lib/creative-studio/ad-copy";
 import { firmBrief, studioById, studioRef } from "@/lib/creative-studio/studios";
 import type { ScriptInput } from "@/lib/creative-studio/script";
@@ -34,6 +36,8 @@ export function clipFieldsOf(c: Clip): ClipFields {
     listenerReactions: c.listenerReactions ?? [],
     kind: c.kind ?? "to_camera",
     frameId: c.frameAssetId ?? null,
+    // Only a reaction video's watch clips have one (every other clip reads exactly as before).
+    ...(c.watch ? { watch: c.watch } : {}),
   };
 }
 
@@ -49,13 +53,15 @@ export function clipColumns(f: ClipFields) {
     cues: f.cues,
     listenerReactions: f.listenerReactions,
     kind: f.kind ?? "to_camera",
+    watch: f.kind === "silent" ? f.watch ?? null : null,
   };
 }
 
 /** Duration + full Kling prompt + model for a clip, from the project's format, rig, frame (scenes) and presenter. */
 export function derivedClip(project: Project, fields: ClipFields) {
   return {
-    durationS: clipDuration(fields.kind === "silent" ? "" : fields.line),
+    // A reaction video's watch clip lasts as long as the part of the video she watches.
+    durationS: fields.kind === "silent" && fields.watch ? watchClipDuration(fields.watch) : clipDuration(fields.kind === "silent" ? "" : fields.line),
     prompt: buildKlingPrompt({
       format: project.format,
       rig: project.rig,
@@ -139,7 +145,7 @@ export async function projectDetail(project: Project) {
     db
       .select()
       .from(creativeAssets)
-      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut", "render", "ad_copy"])))
+      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut", "render", "ad_copy", "source_video"])))
       .orderBy(asc(creativeAssets.createdAt)),
     db.select().from(creativeCuts).where(eq(creativeCuts.projectId, project.id)).orderBy(asc(creativeCuts.version)),
     db.select().from(creativeEdits).where(eq(creativeEdits.projectId, project.id)).orderBy(asc(creativeEdits.version)),
@@ -157,8 +163,14 @@ export async function projectDetail(project: Project) {
     ? await db.select().from(creativeAssets).where(inArray(creativeAssets.id, videoIds))
     : [];
   const videoPath = new Map(videos.map((v) => [v.id, v.storagePath]));
+  // A reaction video's source: the upload, its light copy and its stills.
+  const source = project.reaction ? extras.find((a) => a.kind === "source_video" && a.id === project.reaction?.sourceId) ?? null : null;
+  const sourceMeta = (source?.metadata ?? {}) as SourceMeta;
   const signed = await signPaths(
-    [...frames, ...videos, ...options, ...finalCuts, ...cutAssets, ...extras.filter((a) => a.kind === "render")].map((a) => a.storagePath),
+    [
+      ...[...frames, ...videos, ...options, ...finalCuts, ...cutAssets, ...extras.filter((a) => a.kind === "render")].map((a) => a.storagePath),
+      ...(source ? [source.storagePath, sourceMeta.proxyPath, ...(sourceMeta.stills ?? []).map((st) => st.path)] : []),
+    ],
     6 * 3600
   );
   const url = (path: string | null) => (path ? signed.get(path) ?? null : null);
@@ -297,6 +309,14 @@ export async function projectDetail(project: Project) {
       outputUrl: e.outputAssetId ? url(renders.get(e.outputAssetId) ?? null) : s3Outputs.get(e.id) ?? null,
       createdAt: e.createdAt.toISOString(),
     })),
+    /** A reaction video: the video she reacts to (null on every other video). */
+    reaction: project.reaction
+      ? {
+          /** The source the script was written for (another one = rewrite the script). */
+          scriptFor: project.reaction.scriptFor ?? null,
+          source: source ? sourceDetail(source, sourceMeta, url) : null,
+        }
+      : null,
     adCopies: extras
       .filter((a) => a.kind === "ad_copy")
       .map((a) => ({ id: a.id, ...normalizeCopy(a.metadata), createdAt: a.createdAt.toISOString() })),
@@ -318,6 +338,34 @@ export async function projectDetail(project: Project) {
 }
 
 export type ProjectDetail = Awaited<ReturnType<typeof projectDetail>>;
+
+function sourceDetail(a: Asset, m: SourceMeta, url: (path: string | null) => string | null) {
+  return {
+    id: a.id,
+    /** processing | ready | failed */
+    status: a.status,
+    error: a.error,
+    filename: m.filename ?? "video",
+    durationS: a.durationMs ? a.durationMs / 1000 : null,
+    width: a.width,
+    height: a.height,
+    url: url(a.storagePath),
+    /** The light copy (what the edit plays in the corner); null until it's made. */
+    proxyUrl: url(m.proxyPath ?? null),
+    analyzed: Boolean(m.analyzedAt),
+    analyzeError: m.analyzeError ?? null,
+    proxyError: m.proxyError ?? null,
+    /** Steps another request is working on right now. */
+    running: { analyze: claimLive(m.claims?.analyze), proxy: claimLive(m.claims?.proxy) },
+    stills: (m.stills ?? []).map((st) => ({ t: st.t, url: url(st.path) })),
+    /** How many words Scribe heard (0 = no speech). */
+    words: m.words?.length ?? 0,
+    hasAudio: m.hasAudio ?? null,
+    summary: m.summary ?? null,
+    captioned: m.captioned ?? null,
+    uploadedAt: a.createdAt.toISOString(),
+  };
+}
 
 /** Snapshot of the current script, for the version history (kept so the user can revert). */
 export async function snapshotOf(project: Project, reason: string): Promise<ScriptSnapshot | null> {

@@ -7,6 +7,7 @@ import { projectDetail, rebuildPrompts } from "@/lib/creative-studio/service";
 import { removePaths } from "@/lib/creative-studio/storage";
 import { cleanBrief, cleanFormatRig } from "@/lib/creative-studio/validate";
 import { presenterForStudio } from "@/lib/creative-studio/presenters";
+import { assetFiles } from "@/lib/creative-studio/source";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -84,10 +85,11 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
   const assets = await db
-    .select({ path: creativeAssets.storagePath })
+    .select({ kind: creativeAssets.kind, storagePath: creativeAssets.storagePath, metadata: creativeAssets.metadata })
     .from(creativeAssets)
     .where(eq(creativeAssets.projectId, project.id));
-  await removePaths(assets.map((a) => a.path));
+  // A reaction video's source also keeps a light copy and stills.
+  await removePaths(assets.flatMap(assetFiles));
   await db.delete(creativeProjects).where(eq(creativeProjects.id, project.id));
   return NextResponse.json({ ok: true });
 }

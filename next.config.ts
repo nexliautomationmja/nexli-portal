@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/dashboard/creative-studio/projects/[projectId]/cut/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
     "/api/dashboard/creative-studio/projects/[projectId]/edit/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
+    // Reaction videos: stills and the light copy of the video she reacts to.
+    "/api/dashboard/creative-studio/projects/[projectId]/source/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
     "/api/dashboard/creative-studio/ad-copy/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
   },
 };

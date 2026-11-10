@@ -158,6 +158,55 @@ export interface ClipFields {
   kind?: ClipKind;
   /** The scene's frame (creative_clips.frame_asset_id); absent = the opening frame. */
   frameId?: string | null;
+  /** A reaction video's watch clip: the part of the video she watches. Absent on every other clip. */
+  watch?: WatchWindow | null;
+}
+
+/**
+ * A reaction video (Nov 2026): the presenter holds her phone, opens with a
+ * hook, watches a video, then reacts, with the video in the corner of the
+ * edit. Null on every other video.
+ */
+export interface ReactionInfo {
+  /** The creative_assets row (kind source_video) she reacts to. */
+  sourceId: string;
+  /** The source the current script was written for (a different one = the script needs rewriting). */
+  scriptFor?: string | null;
+}
+
+/** Seconds on the source video's own timeline. */
+export interface WatchWindow {
+  from: number;
+  to: number;
+}
+
+/** One still taken from the source video, for Claude to look at. */
+export interface SourceStill {
+  path: string;
+  /** Seconds into the source. */
+  t: number;
+}
+
+/** creative_assets.metadata of a source_video. */
+export interface SourceMeta {
+  filename?: string;
+  /** The light copy the edit plays in the corner (960 px, 30 fps, H.264, −16 LUFS). */
+  proxyPath?: string;
+  proxyError?: string;
+  stills?: SourceStill[];
+  /** What Scribe heard (empty for a video with no speech). */
+  words?: TranscriptWord[];
+  text?: string;
+  analyzedAt?: string;
+  analyzeError?: string;
+  hasAudio?: boolean;
+  fps?: number | null;
+  /** In-flight work: when each step was claimed (a claim older than 320 s is dead). */
+  claims?: { analyze?: string; proxy?: string };
+  /** Claude's one-line read of the video (written with the script). */
+  summary?: string;
+  /** The video already shows its own captions (so the edit doesn't add a second set). */
+  captioned?: boolean;
 }
 
 export interface ScriptSnapshot {
@@ -244,6 +293,8 @@ export const creativeProjects = pgTable("creative_projects", {
   scenes: jsonb("scenes").$type<SceneSlot[] | null>(),
   /** Who presents it; null = the studio's default (Daniela in Nexli's studio). */
   presenter: jsonb("presenter").$type<PresenterInfo | null>(),
+  /** A reaction video's source; null = every other video. */
+  reaction: jsonb("reaction").$type<ReactionInfo | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -320,6 +371,8 @@ export const creativeClips = pgTable("creative_clips", {
   listenerReactions: jsonb("listener_reactions").$type<ListenerReaction[]>().notNull().default([]),
   /** to_camera | in_scene | voiceover | silent (story videos). */
   kind: text("kind").$type<ClipKind>().notNull().default("to_camera"),
+  /** A reaction video's watch clip: the part of the source she watches (null otherwise). */
+  watch: jsonb("watch").$type<WatchWindow | null>(),
   durationS: integer("duration_s").notNull(),
   /** The complete Kling prompt, assembled in code from the §7 templates. */
   prompt: text("prompt").notNull(),
@@ -803,6 +856,9 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "scenes" jsonb`);
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "presenter" jsonb`);
       await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "kind" text NOT NULL DEFAULT 'to_camera'`);
+      // Nov 2026: reaction videos (the presenter reacts to a video shown in the corner).
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "reaction" jsonb`);
+      await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "watch" jsonb`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_presenters" (
           "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -167,6 +167,75 @@ export async function tempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`));
 }
 
+/** Fit inside a `max`-pixel square, never upscaling, both sides even (works on ffmpeg 4.1). */
+const fitLongEdge = (max: number) => `scale='if(gt(iw,ih),min(${max},iw),-2)':'if(gt(iw,ih),-2,min(${max},ih))'`;
+
+/**
+ * Stills from a reaction video's source for Claude to look at: `count` JPEGs
+ * at even points through it (long edge `size` px), each with the second it
+ * was taken at so Claude can tie what it sees to the words.
+ */
+export async function extractStills(file: string, outDir: string, count: number, durationS: number, size = 768): Promise<{ path: string; t: number }[]> {
+  const out: { path: string; t: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = Math.round(((durationS * (i + 0.5)) / count) * 10) / 10;
+    const dest = path.join(outDir, `still-${String(i + 1).padStart(2, "0")}.jpg`);
+    try {
+      await run(["-y", "-hide_banner", "-loglevel", "error", "-ss", t.toFixed(2), "-i", file, "-frames:v", "1", "-vf", fitLongEdge(size), "-q:v", "4", dest], 60_000);
+      out.push({ path: dest, t });
+    } catch (err) {
+      console.warn("[creative-studio] still grab failed at", t.toFixed(2), err instanceof Error ? err.message : err);
+    }
+  }
+  return out;
+}
+
+/**
+ * The light copy of a reaction video's source that the edit plays in the
+ * corner: long edge at most 960 px, 30 fps, H.264, and the sound at the cut's
+ * loudness (−16 LUFS) so it's as loud as the presenter. Small enough that a
+ * second video costs little in a Lambda copy; plays in every browser.
+ */
+export async function makeSourceProxy(input: string, output: string, opts: { maxSeconds: number; hasAudio: boolean; timeoutMs: number }) {
+  await run(
+    [
+      "-hide_banner",
+      "-y",
+      "-filter_threads",
+      "1",
+      "-threads",
+      "2",
+      "-i",
+      input,
+      "-t",
+      String(opts.maxSeconds),
+      "-vf",
+      `${fitLongEdge(960)},setsar=1,fps=30,format=yuv420p`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "23",
+      "-maxrate",
+      "3M",
+      "-bufsize",
+      "6M",
+      "-g",
+      "60",
+      "-threads",
+      "2",
+      ...(opts.hasAudio
+        ? ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,aformat=channel_layouts=stereo", "-c:a", "aac", "-b:a", "128k", "-ar", "44100"]
+        : ["-an"]),
+      "-movflags",
+      "+faststart",
+      output,
+    ],
+    opts.timeoutMs
+  );
+}
+
 /**
  * Render one clip's piece: keep the planned segments, speed up (pitch kept),
  * normalise frame size + 60 fps CFR (editing rulebook), and run the
