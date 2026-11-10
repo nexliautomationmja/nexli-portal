@@ -123,7 +123,11 @@ export function MessageBubble({
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] mb-1.5" style={{ color: "var(--text-muted)" }}>
             <span aria-hidden="true">📬</span> Weekly update
           </p>
-          {headline && <p className="text-[15px] font-bold leading-snug mb-1.5">{headline}</p>}
+          {headline && (
+            <p className="text-[15px] font-bold leading-snug mb-1.5" style={{ color: "inherit" }}>
+              {headline}
+            </p>
+          )}
           {msg.audioUrl && (
             <div className="my-2">
               <VoicePlayer src={msg.audioUrl} durationMs={msg.audioDurationMs} tone="theirs" />
@@ -134,7 +138,7 @@ export function MessageBubble({
           ) : (
             <div className="space-y-2">
               {paragraphs.map((p, i) => (
-                <p key={i} className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                <p key={i} className="text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: "inherit" }}>
                   {p}
                 </p>
               ))}
@@ -183,7 +187,10 @@ export function MessageBubble({
             <Transcript msg={msg} mine={mine} onRetry={onRetry} retrying={retrying} />
           </>
         ) : (
-          <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+          // Inherit the bubble's color (white on ours): the global `p` rule would make it muted gray.
+          <p className="text-sm whitespace-pre-wrap break-words" style={{ color: "inherit" }}>
+            {msg.message}
+          </p>
         )}
       </div>
       <p className="text-[10px] mt-1 px-1" style={{ color: "var(--text-muted)" }}>

@@ -11,3 +11,4 @@ export { Surface, Inset, FeatureCard, type FeatureTone } from "./surfaces";
 export { KpiTile, KpiGrid, MiniStat, DataTable, List, ListRow, type Column } from "./data";
 export { Sheet } from "./sheet";
 export { Toast, useToast, type ToastState, type ToastTone } from "./toast";
+export { ThreadLayout, ThreadListHeader } from "./thread";

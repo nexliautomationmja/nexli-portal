@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { SendIcon } from "@/components/ui/icons";
 import type { ThreadMessage } from "@/lib/portal-messages-types";
-import { MessageBubble } from "./message-bubble";
+import { ThreadView } from "./thread-view";
 import { VoiceRecorder } from "./voice-recorder";
 
 const MAX_LEN = 2000;
@@ -59,6 +58,7 @@ export function MessageThread({
   headerRight,
   theirLabel,
   onActivity,
+  onBack,
   className = "",
 }: {
   fetchUrl: string;
@@ -75,6 +75,8 @@ export function MessageThread({
   theirLabel?: string;
   /** Called after this side sends something or the thread is (re)loaded. */
   onActivity?: () => void;
+  /** Back to the conversation list (shown below lg). */
+  onBack?: () => void;
   className?: string;
 }) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
@@ -261,128 +263,36 @@ export function MessageThread({
     }
   }
 
-  // "Read" goes under the latest message from this side, if it was read.
-  let lastMineIdx = -1;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].senderType === mineSide) {
-      lastMineIdx = i;
-      break;
-    }
-  }
-
   return (
-    <div className={`flex flex-col h-full min-h-0 ${className}`}>
-      {/* Header */}
-      <div className="px-4 md:px-5 py-3 border-b border-[var(--card-border)] flex items-start justify-between gap-3 shrink-0">
-        <div className="min-w-0">
-          <div className="text-sm md:text-base font-semibold truncate" style={{ color: "var(--text-main)" }}>
-            {title}
-          </div>
-          {subtitle && (
-            <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              {subtitle}
-            </div>
-          )}
-        </div>
-        {headerRight}
-      </div>
-
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 md:px-5 py-4 space-y-3 no-scrollbar"
-      >
-        {loading ? (
-          <div className="py-10 text-center">
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-center px-6">
-            <p className="text-sm" style={{ color: loadError ? "#f43f5e" : "var(--text-muted)" }}>
-              {loadError ?? emptyText}
-            </p>
-          </div>
-        ) : (
-          messages.map((m, i) => {
-            const mine = m.senderType === mineSide;
-            return (
-              <div key={m.id} className={m.id.startsWith("temp-") ? "opacity-70" : undefined}>
-                <MessageBubble
-                  msg={m}
-                  mine={mine}
-                  showRead={i === lastMineIdx && m.read}
-                  senderLabel={!mine ? theirLabel : undefined}
-                  onRetry={retryUrl && m.audioUrl ? () => void retryTranscript(m.id) : undefined}
-                  retrying={retrying.has(m.id)}
-                />
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Composer */}
-      <div
-        className="shrink-0 border-t border-[var(--card-border)] px-3 md:px-4 pt-3"
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
-      >
-        {sendError && (
-          <p className="text-xs text-rose-700 dark:text-rose-400 mb-2" role="alert">
-            {sendError}
-          </p>
-        )}
-        <div className="flex items-end gap-2">
-          {!recorderOpen && (
-            <div className="flex-1 min-w-0 relative">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value.slice(0, MAX_LEN));
-                  autoGrow();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    void sendText();
-                  }
-                }}
-                placeholder="Message…"
-                rows={1}
-                maxLength={MAX_LEN}
-                enterKeyHint="send"
-                className="block w-full resize-none rounded-2xl px-4 py-[10px] text-base md:text-sm leading-6 outline-none border border-[var(--card-border)] bg-[var(--input-bg)] focus:border-cyan-400 transition-colors"
-                style={{ color: "var(--text-main)", maxHeight: 140 }}
-              />
-              {input.length > MAX_LEN - 200 && (
-                <span
-                  className="absolute bottom-1 right-3 text-[10px]"
-                  style={{ color: input.length > MAX_LEN - 50 ? "#EF4444" : "var(--text-muted)" }}
-                >
-                  {input.length}/{MAX_LEN}
-                </span>
-              )}
-            </div>
-          )}
-          <VoiceRecorder
-            onSend={sendVoice}
-            onActiveChange={setRecorderOpen}
-            className={recorderOpen ? "flex-1" : ""}
-          />
-          {!recorderOpen && (
-            <button
-              type="button"
-              onClick={() => void sendText()}
-              disabled={!input.trim()}
-              aria-label="Send message"
-              className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center text-white disabled:opacity-40 transition-opacity"
-              style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-            >
-              <SendIcon className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
+    <div className={`flex h-full min-h-0 flex-col ${className}`}>
+      <ThreadView
+        title={title}
+        subtitle={subtitle}
+        headerRight={headerRight}
+        onBack={onBack}
+        messages={messages}
+        mineSide={mineSide}
+        theirLabel={theirLabel}
+        loading={loading}
+        loadError={loadError}
+        emptyText={emptyText}
+        scrollRef={scrollRef}
+        textareaRef={textareaRef}
+        onRetryTranscript={retryUrl ? (id) => void retryTranscript(id) : undefined}
+        retrying={retrying}
+        composer={{
+          value: input,
+          onChange: (v) => {
+            setInput(v.slice(0, MAX_LEN));
+            autoGrow();
+          },
+          onSend: () => void sendText(),
+          maxLen: MAX_LEN,
+          error: sendError,
+          recorder: <VoiceRecorder onSend={sendVoice} onActiveChange={setRecorderOpen} className={recorderOpen ? "flex-1" : ""} />,
+          recorderOpen,
+        }}
+      />
     </div>
   );
 }

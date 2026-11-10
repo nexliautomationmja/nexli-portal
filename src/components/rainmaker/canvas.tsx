@@ -40,10 +40,15 @@ export function RainmakerStyles() {
  * Edge to edge on phones, framed from sm up. overflow-clip (not hidden) keeps
  * sticky children sticking to the viewport.
  */
-export function RainmakerCanvas({ children }: { children: React.ReactNode }) {
+export function RainmakerCanvas({ fill = false, children }: { fill?: boolean; children: React.ReactNode }) {
+  // `fill`: exactly one screen tall (chat pages scroll inside, not the page).
+  // The phone top bar shows until md, so the height switches there.
+  const height = fill
+    ? "flex h-[calc(100dvh-5.75rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col md:h-[calc(100dvh-3rem)]"
+    : "min-h-[calc(100dvh-5.75rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] sm:min-h-[calc(100dvh-3rem)] md:min-h-[calc(100dvh-3rem)]";
   return (
     <div
-      className="rm-canvas dark relative isolate -mx-4 min-h-[calc(100dvh-5.75rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-clip border-y border-white/5 bg-[#020617] text-white sm:mx-0 sm:min-h-[calc(100dvh-3rem)] sm:rounded-3xl sm:border md:min-h-[calc(100dvh-3rem)]"
+      className={`rm-canvas dark relative isolate -mx-4 overflow-clip border-y border-white/5 bg-[#020617] text-white sm:mx-0 sm:rounded-3xl sm:border ${height}`}
       style={CANVAS_VARS}
     >
       <RainmakerStyles />
@@ -59,9 +64,23 @@ export function RainmakerCanvas({ children }: { children: React.ReactNode }) {
 
 const COLUMN = { data: "max-w-6xl", form: "max-w-5xl", thread: "max-w-3xl" } as const;
 
-/** The page column inside the canvas. Data pages use the widest. */
-export function PageColumn({ width = "data", className = "", children }: { width?: keyof typeof COLUMN; className?: string; children: React.ReactNode }) {
-  return <div className={`mx-auto px-4 pb-24 sm:px-6 ${COLUMN[width]} ${className}`}>{children}</div>;
+/** The page column inside the canvas. Data pages use the widest; `fill` stretches it to the canvas height. */
+export function PageColumn({
+  width = "data",
+  fill = false,
+  className = "",
+  children,
+}: {
+  width?: keyof typeof COLUMN;
+  fill?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`mx-auto w-full px-4 sm:px-6 ${fill ? "flex min-h-0 flex-1 flex-col pb-4 sm:pb-6" : "pb-24"} ${COLUMN[width]} ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 const GRADIENT = {
