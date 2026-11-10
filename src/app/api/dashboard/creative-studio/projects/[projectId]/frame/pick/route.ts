@@ -4,21 +4,25 @@ import { db } from "@/db";
 import { creativeAssets } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { projectDetail } from "@/lib/creative-studio/service";
-import { readStorage, setOpeningFrame } from "@/lib/creative-studio/frames";
+import { readStorage, setSceneFrame } from "@/lib/creative-studio/frames";
 import { sameStudio } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 60;
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
-/** Use a Manus option or a Daniela reference as the opening frame (cropped to 9:16 for ads). */
+/**
+ * Use a Manus option or a reference picture as a frame (cropped to 9:16 for
+ * ads): the opening frame, or with `scene` a scene's frame ("new" adds a scene).
+ */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
-  const body = (await req.json().catch(() => null)) as { assetId?: string } | null;
+  const body = (await req.json().catch(() => null)) as { assetId?: string; scene?: string } | null;
   const id = typeof body?.assetId === "string" ? body.assetId : "";
+  const scene = typeof body?.scene === "string" && body.scene ? body.scene : null;
 
   const [asset] = await db
     .select()
@@ -42,9 +46,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (!asset?.storagePath) return NextResponse.json({ error: "Image not found" }, { status: 404 });
 
   try {
-    await setOpeningFrame(project, await readStorage(asset.storagePath), asset.source === "manus" ? "manus" : "reference", {
-      fromAssetId: asset.id,
-    });
+    await setSceneFrame(
+      project,
+      await readStorage(asset.storagePath),
+      asset.source === "manus" ? "manus" : "reference",
+      { fromAssetId: asset.id },
+      scene
+    );
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't use that image" }, { status: 500 });
   }

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { creativeClips, type ClipFields } from "@/lib/creative-studio/tables";
+import { CLIP_KINDS, creativeClips, type ClipFields, type ClipKind } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipFieldsOf, derivedClip, projectDetail, touchProject } from "@/lib/creative-studio/service";
+import { clipColumns, clipFieldsOf, derivedClip, framesOf, projectDetail, scenesOf, touchProject } from "@/lib/creative-studio/service";
 
 type Ctx = { params: Promise<{ projectId: string; clipId: string }> };
 
@@ -17,7 +17,10 @@ async function loadClip(projectId: string, clipId: string) {
   return clip ?? null;
 }
 
-/** Edit a clip's fields; duration and the Kling prompt are recomputed server-side. */
+/**
+ * Edit a clip's fields — including, in a story, its scene (`frameId`) and
+ * kind of shot; duration and the Kling prompt are recomputed server-side.
+ */
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
@@ -30,13 +33,22 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const body = (await req.json().catch(() => null)) as Partial<ClipFields> | null;
   const current = clipFieldsOf(clip);
   const s = (v: unknown, fallback: string) => (typeof v === "string" ? v.slice(0, 2000) : fallback);
+  // A scene change must name one of this video's scene frames.
+  let frameId = current.frameId ?? null;
+  if (typeof body?.frameId === "string" && body.frameId !== frameId) {
+    const scenes = scenesOf(project, await framesOf(project.id));
+    if (!scenes.some((sc) => sc.frameId === body.frameId)) return NextResponse.json({ error: "That scene isn't in this video" }, { status: 400 });
+    frameId = body.frameId;
+  }
+  const kind: ClipKind = CLIP_KINDS.includes(body?.kind as ClipKind) ? (body?.kind as ClipKind) : current.kind ?? "to_camera";
   const next: ClipFields = {
     section: s(body?.section, current.section).trim() || current.section,
     speaker:
       body?.speaker === null || ["LEFT", "CENTER", "RIGHT"].includes(body?.speaker as string)
         ? (body?.speaker as ClipFields["speaker"])
         : current.speaker,
-    line: s(body?.line, current.line).trim() || current.line,
+    // A silent shot has no line; anything else keeps one.
+    line: kind === "silent" ? "" : s(body?.line, current.line).trim() || current.line || "New line.",
     register: s(body?.register, current.register),
     action: s(body?.action, current.action),
     editNote: s(body?.editNote, current.editNote),
@@ -46,11 +58,13 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
           .filter((r) => r && typeof r.shortName === "string" && typeof r.reaction === "string")
           .map((r) => ({ shortName: r.shortName.slice(0, 200), reaction: r.reaction.slice(0, 500) }))
       : current.listenerReactions,
+    kind,
+    frameId,
   };
 
   await db
     .update(creativeClips)
-    .set({ ...next, speaker: next.speaker ?? null, ...derivedClip(project, next), updatedAt: new Date() })
+    .set({ ...clipColumns(next), ...derivedClip(project, next), frameAssetId: frameId, updatedAt: new Date() })
     .where(eq(creativeClips.id, clip.id));
   await touchProject(project);
   const fresh = await loadProject(access.ownerId, project.id);

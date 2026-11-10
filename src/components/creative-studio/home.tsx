@@ -11,6 +11,7 @@ import { Composer, type ComposerSubmit } from "@/components/creative-studio/comp
 import { BatchPlanCard, type BatchPlan, type ManusMode } from "@/components/creative-studio/batch-plan-card";
 import { META_LIME, MetaChip, MetaLogo } from "@/components/creative-studio/meta";
 import { assignFrames, BATCH_MAX } from "@/lib/creative-studio/batch-shared";
+import { MAX_SCENES } from "@/lib/creative-studio/prompts";
 import { useIsTouch } from "@/lib/use-media";
 import { inStudioQs, studioHref } from "@/components/creative-studio/client";
 import type { StudioView } from "@/lib/creative-studio/studios";
@@ -200,7 +201,9 @@ export function StudioHome({ studio }: { studio: StudioView }) {
       });
       const b = await r.json().catch(() => null);
       if (!r.ok || !b?.id) throw new Error(b?.error || "Couldn't start the video");
-      if (images[0]) await uploadFrameFile(b.id, images[0], fmt === "ad_9x16");
+      // One image is the frame; several are the story's scenes, in the order attached.
+      if (images.length === 1) await uploadFrameFile(b.id, images[0], fmt === "ad_9x16");
+      for (const file of images.length > 1 ? images : []) await uploadFrameFile(b.id, file, fmt === "ad_9x16", "new");
       router.push(`/dashboard/creative-studio/${b.id}${text ? "?start=1" : ""}`);
       return true;
     } catch (err) {
@@ -261,6 +264,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
             count={count}
             onCount={setCount}
             maxCount={BATCH_MAX[format]}
+            maxImages={MAX_SCENES}
             onSubmit={start}
           />
           {error && (

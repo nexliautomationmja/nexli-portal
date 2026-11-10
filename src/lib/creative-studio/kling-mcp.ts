@@ -394,6 +394,8 @@ export async function submitClip(
     frameUrl: string;
     taskTraceId: string;
     rationale: string;
+    /** Omni needs the aspect ratio (its default is 16:9): 9:16 for ads, 16:9 for VSLs. */
+    aspectRatio?: "9:16" | "16:9";
   }
 ): Promise<{ generationId: string; model: string }> {
   const model = args.multiPerson ? "kling-video-v3_0_omni" : "kling-video-v3_0";
@@ -407,7 +409,7 @@ export async function submitClip(
   ];
   const result = await callTool(token, "image_to_video", {
     model,
-    arguments: args.multiPerson ? [...common, { name: "aspect_ratio", value: "9:16" }] : common,
+    arguments: args.multiPerson ? [...common, { name: "aspect_ratio", value: args.aspectRatio ?? "9:16" }] : common,
     inputs: [{ name: args.multiPerson ? "image_1" : "first_image", inputType: "URL", url: args.frameUrl }],
     rationale: args.rationale,
     taskTraceId: args.taskTraceId,

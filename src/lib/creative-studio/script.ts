@@ -1,13 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { KLING_FRAMEWORK } from "@/lib/creative-studio/rules.generated";
+import { KLING_FRAMEWORK, STORY_RULES } from "@/lib/creative-studio/rules.generated";
 import { withoutNexliSections } from "@/lib/creative-studio/framework-sections";
 import { FORMAT_LABEL, RIG_LABEL } from "@/lib/creative-studio/prompts";
-import type {
-  ClipFields,
-  CreativeBrief,
-  CreativeFormat,
-  CreativeRig,
-  FrameSpec,
+import {
+  CLIP_KINDS,
+  type ClipFields,
+  type ClipKind,
+  type CreativeBrief,
+  type CreativeFormat,
+  type CreativeRig,
+  type FrameSpec,
+  type PresenterInfo,
+  type ScenePerson,
+  type SceneSpec,
 } from "@/lib/creative-studio/tables";
 
 /**
@@ -41,6 +46,8 @@ Follow every standing rule in §1: C-P-A spelled with hyphens, dollar figures as
 `;
 
 const SYSTEM = `${KLING_FRAMEWORK}\n${PORTAL_ADDENDUM}`;
+/** A story video: the framework, then the story rules (they replace the one-frame field list). */
+const STORY_SYSTEM = `${KLING_FRAMEWORK}\n${STORY_RULES}`;
 
 const STR = { type: "string" } as const;
 
@@ -113,6 +120,262 @@ const REWRITE_SCHEMA = {
   properties: { clip: CLIP_SCHEMA, notes: STR },
 } as const;
 
+// ── Story videos ─────────────────────────────────────────────────────────
+
+const STORY_PERSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["position", "presenter", "who", "look", "shortName", "pronoun", "voice"],
+  properties: {
+    position: { type: "string", enum: ["ONLY", "LEFT", "CENTER", "RIGHT"] },
+    presenter: { type: "boolean" },
+    who: STR,
+    look: STR,
+    shortName: STR,
+    pronoun: { type: "string", enum: ["she", "he"] },
+    voice: STR,
+  },
+} as const;
+
+const STORY_SCENE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["scene", "camera", "setting", "people"],
+  properties: {
+    scene: { type: "integer" },
+    camera: { type: "string", enum: ["locked", "selfie", "handheld"] },
+    setting: STR,
+    people: { type: "array", items: STORY_PERSON_SCHEMA },
+  },
+} as const;
+
+const STORY_CLIP_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["scene", "kind", "speaker", "section", "line", "register", "action", "editNote", "cues", "listenerReactions"],
+  properties: {
+    scene: { type: "integer" },
+    kind: { type: "string", enum: ["to_camera", "in_scene", "voiceover", "silent"] },
+    speaker: { type: "string", enum: ["PRESENTER", "LEFT", "CENTER", "RIGHT"] },
+    section: STR,
+    line: STR,
+    register: STR,
+    action: STR,
+    editNote: STR,
+    cues: STR,
+    listenerReactions: CLIP_SCHEMA.properties.listenerReactions,
+  },
+} as const;
+
+const STORY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "scenes", "clips", "notes"],
+  properties: {
+    title: STR,
+    scenes: { type: "array", items: STORY_SCENE_SCHEMA },
+    clips: { type: "array", items: STORY_CLIP_SCHEMA },
+    notes: STR,
+  },
+} as const;
+
+const STORY_REWRITE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["clip", "notes"],
+  properties: { clip: STORY_CLIP_SCHEMA, notes: STR },
+} as const;
+
+interface RawStoryPerson {
+  position: ScenePerson["position"];
+  presenter: boolean;
+  who: string;
+  look: string;
+  shortName: string;
+  pronoun: "she" | "he";
+  voice: string;
+}
+interface RawStoryScene {
+  scene: number;
+  camera: SceneSpec["camera"];
+  setting: string;
+  people: RawStoryPerson[];
+}
+interface RawStoryClip {
+  scene: number;
+  kind: ClipKind;
+  speaker: "PRESENTER" | "LEFT" | "CENTER" | "RIGHT";
+  section: string;
+  line: string;
+  register: string;
+  action: string;
+  editNote: string;
+  cues: string;
+  listenerReactions: { shortName: string; reaction: string }[];
+}
+export interface RawStory {
+  title: string;
+  scenes: RawStoryScene[];
+  clips: RawStoryClip[];
+  notes: string;
+}
+
+const CAMERAS: SceneSpec["camera"][] = ["locked", "selfie", "handheld"];
+const POSITIONS: ScenePerson["position"][] = ["ONLY", "LEFT", "CENTER", "RIGHT"];
+
+function cleanPeople(raw: unknown): ScenePerson[] {
+  if (!Array.isArray(raw)) return [];
+  let presenterSeen = false;
+  return raw.slice(0, 4).flatMap((x) => {
+    const r = (x ?? {}) as Partial<RawStoryPerson>;
+    const t = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    if (!t(r.who) && !t(r.look)) return [];
+    // One presenter per scene.
+    const presenter = Boolean(r.presenter) && !presenterSeen;
+    if (presenter) presenterSeen = true;
+    return [
+      {
+        position: POSITIONS.includes(r.position as ScenePerson["position"]) ? (r.position as ScenePerson["position"]) : "ONLY",
+        presenter,
+        who: t(r.who),
+        look: t(r.look),
+        shortName: t(r.shortName) || t(r.who),
+        pronoun: r.pronoun === "he" ? "he" : "she",
+        voice: presenter ? "" : t(r.voice),
+      },
+    ];
+  });
+}
+
+/** The scene index (0-based) for Claude's 1-based scene number, clamped to the scenes there are. */
+const sceneIndex = (n: unknown, count: number) => {
+  const i = Math.round(Number(n)) - 1;
+  return Number.isFinite(i) ? Math.min(count - 1, Math.max(0, i)) : 0;
+};
+
+function toStoryClip(c: RawStoryClip, scene: SceneSpec): ClipFields {
+  const kind: ClipKind = CLIP_KINDS.includes(c.kind) ? c.kind : "to_camera";
+  // Someone other than the presenter speaks only if they're in that scene's frame.
+  const speaker =
+    c.speaker && c.speaker !== "PRESENTER" && scene.people.some((p) => p.position === c.speaker)
+      ? (c.speaker as ClipFields["speaker"])
+      : null;
+  return {
+    section: (c.section ?? "").trim() || "Clip",
+    speaker,
+    line: kind === "silent" ? "" : (c.line ?? "").trim(),
+    register: (c.register ?? "").trim(),
+    action: (c.action ?? "").trim(),
+    editNote: (c.editNote ?? "").trim(),
+    cues: kind === "silent" ? "" : (c.cues ?? "").trim(),
+    listenerReactions: Array.isArray(c.listenerReactions) ? c.listenerReactions : [],
+    kind,
+    frameId: scene.frameId,
+  };
+}
+
+/** Claude's story JSON → the stored script (exported for the scratch tests). */
+export function toStoryResult(raw: RawStory, input: ScriptInput): ScriptResult {
+  const slots = input.story?.scenes ?? [];
+  if (slots.length === 0) throw new Error("This story has no scene frames yet.");
+  const rawScenes = Array.isArray(raw.scenes) ? raw.scenes : [];
+  const specs: SceneSpec[] = slots.map((slot, i) => {
+    const r = rawScenes.find((x) => Math.round(Number(x?.scene)) === i + 1) ?? rawScenes[i];
+    return {
+      frameId: slot.frameId,
+      label: slot.label,
+      camera: CAMERAS.includes(r?.camera) ? r!.camera : "locked",
+      setting: (r?.setting ?? "").trim(),
+      people: cleanPeople(r?.people),
+    };
+  });
+  const clips = (raw.clips ?? [])
+    .map((c) => toStoryClip(c, specs[sceneIndex(c?.scene, specs.length)]))
+    .filter((c) => (c.kind === "silent" ? Boolean(c.action) : Boolean(c.line)));
+  if (clips.length === 0) throw new Error("Claude returned no clips. Please try again.");
+  const unused = specs.map((sc, i) => (clips.some((c) => c.frameId === sc.frameId) ? null : i + 1)).filter((n): n is number => n !== null);
+  const notes = [
+    (raw.notes ?? "").trim(),
+    unused.length ? `Scene${unused.length > 1 ? "s" : ""} ${unused.join(", ")} ${unused.length > 1 ? "aren't" : "isn't"} in the script yet.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const first = specs[0];
+  const lead = first.people.find((p) => p.presenter) ?? first.people[0];
+  return {
+    title: (raw.title ?? "").trim().slice(0, 120),
+    // Multi-scene stories aren't the founders' duo/trio rig; the edit suggests Solo.
+    rig: "solo_locked",
+    frame: { subject: lead?.look ?? "", room: first.setting, base: "", positions: [], scenes: specs },
+    clips,
+    notes,
+  };
+}
+
+/** The current story script as Claude reads it back (scene numbers, not frame ids). */
+function storyScriptJson(frame: FrameSpec | null, clips: ClipFields[], input: ScriptInput) {
+  const slots = input.story?.scenes ?? [];
+  const number = (frameId: string | null | undefined) => Math.max(0, slots.findIndex((s) => s.frameId === frameId)) + 1;
+  return {
+    scenes: slots.map((slot, i) => {
+      const spec = frame?.scenes?.find((x) => x.frameId === slot.frameId);
+      return { scene: i + 1, label: slot.label, camera: spec?.camera ?? "locked", setting: spec?.setting ?? "", people: spec?.people ?? [] };
+    }),
+    clips: clips.map((c) => ({
+      scene: number(c.frameId),
+      kind: c.kind ?? "to_camera",
+      speaker: c.speaker ?? "PRESENTER",
+      section: c.section,
+      line: c.line,
+      register: c.register,
+      action: c.action,
+      editNote: c.editNote,
+      cues: c.cues,
+      listenerReactions: c.listenerReactions,
+    })),
+  };
+}
+
+function presenterLine(p: PresenterInfo | undefined): string {
+  if (!p) return "";
+  const pron = p.pronoun === "he" ? "he/him" : "she/her";
+  if (!p.name) return `The presenter: the person in the frames (${pron}). Don't name them unless the user does.`;
+  return `The presenter: ${p.name} (${pron}). Describe ${p.name} from the frames; the portal adds ${p.pronoun === "he" ? "his" : "her"} voice to every clip.`;
+}
+
+function storyBriefText(input: ScriptInput): string {
+  const scenes = input.story?.scenes ?? [];
+  return [
+    `Format: ${input.format === "vsl_16x9" ? "VSL, 16:9 horizontal" : "ad creative, 9:16 vertical"}`,
+    presenterLine(input.presenter),
+    `What the user wants this video to be, in their words:\n${input.brief.direction?.trim() || "(no direction yet: infer the story from the scenes)"}`,
+    `Scenes attached: ${scenes.length}, in story order (each image is labeled with its scene number).`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function storyFrameBlocks(input: ScriptInput): Anthropic.ContentBlockParam[] {
+  return (input.story?.scenes ?? []).slice(0, 8).flatMap((sc, i) => [
+    { type: "text" as const, text: `Scene ${i + 1}${sc.label ? ` — ${sc.label}` : ""}:` },
+    { type: "image" as const, source: { type: "url" as const, url: sc.url } },
+  ]);
+}
+
+/** A one-frame video's clip fields, exactly as Claude has always seen them (no kind / frame id). */
+function classicFields(c: ClipFields) {
+  return {
+    section: c.section,
+    speaker: c.speaker,
+    line: c.line,
+    register: c.register,
+    action: c.action,
+    editNote: c.editNote,
+    cues: c.cues,
+    listenerReactions: c.listenerReactions,
+  };
+}
+
 interface RawClip {
   section: string;
   speaker: "LEFT" | "CENTER" | "RIGHT" | "NONE";
@@ -146,6 +409,10 @@ export interface ScriptInput {
   frameUrls: string[];
   /** A client studio's firm brief (studios.ts firmBrief); empty for Nexli. */
   firm?: string;
+  /** A story video: its scenes in order (frame id, label, signed URL). Absent = a one-frame video. */
+  story?: { scenes: { frameId: string; label: string; url: string }[] };
+  /** Who presents (story videos). */
+  presenter?: PresenterInfo;
 }
 
 function briefText(input: ScriptInput): string {
@@ -176,27 +443,47 @@ function frameBlocks(urls: string[]): Anthropic.ImageBlockParam[] {
   return urls.slice(0, 4).map((url) => ({ type: "image", source: { type: "url", url } }));
 }
 
-async function callClaude(content: Anthropic.ContentBlockParam[], schema: object, maxTokens: number, firm = ""): Promise<unknown> {
+async function callClaude(content: Anthropic.ContentBlockParam[], schema: object, maxTokens: number, firm = "", story = false): Promise<unknown> {
+  const base = story ? STORY_SYSTEM : SYSTEM;
+  return askClaude({
+    // A client studio: Nexli's own walkthrough and offer facts are cut out, the firm's brief added.
+    system: firm ? `${withoutNexliSections(base)}${firm}` : base,
+    content,
+    schema,
+    maxTokens,
+    effort: "high",
+    refusal: "Claude declined to write this script. Try rewording the angle.",
+    tooLong: "The script was too long for one pass. Try a shorter brief or split the VSL.",
+    unreadable: "Claude returned an unreadable script. Please try again.",
+  });
+}
+
+/** One structured-output call to Claude (the studio's writers share this shape). */
+export async function askClaude(args: {
+  system: string;
+  content: Anthropic.ContentBlockParam[];
+  schema: object;
+  maxTokens: number;
+  effort: "low" | "medium" | "high";
+  refusal: string;
+  tooLong: string;
+  unreadable: string;
+}): Promise<unknown> {
   const client = new Anthropic({ timeout: 280_000, maxRetries: 1 });
   // Server-side refusal fallback ("default" routes by refusal category).
   const params = {
     model: MODEL,
-    max_tokens: maxTokens,
-    // A client studio: Nexli's own walkthrough and offer facts are cut out, the firm's brief added.
-    system: firm ? `${withoutNexliSections(SYSTEM)}${firm}` : SYSTEM,
-    messages: [{ role: "user", content }],
-    output_config: { effort: "high", format: { type: "json_schema", schema } },
+    max_tokens: args.maxTokens,
+    system: args.system,
+    messages: [{ role: "user", content: args.content }],
+    output_config: { effort: args.effort, format: { type: "json_schema", schema: args.schema } },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
   } as unknown as Parameters<typeof client.beta.messages.stream>[0];
 
   const message = await client.beta.messages.stream(params).finalMessage();
-  if (message.stop_reason === "refusal") {
-    throw new Error("Claude declined to write this script. Try rewording the angle.");
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw new Error("The script was too long for one pass. Try a shorter brief or split the VSL.");
-  }
+  if (message.stop_reason === "refusal") throw new Error(args.refusal);
+  if (message.stop_reason === "max_tokens") throw new Error(args.tooLong);
   const text = message.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
@@ -204,7 +491,7 @@ async function callClaude(content: Anthropic.ContentBlockParam[], schema: object
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error("Claude returned an unreadable script. Please try again.");
+    throw new Error(args.unreadable);
   }
 }
 
@@ -252,6 +539,30 @@ export async function reviseScript(args: {
   note: string;
 }): Promise<ScriptResult> {
   const { input, frame, clips, note } = args;
+  if (input.story) {
+    const raw = (await callClaude(
+      [
+        ...storyFrameBlocks(input),
+        {
+          type: "text",
+          text: [
+            storyBriefText(input),
+            "",
+            `Current script (JSON):\n${JSON.stringify(storyScriptJson(frame, clips, input))}`,
+            "",
+            `The user's requested changes: ${note}`,
+            "",
+            "Return the complete revised script. Change only what the note asks for (plus anything the framework requires as a consequence); keep every other clip and scene description exactly as it is.",
+          ].join("\n"),
+        },
+      ],
+      STORY_SCHEMA,
+      48_000,
+      input.firm,
+      true
+    )) as RawStory;
+    return toStoryResult(raw, input);
+  }
   const raw = (await callClaude(
     [
       ...frameBlocks(input.frameUrls.slice(0, 1)),
@@ -260,7 +571,7 @@ export async function reviseScript(args: {
         text: [
           briefText(input),
           "",
-          `Current script (JSON):\n${JSON.stringify({ rig: input.rig, frame, clips })}`,
+          `Current script (JSON):\n${JSON.stringify({ rig: input.rig, frame, clips: clips.map(classicFields) })}`,
           "",
           `The user's requested changes: ${note}`,
           "",
@@ -276,6 +587,16 @@ export async function reviseScript(args: {
 }
 
 export async function generateScript(input: ScriptInput): Promise<ScriptResult> {
+  if (input.story) {
+    const raw = (await callClaude(
+      [...storyFrameBlocks(input), { type: "text", text: `${storyBriefText(input)}\n\nWrite the full clip-by-clip script for this story.` }],
+      STORY_SCHEMA,
+      48_000,
+      input.firm,
+      true
+    )) as RawStory;
+    return toStoryResult(raw, input);
+  }
   const raw = (await callClaude(
     [
       ...frameBlocks(input.frameUrls),
@@ -299,6 +620,42 @@ export async function rewriteClip(args: {
   instruction: string;
 }): Promise<{ clip: ClipFields; notes: string }> {
   const { input, frame, clips, index, instruction } = args;
+  if (input.story) {
+    const current = storyScriptJson(frame, clips, input);
+    const lines = current.clips
+      .map((c, i) => `${i + 1}. [Scene ${c.scene} · ${c.kind} · ${c.section}${c.speaker !== "PRESENTER" ? ` · ${c.speaker}` : ""}] ${c.line || `(no talking) ${c.action}`}`)
+      .join("\n");
+    const raw = (await callClaude(
+      [
+        ...storyFrameBlocks(input),
+        {
+          type: "text",
+          text: [
+            storyBriefText(input),
+            "",
+            `Scene descriptions in use (JSON):\n${JSON.stringify(current.scenes)}`,
+            "",
+            `Current script:\n${lines}`,
+            "",
+            `Rewrite clip ${index + 1} only, keeping it in its scene and section and consistent with the clips around it.`,
+            `Current fields: ${JSON.stringify(current.clips[index])}`,
+            instruction ? `What to change: ${instruction}` : "Make it sharper and more natural, following the framework.",
+          ].join("\n"),
+        },
+      ],
+      STORY_REWRITE_SCHEMA,
+      8_000,
+      input.firm,
+      true
+    )) as { clip: RawStoryClip; notes: string };
+    const specs = frame?.scenes ?? [];
+    const slots = input.story.scenes;
+    const fallback = specs.find((x) => x.frameId === clips[index]?.frameId) ?? specs[0];
+    const want = slots[sceneIndex(raw.clip?.scene, slots.length)]?.frameId;
+    const scene = specs.find((x) => x.frameId === want) ?? fallback;
+    if (!scene) throw new Error("This story has no scene descriptions yet. Rewrite the script first.");
+    return { clip: toStoryClip(raw.clip, scene), notes: raw.notes?.trim() ?? "" };
+  }
   const script = clips
     .map((c, i) => `${i + 1}. [${c.section}${c.speaker ? ` · ${c.speaker}` : ""}] ${c.line}`)
     .join("\n");
@@ -315,7 +672,7 @@ export async function rewriteClip(args: {
           `Current script:\n${script}`,
           "",
           `Rewrite clip ${index + 1} only, keeping it in its section and consistent with the clips around it.`,
-          `Current fields: ${JSON.stringify(clips[index])}`,
+          `Current fields: ${JSON.stringify(clips[index] ? classicFields(clips[index]) : clips[index])}`,
           instruction ? `What to change: ${instruction}` : "Make it sharper and more natural to say, following the framework.",
         ].join("\n"),
       },

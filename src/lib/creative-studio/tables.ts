@@ -19,9 +19,87 @@ export type CreativeFormat = "ad_9x16" | "vsl_16x9";
 export type CreativeRig = "solo_locked" | "solo_selfie" | "duo" | "trio";
 export type ClipSpeaker = "LEFT" | "CENTER" | "RIGHT" | null;
 
+/**
+ * How a clip is shot (story videos; a classic one-frame video is always
+ * to_camera): talks into the lens · talks to someone/something in the scene ·
+ * acts while their voice narrates · nobody talks.
+ */
+export type ClipKind = "to_camera" | "in_scene" | "voiceover" | "silent";
+export const CLIP_KINDS: ClipKind[] = ["to_camera", "in_scene", "voiceover", "silent"];
+export type SceneCamera = "locked" | "selfie" | "handheld";
+export type Pronoun = "she" | "he";
+
+/** One person in a story scene, as Claude describes them from the frame. */
+export interface ScenePerson {
+  /** ONLY when they're alone in the frame. */
+  position: "ONLY" | "LEFT" | "CENTER" | "RIGHT";
+  /** The video's presenter (speaks with the presenter's voice). */
+  presenter: boolean;
+  /** "the man on the LEFT in the navy suit" */
+  who: string;
+  /** §5 Subject style: look, outfit, seat, pose, how they move from it. */
+  look: string;
+  /** "The man in navy" — for listener directions. */
+  shortName: string;
+  pronoun: Pronoun;
+  /** Anyone but the presenter who talks: their voice, worded the same every time. */
+  voice: string;
+}
+
+/** A story scene's description (one per scene frame), written by Claude with the script. */
+export interface SceneSpec {
+  /** The scene's frame (creative_assets id). */
+  frameId: string;
+  label: string;
+  camera: SceneCamera;
+  /** §5 Room: props by side, background left to right, light. */
+  setting: string;
+  /** Who's in the frame (empty for a shot with nobody in it). */
+  people: ScenePerson[];
+  /** The frame was replaced after this was written (the script should catch up). */
+  stale?: boolean;
+}
+
+/**
+ * A scene of a story video, in story order: its frame, a short label and
+ * (when Claude planned it) the shot Manus was asked for.
+ */
+export interface SceneSlot {
+  id: string;
+  label: string;
+  shot: string;
+  frameId: string | null;
+}
+
+/** Claude's read of frames that arrived without a direction, and its question. */
+export interface SceneAsk {
+  /** The frame ids it looked at, in order (a different set means it's out of date). */
+  frames: string[];
+  reads: { label: string; read: string }[];
+  question: string;
+  /** A direction the user could take as is. */
+  suggestion: string;
+}
+
+/** Who presents a video (a snapshot of creative_presenters; null = the studio's default). */
+export interface PresenterInfo {
+  id: string;
+  name: string;
+  pronoun: Pronoun;
+  /** The voice line, worded identically in every clip. */
+  voice: string;
+  /** What they look like (Manus uses it when there are no photos). */
+  look: string;
+}
+
 export interface CreativeBrief {
   /** What Marcel says the video is about, in his own words (the simple flow). */
   direction?: string;
+  /**
+   * Frames came in with no direction: what Claude sees in each one and the
+   * one question it asks (for the frames listed in `frames`).
+   */
+  ask?: SceneAsk;
   oldBelief: string;
   newBelief: string;
   proof: string;
@@ -50,6 +128,11 @@ export interface FrameSpec {
   base: string;
   /** Multi-person: one entry per position. Empty for a single presenter. */
   positions: FramePosition[];
+  /**
+   * A story video: one description per scene (subject/room above mirror
+   * scene 1). Absent on a classic one-frame video.
+   */
+  scenes?: SceneSpec[];
 }
 
 export interface ListenerReaction {
@@ -67,6 +150,10 @@ export interface ClipFields {
   editNote: string;
   cues: string;
   listenerReactions: ListenerReaction[];
+  /** How it's shot (story videos); absent = to_camera. */
+  kind?: ClipKind;
+  /** The scene's frame (creative_clips.frame_asset_id); absent = the opening frame. */
+  frameId?: string | null;
 }
 
 export interface ScriptSnapshot {
@@ -124,6 +211,10 @@ export const creativeProjects = pgTable("creative_projects", {
   batchIndex: integer("batch_index"),
   /** The client studio it belongs to (creative_studios); null = Nexli's own studio. */
   studioId: uuid("studio_id"),
+  /** A story video's scenes in order; null = a classic one-frame video (its first frame). */
+  scenes: jsonb("scenes").$type<SceneSlot[] | null>(),
+  /** Who presents it; null = the studio's default (Daniela in Nexli's studio). */
+  presenter: jsonb("presenter").$type<PresenterInfo | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -196,6 +287,8 @@ export const creativeClips = pgTable("creative_clips", {
   editNote: text("edit_note").notNull().default(""),
   cues: text("cues").notNull().default(""),
   listenerReactions: jsonb("listener_reactions").$type<ListenerReaction[]>().notNull().default([]),
+  /** to_camera | in_scene | voiceover | silent (story videos). */
+  kind: text("kind").$type<ClipKind>().notNull().default("to_camera"),
   durationS: integer("duration_s").notNull(),
   /** The complete Kling prompt, assembled in code from the §7 templates. */
   prompt: text("prompt").notNull(),
@@ -671,6 +764,10 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_photo_ads_owner_status_idx" ON "creative_photo_ads" ("owner_id", "status")`);
       // Nov 2026: renders queue for the AWS Lambda concurrency limit.
       await db.execute(sql`ALTER TABLE "creative_edits" ADD COLUMN IF NOT EXISTS "render_attempts" integer NOT NULL DEFAULT 0`);
+      // Nov 2026: story videos (several scenes, any kind of shot) and presenters other than Daniela.
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "scenes" jsonb`);
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "presenter" jsonb`);
+      await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "kind" text NOT NULL DEFAULT 'to_camera'`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_kling_connections" (
           "owner_id" uuid PRIMARY KEY REFERENCES "users"("id") ON DELETE CASCADE,

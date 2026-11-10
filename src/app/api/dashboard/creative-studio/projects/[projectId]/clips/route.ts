@@ -3,7 +3,8 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeClips, type ClipFields } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipsOf, derivedClip, framesOf, projectDetail, touchProject } from "@/lib/creative-studio/service";
+import { clipColumns, clipFieldsOf, clipsOf, derivedClip, framesOf, projectDetail, touchProject } from "@/lib/creative-studio/service";
+import { presenterOf } from "@/lib/creative-studio/prompts";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -23,23 +24,27 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     .set({ idx: sql`${creativeClips.idx} + 1` })
     .where(and(eq(creativeClips.projectId, project.id), gt(creativeClips.idx, after)));
 
+  const frames = await framesOf(project.id);
+  // A story clip starts in its neighbour's scene, spoken to camera.
+  const frameId = (neighbour ? clipFieldsOf(neighbour).frameId : null) ?? frames[0]?.id ?? null;
   const fields: ClipFields = {
     section: neighbour?.section ?? "Clip",
     speaker: neighbour?.speaker ?? null,
     line: "New line.",
     register: "Natural and conversational",
-    action: "She opens one hand toward camera",
+    action: `${presenterOf(project).pronoun === "he" ? "He" : "She"} opens one hand toward camera`,
     editNote: "",
     cues: "",
     listenerReactions: [],
+    kind: "to_camera",
+    frameId,
   };
-  const frames = await framesOf(project.id);
   await db.insert(creativeClips).values({
     projectId: project.id,
     idx: after + 1,
-    ...fields,
+    ...clipColumns(fields),
     ...derivedClip(project, fields),
-    frameAssetId: frames[0]?.id ?? null,
+    frameAssetId: frameId,
   });
   await touchProject(project);
   const fresh = await loadProject(access.ownerId, project.id);

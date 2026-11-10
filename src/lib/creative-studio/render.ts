@@ -108,7 +108,8 @@ export async function submitClips(token: string, project: Project, clips: Clip[]
 
   const frames = await framesOf(project.id);
   const primary = frames[0]?.id;
-  const multi = isMultiPerson(project.rig);
+  // Per clip: a story's scene with two or more people renders on Omni (its model is stored on the clip).
+  const multiFor = (clip: Clip) => (clip.model ? clip.model === "kling-video-v3_0_omni" : isMultiPerson(project.rig));
   const pending = [...affordable];
   report.queued = clips.length - affordable.length;
 
@@ -136,12 +137,13 @@ export async function submitClips(token: string, project: Project, clips: Clip[]
         try {
           const frameUrl = await klingFrameUrl(token, frameId, taskTraceId);
           const { generationId, model } = await submitClip(token, {
-            multiPerson: multi,
+            multiPerson: multiFor(clip),
+            aspectRatio: project.format === "vsl_16x9" ? "16:9" : "9:16",
             prompt: clip.prompt,
             durationS: clip.durationS,
             frameUrl,
             taskTraceId,
-            rationale: `Nexli Creative Studio: clip ${clip.idx + 1} of the approved talking-head script "${project.title}", rendered with native audio as the framework specifies.`,
+            rationale: `Nexli Creative Studio: clip ${clip.idx + 1} of the approved ${clip.kind && clip.kind !== "to_camera" ? "story" : "talking-head"} script "${project.title}", rendered with native audio as the framework specifies.`,
           });
           await db
             .update(creativeClips)

@@ -10,10 +10,15 @@
  */
 import type {
   ClipFields,
+  ClipKind,
   CreativeBrief,
   CreativeFormat,
   CreativeRig,
   FrameSpec,
+  PresenterInfo,
+  Pronoun,
+  ScenePerson,
+  SceneSpec,
 } from "@/lib/creative-studio/tables";
 
 export const EMPTY_BRIEF: CreativeBrief = {
@@ -32,6 +37,24 @@ export const DANIELA_VOICE =
 // §7 Multi-person voice line.
 const MULTI_VOICE =
   "Daniela's voice: a confident woman, neutral American accent, medium-low pitch, natural conversational pace";
+
+/** Nexli's default presenter (a video with no presenter chosen, in Nexli's studio). */
+export const DANIELA: PresenterInfo = { id: "", name: "Daniela", pronoun: "she", voice: DANIELA_VOICE, look: "" };
+
+/** A client studio's presenter before one is chosen: unnamed, Daniela's voice wording without her name. */
+export const STUDIO_PRESENTER: PresenterInfo = {
+  id: "",
+  name: "",
+  pronoun: "she",
+  voice:
+    "The presenter's voice, the same in every clip: a confident woman talking to a business owner she respects, warm, honest and direct, no hype and no sales tone, neutral American accent, medium-low pitch, natural conversational pace",
+  look: "",
+};
+
+/** Who presents this video: the chosen presenter, else the studio's default. */
+export function presenterOf(project: { studioId: string | null; presenter?: PresenterInfo | null }): PresenterInfo {
+  return project.presenter ?? (project.studioId ? STUDIO_PRESENTER : DANIELA);
+}
 
 /** §11 Kling credits per second on 3.0 and Omni. */
 export const CREDITS_PER_SECOND = 12;
@@ -80,17 +103,17 @@ const sentence = (s: string) => {
  * these spellings — added automatically if Claude's cues don't already
  * cover them, so a clip can never ship with "C-P-A" and no letter cue.
  */
-function requiredCues(line: string, cues: string): string[] {
+function requiredCues(line: string, cues: string, subj = "She"): string[] {
   const out: string[] = [];
   const has = (needle: string) => cues.toLowerCase().includes(needle.toLowerCase());
-  if (/C-P-A/.test(line) && !has("C, P, A")) out.push("She clearly pronounces each letter: C, P, A.");
-  if (/I-R-S/.test(line) && !has("I, R, S")) out.push("She says I-R-S as the letters I, R, S.");
-  if (/C-E-O/.test(line) && !has("C, E, O")) out.push("She clearly pronounces each letter: C, E, O.");
+  if (/C-P-A/.test(line) && !has("C, P, A")) out.push(`${subj} clearly pronounces each letter: C, P, A.`);
+  if (/I-R-S/.test(line) && !has("I, R, S")) out.push(`${subj} says I-R-S as the letters I, R, S.`);
+  if (/C-E-O/.test(line) && !has("C, E, O")) out.push(`${subj} clearly pronounces each letter: C, E, O.`);
   return out;
 }
 
-function cuesText(clip: ClipFields): string {
-  const parts = [clip.cues.trim(), ...requiredCues(clip.line, clip.cues)].filter(Boolean);
+function cuesText(clip: ClipFields, subj = "She"): string {
+  const parts = [clip.cues.trim(), ...requiredCues(clip.line, clip.cues, subj)].filter(Boolean);
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
 
@@ -111,7 +134,18 @@ export function buildKlingPrompt(args: {
   rig: CreativeRig;
   frame: FrameSpec | null;
   clip: ClipFields;
+  /** Who presents (story videos); defaults to Daniela. */
+  presenter?: PresenterInfo;
 }): string {
+  // A story video: the clip's own scene, kind of shot and speaker.
+  if (args.frame?.scenes?.length) {
+    return buildStoryPrompt({
+      format: args.format,
+      scene: sceneFor(args.frame, args.clip),
+      clip: args.clip,
+      presenter: args.presenter ?? DANIELA,
+    });
+  }
   const { format, rig, clip } = args;
   const frame: FrameSpec = args.frame ?? { subject: "", room: "", base: "", positions: [] };
   const orientation = format === "vsl_16x9" ? "Horizontal 16:9" : "Vertical 9:16";
@@ -177,6 +211,226 @@ export function buildKlingPrompt(args: {
     "She says the line once, word for word, then holds a natural expression until the end.",
     room,
     "Realistic skin, hair and fabric; everything in the scene stays unchanged. Only her voice is heard: no background music, no on-screen text.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+// ── Story videos (several scenes, any kind of shot) ─────────────────────
+
+/** Most scenes one video can have (Claude reads every frame; Manus makes them in one go). */
+export const MAX_SCENES = 8;
+
+const PRONOUNS: Record<Pronoun, { Subj: string; subj: string; poss: string; Poss: string }> = {
+  she: { Subj: "She", subj: "she", poss: "her", Poss: "Her" },
+  he: { Subj: "He", subj: "he", poss: "his", Poss: "His" },
+};
+
+export const KIND_LABEL: Record<ClipKind, string> = {
+  to_camera: "To camera",
+  in_scene: "In the scene",
+  voiceover: "Voiceover",
+  silent: "No talking",
+};
+
+export const isStory = (frame: FrameSpec | null | undefined): boolean => Boolean(frame?.scenes?.length);
+
+/** The scene a clip plays in (its frame's description), else the first scene. */
+export function sceneFor(frame: FrameSpec, clip: { frameId?: string | null }): SceneSpec {
+  const scenes = frame.scenes ?? [];
+  return scenes.find((s) => s.frameId === clip.frameId) ?? scenes[0];
+}
+
+/** §11 model for a story clip: Omni when two or more people share the frame. */
+export function storyModelFor(scene: SceneSpec | null | undefined): string {
+  return (scene?.people?.length ?? 0) >= 2 ? "kling-video-v3_0_omni" : "kling-video-v3_0";
+}
+
+/** The Kling model for one clip (story videos choose per scene). */
+export function klingModelForClip(rig: CreativeRig, frame: FrameSpec | null, clip: { frameId?: string | null }): string {
+  return frame?.scenes?.length ? storyModelFor(sceneFor(frame, clip)) : klingModelFor(rig);
+}
+
+/** Who talks in a speaking clip: the named position, else the presenter, else the first person. */
+function speakerIn(scene: SceneSpec, clip: ClipFields): ScenePerson | null {
+  const people = scene.people ?? [];
+  if (people.length === 0) return null;
+  if (people.length === 1) return people[0];
+  return (clip.speaker ? people.find((p) => p.position === clip.speaker) : null) ?? people.find((p) => p.presenter) ?? people[0];
+}
+
+function genericVoice(pronoun: Pronoun): string {
+  return `${pronoun === "he" ? "A man's" : "A woman's"} natural conversational voice, neutral American accent`;
+}
+
+function voiceOf(person: ScenePerson | null, presenter: PresenterInfo): string {
+  if (!person || person.presenter) return presenter.voice;
+  return person.voice.trim().replace(/[.]+$/, "") || genericVoice(person.pronoun);
+}
+
+const where = (p: ScenePerson) =>
+  p.position === "CENTER" ? "In the CENTER" : p.position === "ONLY" ? "In the frame" : `On the ${p.position}`;
+
+const noPeriod = (s: string) => s.trim().replace(/[.]+$/, "");
+
+/** Listener directions for a multi-person clip, with each listener's own pronoun. */
+function reactionsFor(listeners: ScenePerson[], clip: ClipFields): string {
+  return listeners
+    .map((p, i) => {
+      const P = PRONOUNS[p.pronoun] ?? PRONOUNS.she;
+      const custom = clip.listenerReactions.find((r) => r.shortName.trim().toLowerCase() === p.shortName.trim().toLowerCase());
+      const fallback = [
+        `${P.subj} turns ${P.poss} head to look at the speaker, listening closely`,
+        `${P.subj} gives a small agreeing nod`,
+        `${P.subj} shifts ${P.poss} weight and glances over at the speaker`,
+      ][i % 3];
+      return `${p.shortName}: ${noPeriod(custom?.reaction ?? "") || fallback}.`;
+    })
+    .join(" ");
+}
+
+/**
+ * The Kling prompt for one clip of a story video. Same standing rules as §7
+ * (spoken line inside the prompt, said once word for word, one voice, no
+ * music, no on-screen text), with the scene's camera and people, the
+ * presenter's name, pronouns and voice, and the clip's kind of shot.
+ */
+export function buildStoryPrompt(args: {
+  format: CreativeFormat;
+  scene: SceneSpec;
+  clip: ClipFields;
+  presenter: PresenterInfo;
+}): string {
+  const { format, scene, clip, presenter } = args;
+  const orientation = format === "vsl_16x9" ? "Horizontal 16:9" : "Vertical 9:16";
+  const people = scene.people ?? [];
+  const line = clip.line.trim();
+  const register = clip.register.trim().replace(/[.]+$/, "");
+  const action = sentence(clip.action);
+  const setting = sentence(scene.setting);
+  const requested = clip.kind ?? "to_camera";
+  // Nobody on screen can't talk on camera: the line becomes a voiceover.
+  const kind: ClipKind = (requested === "to_camera" || requested === "in_scene") && people.length === 0 ? "voiceover" : requested;
+  const talking = kind === "to_camera" || kind === "in_scene";
+  const looking =
+    kind === "to_camera" ? "looking into the lens" : "looking where the action says, not into the lens,";
+  const presenterPerson = people.find((p) => p.presenter) ?? null;
+
+  // Who is heard: the speaker (talking) or the narrator (voiceover; the presenter unless a person is named).
+  const named = clip.speaker ? people.find((p) => p.position === clip.speaker) ?? null : null;
+  const voicePerson = talking ? speakerIn(scene, clip) : kind === "voiceover" ? named ?? presenterPerson : null;
+  const heard = voicePerson ?? (kind === "voiceover" ? null : people[0] ?? null);
+  const heardPronoun: Pronoun = heard ? heard.pronoun : presenter.pronoun;
+  const H = PRONOUNS[heardPronoun] ?? PRONOUNS.she;
+  const voice = voiceOf(heard, presenter);
+  const cues = cuesText(clip, H.Subj);
+  const narrator = heard && !heard.presenter ? `${noPeriod(heard.shortName) || "The narrator"}'s` : presenter.name ? `${presenter.name}'s` : "The narrator's";
+
+  if (people.length >= 2) {
+    const count = people.length === 2 ? "two" : people.length === 3 ? "three" : String(people.length);
+    const camera =
+      scene.camera === "handheld"
+        ? "Handheld camera with gentle natural movement, no cuts."
+        : scene.camera === "selfie"
+          ? `Handheld selfie video held by ${presenterPerson?.who || "one of them"}, with only gentle natural hand sway, no cuts.`
+          : "Static locked-off camera, no zoom.";
+    const lineup = people.map((p) => `${where(p)}: ${noPeriod(p.look || p.who)}.`).join(" ");
+    const head = [
+      `Use 图片1 as the exact opening frame: the same ${count} people, same outfits, same positions and the same place, framed exactly as in 图片1.`,
+      camera,
+      `${orientation}.`,
+      lineup,
+    ];
+    const quiet =
+      "No one speaks: everyone keeps their lips closed the whole time, but they behave like real people, not statues, with natural blinking, breathing and small shifts of weight.";
+    if (talking && heard) {
+      const listeners = people.filter((p) => p !== heard);
+      return [
+        ...head,
+        `In this clip ONLY ${heard.who || heard.shortName} speaks.`,
+        action,
+        `${H.Subj} starts speaking within the first half-second, ${looking} with natural lip-sync and subtle head movement, saying: "${multiPersonLine(line)}"`,
+        `${H.Subj} says the line once, word for word, then holds a natural expression until the end.`,
+        listeners.length === 1
+          ? "The other person never speaks and keeps their lips closed the whole time, but behaves like a real person listening, not a statue, with natural blinking, breathing and small shifts of weight."
+          : "The other people never speak and keep their lips closed the whole time, but they behave like real people listening, not statues, with natural blinking, breathing and small shifts of weight.",
+        reactionsFor(listeners, clip),
+        `Voice: ${voice}. Delivery: ${register}.${cues}`,
+        setting,
+        "Only one voice is heard: no background music, no other people talking, no on-screen text.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (kind === "voiceover") {
+      return [
+        ...head,
+        quiet.replace("No one speaks", "No one on screen speaks"),
+        action,
+        `${narrator} voice is heard as a voiceover over the shot, saying: "${multiPersonLine(line)}"`,
+        `Voice: ${voice}. Delivery: ${register}.${cues}`,
+        "The voiceover says the line once, word for word.",
+        setting,
+        "Only the voiceover is heard: no background music, no on-screen text.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+    return [...head, quiet, action, setting, "Only quiet natural sound: no voices, no background music, no on-screen text."]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  // One person in the frame, or nobody.
+  const person = people[0] ?? null;
+  const P = person ? PRONOUNS[person.pronoun] ?? PRONOUNS.she : null;
+  const look = person ? sentence(person.look || person.who) : "";
+  const opening =
+    scene.camera === "selfie" && person
+      ? `${orientation} handheld selfie video, single continuous shot, no cuts, with only gentle natural hand sway. Selfie-style shot: ${look}`
+      : scene.camera === "handheld"
+        ? `Handheld camera with gentle natural movement, single continuous shot, no cuts. ${orientation}.${look ? ` ${look}` : ""}`
+        : `Static locked-off camera, single continuous shot, no cuts. ${orientation}.${look ? ` ${look}` : ""}`;
+  const realism = person
+    ? kind === "to_camera"
+      ? "Realistic skin, hair and fabric; everything in the scene stays unchanged."
+      : "Realistic skin, hair and fabric; the place stays exactly as in the frame."
+    : "Realistic textures and light; the place stays exactly as in the frame.";
+
+  if (talking && person && P) {
+    return [
+      opening,
+      action,
+      `${P.Subj} starts speaking within the first half-second, ${looking} with natural lip-sync and subtle head movement, saying: "${line}"`,
+      `Voice: ${voice}. Delivery: ${register}.${cues}`,
+      `${P.Subj} says the line once, word for word, then holds a natural expression until the end.`,
+      setting,
+      `${realism} Only ${P.poss} voice is heard: no background music, no on-screen text.`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  if (kind === "voiceover") {
+    const self = Boolean(person && heard === person);
+    return [
+      opening,
+      action,
+      person && P ? `${P.Subj} doesn't speak on camera: ${P.poss} lips stay closed the whole time.` : "",
+      `${self && P ? P.Poss : narrator} voice is heard as a voiceover over the shot, saying: "${line}"`,
+      `Voice: ${voice}. Delivery: ${register}.${cues}`,
+      "The voiceover says the line once, word for word.",
+      setting,
+      `${realism} Only the voiceover is heard: no background music, no on-screen text.`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  return [
+    opening,
+    action,
+    person && P ? `${P.Subj} doesn't speak: ${P.poss} lips stay closed the whole time.` : "",
+    setting,
+    `${realism} Nobody speaks: only quiet natural sound, no voices, no background music, no on-screen text.`,
   ]
     .filter(Boolean)
     .join(" ");

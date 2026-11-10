@@ -237,7 +237,7 @@ export function CutCard({
                     className={`group relative shrink-0 rounded-lg border bg-white/[0.03] hover:bg-white/[0.06] ${trimmed ? "border-emerald-400/40" : "border-white/10 hover:border-emerald-400/40"}`}
                     style={{ minWidth: `${Math.max(76, Math.min(170, r.out * 18))}px` }}
                   >
-                    <button type="button" onClick={() => jump(r.start)} className="block w-full px-2.5 py-2 pr-10 text-left" title={r.clip.line}>
+                    <button type="button" onClick={() => jump(r.start)} className="block w-full px-2.5 py-2 pr-10 text-left" title={r.clip.line || r.clip.action}>
                       <p className="text-[10px] font-bold text-white" style={NUM_FONT}>
                         #{r.clip.idx + 1} · {r.out.toFixed(1)}s
                       </p>
@@ -272,7 +272,7 @@ export function CutCard({
                       <button type="button" onClick={() => jump(r.start)} className="mr-1.5 inline-flex min-h-7 items-center align-baseline text-[11px] font-bold text-emerald-300 hover:text-white" style={NUM_FONT}>
                         #{r.clip.idx + 1}
                       </button>
-                      <Words words={r.clip.words} segments={r.plan?.segments ?? []} fallback={r.clip.line} />
+                      <Words words={r.clip.words} segments={r.plan?.segments ?? []} fallback={r.clip.kind === "silent" ? `🎬 ${r.clip.action}` : r.clip.line} />
                       {latest?.status !== "cutting" && r.clip.videoUrl && (
                         <button type="button" onClick={() => setTrimId(r.clip.id)} className="ml-1 inline-flex min-h-7 items-center rounded-md bg-white/5 px-2 align-baseline text-[11px] font-bold text-neutral-300 hover:text-emerald-300">
                           ✂ Trim

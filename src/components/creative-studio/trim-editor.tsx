@@ -471,7 +471,7 @@ export function TrimEditor({
             <h2 className="text-base font-bold text-white" style={SYNE}>
               Trim clip {clip.idx + 1}
             </h2>
-            <p className="truncate text-xs text-neutral-400">{clip.line}</p>
+            <p className="truncate text-xs text-neutral-400">{clip.kind === "silent" ? `🎬 ${clip.action}` : clip.line}</p>
           </div>
           <button type="button" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white" aria-label="Close">
             <SvgIcon d={SP.x} />

@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipFieldsOf, clipsOf, framesOf, projectDetail, replaceScript } from "@/lib/creative-studio/service";
-import { signPaths } from "@/lib/creative-studio/storage";
+import { clipFieldsOf, clipsOf, projectDetail, replaceScript, scriptInputFor } from "@/lib/creative-studio/service";
 import { reviseScript } from "@/lib/creative-studio/script";
-import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 300;
 
@@ -20,24 +18,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 3000) : "";
   if (!note) return NextResponse.json({ error: "Say what should change" }, { status: 400 });
 
-  const [frames, clips] = await Promise.all([framesOf(project.id), clipsOf(project.id)]);
+  const clips = await clipsOf(project.id);
   if (clips.length === 0) return NextResponse.json({ error: "There's no script yet" }, { status: 400 });
-  const signed = await signPaths(frames.slice(0, 1).map((f) => f.storagePath));
-  const frameUrls = frames
-    .slice(0, 1)
-    .map((f) => (f.storagePath ? signed.get(f.storagePath) : undefined))
-    .filter(Boolean) as string[];
 
   try {
     const result = await reviseScript({
-      input: {
-          title: project.title,
-          format: project.format,
-          rig: project.rig,
-          brief: project.brief,
-          frameUrls,
-          firm: firmBrief(await studioById(access.ownerId, project.studioId)),
-        },
+      input: await scriptInputFor(project, "change"),
       frame: project.frameSpec,
       clips: clips.map(clipFieldsOf),
       note,

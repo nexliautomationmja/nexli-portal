@@ -4,10 +4,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeClips, creativeProjects } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipFieldsOf, clipsOf, derivedClip, framesOf, projectDetail, snapshotOf } from "@/lib/creative-studio/service";
-import { signPaths } from "@/lib/creative-studio/storage";
+import { clipColumns, clipFieldsOf, clipsOf, derivedClip, projectDetail, scriptInputFor, snapshotOf } from "@/lib/creative-studio/service";
 import { rewriteClip } from "@/lib/creative-studio/script";
-import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 export const maxDuration = 120;
 
@@ -26,24 +24,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const body = (await req.json().catch(() => null)) as { instruction?: string } | null;
   const instruction = typeof body?.instruction === "string" ? body.instruction.slice(0, 1000) : "";
 
-  const frames = await framesOf(project.id);
-  const signed = await signPaths(frames.slice(0, 1).map((f) => f.storagePath));
-  const frameUrls = frames
-    .slice(0, 1)
-    .map((f) => (f.storagePath ? signed.get(f.storagePath) : undefined))
-    .filter(Boolean) as string[];
-
   let result;
   try {
     result = await rewriteClip({
-      input: {
-          title: project.title,
-          format: project.format,
-          rig: project.rig,
-          brief: project.brief,
-          frameUrls,
-          firm: firmBrief(await studioById(access.ownerId, project.studioId)),
-        },
+      input: await scriptInputFor(project, "change"),
       frame: project.frameSpec,
       clips: clips.map(clipFieldsOf),
       index,
@@ -62,10 +46,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   // Keep the pre-rewrite script so it can be restored.
   const snapshot = await snapshotOf(project, `Before rewriting clip ${index + 1}`);
-  const fields = result.clip;
+  // A one-frame rewrite keeps the clip where it was; a story rewrite says its scene.
+  const fields = { ...result.clip, frameId: result.clip.frameId ?? clips[index].frameAssetId ?? null };
   await db
     .update(creativeClips)
-    .set({ ...fields, speaker: fields.speaker ?? null, ...derivedClip(project, fields), updatedAt: new Date() })
+    .set({ ...clipColumns(fields), ...derivedClip(project, fields), frameAssetId: fields.frameId, updatedAt: new Date() })
     .where(eq(creativeClips.id, clipId));
   await db
     .update(creativeProjects)

@@ -9,15 +9,18 @@ import {
   isWaiting,
   type ClipFields,
   type ManusActivitySnapshot,
+  type SceneSlot,
   type ScriptSnapshot,
 } from "@/lib/creative-studio/tables";
-import { buildKlingPrompt, clipDuration, klingModelFor } from "@/lib/creative-studio/prompts";
+import { buildKlingPrompt, clipDuration, isStory, klingModelForClip, presenterOf } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
 import { normalizeCopy } from "@/lib/creative-studio/ad-copy";
-import { studioById, studioRef } from "@/lib/creative-studio/studios";
+import { firmBrief, studioById, studioRef } from "@/lib/creative-studio/studios";
+import type { ScriptInput } from "@/lib/creative-studio/script";
 
 type Project = typeof creativeProjects.$inferSelect;
 type Clip = typeof creativeClips.$inferSelect;
+type Asset = typeof creativeAssets.$inferSelect;
 
 export function clipFieldsOf(c: Clip): ClipFields {
   return {
@@ -29,16 +32,87 @@ export function clipFieldsOf(c: Clip): ClipFields {
     editNote: c.editNote,
     cues: c.cues,
     listenerReactions: c.listenerReactions ?? [],
+    kind: c.kind ?? "to_camera",
+    frameId: c.frameAssetId ?? null,
   };
 }
 
-/** Duration + full Kling prompt for a clip, from the project's format, rig and frame. */
+/** The creative_clips columns a clip's fields write (its scene goes in frame_asset_id, set by the caller). */
+export function clipColumns(f: ClipFields) {
+  return {
+    section: f.section,
+    speaker: f.speaker ?? null,
+    line: f.line,
+    register: f.register,
+    action: f.action,
+    editNote: f.editNote,
+    cues: f.cues,
+    listenerReactions: f.listenerReactions,
+    kind: f.kind ?? "to_camera",
+  };
+}
+
+/** Duration + full Kling prompt + model for a clip, from the project's format, rig, frame (scenes) and presenter. */
 export function derivedClip(project: Project, fields: ClipFields) {
   return {
-    durationS: clipDuration(fields.line),
-    prompt: buildKlingPrompt({ format: project.format, rig: project.rig, frame: project.frameSpec, clip: fields }),
-    model: klingModelFor(project.rig),
+    durationS: clipDuration(fields.kind === "silent" ? "" : fields.line),
+    prompt: buildKlingPrompt({
+      format: project.format,
+      rig: project.rig,
+      frame: project.frameSpec,
+      clip: fields,
+      presenter: presenterOf(project),
+    }),
+    model: klingModelForClip(project.rig, project.frameSpec, fields),
   };
+}
+
+/**
+ * The video's scenes in story order. A classic one-frame video (scenes null)
+ * has one scene: its opening frame.
+ */
+export function scenesOf(project: Pick<Project, "scenes">, frames: Pick<Asset, "id">[]): SceneSlot[] {
+  if (project.scenes) return project.scenes;
+  const first = frames[0];
+  return first ? [{ id: first.id, label: "", shot: "", frameId: first.id }] : [];
+}
+
+/** A story video: several scenes, a chosen presenter, or a script already written as a story. */
+export function storyVideo(project: Project, scenes: SceneSlot[], mode: "write" | "change"): boolean {
+  if (mode === "change") return isStory(project.frameSpec);
+  return scenes.filter((s) => s.frameId).length > 1 || Boolean(project.presenter);
+}
+
+/**
+ * What Claude needs to write ("write") or change ("change") this video's
+ * script. One-frame videos send exactly what they always did: every frame
+ * when writing (`classicFrames: "all"`), the opening frame otherwise.
+ */
+export async function scriptInputFor(
+  project: Project,
+  mode: "write" | "change",
+  classicFrames: "all" | "first" = mode === "write" ? "all" : "first"
+): Promise<ScriptInput> {
+  const frames = await framesOf(project.id);
+  const scenes = scenesOf(project, frames).filter((s) => s.frameId);
+  const story = storyVideo(project, scenes, mode);
+  const studio = await studioById(project.ownerId, project.studioId);
+  const base = { title: project.title, format: project.format, rig: project.rig, brief: project.brief, firm: firmBrief(studio) };
+  if (!story) {
+    const pick = classicFrames === "all" ? frames : frames.slice(0, 1);
+    const signed = await signPaths(pick.map((f) => f.storagePath));
+    return { ...base, frameUrls: pick.map((f) => (f.storagePath ? signed.get(f.storagePath) : undefined)).filter(Boolean) as string[] };
+  }
+  const byId = new Map(frames.map((f) => [f.id, f]));
+  const sceneFrames = scenes.slice(0, 8).flatMap((sc) => {
+    const f = sc.frameId ? byId.get(sc.frameId) : undefined;
+    return f?.storagePath ? [{ sc, path: f.storagePath }] : [];
+  });
+  const signed = await signPaths(sceneFrames.map((x) => x.path));
+  const list = sceneFrames
+    .map(({ sc, path }) => ({ frameId: sc.frameId as string, label: sc.label, url: signed.get(path) ?? "" }))
+    .filter((x) => x.url);
+  return { ...base, frameUrls: list.map((x) => x.url), story: { scenes: list }, presenter: presenterOf(project) };
 }
 
 export async function framesOf(projectId: string) {
@@ -101,7 +175,24 @@ export async function projectDetail(project: Project) {
     );
   }
   const latestEditId = edits[edits.length - 1]?.id;
+  const frameById = new Map(frames.map((f) => [f.id, f]));
   return {
+    /** The video's scenes in story order (one for a classic one-frame video). */
+    scenes: scenesOf(project, frames).map((sc, i) => {
+      const f = sc.frameId ? frameById.get(sc.frameId) : undefined;
+      return {
+        id: sc.id,
+        number: i + 1,
+        label: sc.label,
+        shot: sc.shot,
+        frameId: sc.frameId,
+        url: f?.storagePath ? signed.get(f.storagePath) ?? null : null,
+        width: f?.width ?? null,
+        height: f?.height ?? null,
+      };
+    }),
+    /** The script was written as a story (scene descriptions per frame). */
+    story: isStory(project.frameSpec),
     project: {
       id: project.id,
       title: project.title,
@@ -122,6 +213,8 @@ export async function projectDetail(project: Project) {
       batchId: project.batchId ?? null,
       /** Which studio this video lives in (Nexli's or a client firm's). */
       studio: studioRef(studio),
+      /** The chosen presenter (null = the studio's default: Daniela in Nexli's studio). */
+      presenter: project.presenter ?? null,
       approvedAt: project.approvedAt?.toISOString() ?? null,
       updatedAt: project.updatedAt.toISOString(),
     },
@@ -253,19 +346,25 @@ export async function replaceScript(
   const rig = next.rig ?? project.rig;
   const updated: Project = { ...project, frameSpec: next.frameSpec, rig };
   const frames = await framesOf(project.id);
-  const primaryFrame = frames[0]?.id ?? null;
+  const scenes = scenesOf(project, frames);
+  const sceneFrames = new Set(scenes.map((sc) => sc.frameId).filter(Boolean));
+  const primaryFrame = scenes.find((sc) => sc.frameId)?.frameId ?? frames[0]?.id ?? null;
 
   await db.delete(creativeClips).where(eq(creativeClips.projectId, project.id));
   if (next.clips.length > 0) {
     await db.insert(creativeClips).values(
-      next.clips.map((fields, i) => ({
-        projectId: project.id,
-        idx: i,
-        ...fields,
-        speaker: fields.speaker ?? null,
-        ...derivedClip(updated, fields),
-        frameAssetId: primaryFrame,
-      }))
+      next.clips.map((fields, i) => {
+        // A story clip plays in its own scene; anything else opens on scene 1.
+        const frameId = fields.frameId && sceneFrames.has(fields.frameId) ? fields.frameId : primaryFrame;
+        const f: ClipFields = { ...fields, frameId };
+        return {
+          projectId: project.id,
+          idx: i,
+          ...clipColumns(f),
+          ...derivedClip(updated, f),
+          frameAssetId: frameId,
+        };
+      })
     );
   }
   await db

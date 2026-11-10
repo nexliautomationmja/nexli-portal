@@ -62,11 +62,19 @@ export async function clipVideoFile(clip: Clip, dir: string): Promise<string> {
   return file;
 }
 
-/** Make sure the clip's current take has word timings (Scribe) and its true duration. */
+/**
+ * Make sure the clip's current take has word timings (Scribe) and its true
+ * duration. A silent story shot has no words by design: it isn't sent to
+ * Scribe (a stray "uh" would make the cut trim it), so it's kept whole.
+ */
 export async function ensureTranscript(clip: Clip, videoFile: string): Promise<Clip> {
   if (clip.transcript && clip.transcript.version === clip.version && clip.transcript.durationS > 0) return clip;
-  const bytes = await fs.readFile(videoFile);
-  const [transcript, duration] = await Promise.all([transcribeClip(bytes, clip.version), probeDuration(videoFile)]);
+  const silent = clip.kind === "silent";
+  const bytes = silent ? null : await fs.readFile(videoFile);
+  const [transcript, duration] = await Promise.all([
+    bytes ? transcribeClip(bytes, clip.version) : Promise.resolve({ version: clip.version, durationS: 0, words: [], text: "" }),
+    probeDuration(videoFile),
+  ]);
   transcript.durationS = duration || transcript.durationS || clip.durationS;
   const [updated] = await db
     .update(creativeClips)

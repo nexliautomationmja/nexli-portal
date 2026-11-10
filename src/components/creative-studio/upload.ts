@@ -82,10 +82,11 @@ export async function uploadToTarget(target: { path: string; token: string }, bl
 
 /**
  * Upload an image as a project's opening frame (cropped to 9:16 for ads):
- * sign → direct upload → register → make it the opening frame.
- * Returns the fresh project detail.
+ * sign → direct upload → register → make it the opening frame. With `scene`
+ * it becomes a scene's frame instead ("new" adds a scene; a scene id replaces
+ * that scene's frame). Returns the fresh project detail.
  */
-export async function uploadFrameFile(projectId: string, file: File, vertical: boolean) {
+export async function uploadFrameFile(projectId: string, file: File, vertical: boolean, scene?: string) {
   const base = `/api/dashboard/creative-studio/projects/${projectId}/frames`;
   const prepared = await prepareFrame(file, vertical);
   const kling = prepared.mime === "image/webp" ? await toPng(prepared.blob) : prepared;
@@ -100,10 +101,11 @@ export async function uploadFrameFile(projectId: string, file: File, vertical: b
   const reg = await fetch(base, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "register", path: target.path, mime: kling.mime, width: prepared.width, height: prepared.height }),
+    body: JSON.stringify({ action: "register", path: target.path, mime: kling.mime, width: prepared.width, height: prepared.height, ...(scene ? { scene } : {}) }),
   });
   const detail = await reg.json().catch(() => null);
   if (!reg.ok || !detail?.frames) throw new Error(detail?.error || "Couldn't save the frame");
+  if (scene) return detail;
   const newest = [...detail.frames].sort((a: { sort: number }, b: { sort: number }) => b.sort - a.sort)[0];
   if (!newest) return detail;
   const primary = await fetch(base, {

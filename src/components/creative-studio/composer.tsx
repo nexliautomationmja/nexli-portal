@@ -46,6 +46,7 @@ export function Composer({
   count = 1,
   onCount,
   maxCount = 1,
+  maxImages,
   onSubmit,
 }: {
   placeholder: string;
@@ -64,6 +65,8 @@ export function Composer({
   count?: number;
   onCount?: (n: number) => void;
   maxCount?: number;
+  /** How many images one message can carry (a story's scenes); defaults to one per video in the batch. */
+  maxImages?: number;
   onSubmit: (s: ComposerSubmit) => Promise<boolean | void> | boolean | void;
 }) {
   const [text, setText] = useState(defaultText ?? "");
@@ -84,16 +87,16 @@ export function Composer({
     const accepted = list.filter((f) => f.type.startsWith("image/") || (allowVideo && f.type.startsWith("video/")));
     if (accepted.length === 0) return;
     setFiles((prev) => {
-      // One frame at a time (a new image replaces it); a batch keeps up to one frame per video. One video max.
-      const maxImages = Math.max(1, count);
+      // A batch keeps up to one frame per video; a single video up to `maxImages` (its scenes, in order). One video max.
+      const limit = count > 1 ? count : Math.max(1, maxImages ?? 1);
       const newImages = accepted.filter((f) => f.type.startsWith("image/"));
       const prevImages = prev.filter((a) => a.file.type.startsWith("image/"));
-      const keepImages = newImages.length ? prevImages.slice(Math.max(0, prevImages.length + newImages.length - maxImages)) : prevImages;
+      const keepImages = newImages.length ? prevImages.slice(Math.max(0, prevImages.length + newImages.length - limit)) : prevImages;
       const keep = prev.filter((a) =>
         a.file.type.startsWith("image/") ? keepImages.includes(a) : !accepted.some((f) => f.type.startsWith("video/"))
       );
       prev.filter((a) => !keep.includes(a)).forEach((a) => a.preview && URL.revokeObjectURL(a.preview));
-      const image = newImages.slice(-maxImages);
+      const image = newImages.slice(-limit);
       const video = accepted.filter((f) => f.type.startsWith("video/")).slice(-1);
       return [
         ...keep,
@@ -144,6 +147,10 @@ export function Composer({
   }
 
   const canSend = !busy && !disabled && (text.trim().length > 0 || files.length > 0);
+  // Several images on one video are its scenes, in the order attached.
+  const imageIds = files.filter((a) => a.preview).map((a) => a.id);
+  const imageCount = imageIds.length;
+  const imageIndex = new Map(imageIds.map((id, i) => [id, i]));
 
   return (
     <div
@@ -182,7 +189,7 @@ export function Composer({
                 </div>
               )}
               <span className="absolute bottom-1 left-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                {a.preview ? "Frame" : "Final cut"}
+                {!a.preview ? "Final cut" : imageCount > 1 && count === 1 ? `Scene ${imageIndex.get(a.id)! + 1}` : "Frame"}
               </span>
               <button
                 type="button"
@@ -237,7 +244,7 @@ export function Composer({
           disabled={disabled}
           className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white"
           aria-label="Attach an image"
-          title={allowVideo ? "Attach a frame image or your final cut video" : "Attach the frame image"}
+          title={allowVideo ? "Attach a frame image or your final cut video" : (maxImages ?? 1) > 1 ? "Attach frames (several = scenes of a story)" : "Attach the frame image"}
         >
           <SvgIcon d={SP.paperclip} />
         </button>
@@ -245,6 +252,7 @@ export function Composer({
           ref={picker}
           type="file"
           hidden
+          multiple={count > 1 || (maxImages ?? 1) > 1}
           accept={allowVideo ? "image/png,image/jpeg,image/webp,video/mp4,video/quicktime" : "image/png,image/jpeg,image/webp"}
           onChange={(e) => {
             add(Array.from(e.target.files ?? []));

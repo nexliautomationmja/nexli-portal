@@ -240,8 +240,8 @@ function ClipTile({
         </span>
       </div>
       <div className="space-y-2 p-3">
-        <p className="line-clamp-3 text-xs font-medium leading-relaxed text-white" title={clip.line}>
-          {clip.line}
+        <p className="line-clamp-3 text-xs font-medium leading-relaxed text-white" title={clip.line || clip.action}>
+          {clip.kind === "silent" ? <span className="text-neutral-300">🎬 {clip.action}</span> : clip.line}
         </p>
         {clip.error && <p className="text-[11px] font-semibold text-rose-300">{clip.error}</p>}
         <div className="flex flex-wrap gap-2 text-[11px] font-semibold">

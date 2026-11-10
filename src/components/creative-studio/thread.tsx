@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
+import { MAX_SCENES } from "@/lib/creative-studio/prompts";
 import { SYNE } from "@/components/launch-pad";
 import { studioHref, api, send } from "@/components/creative-studio/client";
 import { uploadFrameFile } from "@/components/creative-studio/upload";
@@ -45,9 +46,12 @@ function stageOf(d: ProjectDetail): Stage {
   if (locked) return "locked";
   if (d.clips.length > 0) return "review";
   if (!d.project.direction.trim()) return "direction";
-  if (d.frames.length === 0) return "frame";
+  if (d.frames.length === 0 || d.scenes.some((sc) => !sc.frameId)) return "frame";
   return "write";
 }
+
+/** Several scenes: the video is a story (the script is written across them). */
+const isStoryDetail = (d: ProjectDetail) => d.scenes.filter((sc) => sc.frameId).length > 1;
 
 const COMPOSER: Record<Stage, { placeholder: string; hint: string }> = {
   direction: {
@@ -98,6 +102,10 @@ export function StudioThread({ projectId }: { projectId: string }) {
   const [format, setFormat] = useState<CreativeFormat>("ad_9x16");
   const [frameChanged, setFrameChanged] = useState(false);
   const [cutSummary, setCutSummary] = useState<string | null>(null);
+  // A suggestion dropped into the chat box (remounts the composer with that text).
+  const [seed, setSeed] = useState<{ key: number; text: string } | null>(null);
+  const [reading, setReading] = useState(false);
+  const readFor = useRef<string | null>(null);
   const [params] = useState(() => (typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)));
   const [autoWrite, setAutoWrite] = useState(() => params.get("start") === "1");
   const klingNotice = params.get("kling");
@@ -131,7 +139,9 @@ export function StudioThread({ projectId }: { projectId: string }) {
       setError(null);
       setWorking({
         label: "Claude is writing the script…",
-        detail: "Following your Kling framework: structure, lines, delivery, actions and pronunciation cues. An ad takes about a minute; a VSL up to three.",
+        detail: isStoryDetail(detail)
+          ? `A story across your ${detail.scenes.length} scenes, following your Kling framework: who says what in which scene, the shots, delivery and pronunciation cues. About a minute or two.`
+          : "Following your Kling framework: structure, lines, delivery, actions and pronunciation cues. An ad takes about a minute; a VSL up to three.",
         accent: "violet",
       });
       const r = await send(api(`${detail.project.id}/script`), "POST", {
@@ -152,6 +162,19 @@ export function StudioThread({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (stage === "write" && autoWrite && !working && !error) void writeScript();
   }, [stage, autoWrite, working, error, writeScript]);
+
+  // Frames but no direction: Claude reads them and asks what the video is about (once per set of frames).
+  useEffect(() => {
+    if (!detail || stage !== "direction" || reading) return;
+    const ids = detail.scenes.map((sc) => sc.frameId).filter(Boolean).join();
+    if (!ids || detail.project.brief?.ask?.frames.join() === ids || readFor.current === ids) return;
+    readFor.current = ids;
+    setReading(true);
+    void send(api(`${detail.project.id}/scenes/read`), "POST").then((r) => {
+      setReading(false);
+      if (r.ok) apply(r.data);
+    });
+  }, [detail, stage, reading, apply]);
 
   // Bring the active step into view when the stage moves on.
   useEffect(() => {
@@ -203,8 +226,25 @@ export function StudioThread({ projectId }: { projectId: string }) {
         return true;
       }
 
-      // A pasted image is the frame.
-      if (images[0]) {
+      // Several images (or any image on a video that already has scenes) are scenes, in order.
+      const sceneCount = d.scenes.filter((sc) => sc.frameId).length;
+      if (images.length > 1 || (images.length > 0 && sceneCount > 1)) {
+        const hadScript = d.clips.length > 0;
+        if (sceneCount + images.length > MAX_SCENES) {
+          setError(`A video can have up to ${MAX_SCENES} scenes. It has ${sceneCount}, so add up to ${Math.max(0, MAX_SCENES - sceneCount)} more.`);
+          return false;
+        }
+        if (hadScript && !confirm(`Add ${images.length === 1 ? "this image as a new scene" : `these ${images.length} images as new scenes`}? The script can work ${images.length === 1 ? "it" : "them"} in afterwards.`)) return false;
+        const vertical = (hadScript ? d.project.format : fmt) === "ad_9x16";
+        for (let i = 0; i < images.length; i++) {
+          setWorking({ label: images.length > 1 ? `Adding scene ${sceneCount + i + 1} of ${sceneCount + images.length}…` : `Adding scene ${sceneCount + 1}…`, accent: "blue" });
+          d = (await uploadFrameFile(p.id, images[i], vertical, "new")) as ProjectDetail;
+          apply(d);
+        }
+        setWorking(null);
+        if (!hadScript && !text) setAutoWrite(true);
+      } else if (images[0]) {
+        // A pasted image is the frame.
         const hadScript = d.clips.length > 0;
         if (hadScript && !confirm("Use this image as the new frame? You can rewrite the script for it afterwards.")) return false;
         setWorking({ label: p.studio.kind === "client" ? "Setting the frame…" : "Setting Daniela's frame…", accent: "blue" });
@@ -321,7 +361,12 @@ export function StudioThread({ projectId }: { projectId: string }) {
     else setError(r.error);
   }
 
-  const base = stage === "edit" && detail.edits.length === 0 ? DESCRIBE_EDIT : COMPOSER[stage];
+  const base =
+    stage === "edit" && detail.edits.length === 0
+      ? DESCRIBE_EDIT
+      : stage === "direction" && detail.frames.length > 0
+        ? { placeholder: "Tell me the story: the angle, who it's for, where it should send people…", hint: "Enter saves it and writes the script" }
+        : COMPOSER[stage];
   // A client firm's studio has no Daniela.
   const composer = p.studio.kind === "client" ? { ...base, placeholder: base.placeholder.replace("Daniela's frame", "the frame") } : base;
   const showFormat = stage === "direction" || stage === "frame" || stage === "write";
@@ -373,13 +418,121 @@ export function StudioThread({ projectId }: { projectId: string }) {
 
           <FrameCard key={detail.frames[0]?.id ?? "none"} detail={detail} onChange={apply} onError={fail} onFrameChosen={() => (detail.clips.length > 0 ? setFrameChanged(true) : setAutoWrite(true))} />
 
-          {stage === "direction" && (
-            <AssistantCard accent="violet" icon={SP.sparkles} title="What's the video?" delay={0.05}>
-              <p className="text-sm text-neutral-300">
-                Tell me in the box below what this video is about: the angle, who it&apos;s for, what she should get across, any lines she has to say. Then pick <b className="text-white">Ad</b> or <b className="text-white">VSL</b>. I&apos;ll write it clip by clip with your Kling framework.
-              </p>
+          {stage === "direction" && (() => {
+            const ask = detail.project.brief?.ask;
+            const ids = detail.scenes.map((sc) => sc.frameId).filter(Boolean).join();
+            const current = ask && ids && ask.frames.join() === ids ? ask : null;
+            return (
+              <AssistantCard accent="violet" icon={SP.sparkles} title="What's the video?" delay={0.05}>
+                {current ? (
+                  <div className="space-y-3">
+                    <ul className="space-y-1.5">
+                      {current.reads.map((r, i) => (
+                        <li key={i} className="flex gap-2 text-sm text-neutral-300">
+                          {current.reads.length > 1 && <span className="mt-0.5 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-white/10 px-1 text-[10px] font-black text-white">{i + 1}</span>}
+                          <span className="min-w-0">
+                            {r.label && <b className="text-white">{r.label}. </b>}
+                            {r.read}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-[15px] font-semibold leading-snug text-white">{current.question}</p>
+                    {current.suggestion && (
+                      <button
+                        type="button"
+                        onClick={() => setSeed({ key: Date.now(), text: current.suggestion })}
+                        className="w-full rounded-2xl border border-violet-400/30 bg-violet-500/[0.08] px-3.5 py-2.5 text-left text-sm text-violet-100 transition-colors hover:border-violet-300/60"
+                      >
+                        <span className="mb-0.5 block text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Or start from this</span>
+                        {current.suggestion}
+                      </button>
+                    )}
+                    <p className="text-xs text-neutral-400">Answer in the box below and pick <b className="text-white">Ad</b> or <b className="text-white">VSL</b>. I&apos;ll write it clip by clip with your Kling framework.</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-300">
+                    {reading ? (
+                      <span className="text-neutral-400">Looking at your {detail.scenes.length > 1 ? "scenes" : "frame"}…</span>
+                    ) : (
+                      <>
+                        Tell me in the box below what this video is about: the angle, who it&apos;s for, what {p.presenter?.pronoun === "he" ? "he" : "she"} should get across, any lines that have to be said. Then pick <b className="text-white">Ad</b> or <b className="text-white">VSL</b>. I&apos;ll write it clip by clip with your Kling framework.
+                      </>
+                    )}
+                  </p>
+                )}
+              </AssistantCard>
+            );
+          })()}
+
+          {stage === "write" && !working && isStoryDetail(detail) && (
+            <AssistantCard accent="violet" icon={SP.script} title="Ready to write the story">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-neutral-300">
+                  {detail.scenes.length} scenes in order. Claude writes it across them: who says what in each scene, to camera, in the scene, voiceover or no talking — whatever your direction calls for.
+                </p>
+                <button type="button" onClick={() => void writeScript()} className="rounded-full bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-500">
+                  Write the script
+                </button>
+              </div>
             </AssistantCard>
           )}
+
+          {stage === "review" && !working && (() => {
+            const specs = p.frameSpec?.scenes ?? [];
+            const withFrames = detail.scenes.filter((sc) => sc.frameId);
+            // A one-frame script on a video that now has several scenes.
+            if (!detail.story && withFrames.length > 1) {
+              return (
+                <AssistantCard accent="blue" icon={SP.image} title="Now it's a story">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-neutral-300">This script was written for one frame. Rewrite it across your {withFrames.length} scenes?</p>
+                    <button type="button" onClick={() => void writeScript()} className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500">
+                      Rewrite as a story
+                    </button>
+                  </div>
+                </AssistantCard>
+              );
+            }
+            if (!detail.story) return null;
+            const stale = withFrames.filter((sc) => specs.some((x) => x.frameId === sc.frameId && x.stale));
+            const unused = withFrames.filter((sc) => !detail.clips.some((c) => c.frameId === sc.frameId));
+            if (stale.length === 0 && unused.length === 0) return null;
+            const names = (list: typeof withFrames) => list.map((sc) => `scene ${sc.number}`).join(", ").replace(/, ([^,]*)$/, " and $1");
+            const note = [
+              stale.length
+                ? `${stale.map((sc) => `Scene ${sc.number}`).join(", ")} ${stale.length > 1 ? "have" : "has"} a new frame (attached as ${stale.length > 1 ? "those scenes" : "that scene"}). Re-describe ${stale.length > 1 ? "them" : "it"} from the new frame and adjust the actions of ${stale.length > 1 ? "their" : "its"} clips so the new pose supports them. Keep every line exactly as it is.`
+                : "",
+              unused.length ? `Work ${unused.map((sc) => `Scene ${sc.number}`).join(" and ")} into the story where ${unused.length > 1 ? "they fit" : "it fits"} best.` : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <AssistantCard accent="amber" icon={SP.image} title={stale.length ? "The script needs to catch up" : "A scene isn't in the script yet"}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-neutral-300">
+                    {stale.length ? `${names(stale).replace(/^s/, "S")} ${stale.length > 1 ? "have" : "has"} a new frame. ` : ""}
+                    {unused.length ? `${names(unused).replace(/^s/, "S")} ${unused.length > 1 ? "aren't" : "isn't"} in the script yet. ` : ""}
+                    Update the script for {stale.length + unused.length > 1 ? "them" : "it"}{stale.length ? ", keeping every line" : ""}? Or say how in the box below.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setError(null);
+                      setWorking({ label: "Claude is updating the script…", detail: note, accent: "violet" });
+                      const r = await send(api(`${p.id}/script/revise`), "POST", { note });
+                      setWorking(null);
+                      if (r.ok) apply(r.data);
+                      else setError(r.error);
+                    }}
+                    className="rounded-full bg-amber-500 px-4 py-2 text-xs font-bold text-black hover:bg-amber-400"
+                  >
+                    Update the script
+                  </button>
+                </div>
+              </AssistantCard>
+            );
+          })()}
 
           {frameChanged && stage === "review" && (
             <AssistantCard accent="blue" icon={SP.image} title="New frame set">
@@ -412,6 +565,9 @@ export function StudioThread({ projectId }: { projectId: string }) {
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
           <Composer
+            key={seed?.key ?? 0}
+            defaultText={seed?.text}
+            autoFocus={Boolean(seed)}
             placeholder={composer.placeholder}
             hint={composer.hint}
             busy={Boolean(working)}
@@ -419,6 +575,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
             allowVideo={locked}
             format={format}
             onFormat={showFormat ? changeFormat : undefined}
+            maxImages={locked ? 1 : MAX_SCENES}
             onSubmit={onSubmit}
           />
         </div>

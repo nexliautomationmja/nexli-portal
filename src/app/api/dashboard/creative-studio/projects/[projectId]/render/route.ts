@@ -3,12 +3,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeClips, type ClipFields } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipFieldsOf, clipsOf, derivedClip, framesOf, projectDetail } from "@/lib/creative-studio/service";
-import { signPaths } from "@/lib/creative-studio/storage";
+import { clipColumns, clipFieldsOf, clipsOf, derivedClip, projectDetail, scriptInputFor } from "@/lib/creative-studio/service";
 import { rewriteClip } from "@/lib/creative-studio/script";
 import { submitClips } from "@/lib/creative-studio/render";
 import { accessToken, KlingNotConnectedError } from "@/lib/creative-studio/kling-mcp";
-import { firmBrief, studioById } from "@/lib/creative-studio/studios";
 
 // Rate-limit backoff (60 s) plus batches of submissions.
 export const maxDuration = 300;
@@ -59,27 +57,15 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     if (note) {
       try {
         const all = await clipsOf(project.id);
-        const frames = await framesOf(project.id);
-        const signed = await signPaths(frames.slice(0, 1).map((f) => f.storagePath));
-        const frameUrls = frames
-          .slice(0, 1)
-          .map((f) => (f.storagePath ? signed.get(f.storagePath) : undefined))
-          .filter(Boolean) as string[];
         const rewritten = await rewriteClip({
-          input: {
-          title: project.title,
-          format: project.format,
-          rig: project.rig,
-          brief: project.brief,
-          frameUrls,
-          firm: firmBrief(await studioById(access.ownerId, project.studioId)),
-        },
+          input: await scriptInputFor(project, "change"),
           frame: project.frameSpec,
           clips: all.map(clipFieldsOf),
           index: all.findIndex((c) => c.id === clip.id),
           instruction: `${note} (This clip already rendered on Kling; fix it with a targeted change to the line or a pronunciation cue, per the framework's redo pattern.)`,
         });
-        fields = rewritten.clip;
+        // A redo keeps the clip in its scene.
+        fields = { ...rewritten.clip, frameId: rewritten.clip.frameId ?? clip.frameAssetId ?? null };
       } catch (err) {
         console.error("[creative-studio] redo rewrite failed:", err);
         return NextResponse.json({ error: "Claude couldn't adjust the clip. Try again." }, { status: 502 });
@@ -103,9 +89,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const [updated] = await db
       .update(creativeClips)
       .set({
-        ...fields,
-        speaker: fields.speaker ?? null,
+        ...clipColumns(fields),
         ...derivedClip(project, fields),
+        frameAssetId: fields.frameId ?? clip.frameAssetId,
         version: previous.length > (clip.previous ?? []).length ? clip.version + 1 : clip.version,
         previous,
         klingTaskId: null,

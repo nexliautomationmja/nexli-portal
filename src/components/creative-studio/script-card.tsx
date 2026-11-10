@@ -2,13 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import { RIG_LABEL, lintClip, scriptTotals } from "@/lib/creative-studio/prompts";
+import { KIND_LABEL, RIG_LABEL, lintClip, scriptTotals } from "@/lib/creative-studio/prompts";
+import type { ClipKind } from "@/lib/creative-studio/tables";
 import { CTA_CLASSES } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+const KIND_ICON: Record<ClipKind, string> = { to_camera: "🎥", in_scene: "💬", voiceover: "🔊", silent: "🎬" };
 
 /** "Before: \"make the hook punchier\"" → "make the hook punchier" */
 function noteFromReason(reason: string): string | null {
@@ -37,6 +40,11 @@ export function ScriptCard({
   const [approving, setApproving] = useState(false);
   const [kling, setKling] = useState<{ connected: boolean; credits: number | null } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  // Story videos: the clip whose scene picker is open.
+  const [moving, setMoving] = useState<string | null>(null);
+  const story = detail.story;
+  const sceneOf = useMemo(() => new Map(detail.scenes.filter((sc) => sc.frameId).map((sc) => [sc.frameId as string, sc])), [detail.scenes]);
+  const specOf = useMemo(() => new Map((p.frameSpec?.scenes ?? []).map((sc) => [sc.frameId, sc])), [p.frameSpec]);
 
   useEffect(() => {
     if (locked) return;
@@ -50,7 +58,14 @@ export function ScriptCard({
     };
   }, [locked]);
 
-  const totals = useMemo(() => scriptTotals(detail.clips.map((c) => c.line)), [detail.clips]);
+  const totals = useMemo(() => scriptTotals(detail.clips.map((c) => (c.kind === "silent" ? "" : c.line))), [detail.clips]);
+
+  async function moveToScene(clipId: string, frameId: string) {
+    setMoving(null);
+    const r = await send(api(`${p.id}/clips/${clipId}`), "PATCH", { frameId });
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
   const rows = useMemo(
     () =>
       detail.clips.map((c, i) => {
@@ -121,7 +136,7 @@ export function ScriptCard({
         title={locked ? "The approved script" : "Here's the script"}
         right={
           <div className="flex flex-wrap items-center gap-1.5">
-            <Chip>{RIG_LABEL[p.rig]}</Chip>
+            <Chip>{story ? `Story · ${detail.scenes.filter((sc) => sc.frameId).length} scenes` : RIG_LABEL[p.rig]}</Chip>
             <Chip>v{p.scriptVersion}</Chip>
             {locked ? <Chip tone="green">✓ Approved</Chip> : risks > 0 ? <Chip tone="red">{risks} flagged</Chip> : null}
           </div>
@@ -147,8 +162,28 @@ export function ScriptCard({
         <ol className="mt-4 space-y-1">
           {rows.map(({ clip, start, end, flags }, i) => {
             const newSection = i === 0 || rows[i - 1].clip.section !== clip.section;
+            const scene = story && clip.frameId ? sceneOf.get(clip.frameId) : undefined;
+            const newScene = story && (i === 0 || rows[i - 1].clip.frameId !== clip.frameId);
+            const kind = (clip.kind ?? "to_camera") as ClipKind;
+            // Someone other than the presenter talking: their short name from the scene description.
+            const speakerName =
+              story && clip.speaker
+                ? specOf.get(clip.frameId ?? "")?.people.find((x) => x.position === clip.speaker && !x.presenter)?.shortName ?? null
+                : null;
             return (
               <li key={clip.id}>
+                {newScene && scene && (
+                  <div className="mb-1 mt-5 flex items-center gap-2 first:mt-0">
+                    {scene.url && (
+                      // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+                      <img src={scene.url} alt="" className="h-9 w-auto rounded-md border border-white/15 object-cover" style={{ aspectRatio: p.format === "vsl_16x9" ? "16 / 9" : "9 / 16" }} />
+                    )}
+                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-300">
+                      Scene {scene.number}
+                      {scene.label && <span className="font-semibold normal-case tracking-normal text-neutral-300"> · {scene.label}</span>}
+                    </p>
+                  </div>
+                )}
                 {newSection && (
                   <p className="mb-1 mt-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300/80 first:mt-0">
                     <span className="h-px w-4 bg-cyan-300/40" />
@@ -170,13 +205,65 @@ export function ScriptCard({
                         #{clip.idx + 1} · {clock(start)}–{clock(end)} ·{" "}
                         <span className={clip.durationS >= 12 ? "text-rose-300" : ""}>{clip.durationS}s</span>
                       </p>
-                      <p className="text-[15px] font-semibold leading-snug text-white">
-                        {clip.speaker && <span className="mr-1.5 rounded bg-blue-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-blue-300">{clip.speaker}</span>}
-                        {clip.line}
-                      </p>
+                      {kind === "silent" ? (
+                        <p className="text-[15px] font-semibold leading-snug text-neutral-200">
+                          <span className="mr-1.5 rounded bg-white/10 px-1.5 py-0.5 align-middle text-[10px] font-bold text-neutral-300">NO TALKING</span>
+                          {clip.action}
+                        </p>
+                      ) : (
+                        <p className="text-[15px] font-semibold leading-snug text-white">
+                          {(speakerName || (!story && clip.speaker)) && (
+                            <span className="mr-1.5 rounded bg-blue-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-blue-300">{speakerName ?? clip.speaker}</span>
+                          )}
+                          {clip.line}
+                        </p>
+                      )}
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {clip.register && <Chip>🎙 {clip.register}</Chip>}
-                        {clip.action && <Chip>✋ {clip.action}</Chip>}
+                        {story && (
+                          <span className="relative">
+                            <button
+                              type="button"
+                              onClick={() => !locked && setMoving(moving === clip.id ? null : clip.id)}
+                              disabled={locked}
+                              aria-expanded={moving === clip.id}
+                              aria-label={`Clip ${clip.idx + 1} plays in scene ${scene?.number ?? 1}${locked ? "" : ". Move it to another scene"}`}
+                              className="inline-flex items-center gap-1 rounded-full border border-blue-400/30 bg-blue-500/10 py-0.5 pl-0.5 pr-2 text-[11px] font-semibold text-blue-200 enabled:hover:border-blue-300/60"
+                            >
+                              {scene?.url && (
+                                // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+                                <img src={scene.url} alt="" className="h-5 w-5 rounded-full object-cover" />
+                              )}
+                              Scene {scene?.number ?? 1}
+                              {!locked && <span aria-hidden="true">▾</span>}
+                            </button>
+                            {moving === clip.id && (
+                              <span className="absolute left-0 top-full z-30 mt-1 flex w-max max-w-[80vw] gap-1.5 overflow-x-auto rounded-xl border border-white/15 bg-[#0b1220] p-2 shadow-2xl shadow-black/50">
+                                {detail.scenes
+                                  .filter((sc) => sc.frameId)
+                                  .map((sc) => (
+                                    <button
+                                      key={sc.id}
+                                      type="button"
+                                      // A scene the script hasn't described yet can't take clips (its prompt would describe another scene).
+                                      disabled={!specOf.has(sc.frameId as string)}
+                                      onClick={() => void moveToScene(clip.id, sc.frameId as string)}
+                                      className={`w-14 shrink-0 overflow-hidden rounded-lg border text-center disabled:opacity-35 ${sc.frameId === clip.frameId ? "border-blue-400" : "border-white/10 enabled:hover:border-white/30"}`}
+                                      aria-label={specOf.has(sc.frameId as string) ? `Move clip ${clip.idx + 1} to scene ${sc.number}` : `Scene ${sc.number} isn't in the script yet`}
+                                    >
+                                      {sc.url && (
+                                        // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+                                        <img src={sc.url} alt="" className="w-full object-cover" style={{ aspectRatio: p.format === "vsl_16x9" ? "16 / 9" : "9 / 16" }} />
+                                      )}
+                                      <span className="block py-0.5 text-[10px] font-bold text-white">{sc.number}</span>
+                                    </button>
+                                  ))}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                        {story && kind !== "silent" && <Chip tone={kind === "to_camera" ? "neutral" : "blue"}>{KIND_ICON[kind]} {KIND_LABEL[kind]}</Chip>}
+                        {clip.register && kind !== "silent" && <Chip>🎙 {clip.register}</Chip>}
+                        {clip.action && kind !== "silent" && <Chip>✋ {clip.action}</Chip>}
                       </div>
                       {clip.editNote && <p className="mt-1.5 text-[11px] text-neutral-400">✂ {clip.editNote}</p>}
                       {clip.cues && <p className="mt-1 text-[11px] text-neutral-400">🔤 {clip.cues}</p>}
