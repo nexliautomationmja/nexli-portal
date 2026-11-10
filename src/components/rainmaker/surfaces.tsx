@@ -27,6 +27,7 @@ const FEATURE = {
   emerald: "border-emerald-400/25 from-emerald-500/[0.14] to-cyan-500/[0.06]",
   violet: "border-violet-400/25 from-violet-600/[0.16] to-fuchsia-500/[0.06]",
   amber: "border-amber-400/25 from-amber-500/[0.12] to-orange-500/[0.05]",
+  rose: "border-rose-400/30 from-rose-500/[0.14] to-orange-500/[0.05]",
 } as const;
 export type FeatureTone = keyof typeof FEATURE;
 
