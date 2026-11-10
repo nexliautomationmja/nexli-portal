@@ -121,11 +121,11 @@ export function ShimmerPill({
   return (
     <div className="relative inline-flex items-center rounded-full overflow-hidden p-[1.5px]">
       <span
-        className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-80"
+        className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-80 motion-reduce:animate-none"
         style={{ background: conic }}
       />
       <span
-        className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] blur-md opacity-40"
+        className="absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] blur-md opacity-40 motion-reduce:animate-none"
         style={{ background: conic }}
       />
       <span className="relative z-10 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#020617]">
@@ -143,8 +143,9 @@ export const CTA_CLASSES =
 export const SECONDARY_BTN =
   "min-h-11 px-5 py-3 rounded-full text-sm font-semibold text-neutral-400 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-all active:scale-[0.98] disabled:opacity-50";
 
+// neutral-400: 10px caps on navy need the brighter step to stay readable (4.5:1+).
 export const labelCls =
-  "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-neutral-500";
+  "block text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-neutral-400";
 
 // ─── Progress Ring (gradient stroke) ───────────────────────
 

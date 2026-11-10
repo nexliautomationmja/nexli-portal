@@ -8,6 +8,7 @@ import { DocumentPreview } from "@/components/engagement-document";
 import { CTA_CLASSES, ConfettiBurst, SECONDARY_BTN, SHIMMER_CONIC, SYNE, ShimmerPill } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { ErrorStrip, LaunchPadCanvas, SP, SvgIcon } from "@/components/creative-studio/canvas";
+import { BIG_NUM, GradientText } from "@/components/rainmaker";
 import { generateDrsContent, fillClientPlaceholder } from "@/lib/engagement-defaults";
 import { generateEnterpriseContent } from "@/lib/enterprise-engagement";
 import { ANNUAL_UPFRONT_CENTS, DRS_PRICING, TERM_MONTHS, TOTAL_MONTHLY_CENTS, type BillingPlan } from "@/lib/drs-pricing";
@@ -211,19 +212,19 @@ export function EngagementComposer() {
 
   const heading = sent ? (
     <>
-      Sent. <span className="bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent">Nice work.</span>
+      Sent. <GradientText tone="success">Nice work.</GradientText>
     </>
   ) : step === 1 ? (
     <>
-      Who&apos;s signing <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-cyan-300 bg-clip-text text-transparent">today?</span>
+      Who&apos;s signing <GradientText>today?</GradientText>
     </>
   ) : step === 2 ? (
     <>
-      Which <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-cyan-300 bg-clip-text text-transparent">agreement?</span>
+      Which <GradientText>agreement?</GradientText>
     </>
   ) : (
     <>
-      Review &amp; <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-cyan-300 bg-clip-text text-transparent">send</span>
+      Review &amp; <GradientText>send</GradientText>
     </>
   );
 
@@ -547,7 +548,7 @@ export function EngagementComposer() {
                             className={`rounded-2xl border p-3 text-left transition ${on ? "border-violet-300/70 bg-violet-500/20" : "border-white/10 bg-white/[0.03] hover:border-violet-400/40"}`}
                           >
                             <p className="text-xs font-bold text-white">{info.label}</p>
-                            <p className="mt-0.5 text-xl font-bold text-white" style={SYNE}>
+                            <p className="mt-0.5 text-xl font-bold text-white" style={BIG_NUM}>
                               {fmtWhole(info.priceCents)}
                             </p>
                             <p className="text-[10px] text-neutral-400">For {info.firmSize} · renews {fmtWhole(renewalCents(t))}/yr</p>
@@ -758,7 +759,7 @@ function OfferCard({ on, onClick, emoji, accent, title, price, sub }: { on: bool
     >
       <span className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${accent} text-xl`}>{emoji}</span>
       <p className="mt-3 text-sm font-bold text-white">{title}</p>
-      <p className="mt-1 text-2xl font-bold tracking-tight text-white" style={SYNE}>
+      <p className="mt-1 text-2xl font-bold tracking-tight text-white" style={BIG_NUM}>
         {price}
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{sub}</p>

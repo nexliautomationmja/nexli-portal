@@ -1,32 +1,12 @@
 "use client";
 
-import { SYNE } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { change } from "@/lib/ads/format";
 import type { Delta, FatigueState, Severity } from "@/lib/ads/types";
 import { FATIGUE, SEVERITY, VIZ } from "@/components/ads/viz";
 
-/** Big standalone numbers: proportional figures (tabular only in columns). */
-export const BIG_NUM: React.CSSProperties = { ...NUM_FONT, fontVariantNumeric: "lining-nums proportional-nums" };
-
-export function SectionHead({ id, eyebrow, title, sub, right }: { id?: string; eyebrow: string; title: string; sub?: React.ReactNode; right?: React.ReactNode }) {
-  return (
-    <div id={id} className="mb-4 flex scroll-mt-28 flex-wrap items-end justify-between gap-3 md:scroll-mt-20">
-      <div className="min-w-0">
-        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-cyan-300/80">{eyebrow}</p>
-        <h2 className="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl" style={SYNE}>
-          {title}
-        </h2>
-        {sub && <div className="mt-1 max-w-2xl text-sm text-neutral-400">{sub}</div>}
-      </div>
-      {right}
-    </div>
-  );
-}
-
-export function Glass({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-white/10 bg-white/[0.04] ${className}`}>{children}</div>;
-}
+// Shared look now lives in the Rainmaker kit; re-exported so Ads imports keep working.
+export { BIG_NUM, SectionHead, Skeleton, Surface as Glass } from "@/components/rainmaker";
 
 const ARROW_UP = <path d="m5 12 7-7 7 7M12 19V5" />;
 const ARROW_DOWN = <path d="M12 5v14M19 12l-7 7-7-7" />;
@@ -148,10 +128,6 @@ export function Meter({ value, color = VIZ.current, label }: { value: number | n
       <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(v > 0 ? 3 : 0, v * 100)}%`, background: color }} />
     </div>
   );
-}
-
-export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-2xl bg-white/[0.05] ${className}`} />;
 }
 
 export const ExternalIcon = () => <Ico d={<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />} size={11} />;

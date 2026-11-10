@@ -23,7 +23,13 @@ export function LaunchPadStyles() {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-6px); }
         }
-        .lp-card { animation: lp-fade-up 0.5s ease-out both; }
+        /* backwards (not both): once it has played, no transform is left behind, so fixed
+           children (lightboxes, sheets) are positioned against the viewport, not this card. */
+        .lp-card { animation: lp-fade-up 0.5s ease-out backwards; }
+        @media (prefers-reduced-motion: reduce) {
+          .lp-card { animation: none; }
+          [style*="lp-float"] { animation: none !important; }
+        }
         .lp-input {
           width: 100%;
           background: rgba(255, 255, 255, 0.05);

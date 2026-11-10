@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SHIMMER_CONIC, ShimmerPill, SYNE } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { ErrorStrip, GradientText, LaunchPadCanvas } from "@/components/creative-studio/canvas";
 import { MetaLogo } from "@/components/creative-studio/meta";
+import { Segmented, SectionNav } from "@/components/rainmaker";
+
+export { SectionNav };
 import { shortDay } from "@/lib/ads/time";
 import { money } from "@/lib/ads/format";
 import { ADS_RANGES, type AdRow, type AdsRange, type AdsSnapshot, type Signal } from "@/lib/ads/types";
@@ -57,82 +60,7 @@ const ago = (iso: string, now: number) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
 };
 
-function RangeControl({ value, onChange, busy }: { value: AdsRange; onChange: (r: AdsRange) => void; busy: boolean }) {
-  return (
-    <div className="inline-flex rounded-2xl border border-white/10 bg-white/[0.04] p-1" role="radiogroup" aria-label="Date range">
-      {ADS_RANGES.map((r) => (
-        <button
-          key={r}
-          type="button"
-          role="radio"
-          aria-checked={value === r}
-          onClick={() => onChange(r)}
-          className={`min-h-10 min-w-[3.25rem] rounded-xl px-3 text-xs font-bold transition-all ${
-            value === r ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/30" : "text-neutral-400 hover:bg-white/[0.06] hover:text-white"
-          }`}
-          style={NUM_FONT}
-        >
-          {busy && value === r ? <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/80 border-t-transparent align-middle" /> : `${r}D`}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Scroll-spy chips: which section is on screen. */
-function useActiveSection(ids: readonly string[]) {
-  const [active, setActive] = useState<string>(ids[0]);
-  useEffect(() => {
-    let frame = 0;
-    const measure = () => {
-      frame = 0;
-      let cur = ids[0];
-      for (const id of ids) {
-        const el = document.getElementById(id);
-        if (el && el.getBoundingClientRect().top <= window.innerHeight * 0.3) cur = id;
-      }
-      setActive(cur);
-    };
-    const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(measure);
-    };
-    measure();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, [ids]);
-  return active;
-}
-
-export function SectionNav({ sections }: { sections: readonly { id: string; label: string }[] }) {
-  const ids = useMemo(() => sections.map((s) => s.id), [sections]);
-  const active = useActiveSection(ids);
-  return (
-    <nav aria-label="Sections" className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 -mx-4 mb-6 border-b border-white/5 bg-[#020617]/85 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6 md:top-0">
-      <div className="cs-scroll flex gap-1.5 overflow-x-auto">
-        {sections.map((s) => (
-          <a
-            key={s.id}
-            href={`#${s.id}`}
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-            className={`flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-[11px] font-bold transition-colors ${
-              active === s.id ? "border-blue-500 bg-blue-600 text-white" : "border-white/10 bg-white/5 text-neutral-400 hover:text-white"
-            }`}
-          >
-            {s.label}
-          </a>
-        ))}
-      </div>
-    </nav>
-  );
-}
+const RANGE_OPTIONS = ADS_RANGES.map((r) => ({ value: r, label: `${r}D` }));
 
 export function useSnapshot() {
   const [range, setRangeState] = useState<AdsRange>("30");
@@ -232,7 +160,7 @@ export function Hero({
         </div>
       )}
       <div className="mt-5 flex flex-col items-center gap-2">
-        <RangeControl value={range} onChange={onRange} busy={loading} />
+        <Segmented value={range} options={RANGE_OPTIONS} onChange={onRange} ariaLabel="Date range" busyValue={loading ? range : null} numeric />
         <p className="text-[11px] text-neutral-400" style={NUM_FONT}>
           {s ? (
             <>

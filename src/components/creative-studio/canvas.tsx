@@ -2,65 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ACCENT, LaunchPadStyles, SHIMMER_CONIC, SYNE, type Accent } from "@/components/launch-pad";
+import { ACCENT, SHIMMER_CONIC, SYNE, type Accent } from "@/components/launch-pad";
 import { LimeBadge, META_LIME, META_LIME_CONIC, META_LIME_FILL, MetaLogo } from "@/components/creative-studio/meta";
 import { studioHref, type StudioTab } from "@/components/creative-studio/client";
 
 /**
- * Creative Studio visual foundation: a Launch Pad canvas (the dark navy,
- * glass and glow look of the client onboarding and invoice pages) that lives
- * inside the dashboard, plus chat-thread primitives.
- *
- * The canvas is always dark, whatever the dashboard theme. globals.css colors
- * h1–h6 and p through --text-main / --text-muted in an unlayered rule that
- * beats Tailwind colour classes, so the canvas sets those variables to the
- * dark values on itself — otherwise light mode would paint dark text on navy.
+ * Creative Studio chat-thread primitives. The dark canvas, its variables and
+ * GradientText now live in the shared Rainmaker kit (@/components/rainmaker);
+ * they are re-exported here so existing imports keep working.
  */
-export const CANVAS_VARS = {
-  "--text-main": "#f8fafc",
-  "--text-muted": "#94a3b8",
-  "--card-border": "rgba(255,255,255,0.1)",
-  "--glass-border": "rgba(255,255,255,0.1)",
-  "--input-bg": "rgba(255,255,255,0.05)",
-  "--card-bg": "#0b1220",
-  colorScheme: "dark",
-} as React.CSSProperties;
-
-export function StudioCanvas({ children }: { children: React.ReactNode }) {
-  return (
-    // overflow-clip (not hidden) so the sticky composer still sticks to the viewport.
-    // Edge to edge on phones (no double padding inside the dashboard), framed from sm up.
-    <div
-      className="relative isolate -mx-4 min-h-[calc(100dvh-5.75rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-clip border-y border-white/5 bg-[#020617] text-white sm:mx-0 sm:min-h-[calc(100dvh-3rem)] sm:rounded-3xl sm:border md:min-h-[calc(100dvh-3rem)]"
-      style={CANVAS_VARS}
-    >
-      <LaunchPadStyles />
-      <style>{`
-        @keyframes cs-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }
-        .cs-scroll::-webkit-scrollbar { height: 6px; width: 6px } .cs-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 9999px }
-        @keyframes cs-shimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
-        .cs-shimmer-text { background: linear-gradient(90deg, #94a3b8 0%, #ffffff 35%, #67e8f9 50%, #ffffff 65%, #94a3b8 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: cs-shimmer 2.4s linear infinite }
-        @keyframes cs-sweep { from { transform: translateX(-100%) } to { transform: translateX(100%) } }
-        .cs-sweep { position: relative; overflow: hidden }
-        .cs-sweep::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.08) 45%, rgba(103,232,249,.12) 50%, rgba(255,255,255,.08) 55%, transparent 80%); animation: cs-sweep 1.8s ease-in-out infinite }
-        @keyframes cs-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(59,130,246,.45) } 70% { box-shadow: 0 0 0 10px rgba(59,130,246,0) } 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0) } }
-      `}</style>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-40 -right-32 h-[560px] w-[560px] rounded-full" style={{ background: "radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)" }} />
-        <div className="absolute top-1/3 -left-40 h-[480px] w-[480px] rounded-full" style={{ background: "radial-gradient(circle, rgba(139,92,246,0.09) 0%, transparent 70%)" }} />
-        <div className="absolute -bottom-32 -right-24 h-[480px] w-[480px] rounded-full" style={{ background: "radial-gradient(circle, rgba(6,182,212,0.09) 0%, transparent 70%)" }} />
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/** Gradient text used for headline words (blue → violet → cyan). */
-export function GradientText({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-cyan-300 bg-clip-text text-transparent">{children}</span>
-  );
-}
+export { CANVAS_VARS, GradientText } from "@/components/rainmaker";
+export { RainmakerCanvas as StudioCanvas } from "@/components/rainmaker";
+import { RainmakerCanvas } from "@/components/rainmaker";
 
 // Lucide-style stroke icons used only by the studio.
 export const SP = {
@@ -471,4 +424,4 @@ export function StudioTabs({ active, studioKey }: { active: StudioTab; studioKey
 }
 
 /** The same dark Launch Pad canvas, for pages outside Creative Studio (e.g. the engagement letter composer). */
-export const LaunchPadCanvas = StudioCanvas;
+export const LaunchPadCanvas = RainmakerCanvas;
