@@ -11,6 +11,7 @@ import { ManusActivity } from "@/components/creative-studio/manus-activity";
 import { PresenterPicker, defaultPresenterName } from "@/components/creative-studio/presenter-picker";
 import { useIsTouch } from "@/lib/use-media";
 import { reactionShot } from "@/lib/creative-studio/reaction-shared";
+import { FrameViewer, type ViewerItem } from "@/components/creative-studio/frame-viewer";
 
 interface Reference {
   id: string;
@@ -58,6 +59,8 @@ export function FrameCard({
   const [refs, setRefs] = useState<Reference[] | null>(null);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
   // A reaction video starts with the shot it needs: the presenter holding the phone, the top right left clear.
+  // A frame up close (the opening frame, a scene, or Manus's options).
+  const [viewer, setViewer] = useState<{ items: ViewerItem[]; index: number } | null>(null);
   const [shot, setShot] = useState(() =>
     detail.reaction && !frame ? reactionShot(presenter?.name || (client ? "The presenter" : "Daniela"), presenter?.pronoun ?? "she", p.format !== "vsl_16x9") : ""
   );
@@ -344,6 +347,16 @@ export function FrameCard({
     } else onError(r.error);
   }
 
+  /** Every scene with a frame, in order, big; starting at this one. */
+  function openSceneViewer(sceneId: string) {
+    const framed = scenes.filter((sc) => sc.url);
+    const at = Math.max(0, framed.findIndex((sc) => sc.id === sceneId));
+    setViewer({
+      index: at,
+      items: framed.map((sc) => ({ id: sc.id, url: sc.url, label: `Scene ${sc.number}${sc.label ? ` · ${sc.label}` : ""}`, width: sc.width, height: sc.height })),
+    });
+  }
+
   function openScene(to: Target | null) {
     setTarget(to);
     if (to?.kind === "scene") setShot(scenes.find((sc) => sc.id === to.id)?.shot ?? "");
@@ -534,11 +547,36 @@ export function FrameCard({
         <div className="space-y-2">
           <span className={labelCls}>Manus options · {target.kind === "scene" ? `use one for scene ${target.number}?` : target.kind === "new" ? "add one as a scene?" : "use one as the frame?"}</span>
           <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
-            {detail.frameOptions.map((o) => (
+            {detail.frameOptions.map((o, oi) => (
               <div key={o.id} className="group relative overflow-hidden rounded-2xl border border-white/15 bg-black sm:w-40" style={{ aspectRatio: aspect }}>
                 {o.url && (
-                  // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
-                  <img src={o.url} alt="Frame option" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setViewer({
+                        index: oi,
+                        items: detail.frameOptions.map((x, xi) => ({
+                          id: x.id,
+                          url: x.url,
+                          label: `Manus option ${xi + 1}`,
+                          width: x.width,
+                          height: x.height,
+                          action: {
+                            label: x.sceneId && scenes.some((sc) => sc.id === x.sceneId) ? `Use for scene ${scenes.find((sc) => sc.id === x.sceneId)!.number}` : pickLabel,
+                            onClick: () => {
+                              setViewer(null);
+                              void pickOption(x);
+                            },
+                          },
+                        })),
+                      })
+                    }
+                    className="block h-full w-full cursor-zoom-in"
+                    aria-label={`See Manus option ${oi + 1} bigger`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- signed storage URL */}
+                    <img src={o.url} alt="Frame option" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                  </button>
                 )}
                 <button type="button" onClick={() => void pickOption(o)} disabled={!!busy} className="absolute inset-x-2 bottom-2 rounded-full bg-blue-600 py-2 text-[11px] font-bold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500">
                   {o.sceneId && scenes.some((sc) => sc.id === o.sceneId) ? `Use for scene ${scenes.find((sc) => sc.id === o.sceneId)!.number}` : pickLabel}
@@ -645,8 +683,10 @@ export function FrameCard({
                       style={{ aspectRatio: aspect }}
                     >
                       {sc.url ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
-                        <img src={sc.url} alt={`Scene ${sc.number}${sc.label ? `: ${sc.label}` : ""}`} className="h-full w-full object-cover" />
+                        <button type="button" onClick={() => openSceneViewer(sc.id)} className="block h-full w-full cursor-zoom-in" aria-label={`See scene ${sc.number} bigger`}>
+                          {/* eslint-disable-next-line @next/next/no-img-element -- signed storage URL */}
+                          <img src={sc.url} alt={`Scene ${sc.number}${sc.label ? `: ${sc.label}` : ""}`} className="h-full w-full object-cover" />
+                        </button>
                       ) : making.has(sc.id) ? (
                         <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-blue-500/15 to-cyan-400/5 px-2 text-center">
                           <span className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-300/30 border-t-cyan-300 motion-reduce:animate-none" aria-hidden="true" />
@@ -732,12 +772,23 @@ export function FrameCard({
           </div>
         ) : frame && !target ? (
           <div className="flex flex-wrap items-end gap-4">
-            <div className="w-32 overflow-hidden rounded-xl border border-white/15 bg-black shadow-xl shadow-blue-500/10" style={{ aspectRatio: aspect }}>
+            <button
+              type="button"
+              onClick={() => setViewer({ index: 0, items: [{ id: frame.id, url: frame.url, label: "Opening frame", width: frame.width, height: frame.height }] })}
+              disabled={!frame.url}
+              className="group relative w-32 cursor-zoom-in overflow-hidden rounded-xl border border-white/15 bg-black shadow-xl shadow-blue-500/10"
+              style={{ aspectRatio: aspect }}
+              aria-label="See the frame bigger"
+              title="See the frame bigger"
+            >
               {frame.url && (
                 // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
-                <img src={frame.url} alt="Opening frame" className="h-full w-full object-cover" />
+                <img src={frame.url} alt="Opening frame" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
               )}
-            </div>
+              <span className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white" aria-hidden="true">
+                <SvgIcon d={SP.search} size={13} />
+              </span>
+            </button>
             <div className="min-w-0 flex-1 space-y-1.5 pb-1">
               <Chip tone="green">✓ Opening frame</Chip>
               <p className="text-xs text-neutral-400">
@@ -822,6 +873,7 @@ export function FrameCard({
       {active.length === 0 && lastFailed && (
         <ManusActivity projectId={p.id} task={lastFailed} aspect={aspect} onChange={onChange} onError={onError} onRetry={(s) => void generate(s)} />
       )}
+      {viewer && <FrameViewer items={viewer.items} index={viewer.index} onIndex={(index) => setViewer((v) => (v ? { ...v, index } : v))} onClose={() => setViewer(null)} />}
     </div>
   );
 }
