@@ -8,7 +8,7 @@ export interface ComposerSubmit {
   text: string;
   /** Pasted / dropped / picked images — in the studio a pasted image is the frame. */
   images: File[];
-  /** A video file (the final cut). */
+  /** A video file (the final cut, or before a script is approved the video a reaction reacts to). */
   video: File | null;
   format: CreativeFormat;
   /** Batch size (1 = a single video). */
@@ -38,6 +38,7 @@ export function Composer({
   disabled = false,
   allowFormat = false,
   allowVideo = false,
+  videoLabel = "Final cut",
   format,
   onFormat,
   large = false,
@@ -55,6 +56,8 @@ export function Composer({
   disabled?: boolean;
   allowFormat?: boolean;
   allowVideo?: boolean;
+  /** What an attached video is for, on its chip ("Final cut", or "React to" before a script is approved). */
+  videoLabel?: string;
   format: CreativeFormat;
   onFormat?: (f: CreativeFormat) => void;
   large?: boolean;
@@ -189,7 +192,7 @@ export function Composer({
                 </div>
               )}
               <span className="absolute bottom-1 left-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                {!a.preview ? "Final cut" : imageCount > 1 && count === 1 ? `Scene ${imageIndex.get(a.id)! + 1}` : "Frame"}
+                {!a.preview ? videoLabel : imageCount > 1 && count === 1 ? `Scene ${imageIndex.get(a.id)! + 1}` : "Frame"}
               </span>
               <button
                 type="button"
@@ -244,7 +247,15 @@ export function Composer({
           disabled={disabled}
           className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white"
           aria-label="Attach an image"
-          title={allowVideo ? "Attach a frame image or your final cut video" : (maxImages ?? 1) > 1 ? "Attach frames (several = scenes of a story)" : "Attach the frame image"}
+          title={
+            allowVideo
+              ? videoLabel === "Final cut"
+                ? "Attach a frame image or your final cut video"
+                : "Attach a frame image, or a video to react to"
+              : (maxImages ?? 1) > 1
+                ? "Attach frames (several = scenes of a story)"
+                : "Attach the frame image"
+          }
         >
           <SvgIcon d={SP.paperclip} />
         </button>

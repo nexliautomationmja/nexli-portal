@@ -1,6 +1,8 @@
 "use client";
 
 import { createClient } from "@supabase/supabase-js";
+import type { ProjectDetail } from "@/lib/creative-studio/service";
+import { SOURCE_MAX_BYTES, SOURCE_MAX_SECONDS, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
 
 /**
  * Frame prep + direct-to-storage upload.
@@ -116,6 +118,59 @@ export async function uploadFrameFile(projectId: string, file: File, vertical: b
   const out = await primary.json().catch(() => null);
   if (!primary.ok) throw new Error(out?.error || "Couldn't set the frame");
   return out;
+}
+
+/** A video's length and upright size as the browser reads it (null when it can't, e.g. HEVC in Chrome). */
+export function readVideo(file: File): Promise<{ durationS: number; width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    let settled = false;
+    const done = (out: { durationS: number; width: number; height: number } | null) => {
+      if (settled) return;
+      settled = true;
+      v.removeAttribute("src");
+      v.load();
+      URL.revokeObjectURL(url);
+      resolve(out);
+    };
+    v.preload = "metadata";
+    v.muted = true;
+    v.onloadedmetadata = () =>
+      done(Number.isFinite(v.duration) && v.duration > 0 ? { durationS: v.duration, width: v.videoWidth, height: v.videoHeight } : null);
+    v.onerror = () => done(null);
+    setTimeout(() => done(null), 15_000);
+    v.src = url;
+  });
+}
+
+/**
+ * Upload the video a reaction video reacts to: checked in the browser first
+ * (type, size, length), then sign → direct upload → register. The server
+ * gets it ready from there (the source card drives it). Returns the fresh
+ * project detail.
+ */
+export async function uploadSource(projectId: string, file: File): Promise<ProjectDetail> {
+  const mime = file.type === "video/mp4" || file.type === "video/quicktime" ? file.type : /\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : "";
+  if (!mime) throw new Error("Upload an MP4 or MOV video.");
+  if (file.size > SOURCE_MAX_BYTES) {
+    throw new Error(`That file is ${Math.round(file.size / 1024 / 1024)} MB. Upload one under ${SOURCE_MAX_BYTES / 1024 / 1024} MB (export it at 1080p).`);
+  }
+  const meta = await readVideo(file);
+  if (meta && meta.durationS > SOURCE_MAX_SECONDS + 0.5) throw new Error(tooLongMessage(meta.durationS));
+  const base = `/api/dashboard/creative-studio/projects/${projectId}/source`;
+  const sign = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sign", mime, size: file.size }) });
+  const target = await sign.json().catch(() => null);
+  if (!sign.ok || !target?.token) throw new Error(target?.error || "Couldn't start the upload");
+  await uploadToTarget(target, file, mime);
+  const reg = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "register", path: target.path, mime, filename: file.name, ...(meta ?? {}) }),
+  });
+  const detail = await reg.json().catch(() => null);
+  if (!reg.ok || !detail?.project) throw new Error(detail?.error || "Couldn't save the video");
+  return detail as ProjectDetail;
 }
 
 /** Kling accepts PNG/JPG only — convert a WebP frame to PNG in the browser. */

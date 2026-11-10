@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
 import { SYNE } from "@/components/launch-pad";
-import { uploadFrameFile } from "@/components/creative-studio/upload";
+import { uploadFrameFile, uploadSource } from "@/components/creative-studio/upload";
 import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { Composer, type ComposerSubmit } from "@/components/creative-studio/composer";
 import { PresenterPicker } from "@/components/creative-studio/presenter-picker";
@@ -29,6 +29,8 @@ interface ProjectRow {
   batchId: string | null;
   /** Best video to preview on hover (final render > final cut > auto-cut > first clip). */
   previewUrl: string | null;
+  /** A reaction video (the presenter reacts to a video shown in the corner). */
+  reaction?: boolean;
 }
 
 interface BatchRow {
@@ -183,7 +185,11 @@ export function StudioHome({ studio }: { studio: StudioView }) {
     }
   }
 
-  async function start({ text, images, format: fmt, count: n }: ComposerSubmit): Promise<boolean> {
+  async function start({ text, images, video, format: fmt, count: n }: ComposerSubmit): Promise<boolean> {
+    if (video && n > 1) {
+      setError("Reaction videos are made one at a time. Set it to 1 video, or take the video off to plan a batch.");
+      return false;
+    }
     if (n > 1) {
       if (!text) {
         setError("Describe what the batch is about, e.g. “5 ads on scope creep”.");
@@ -193,7 +199,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
       const frames = images.slice(0, n).map((file) => ({ file, url: URL.createObjectURL(file) }));
       return planBatch(text, fmt, n, frames);
     }
-    if (!text && images.length === 0) return false;
+    if (!text && images.length === 0 && !video) return false;
     setBusy(true);
     setError(null);
     try {
@@ -204,10 +210,12 @@ export function StudioHome({ studio }: { studio: StudioView }) {
       });
       const b = await r.json().catch(() => null);
       if (!r.ok || !b?.id) throw new Error(b?.error || "Couldn't start the video");
+      // A video makes it a reaction video: the presenter watches it on a phone and reacts (written once it's ready).
+      if (video) await uploadSource(b.id, video);
       // One image is the frame; several are the story's scenes, in the order attached.
       if (images.length === 1) await uploadFrameFile(b.id, images[0], fmt === "ad_9x16");
       for (const file of images.length > 1 ? images : []) await uploadFrameFile(b.id, file, fmt === "ad_9x16", "new");
-      router.push(`/dashboard/creative-studio/${b.id}${text ? "?start=1" : ""}`);
+      router.push(`/dashboard/creative-studio/${b.id}${text || video ? "?start=1" : ""}`);
       return true;
     } catch (err) {
       setBusy(false);
@@ -234,7 +242,9 @@ export function StudioHome({ studio }: { studio: StudioView }) {
               Describe the video and paste the frame. Claude writes it for <b className="text-white">{studio.name}</b> with your Kling framework, you approve, Kling renders it.
             </>
           ) : (
-            <>Describe the video and paste Daniela&apos;s frame. Claude writes it with your Kling framework, you approve, Kling renders it.</>
+            <>
+              Describe the video and paste Daniela&apos;s frame. Claude writes it with your Kling framework, you approve, Kling renders it. Drop in a video and Daniela reacts to it.
+            </>
           )}
         </p>
         {client && !studio.hasAbout && (
@@ -272,6 +282,8 @@ export function StudioHome({ studio }: { studio: StudioView }) {
             hint={count > 1 ? "Enter → Claude plans the batch for you to review" : "Enter to start · Shift+Enter for a new line"}
             busy={busy || Boolean(planning) || Boolean(creating)}
             allowFormat
+            allowVideo={count === 1}
+            videoLabel="React to"
             format={format}
             onFormat={changeFormat}
             count={count}
@@ -538,6 +550,7 @@ function ProjectCard({ p, delay }: { p: ProjectRow; delay: number }) {
         {/* One wrapping row, so the two chips stack instead of overlapping on narrow cards. */}
         <div className="absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-1">
           {p.batchId && <Chip>Batch</Chip>}
+          {p.reaction && <Chip tone="blue">Reaction</Chip>}
           <span className="ml-auto">
             <Chip tone={pill.tone}>{pill.label}</Chip>
           </span>

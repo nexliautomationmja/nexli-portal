@@ -10,6 +10,7 @@ import { AssistantCard, Chip, SP, SvgIcon } from "@/components/creative-studio/c
 import { ManusActivity } from "@/components/creative-studio/manus-activity";
 import { PresenterPicker, defaultPresenterName } from "@/components/creative-studio/presenter-picker";
 import { useIsTouch } from "@/lib/use-media";
+import { reactionShot } from "@/lib/creative-studio/reaction-shared";
 
 interface Reference {
   id: string;
@@ -56,7 +57,10 @@ export function FrameCard({
   const [target, setTarget] = useState<Target | null>(frame ? null : { kind: "classic" });
   const [refs, setRefs] = useState<Reference[] | null>(null);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
-  const [shot, setShot] = useState("");
+  // A reaction video starts with the shot it needs: the presenter holding the phone, the top right left clear.
+  const [shot, setShot] = useState(() =>
+    detail.reaction && !frame ? reactionShot(presenter?.name || (client ? "The presenter" : "Daniela"), presenter?.pronoun ?? "she", p.format !== "vsl_16x9") : ""
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const [zoneActive, setZoneActive] = useState(false);
   const [tileZone, setTileZone] = useState<Target | null>(null);
@@ -740,17 +744,20 @@ export function FrameCard({
                 Every clip starts from this frame{frame.width && frame.height ? ` (${frame.width}×${frame.height})` : ""}.
               </p>
               <div className="flex flex-wrap items-center gap-x-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStoryOpen(true);
-                    setTarget({ kind: "new" });
-                  }}
-                  className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-cyan-300 hover:text-white"
-                >
-                  + Add a scene <span className="font-normal text-neutral-400">· tell a story across several frames</span>
-                </button>
-                {hasDirection && !locked && (
+                {/* A reaction video is one scene: the presenter holding the phone. */}
+                {!detail.reaction && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStoryOpen(true);
+                      setTarget({ kind: "new" });
+                    }}
+                    className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-cyan-300 hover:text-white"
+                  >
+                    + Add a scene <span className="font-normal text-neutral-400">· tell a story across several frames</span>
+                  </button>
+                )}
+                {hasDirection && !locked && !detail.reaction && (
                   <button
                     type="button"
                     onClick={() => void plan()}
@@ -775,7 +782,7 @@ export function FrameCard({
           </div>
         ) : (
           <div className="space-y-5">
-            {!frame && (
+            {!frame && !detail.reaction && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-400/25 bg-violet-500/[0.06] px-3.5 py-3">
                 <p className="min-w-0 flex-1 text-sm text-neutral-300">
                   <b className="text-white">Telling a story?</b>{" "}

@@ -63,3 +63,15 @@ export function watchProblem(w: { from: number; to: number }, durationS: number 
   if (durationS && w.to > durationS + 0.05) return `The video is only ${clock(durationS, true)} long.`;
   return null;
 }
+
+/**
+ * The frame a reaction video needs, as a shot line for Manus: the presenter
+ * holding the phone, off to the left, so the corner video (top right) doesn't
+ * cover their face.
+ */
+export function reactionShot(name: string, pronoun: "she" | "he", vertical: boolean): string {
+  const poss = pronoun === "he" ? "his" : "her";
+  return vertical
+    ? `${name} sitting slightly left of centre, holding ${poss} phone in one hand at chest height with the screen turned toward ${pronoun === "he" ? "him" : "her"}, looking into the camera. The upper right of the frame is calm, uncluttered background.`
+    : `${name} on the left third of the frame, holding ${poss} phone in one hand at chest height with the screen turned toward ${pronoun === "he" ? "him" : "her"}, looking into the camera. The right half of the frame is calm, uncluttered background.`;
+}

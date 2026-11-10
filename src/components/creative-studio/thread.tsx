@@ -9,7 +9,8 @@ import { MAX_SCENES, scriptPresenterMismatch } from "@/lib/creative-studio/promp
 import { defaultPresenterName } from "@/components/creative-studio/presenter-picker";
 import { SYNE } from "@/components/launch-pad";
 import { studioHref, api, send } from "@/components/creative-studio/client";
-import { uploadFrameFile } from "@/components/creative-studio/upload";
+import { uploadFrameFile, uploadSource } from "@/components/creative-studio/upload";
+import { SourceCard, presenterName } from "@/components/creative-studio/source-card";
 import {
   AssistantCard,
   Chip,
@@ -31,7 +32,7 @@ import { CutCard } from "@/components/creative-studio/cut-card";
 import { EditCard, measureDuration } from "@/components/creative-studio/edit-card";
 import { AdCopyCard } from "@/components/creative-studio/ad-copy-card";
 
-type Stage = "direction" | "frame" | "write" | "review" | "locked" | "cut" | "edit";
+type Stage = "direction" | "frame" | "source" | "write" | "review" | "locked" | "cut" | "edit";
 
 function stageOf(d: ProjectDetail): Stage {
   // With a final cut the chat box drives the edit — unless a newer auto-cut is
@@ -46,13 +47,38 @@ function stageOf(d: ProjectDetail): Stage {
   const locked = ["approved", "rendering"].includes(d.project.status);
   if (locked) return "locked";
   if (d.clips.length > 0) return "review";
-  if (!d.project.direction.trim()) return "direction";
+  // A reaction video can go without a direction (Claude decides the take from the video).
+  if (!d.reaction && !d.project.direction.trim()) return "direction";
   if (d.frames.length === 0 || d.scenes.some((sc) => !sc.frameId)) return "frame";
+  // A reaction video is written once Claude can watch the video (stills and words ready).
+  if (d.reaction && !d.reaction.source?.analyzed) return "source";
   return "write";
 }
 
+/** The source can still change (and a dropped video sets it) until the script is approved. */
+const sourceChangeable = (d: ProjectDetail) => ["draft", "scripted"].includes(d.project.status);
+
 /** Several scenes: the video is a story (the script is written across them). */
 const isStoryDetail = (d: ProjectDetail) => d.scenes.filter((sc) => sc.frameId).length > 1;
+
+/** What the thinking card says while Claude writes this video's script. */
+function writingNote(d: ProjectDetail): { label: string; detail: string; accent: "violet" } {
+  if (d.reaction) {
+    const p = d.project;
+    return {
+      label: "Claude is watching the video and writing the reaction…",
+      detail: `The hook, the parts ${presenterName(p)} watches and ${p.presenter?.pronoun === "he" ? "his" : "her"} reactions, following your Kling framework. About a minute or two.`,
+      accent: "violet",
+    };
+  }
+  return {
+    label: "Claude is writing the script…",
+    detail: isStoryDetail(d)
+      ? `A story across your ${d.scenes.length} scenes, following your Kling framework: who says what in which scene, the shots, delivery and pronunciation cues. About a minute or two.`
+      : "Following your Kling framework: structure, lines, delivery, actions and pronunciation cues. An ad takes about a minute; a VSL up to three.",
+    accent: "violet",
+  };
+}
 
 const COMPOSER: Record<Stage, { placeholder: string; hint: string }> = {
   direction: {
@@ -62,6 +88,10 @@ const COMPOSER: Record<Stage, { placeholder: string; hint: string }> = {
   frame: {
     placeholder: "Paste Daniela's frame, or describe the shot for Manus…",
     hint: "A pasted image becomes the frame · text goes to Manus",
+  },
+  source: {
+    placeholder: "Daniela's take on the video (optional), e.g. “agree, then show what we do differently”",
+    hint: "Enter saves it · Claude writes the script as soon as the video is ready",
   },
   write: {
     placeholder: "Change the direction before Claude writes it…",
@@ -82,6 +112,22 @@ const COMPOSER: Record<Stage, { placeholder: string; hint: string }> = {
   edit: {
     placeholder: "Change the edit, e.g. “shorter title” · “zoom in on $15,000” · “caption should say CALENDAR”",
     hint: "Enter → Claude revises the edit · pick another style on the card · trim clips with ✂ on the auto-cut",
+  },
+};
+
+/** A reaction video's chat box, where it differs. */
+const REACTION_COMPOSER: Partial<Record<Stage, { placeholder: string; hint: string }>> = {
+  frame: {
+    placeholder: "Paste Daniela's frame holding her phone, or describe the shot for Manus…",
+    hint: "A pasted image becomes the frame · text goes to Manus",
+  },
+  write: {
+    placeholder: "Daniela's take on the video (optional), e.g. “push back on this”",
+    hint: "Enter → Claude writes the reaction with this take",
+  },
+  review: {
+    placeholder: "What should change? e.g. a sharper hook, watch the part about ads instead",
+    hint: "Enter → Claude revises the script",
   },
 };
 
@@ -138,13 +184,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
       if (!detail || writing.current) return;
       writing.current = true;
       setError(null);
-      setWorking({
-        label: "Claude is writing the script…",
-        detail: isStoryDetail(detail)
-          ? `A story across your ${detail.scenes.length} scenes, following your Kling framework: who says what in which scene, the shots, delivery and pronunciation cues. About a minute or two.`
-          : "Following your Kling framework: structure, lines, delivery, actions and pronunciation cues. An ad takes about a minute; a VSL up to three.",
-        accent: "violet",
-      });
+      setWorking(writingNote(detail));
       const r = await send(api(`${detail.project.id}/script`), "POST", {
         direction: direction ?? detail.project.direction,
         format: fmt ?? format,
@@ -182,7 +222,17 @@ export function StudioThread({ projectId }: { projectId: string }) {
     if (!stage) return;
     if (lastStage.current && lastStage.current !== stage) {
       const id =
-        stage === "review" ? "stage-review" : stage === "locked" ? "stage-clips" : stage === "cut" ? "stage-cut" : stage === "edit" ? "stage-edit" : "stage-frame";
+        stage === "review"
+          ? "stage-review"
+          : stage === "locked"
+            ? "stage-clips"
+            : stage === "cut"
+              ? "stage-cut"
+              : stage === "edit"
+                ? "stage-edit"
+                : stage === "source"
+                  ? "stage-source"
+                  : "stage-frame";
       setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
     }
     lastStage.current = stage;
@@ -214,7 +264,28 @@ export function StudioThread({ projectId }: { projectId: string }) {
     setError(null);
     let d = detail;
     try {
-      // A video is the final cut (text = its note).
+      // Before the script is approved, a video is the one the presenter reacts to (it makes this a reaction video).
+      if (video && !locked && sourceChangeable(d)) {
+        const hadScript = d.clips.length > 0;
+        const name = presenterName(d.project);
+        const ask = d.reaction?.source
+          ? `Replace the video ${name} reacts to?${hadScript ? " The script was written for the old one, so you'll rewrite it afterwards." : ""}`
+          : `Make this a reaction video? ${name} holds ${d.project.presenter?.pronoun === "he" ? "his" : "her"} phone, watches this video and reacts to it${hadScript ? ", and the script is rewritten around it" : ""}.`;
+        if ((d.reaction?.source || hadScript) && !confirm(ask)) return false;
+        setWorking({ label: "Uploading the video to react to…", accent: "violet" });
+        d = await uploadSource(p.id, video);
+        apply(d);
+        setWorking(null);
+        if (text) {
+          const r = await send(api(p.id), "PATCH", { brief: { ...d.project.brief, direction: text } });
+          if (!r.ok) throw new Error(r.error);
+          apply(r.data);
+        }
+        // Written as soon as there's a frame and Claude can watch the video.
+        if (!hadScript) setAutoWrite(true);
+        return true;
+      }
+      // After that, a video is the final cut (text = its note).
       if (video) {
         if (!locked) {
           setError("Upload your final cut after the clips are rendered.");
@@ -259,6 +330,15 @@ export function StudioThread({ projectId }: { projectId: string }) {
 
       if (!text) return true;
       const st = stageOf(d);
+
+      // A reaction video waiting on its video: the take is saved, and the script is written once it's ready.
+      if (st === "source") {
+        const r = await send(api(p.id), "PATCH", { brief: { ...d.project.brief, direction: text }, format: fmt });
+        if (!r.ok) throw new Error(r.error);
+        apply(r.data);
+        setAutoWrite(true);
+        return true;
+      }
 
       if (st === "direction" || st === "write") {
         const r = await send(api(p.id), "PATCH", { brief: { ...d.project.brief, direction: text }, format: fmt });
@@ -350,11 +430,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
 
   async function writeScriptWith(d: ProjectDetail, direction: string, fmt: CreativeFormat) {
     if (writing.current) return;
-    setWorking({
-      label: "Claude is writing the script…",
-      detail: "Following your Kling framework: structure, lines, delivery, actions and pronunciation cues.",
-      accent: "violet",
-    });
+    setWorking(writingNote(d));
     writing.current = true;
     const r = await send(api(`${d.project.id}/script`), "POST", { direction, format: fmt });
     writing.current = false;
@@ -378,15 +454,18 @@ export function StudioThread({ projectId }: { projectId: string }) {
         ? { placeholder: "Tell me the story: the angle, who it's for, where it should send people…", hint: "Enter saves it and writes the script" }
         : stage === "frame" && detail.scenes.length > 1
           ? { placeholder: "Change the plan, e.g. “add a scene at the gym” · “make scene 2 his kitchen”", hint: "Enter → Claude re-plans the scenes that aren't made yet" }
-          : COMPOSER[stage];
+          : (detail.reaction ? REACTION_COMPOSER[stage] : undefined) ?? COMPOSER[stage];
   // The chat box talks about whoever presents (a client firm's studio has no Daniela).
   const who = p.presenter?.name ? `${p.presenter.name}'s frame` : p.studio.kind === "client" ? "the frame" : "Daniela's frame";
-  const placeholder = base.placeholder.replace("Daniela's frame", who);
+  const placeholder = base.placeholder.replace("Daniela's frame", who).replace("Daniela's take", `${presenterName(p)}'s take`);
   const composer = {
     ...base,
-    placeholder: p.presenter?.pronoun === "he" ? placeholder.replace(/\bshe\b/g, "he").replace(/\bShe\b/g, "He") : placeholder,
+    placeholder:
+      p.presenter?.pronoun === "he"
+        ? placeholder.replace(/\bshe\b/g, "he").replace(/\bShe\b/g, "He").replace(/\bher phone\b/g, "his phone")
+        : placeholder,
   };
-  const showFormat = stage === "direction" || stage === "frame" || stage === "write";
+  const showFormat = stage === "direction" || stage === "frame" || stage === "source" || stage === "write";
 
   return (
     <StudioCanvas>
@@ -432,6 +511,8 @@ export function StudioThread({ projectId }: { projectId: string }) {
           {p.direction ? (
             <UserBubble meta={<Chip tone="blue">{p.format === "vsl_16x9" ? "VSL · 16:9" : "Ad · 9:16"}</Chip>}>{p.direction}</UserBubble>
           ) : null}
+
+          {detail.reaction && <SourceCard detail={detail} onChange={apply} onError={fail} />}
 
           <FrameCard key={detail.frames[0]?.id ?? "none"} detail={detail} onChange={apply} onError={fail} onFrameChosen={() => (detail.clips.length > 0 ? setFrameChanged(true) : setAutoWrite(true))} />
 
@@ -481,6 +562,31 @@ export function StudioThread({ projectId }: { projectId: string }) {
               </AssistantCard>
             );
           })()}
+
+          {stage === "write" && !working && detail.reaction && !autoWrite && (
+            <AssistantCard accent="violet" icon={SP.script} title="Ready to write the reaction">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-neutral-300">
+                  Claude watches the video and writes it: a hook, the parts {presenterName(p)} watches, and {p.presenter?.pronoun === "he" ? "his" : "her"} reactions
+                  {p.direction ? ", with your take" : ". Add your take in the box below, or let Claude decide it"}.
+                </p>
+                <button type="button" onClick={() => void writeScript()} className="rounded-full bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-500">
+                  Write the script
+                </button>
+              </div>
+            </AssistantCard>
+          )}
+
+          {stage === "review" && !working && detail.reaction?.source && detail.reaction.scriptFor !== detail.reaction.source.id && detail.reaction.source.analyzed && (
+            <AssistantCard accent="blue" icon={SP.film} title="New video to react to">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-neutral-300">The script was written for another video. Rewrite it for this one?</p>
+                <button type="button" onClick={() => void writeScript()} className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500">
+                  Rewrite for this video
+                </button>
+              </div>
+            </AssistantCard>
+          )}
 
           {stage === "write" && !working && isStoryDetail(detail) && (
             <AssistantCard accent="violet" icon={SP.script} title="Ready to write the story">
@@ -603,7 +709,8 @@ export function StudioThread({ projectId }: { projectId: string }) {
             hint={composer.hint}
             busy={Boolean(working)}
             allowFormat={showFormat}
-            allowVideo={locked}
+            allowVideo={locked || sourceChangeable(detail)}
+            videoLabel={locked ? "Final cut" : "React to"}
             format={format}
             onFormat={showFormat ? changeFormat : undefined}
             maxImages={locked ? 1 : MAX_SCENES}

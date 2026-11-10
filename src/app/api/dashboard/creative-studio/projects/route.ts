@@ -90,6 +90,8 @@ export async function GET(req: NextRequest) {
         previewUrl: preview.has(p.id) ? signed.get(preview.get(p.id)!.path) ?? null : null,
         updatedAt: p.updatedAt.toISOString(),
         batchId: p.batchId ?? null,
+        /** A reaction video (the presenter reacts to a video shown in the corner). */
+        reaction: Boolean(p.reaction),
       };
     }),
   });

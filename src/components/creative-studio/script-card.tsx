@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import { KIND_LABEL, RIG_LABEL, lintClip, scriptTotals } from "@/lib/creative-studio/prompts";
+import { CREDITS_PER_SECOND, KIND_LABEL, RIG_LABEL, lintClip, scriptTotals } from "@/lib/creative-studio/prompts";
 import type { ClipKind } from "@/lib/creative-studio/tables";
 import { CTA_CLASSES } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
+import { WatchPart } from "@/components/creative-studio/source-card";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -42,7 +43,9 @@ export function ScriptCard({
   const [copied, setCopied] = useState<string | null>(null);
   // Story videos: the clip whose scene picker is open.
   const [moving, setMoving] = useState<string | null>(null);
-  const story = detail.story;
+  // A reaction video is written as a one-scene story, but reads as hook → watch → react (no scenes to pick).
+  const reaction = detail.reaction;
+  const story = detail.story && !reaction;
   const sceneOf = useMemo(() => new Map(detail.scenes.filter((sc) => sc.frameId).map((sc) => [sc.frameId as string, sc])), [detail.scenes]);
   const specOf = useMemo(() => new Map((p.frameSpec?.scenes ?? []).map((sc) => [sc.frameId, sc])), [p.frameSpec]);
 
@@ -58,7 +61,12 @@ export function ScriptCard({
     };
   }, [locked]);
 
-  const totals = useMemo(() => scriptTotals(detail.clips.map((c) => (c.kind === "silent" ? "" : c.line))), [detail.clips]);
+  const totals = useMemo(() => {
+    if (!reaction) return scriptTotals(detail.clips.map((c) => (c.kind === "silent" ? "" : c.line)));
+    // A watch clip's length follows the part of the video watched, so count what's stored.
+    const seconds = detail.clips.reduce((s, c) => s + c.durationS, 0);
+    return { clips: detail.clips.length, seconds, minutesAfterTrims: Math.round(((seconds * 0.85) / 60) * 10) / 10, credits: seconds * CREDITS_PER_SECOND };
+  }, [detail.clips, reaction]);
 
   async function moveToScene(clipId: string, frameId: string) {
     setMoving(null);
@@ -136,7 +144,7 @@ export function ScriptCard({
         title={locked ? "The approved script" : "Here's the script"}
         right={
           <div className="flex flex-wrap items-center gap-1.5">
-            <Chip>{story ? `Story · ${detail.scenes.filter((sc) => sc.frameId).length} scenes` : RIG_LABEL[p.rig]}</Chip>
+            <Chip>{reaction ? "Reaction" : story ? `Story · ${detail.scenes.filter((sc) => sc.frameId).length} scenes` : RIG_LABEL[p.rig]}</Chip>
             <Chip>v{p.scriptVersion}</Chip>
             {locked ? <Chip tone="green">✓ Approved</Chip> : risks > 0 ? <Chip tone="red">{risks} flagged</Chip> : null}
           </div>
@@ -207,7 +215,11 @@ export function ScriptCard({
                       </p>
                       {kind === "silent" ? (
                         <p className="text-[15px] font-semibold leading-snug text-neutral-200">
-                          <span className="mr-1.5 rounded bg-white/10 px-1.5 py-0.5 align-middle text-[10px] font-bold text-neutral-300">NO TALKING</span>
+                          <span
+                            className={`mr-1.5 rounded px-1.5 py-0.5 align-middle text-[10px] font-bold ${reaction && clip.watch ? "bg-violet-500/25 text-violet-200" : "bg-white/10 text-neutral-300"}`}
+                          >
+                            {reaction && clip.watch ? "WATCHING" : "NO TALKING"}
+                          </span>
                           {clip.action}
                         </p>
                       ) : (
@@ -265,6 +277,17 @@ export function ScriptCard({
                         {clip.register && kind !== "silent" && <Chip>🎙 {clip.register}</Chip>}
                         {clip.action && kind !== "silent" && <Chip>✋ {clip.action}</Chip>}
                       </div>
+                      {reaction && clip.watch && (
+                        <WatchPart
+                          projectId={p.id}
+                          clipId={clip.id}
+                          watch={clip.watch}
+                          source={reaction.source}
+                          locked={locked}
+                          onChange={onChange}
+                          onError={onError}
+                        />
+                      )}
                       {clip.editNote && <p className="mt-1.5 text-[11px] text-neutral-400">✂ {clip.editNote}</p>}
                       {clip.cues && <p className="mt-1 text-[11px] text-neutral-400">🔤 {clip.cues}</p>}
                       {flags.map((f) => (
@@ -310,7 +333,17 @@ export function ScriptCard({
                 )}
                 <span className="hidden sm:inline">Want changes? Say so in the box below.</span>
               </div>
-              {kling && !kling.connected ? (
+              {reaction && (!reaction.source?.proxyUrl || reaction.scriptFor !== reaction.source.id) ? (
+                <p className="max-w-xs text-right text-xs text-amber-200">
+                  {!reaction.source
+                    ? "Upload the video to react to before approving."
+                    : reaction.scriptFor !== reaction.source.id
+                      ? "Rewrite the script for this video before approving."
+                      : reaction.source.proxyError
+                        ? "Fix the video above before approving: it can't change after that."
+                        : "Approve once the video's light copy is ready (it can't change after that)."}
+                </p>
+              ) : kling && !kling.connected ? (
                 <a href={`/api/dashboard/creative-studio/kling/connect?returnTo=${encodeURIComponent(`/dashboard/creative-studio/${p.id}`)}`} className={CTA_CLASSES}>
                   Connect Kling to render
                 </a>
