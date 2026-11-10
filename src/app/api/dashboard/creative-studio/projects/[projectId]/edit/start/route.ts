@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (!access.ok) return access.response;
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
-  const body = (await req.json().catch(() => null)) as { style?: unknown; instruction?: unknown; finalCutId?: unknown; durationS?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { style?: unknown; instruction?: unknown; finalCutId?: unknown; durationS?: unknown; keepLook?: unknown } | null;
   if (!isEditStyle(body?.style)) return NextResponse.json({ error: "Pick a style or describe the edit" }, { status: 400 });
   const style = body.style;
   const instruction = typeof body.instruction === "string" ? body.instruction.trim().slice(0, 4000) : "";
@@ -40,12 +40,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const built = await captionWords(project, finalCut);
     const sameCut = prev && prev.finalCutAssetId === finalCut.id;
     const words = sameCut ? prev.props.words : built.words;
-    // Spots placed by hand (title clear of her face…) carry over to a new style on the same cut.
-    const layout = sameCut ? prev.props.overlays.layout : undefined;
-    const captionStyle = sameCut ? prev.props.overlays.captionStyle : undefined;
+    // Spots placed by hand (title clear of her face…) carry over to a new style on the same cut,
+    // and to a new cut when asked ("put this edit on the new cut": same frame, same spots).
+    const keep = sameCut || (body?.keepLook === true && prev);
+    const layout = keep ? prev.props.overlays.layout : undefined;
+    const captionStyle = keep ? prev.props.overlays.captionStyle : undefined;
     const durationS = await durationOf(finalCut, body.durationS, words);
     // A reaction video: the video she reacts to, in the corner (its size and captions carry over on the same cut).
-    const reaction = await reactionTrack(project, built.lines, sameCut ? prev.props.pip : undefined);
+    const reaction = await reactionTrack(project, built.lines, keep ? prev.props.pip : undefined);
     const result = await proposeLayout({
       ...editContext(project, style, durationS, words, built.lines, reaction.pip),
       instruction: instruction || undefined,

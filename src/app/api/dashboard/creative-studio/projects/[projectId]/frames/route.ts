@@ -6,7 +6,7 @@ import { creativeAssets, creativeClips } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { framesOf, projectDetail, scenesOf } from "@/lib/creative-studio/service";
 import { createUploadTarget, FRAME_MIME_TYPES, removePaths } from "@/lib/creative-studio/storage";
-import { placeSceneFrame, removeScene, saveScenes } from "@/lib/creative-studio/frames";
+import { pinTakeFrames, placeSceneFrame, removeScene, saveScenes } from "@/lib/creative-studio/frames";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -122,7 +122,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   for (let i = 0; i < ordered.length; i++) {
     await db.update(creativeAssets).set({ sort: i }).where(eq(creativeAssets.id, ordered[i].id));
   }
-  // Clips open on the primary frame.
+  // Clips open on the primary frame (takes already made remember theirs).
+  await pinTakeFrames(project.id);
   await db.update(creativeClips).set({ frameAssetId: primary.id }).where(eq(creativeClips.projectId, project.id));
   return NextResponse.json(await projectDetail(project));
 }

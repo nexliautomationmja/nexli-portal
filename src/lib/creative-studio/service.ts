@@ -16,6 +16,7 @@ import {
 import { buildKlingPrompt, clipDuration, isStory, klingModelForClip, presenterOf, watchClipDuration } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
 import { claimLive } from "@/lib/creative-studio/reaction-shared";
+import { framesToRedescribe, takeOutdated } from "@/lib/creative-studio/remake-shared";
 import { normalizeCopy } from "@/lib/creative-studio/ad-copy";
 import { firmBrief, studioById, studioRef } from "@/lib/creative-studio/studios";
 import type { ScriptInput } from "@/lib/creative-studio/script";
@@ -309,6 +310,8 @@ export async function projectDetail(project: Project) {
       outputUrl: e.outputAssetId ? url(renders.get(e.outputAssetId) ?? null) : s3Outputs.get(e.id) ?? null,
       createdAt: e.createdAt.toISOString(),
     })),
+    /** Frames whose clips have takes from an old frame and whose description hasn't caught up (re-described before a re-make). */
+    redescribe: framesToRedescribe(project.frameSpec, clips),
     /** A reaction video: the video she reacts to (null on every other video). */
     reaction: project.reaction
       ? {
@@ -332,6 +335,8 @@ export async function projectDetail(project: Project) {
       error: c.error,
       videoUrl: c.videoAssetId ? signed.get(videoPath.get(c.videoAssetId) ?? "") ?? null : null,
       previousTakes: (c.previous ?? []).length,
+      /** Its take was made from another frame than the one it uses now (re-make it from the new one). */
+      outdated: takeOutdated(c),
       words: c.transcript && c.transcript.version === c.version ? c.transcript.words : null,
     })),
   };

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { creativeClips, type ClipFields } from "@/lib/creative-studio/tables";
+import { creativeClips } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { clipColumns, clipFieldsOf, clipsOf, derivedClip, projectDetail, scriptInputFor } from "@/lib/creative-studio/service";
-import { rewriteClip } from "@/lib/creative-studio/script";
+import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
 import { submitClips } from "@/lib/creative-studio/render";
+import { RemakeError, clipsById, remakeClips } from "@/lib/creative-studio/remake";
+import { claudeError } from "@/lib/creative-studio/script";
 import { accessToken, KlingNotConnectedError } from "@/lib/creative-studio/kling-mcp";
 
 // Rate-limit backoff (60 s) plus batches of submissions.
@@ -37,72 +38,17 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   let targets;
   if (body?.redo?.clipId) {
-    const [clip] = await db
-      .select()
-      .from(creativeClips)
-      .where(and(eq(creativeClips.id, body.redo.clipId), eq(creativeClips.projectId, project.id)))
-      .limit(1);
-    if (!clip) return NextResponse.json({ error: "Clip not found" }, { status: 404 });
-    if (clip.status === "rendering" || clip.status === "queued") {
-      return NextResponse.json({ error: "That clip is already rendering" }, { status: 409 });
+    const clips = await clipsById(project.id, [body.redo.clipId]);
+    if (!clips) return NextResponse.json({ error: "Clip not found" }, { status: 404 });
+    try {
+      const { report, notes } = await remakeClips(token, project, clips, { note: body.redo.note, line: body.redo.line, cues: body.redo.cues });
+      const fresh = await loadProject(access.ownerId, project.id);
+      return NextResponse.json({ ...(await projectDetail(fresh!)), report, ...(notes ? { remakeNotes: notes } : {}) });
+    } catch (err) {
+      if (err instanceof RemakeError) return NextResponse.json({ error: err.message }, { status: 409 });
+      console.error("[creative-studio] redo failed:", err);
+      return NextResponse.json({ error: claudeError(err, "Claude couldn't adjust the clip. Try again.") }, { status: 502 });
     }
-    // Change only what's needed (line / cue), keep the old take as history.
-    let fields: ClipFields = {
-      ...clipFieldsOf(clip),
-      ...(typeof body.redo.line === "string" && body.redo.line.trim() ? { line: body.redo.line.trim().slice(0, 2000) } : {}),
-      ...(typeof body.redo.cues === "string" ? { cues: body.redo.cues.slice(0, 2000) } : {}),
-    };
-    // "What should change?" note → Claude adjusts this clip's line / cue first.
-    const note = typeof body.redo.note === "string" ? body.redo.note.trim().slice(0, 1000) : "";
-    if (note) {
-      try {
-        const all = await clipsOf(project.id);
-        const rewritten = await rewriteClip({
-          input: await scriptInputFor(project, "change"),
-          frame: project.frameSpec,
-          clips: all.map(clipFieldsOf),
-          index: all.findIndex((c) => c.id === clip.id),
-          instruction: `${note} (This clip already rendered on Kling; fix it with a targeted change to the line or a pronunciation cue, per the framework's redo pattern.)`,
-        });
-        // A redo keeps the clip in its scene.
-        fields = { ...rewritten.clip, frameId: rewritten.clip.frameId ?? clip.frameAssetId ?? null };
-      } catch (err) {
-        console.error("[creative-studio] redo rewrite failed:", err);
-        return NextResponse.json({ error: "Claude couldn't adjust the clip. Try again." }, { status: 502 });
-      }
-    }
-    const previous = clip.klingTaskId || clip.videoAssetId
-      ? [
-          ...(clip.previous ?? []),
-          {
-            version: clip.version,
-            klingTaskId: clip.klingTaskId,
-            videoAssetId: clip.videoAssetId,
-            line: clip.line,
-            cues: clip.cues,
-            status: clip.status,
-            error: clip.error,
-            at: new Date().toISOString(),
-          },
-        ]
-      : clip.previous ?? [];
-    const [updated] = await db
-      .update(creativeClips)
-      .set({
-        ...clipColumns(fields),
-        ...derivedClip(project, fields),
-        frameAssetId: fields.frameId ?? clip.frameAssetId,
-        version: previous.length > (clip.previous ?? []).length ? clip.version + 1 : clip.version,
-        previous,
-        klingTaskId: null,
-        videoAssetId: null,
-        status: "draft",
-        error: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(creativeClips.id, clip.id))
-      .returning();
-    targets = [updated];
   } else {
     if (project.status !== "approved" && project.status !== "rendering" && project.status !== "clips_ready") {
       return NextResponse.json({ error: "Approve the script first. Nothing renders before approval." }, { status: 400 });

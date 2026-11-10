@@ -147,7 +147,7 @@ export async function submitClips(token: string, project: Project, clips: Clip[]
           });
           await db
             .update(creativeClips)
-            .set({ status: "rendering", klingTaskId: generationId, model, error: null, updatedAt: new Date() })
+            .set({ status: "rendering", klingTaskId: generationId, model, takeFrameId: frameId, error: null, updatedAt: new Date() })
             .where(eq(creativeClips.id, clip.id));
           report.submitted++;
           break;

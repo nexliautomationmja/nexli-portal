@@ -75,7 +75,7 @@ const CLIP_SCHEMA = {
   },
 } as const;
 
-const FRAME_SCHEMA = {
+export const FRAME_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["subject", "room", "base", "positions"],
@@ -221,7 +221,7 @@ export interface RawStory {
 const CAMERAS: SceneSpec["camera"][] = ["locked", "selfie", "handheld"];
 const POSITIONS: ScenePerson["position"][] = ["ONLY", "LEFT", "CENTER", "RIGHT"];
 
-function cleanPeople(raw: unknown): ScenePerson[] {
+export function cleanPeople(raw: unknown): ScenePerson[] {
   if (!Array.isArray(raw)) return [];
   let presenterSeen = false;
   return raw.slice(0, 4).flatMap((x) => {

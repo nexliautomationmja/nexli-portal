@@ -137,6 +137,11 @@ export interface FrameSpec {
   scenes?: SceneSpec[];
   /** The presenter a story script was written for (null = the studio's default). */
   presenterId?: string | null;
+  /**
+   * A one-frame video re-described for a new frame (clips re-made from it):
+   * that frame. Absent = the description is the one the script was written with.
+   */
+  describedFrameId?: string | null;
 }
 
 export interface ListenerReaction {
@@ -377,6 +382,8 @@ export const creativeClips = pgTable("creative_clips", {
   /** The complete Kling prompt, assembled in code from the §7 templates. */
   prompt: text("prompt").notNull(),
   frameAssetId: uuid("frame_asset_id"),
+  /** The frame the current take was made from (a different frame_asset_id = the take is from an old frame). */
+  takeFrameId: uuid("take_frame_id"),
   model: text("model"),
   klingTaskId: text("kling_task_id"),
   /** draft | queued | rendering | done | failed | blocked */
@@ -868,6 +875,8 @@ export function ensureCreativeStudioTables(): Promise<void> {
       // Nov 2026: reaction videos (the presenter reacts to a video shown in the corner).
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "reaction" jsonb`);
       await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "watch" jsonb`);
+      // Nov 2026: which frame a take was made from (re-make clips after a frame change).
+      await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "take_frame_id" uuid`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_presenters" (
           "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

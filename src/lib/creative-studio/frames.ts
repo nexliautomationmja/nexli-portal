@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { getSupabase } from "@/lib/supabase";
 import { creativeAssets, creativeClips, creativeProjects, type FrameSpec, type SceneSlot } from "@/lib/creative-studio/tables";
@@ -24,6 +24,26 @@ export async function writeStorage(path: string, bytes: Buffer, contentType: str
   await ensureCreativeBucket();
   const { error } = await getSupabase().storage.from(CREATIVE_BUCKET).upload(path, bytes, { contentType, upsert: true });
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Before a frame change repoints clips: remember which frame each existing
+ * take was made from, so the page can offer to re-make it from the new one.
+ * (New takes record it when they're sent; this covers takes made before.)
+ * `from` = only clips on that frame (a story scene's swap).
+ */
+export async function pinTakeFrames(projectId: string, from?: string) {
+  await db
+    .update(creativeClips)
+    .set({ takeFrameId: sql`${creativeClips.frameAssetId}` })
+    .where(
+      and(
+        eq(creativeClips.projectId, projectId),
+        isNull(creativeClips.takeFrameId),
+        or(isNotNull(creativeClips.videoAssetId), isNotNull(creativeClips.klingTaskId)),
+        ...(from ? [eq(creativeClips.frameAssetId, from)] : [])
+      )
+    );
 }
 
 /**
@@ -52,6 +72,7 @@ export async function setOpeningFrame(project: Project, bytes: Buffer, source: s
       metadata,
     })
     .returning({ id: creativeAssets.id });
+  await pinTakeFrames(project.id);
   await db.update(creativeClips).set({ frameAssetId: asset.id }).where(eq(creativeClips.projectId, project.id));
   await db.update(creativeProjects).set({ updatedAt: new Date() }).where(eq(creativeProjects.id, project.id));
   return asset.id;
@@ -122,6 +143,7 @@ export async function placeSceneFrame(project: Project, assetId: string, target:
 export async function saveScenes(project: Project, scenes: SceneSlot[], replaced: { from: string; to: string } | null = null) {
   let frameSpec: FrameSpec | null = project.frameSpec;
   if (replaced) {
+    await pinTakeFrames(project.id, replaced.from);
     await db
       .update(creativeClips)
       .set({ frameAssetId: replaced.to, updatedAt: new Date() })
