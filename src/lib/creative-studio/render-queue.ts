@@ -2,7 +2,7 @@ import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { RENDER_STARTING as STARTING, creativeEdits, isWaiting } from "@/lib/creative-studio/tables";
 import { renderProps } from "@/lib/creative-studio/edit-service";
-import { isRateLimit, lambdaLimits, renderersFor, startRender } from "@/lib/creative-studio/remotion";
+import { framesFor, isCrash, isRateLimit, lambdaLimits, renderersFor, startRender } from "@/lib/creative-studio/remotion";
 
 /**
  * Final renders wait their turn for the AWS Lambda concurrency limit instead
@@ -10,6 +10,8 @@ import { isRateLimit, lambdaLimits, renderersFor, startRender } from "@/lib/crea
  * no render id; whoever polls it (the video page, the batch board) starts it
  * once fewer than `parallel` renders are on Lambda across the whole account.
  * If AWS still refuses, it goes back in line and retries with fewer copies.
+ * If a copy crashes mid-render (out of memory), it goes back in line once and
+ * retries with lighter settings on the same number of copies.
  */
 
 type Edit = typeof creativeEdits.$inferSelect;
@@ -22,10 +24,20 @@ const LIVE_MS = 20 * 60_000;
 const COOLDOWN_MS = 45_000;
 /** Refusals before giving up (the last try renders on a single copy). */
 export const MAX_RENDER_ATTEMPTS = 4;
+/** Crashed copies before giving up: the first crash retries once with lighter settings. */
+const MAX_RENDER_CRASHES = 2;
 
-function plainError(message: string, limit: number): string {
+function plainError(message: string, limit: number, durationS: number): string {
   if (isRateLimit(message)) {
     return `AWS only lets this account run ${limit} Lambda copies at once and refused even a single one. Ask AWS to raise the limit, then try again.`;
+  }
+  if (isCrash(message)) {
+    const per = Math.round(durationS / Math.max(1, renderersFor(limit, 0, framesFor(durationS))));
+    return (
+      `A Lambda machine crashed twice while rendering, even with lighter settings — most likely it ran out of memory. ` +
+      `With AWS's ${limit}-copy limit, each machine renders about ${per} seconds of this video. ` +
+      `Try again; if it keeps failing, raising the AWS limit gives each machine a much shorter piece.`
+    );
   }
   return `Remotion: ${message}`.slice(0, 500);
 }
@@ -39,6 +51,7 @@ export async function queueRender(edit: Edit): Promise<void> {
       renderId: null,
       renderBucket: null,
       renderAttempts: 0,
+      renderCrashes: 0,
       progress: 0,
       error: null,
       specs: null,
@@ -61,7 +74,7 @@ export async function startIfFree(edit: Edit): Promise<"started" | "waiting" | "
       .set({ renderId: null })
       .where(and(eq(creativeEdits.id, edit.id), eq(creativeEdits.renderId, STARTING)));
   }
-  if (edit.renderAttempts > 0 && Date.now() - edit.updatedAt.getTime() < COOLDOWN_MS) return "waiting";
+  if ((edit.renderAttempts > 0 || edit.renderCrashes > 0) && Date.now() - edit.updatedAt.getTime() < COOLDOWN_MS) return "waiting";
 
   const limits = await lambdaLimits();
   const live = new Date(Date.now() - LIVE_MS);
@@ -88,7 +101,8 @@ export async function startIfFree(edit: Edit): Promise<"started" | "waiting" | "
   try {
     // Every Lambda chunk downloads the cut, so the link has to outlive the render.
     const props = await renderProps(edit, 12 * 3600);
-    const { renderId, bucketName } = await startRender(props, renderersFor(limits.limit, edit.renderAttempts));
+    const copies = renderersFor(limits.limit, edit.renderAttempts, framesFor(props.durationS));
+    const { renderId, bucketName } = await startRender(props, copies, edit.renderCrashes > 0);
     await db
       .update(creativeEdits)
       .set({ renderId, renderBucket: bucketName, progress: 0, updatedAt: new Date() })
@@ -103,8 +117,8 @@ export async function startIfFree(edit: Edit): Promise<"started" | "waiting" | "
 
 /**
  * AWS refused (or the render died of it): back in line with fewer copies,
- * until MAX_RENDER_ATTEMPTS. Anything else fails with the reason.
- * Returns true when it went back in line.
+ * until MAX_RENDER_ATTEMPTS. A crashed copy: back in line once, lighter.
+ * Anything else fails with the reason. Returns true when it went back in line.
  */
 export async function requeueOrFail(edit: Edit, message: string, limit?: number): Promise<boolean> {
   const attempts = edit.renderAttempts + 1;
@@ -115,13 +129,21 @@ export async function requeueOrFail(edit: Edit, message: string, limit?: number)
       .where(eq(creativeEdits.id, edit.id));
     return true;
   }
+  const crashes = edit.renderCrashes + 1;
+  if (isCrash(message) && crashes < MAX_RENDER_CRASHES) {
+    await db
+      .update(creativeEdits)
+      .set({ renderId: null, renderBucket: null, renderCrashes: crashes, progress: 0, error: null, updatedAt: new Date() })
+      .where(eq(creativeEdits.id, edit.id));
+    return true;
+  }
   await db
     .update(creativeEdits)
     .set({
       status: "failed",
       renderId: null,
       renderBucket: null,
-      error: plainError(message, limit ?? (await lambdaLimits()).limit),
+      error: plainError(message, limit ?? (await lambdaLimits()).limit, edit.props.durationS),
       updatedAt: new Date(),
     })
     .where(eq(creativeEdits.id, edit.id));
@@ -132,7 +154,7 @@ export async function requeueOrFail(edit: Edit, message: string, limit?: number)
 export async function leaveQueue(edit: Edit): Promise<boolean> {
   const [left] = await db
     .update(creativeEdits)
-    .set({ status: "draft", renderAttempts: 0, progress: 0, updatedAt: new Date() })
+    .set({ status: "draft", renderAttempts: 0, renderCrashes: 0, progress: 0, updatedAt: new Date() })
     .where(and(eq(creativeEdits.id, edit.id), eq(creativeEdits.status, "rendering"), isNull(creativeEdits.renderId)))
     .returning({ id: creativeEdits.id });
   return Boolean(left);

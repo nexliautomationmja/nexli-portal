@@ -479,6 +479,8 @@ export const creativeEdits = pgTable("creative_edits", {
   renderId: text("render_id"),
   /** Times AWS refused to start this render (each retry uses fewer Lambda copies). */
   renderAttempts: integer("render_attempts").notNull().default(0),
+  /** Times a Lambda copy crashed mid-render (the retry uses lighter settings, same copies). */
+  renderCrashes: integer("render_crashes").notNull().default(0),
   renderBucket: text("render_bucket"),
   progress: integer("progress").notNull().default(0),
   outputAssetId: uuid("output_asset_id"),
@@ -795,6 +797,8 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_photo_ads_owner_status_idx" ON "creative_photo_ads" ("owner_id", "status")`);
       // Nov 2026: renders queue for the AWS Lambda concurrency limit.
       await db.execute(sql`ALTER TABLE "creative_edits" ADD COLUMN IF NOT EXISTS "render_attempts" integer NOT NULL DEFAULT 0`);
+      // Nov 2026: a copy that crashes (out of memory) gets one retry with lighter settings.
+      await db.execute(sql`ALTER TABLE "creative_edits" ADD COLUMN IF NOT EXISTS "render_crashes" integer NOT NULL DEFAULT 0`);
       // Nov 2026: story videos (several scenes, any kind of shot) and presenters other than Daniela.
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "scenes" jsonb`);
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "presenter" jsonb`);

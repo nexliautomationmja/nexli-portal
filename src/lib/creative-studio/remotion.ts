@@ -21,6 +21,26 @@ export const LAMBDA_DISK_MB = 2048;
 export const LAMBDA_TIMEOUT_S = 900;
 
 /**
+ * Memory inside one copy (3,008 MB, the new-account cap): Chrome, the H.264
+ * encoder, Node and the <OffthreadVideo> frame cache (Remotion's default: up
+ * to half the free memory). A copy killed for memory reports only "failed with
+ * an unhandled error" — Nov 10, a 1:25 ad, 731 frames per copy. Measured
+ * locally on one copy's share of that ad (731 frames, Lambda's software GL):
+ * the old settings peaked at ~2.55 GB; a 256 MB cache + "veryfast" ~2.25 GB at
+ * the same speed and with the same frames; the retry's settings below ~2.05 GB,
+ * about 20% slower.
+ */
+const FRAME_CACHE_BYTES = 256 * 1024 * 1024;
+/** The automatic retry after a copy crashed: less again, one decoder thread, classic screenshots. */
+const SAFE_FRAME_CACHE_BYTES = 128 * 1024 * 1024;
+/**
+ * Most frames one copy is given after AWS refusals (20 s at 60 fps). Locally a
+ * copy does ~10 frames/s; Lambda's ~1.8 vCPUs are several times slower, so more
+ * risks the 15-minute limit — a long video never steps down below this.
+ */
+export const MAX_FRAMES_PER_COPY = 1200;
+
+/**
  * AWS caps how many Lambda copies run at once (new accounts: often just 10).
  * One render = 1 launch function + N renderers, and every progress check is
  * one more invocation — so renders are sized to the account's real limit and
@@ -51,14 +71,19 @@ export function remotionMissing(): string[] {
 /**
  * Renderer copies for one render on this limit, leaving room for its launch
  * function, progress checks and a retried chunk. Each AWS refusal steps down
- * (…, 2, then 1 = the whole video on the launch function itself).
+ * (…, 2, then 1 = the whole video on one copy), but never below what a video
+ * of `frames` frames needs to finish in time (MAX_FRAMES_PER_COPY).
  */
-export function renderersFor(limit: number, attempt = 0): number {
+export function renderersFor(limit: number, attempt = 0, frames = 0): number {
   const base = Math.max(1, Math.min(MAX_RENDERERS, limit - 3));
   const half = Math.ceil(base / 2);
   const ladder = [base, half, Math.min(2, half), 1];
-  return ladder[Math.min(Math.max(0, attempt), ladder.length - 1)];
+  const floor = Math.min(base, Math.max(1, Math.ceil(frames / MAX_FRAMES_PER_COPY)));
+  return Math.max(floor, ladder[Math.min(Math.max(0, attempt), ladder.length - 1)]);
 }
+
+/** Frames in a render of this length. */
+export const framesFor = (durationS: number) => Math.max(1, Math.round(FPS * durationS));
 
 /** Renders that fit side by side on this limit (10 → one at a time). */
 export function parallelRenders(limit: number): number {
@@ -70,8 +95,24 @@ export function isRateLimit(message: string | null | undefined): boolean {
   return /concurrency limit|rate exceeded|too ?many ?requests|ConcurrentInvocationLimitExceeded/i.test(message ?? "");
 }
 
-export async function startRender(props: EditProps, renderers: number): Promise<{ renderId: string; bucketName: string }> {
-  const frames = Math.max(1, Math.round(FPS * props.durationS));
+/**
+ * A Lambda copy died mid-render: killed for memory, or crashed with no
+ * details. Remotion reports it as "Lambda function … failed with an
+ * unhandled error" (or "… failed with error code …").
+ */
+export function isCrash(message: string | null | undefined): boolean {
+  return /Lambda function \S+ failed with (an unhandled error|error code)|Runtime exited|Runtime\.(ExitError|OutOfMemory)|signal: killed|out of memory|SIGKILL|ENOMEM/i.test(
+    message ?? ""
+  );
+}
+
+/**
+ * `safe` = the retry after a copy crashed: an even smaller frame cache, one
+ * decoder thread and Remotion's classic screenshots instead of its newer
+ * shared-memory capture.
+ */
+export async function startRender(props: EditProps, renderers: number, safe = false): Promise<{ renderId: string; bucketName: string }> {
+  const frames = framesFor(props.durationS);
   const { renderId, bucketName } = await renderMediaOnLambda({
     region: region(),
     functionName: functionName(),
@@ -85,6 +126,12 @@ export async function startRender(props: EditProps, renderers: number): Promise<
     concurrency: Math.max(1, Math.min(renderers, Math.ceil(frames / 20))),
     downloadBehavior: { type: "download", fileName: "nexli-edit.mp4" },
     maxRetries: 2,
+    offthreadVideoCacheSizeInBytes: safe ? SAFE_FRAME_CACHE_BYTES : FRAME_CACHE_BYTES,
+    ...(safe ? { offthreadVideoThreads: 1, disableSharedMemoryCapture: true } : {}),
+    // Remotion's planned Lambda default: ~170 MB less than "medium" per copy, and less CPU.
+    x264Preset: "veryfast",
+    // When one copy fails, the others stop instead of holding AWS slots the retry needs.
+    enableCancellation: true,
   });
   return { renderId, bucketName };
 }
@@ -102,6 +149,28 @@ export interface RenderState {
 export async function renderState(renderId: string, bucketName: string): Promise<RenderState> {
   const p = await getRenderProgress({ renderId, bucketName, functionName: functionName(), region: region() });
   const fatal = p.errors.find((e) => e.isFatal) ?? (p.fatalErrorEncountered ? p.errors[0] : undefined);
+  if (p.fatalErrorEncountered) {
+    // The Remotion AWS user can't read CloudWatch, so this is the record of where it broke.
+    console.error(
+      "[creative-studio] render failed:",
+      JSON.stringify({
+        renderId,
+        framesPerCopy: p.renderMetadata?.framesPerLambda ?? null,
+        copies: p.renderMetadata?.totalChunks ?? null,
+        chunksDone: p.chunks,
+        framesRendered: p.framesRendered,
+        secondsIn: p.functionLaunched ? Math.round((p.currentTime - p.functionLaunched) / 1000) : null,
+        errors: p.errors.slice(0, 5).map((e) => ({
+          chunk: e.chunk,
+          frame: e.frame,
+          type: e.type,
+          attempt: e.attempt,
+          willRetry: e.willRetry,
+          message: e.message.slice(0, 160),
+        })),
+      })
+    );
+  }
   return {
     done: p.done,
     failed: p.fatalErrorEncountered ? (fatal?.message ?? "The render failed on Lambda.").slice(0, 500) : null,

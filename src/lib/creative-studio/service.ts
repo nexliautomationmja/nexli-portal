@@ -285,6 +285,7 @@ export async function projectDetail(project: Project) {
       /** In line for a free AWS Lambda slot (render-queue.ts). */
       waiting: isWaiting(e),
       renderAttempts: e.renderAttempts,
+      renderCrashes: e.renderCrashes,
       finalCutId: e.finalCutAssetId,
       durationS: e.props.durationS,
       // The full layout only for the newest version (VSL word lists are long).

@@ -708,9 +708,11 @@ export function EditCard({
                     <div>
                       <p className="font-semibold text-white">In line for AWS…</p>
                       <p className="text-xs text-neutral-400">
-                        {latest.renderAttempts > 0
-                          ? "AWS was busy, so it'll try again with fewer machines in a moment."
-                          : "Another video is rendering. This one starts by itself as soon as there's room — keep this page or the batch open."}
+                        {latest.renderCrashes > 0
+                          ? "A Lambda machine ran out of memory, so it's trying once more with lighter settings in a moment — keep this page or the batch open."
+                          : latest.renderAttempts > 0
+                            ? "AWS was busy, so it'll try again with fewer machines in a moment."
+                            : "Another video is rendering. This one starts by itself as soon as there's room — keep this page or the batch open."}
                       </p>
                     </div>
                     <button type="button" onClick={leaveLine} disabled={Boolean(busy)} className="min-h-9 self-start text-xs font-semibold text-neutral-400 hover:text-white sm:self-center">
@@ -725,7 +727,7 @@ export function EditCard({
                       <ProgressRing percent={latest.progress} />
                     </div>
                     <div className="text-sm">
-                      <p className="font-semibold text-white">Rendering on Remotion Lambda…</p>
+                      <p className="font-semibold text-white">{latest.renderCrashes > 0 ? "Rendering again, with lighter settings…" : "Rendering on Remotion Lambda…"}</p>
                       <p className="text-xs text-neutral-400">Split across several machines. An ad takes a minute or two; a VSL a few more. You can leave this page.</p>
                     </div>
                   </div>
