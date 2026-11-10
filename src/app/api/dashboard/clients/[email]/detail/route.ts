@@ -133,6 +133,7 @@ export async function GET(
       active: sql<boolean>`EXISTS(
         SELECT 1 FROM portal_sessions
         WHERE email = ${clientEmail}
+          AND owner_id = ${ownerId}
           AND expires_at > NOW()
       )`,
     })

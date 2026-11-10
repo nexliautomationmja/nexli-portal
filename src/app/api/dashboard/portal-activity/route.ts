@@ -138,7 +138,7 @@ export async function GET() {
     console.error("Portal activity: engagement error", err);
   }
 
-  // 4. Recent portal logins (clients who have interacted with owner's data)
+  // 4. Recent sign-ins to THIS owner's client portal (never another firm's).
   try {
     const recentSessions = await db
       .select({
@@ -147,6 +147,7 @@ export async function GET() {
         createdAt: portalSessions.createdAt,
       })
       .from(portalSessions)
+      .where(eq(portalSessions.ownerId, ownerId))
       .orderBy(desc(portalSessions.createdAt))
       .limit(10);
 
