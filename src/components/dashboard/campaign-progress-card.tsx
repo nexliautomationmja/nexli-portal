@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BIG_NUM, Chip, FeatureCard } from "@/components/rainmaker";
+import { moneyWhole } from "@/lib/format";
 
 type CampaignStatus = "not_launched" | "live";
 
-interface CampaignProgressData {
+export interface CampaignProgressData {
   launchedAt: string | null;
   leads: number;
   daysSinceLaunch: number;
@@ -13,8 +15,38 @@ interface CampaignProgressData {
   status: CampaignStatus;
 }
 
-function money(cents: number): string {
-  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+/** The card itself (no fetching), so it can be shown with any data. */
+export function CampaignProgressView({ data }: { data: CampaignProgressData }) {
+  const launched = data.status === "live";
+  const days = data.daysSinceLaunch;
+  return (
+    <FeatureCard
+      tone="emerald"
+      eyebrow="Campaign progress"
+      title="Leads your campaigns have generated since launch"
+      right={
+        <Chip tone={launched ? "green" : "neutral"} size="xs" dot>
+          {launched ? `${days} ${days === 1 ? "day" : "days"} live` : "Not launched yet"}
+        </Chip>
+      }
+    >
+      {!launched ? (
+        <p className="text-sm leading-relaxed text-neutral-300">Your campaigns haven&apos;t launched yet. Progress shows here the day they go live.</p>
+      ) : (
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+          <div>
+            <div className="text-4xl font-extrabold leading-none text-white" style={BIG_NUM}>
+              {data.leads.toLocaleString("en-US")}
+            </div>
+            <div className="mt-1 text-xs text-neutral-400">leads since launch</div>
+          </div>
+          <div className="text-sm text-neutral-300">
+            ≈ <span className="font-bold text-emerald-300">{moneyWhole(data.pipelineValueCents)}</span> of pipeline at a {moneyWhole(data.avgEngagementCents)} average engagement
+          </div>
+        </div>
+      )}
+    </FeatureCard>
+  );
 }
 
 /**
@@ -42,47 +74,5 @@ export function CampaignProgressCard() {
   }, []);
 
   if (!data) return null;
-
-  const launched = data.status === "live";
-  const days = data.daysSinceLaunch;
-
-  return (
-    <div className="glass-card p-5 md:p-6">
-      <div className="mb-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-1" style={{ color: "var(--text-muted)" }}>
-          Campaign progress
-        </p>
-        <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>
-          Leads your campaigns have generated since launch
-        </h2>
-      </div>
-
-      {!launched ? (
-        <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-          Your campaigns haven&apos;t launched yet — progress shows here the day they go live.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex items-end justify-between gap-3 flex-wrap">
-            <p className="text-2xl font-bold" style={{ color: "var(--text-main)" }}>
-              {data.leads.toLocaleString("en-US")}{" "}
-              <span className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
-                leads since launch
-              </span>
-            </p>
-            <p className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
-              {days} {days === 1 ? "day" : "days"} live
-            </p>
-          </div>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            ≈{" "}
-            <span className="font-bold" style={{ color: "var(--text-main)" }}>
-              {money(data.pipelineValueCents)}
-            </span>{" "}
-            of pipeline at a {money(data.avgEngagementCents)} average engagement
-          </p>
-        </div>
-      )}
-    </div>
-  );
+  return <CampaignProgressView data={data} />;
 }

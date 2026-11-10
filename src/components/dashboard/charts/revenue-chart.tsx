@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useMediaQuery } from "@/lib/use-media";
 
 interface RevenueChartProps {
   data: { month: string; revenue: number; count: number }[];
@@ -24,61 +17,37 @@ function formatCurrency(cents: number) {
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+const TICK = { fill: "#a3a3a3", fontSize: 11, fontFamily: "var(--font-plus-jakarta), sans-serif" };
+
+/** Monthly revenue on the dark canvas: emerald area with a soft gradient, quiet grid, figure ticks. */
 export function RevenueChart({ data }: RevenueChartProps) {
-  const formatted = data.map((d) => ({
-    ...d,
-    label: formatMonth(d.month),
-    displayRevenue: d.revenue / 100,
-  }));
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const formatted = data.map((d) => ({ ...d, label: formatMonth(d.month), displayRevenue: d.revenue / 100 }));
 
   if (data.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center h-[240px] text-sm"
-        style={{ color: "var(--text-muted)" }}
-      >
-        No invoice data yet. Revenue will appear here once invoices are paid.
-      </div>
-    );
+    return <div className="flex h-[240px] items-center justify-center px-6 text-center text-sm text-neutral-400">No paid invoices yet. Revenue shows here month by month once invoices are paid.</div>;
   }
 
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <AreaChart data={formatted}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" />
-        <XAxis
-          dataKey="label"
-          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-          tickLine={false}
-          axisLine={false}
-          width={60}
-          tickFormatter={(v) => `$${v.toLocaleString()}`}
-        />
+      <AreaChart data={formatted} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <defs>
+          <linearGradient id="rm-revenue-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10B981" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+        <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} />
+        <YAxis tick={TICK} tickLine={false} axisLine={false} width={64} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
         <Tooltip
-          contentStyle={{
-            background: "var(--nav-bg)",
-            border: "1px solid var(--glass-border)",
-            borderRadius: "0.75rem",
-            color: "var(--text-main)",
-            fontSize: 12,
-          }}
+          cursor={{ stroke: "rgba(255,255,255,0.15)" }}
+          contentStyle={{ background: "#0b1220", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "0.75rem", color: "#f8fafc", fontSize: 12 }}
+          labelStyle={{ color: "#a3a3a3" }}
           formatter={(value) => [formatCurrency(Number(value || 0) * 100), "Revenue"]}
           labelFormatter={(label) => String(label)}
         />
-        <Area
-          type="monotone"
-          dataKey="displayRevenue"
-          name="Revenue"
-          stroke="#10B981"
-          fill="#10B981"
-          fillOpacity={0.1}
-          strokeWidth={2}
-        />
+        <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="displayRevenue" name="Revenue" stroke="#34d399" fill="url(#rm-revenue-fill)" strokeWidth={2} activeDot={{ r: 4, stroke: "#0b1220", strokeWidth: 2 }} />
       </AreaChart>
     </ResponsiveContainer>
   );

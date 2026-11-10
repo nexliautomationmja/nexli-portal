@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FacebookLogo, InstagramLogo } from "@/components/launch-pad/icons";
 import type { TopCreative, TopCreativesData } from "@/app/api/dashboard/ads-overview/top-creatives/route";
 
@@ -262,11 +263,13 @@ function Lightbox({ c, onClose }: { c: TopCreative; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // The page scrolls on <html> (not body), so that's the one to hold still.
+    const root = document.documentElement;
+    const prev = root.style.overflow;
+    root.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      root.style.overflow = prev;
     };
   }, [onClose]);
 
@@ -274,7 +277,8 @@ function Lightbox({ c, onClose }: { c: TopCreative; onClose: () => void }) {
   const useVideo = Boolean(c.videoUrl) && !videoFailed;
   const useImage = !useVideo && Boolean(poster) && c.mediaType !== "video";
 
-  return (
+  // Portaled to <body>: inside the Overview's canvas (its own stacking context) the phone top bar would sit on top.
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(6px)" }}
@@ -321,7 +325,8 @@ function Lightbox({ c, onClose }: { c: TopCreative; onClose: () => void }) {
           ✕
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

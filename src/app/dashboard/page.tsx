@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { documents } from "@/db/schema";
+import { documents, users } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { OverviewClient } from "./dashboard-client";
 import { FoundationProjectCard } from "@/components/portal/foundation-project-card";
@@ -73,34 +73,35 @@ export default async function DashboardPage() {
     console.error("Dashboard overview: document stats query failed:", err);
   }
 
+  // Whether this account has GoHighLevel connected, so the Overview can say
+  // "Connect GoHighLevel" instead of showing zeros that look real.
+  let ghlConnected = false;
+  try {
+    const [row] = await db.select({ ghlLocationId: users.ghlLocationId }).from(users).where(eq(users.id, userId)).limit(1);
+    ghlConnected = Boolean(row?.ghlLocationId);
+  } catch (err) {
+    console.warn("[dashboard] GHL connection lookup failed:", err);
+  }
+
+  const isDrsClient = session.user.role === "client" && session.user.tier !== "foundation";
+  const role = session.user.role === "admin" ? "admin" : session.user.tier === "foundation" ? "foundation" : "drs";
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1
-          className="text-2xl md:text-3xl font-bold tracking-tight"
-          style={{ color: "var(--text-main)" }}
-        >
-          Welcome back, <span className="text-gradient">{firstName}</span>
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-          Your document portal and CRM overview.
-        </p>
-      </div>
-
-      {foundationProject && (
-        <FoundationProjectCard project={foundationProject} showDashboardLink={false} />
-      )}
-
-      {pendingSurvey && <SurveyPromptCard token={pendingSurvey.token} />}
-      {session.user.role === "client" && session.user.tier !== "foundation" && (
-        <CampaignProgressCard />
-      )}
-      {latestUpdate && <WeeklyUpdateCard update={latestUpdate} />}
-
-      <OverviewClient
-        docStats={docStats}
-        isAdmin={session.user.role === "admin"}
-      />
-    </div>
+    <OverviewClient
+      firstName={firstName}
+      role={role}
+      ghlConnected={ghlConnected}
+      docStats={docStats}
+      thisWeek={
+        pendingSurvey || latestUpdate ? (
+          <>
+            {pendingSurvey && <SurveyPromptCard token={pendingSurvey.token} />}
+            {latestUpdate && <WeeklyUpdateCard update={latestUpdate} />}
+          </>
+        ) : undefined
+      }
+      campaign={isDrsClient ? <CampaignProgressCard /> : undefined}
+      build={foundationProject ? <FoundationProjectCard project={foundationProject} showDashboardLink={false} /> : undefined}
+    />
   );
 }
