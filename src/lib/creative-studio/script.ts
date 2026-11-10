@@ -306,7 +306,7 @@ export function toStoryResult(raw: RawStory, input: ScriptInput): ScriptResult {
     title: (raw.title ?? "").trim().slice(0, 120),
     // Multi-scene stories aren't the founders' duo/trio rig; the edit suggests Solo.
     rig: "solo_locked",
-    frame: { subject: lead?.look ?? "", room: first.setting, base: "", positions: [], scenes: specs },
+    frame: { subject: lead?.look ?? "", room: first.setting, base: "", positions: [], scenes: specs, presenterId: input.presenter?.id || null },
     clips,
     notes,
   };

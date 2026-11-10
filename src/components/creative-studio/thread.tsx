@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
-import { MAX_SCENES } from "@/lib/creative-studio/prompts";
+import { MAX_SCENES, scriptPresenterMismatch } from "@/lib/creative-studio/prompts";
+import { defaultPresenterName } from "@/components/creative-studio/presenter-picker";
 import { SYNE } from "@/components/launch-pad";
 import { studioHref, api, send } from "@/components/creative-studio/client";
 import { uploadFrameFile } from "@/components/creative-studio/upload";
@@ -478,7 +479,21 @@ export function StudioThread({ projectId }: { projectId: string }) {
             </AssistantCard>
           )}
 
-          {stage === "review" && !working && (() => {
+          {stage === "review" && !working && scriptPresenterMismatch(p.frameSpec, p.presenter) && (
+            <AssistantCard accent="blue" icon={SP.script} title={`Rewrite it for ${p.presenter?.name || defaultPresenterName(p.studio)}?`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-neutral-300">
+                  This script was written for {p.frameSpec?.presenterId ? "another presenter" : defaultPresenterName(p.studio)}. Rewrite it so every clip names, describes and voices{" "}
+                  {p.presenter?.name || defaultPresenterName(p.studio)}?
+                </p>
+                <button type="button" onClick={() => void writeScript()} className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500">
+                  Rewrite for {p.presenter?.name || defaultPresenterName(p.studio)}
+                </button>
+              </div>
+            </AssistantCard>
+          )}
+
+          {stage === "review" && !working && !scriptPresenterMismatch(p.frameSpec, p.presenter) && (() => {
             const specs = p.frameSpec?.scenes ?? [];
             const withFrames = detail.scenes.filter((sc) => sc.frameId);
             // A one-frame script on a video that now has several scenes.

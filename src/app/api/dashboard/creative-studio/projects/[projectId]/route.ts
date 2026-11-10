@@ -6,6 +6,7 @@ import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio
 import { projectDetail, rebuildPrompts } from "@/lib/creative-studio/service";
 import { removePaths } from "@/lib/creative-studio/storage";
 import { cleanBrief, cleanFormatRig } from "@/lib/creative-studio/validate";
+import { presenterForStudio } from "@/lib/creative-studio/presenters";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -17,11 +18,14 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   return NextResponse.json(await projectDetail(project));
 }
 
-function cleanFrameSpec(input: unknown): FrameSpec | null {
+function cleanFrameSpec(input: unknown, current: FrameSpec | null): FrameSpec | null {
   if (!input || typeof input !== "object") return null;
   const f = input as Partial<FrameSpec>;
   const s = (v: unknown) => (typeof v === "string" ? v.slice(0, 4000) : "");
   return {
+    // A story's scene descriptions and presenter aren't edited here; keep them.
+    ...(current?.scenes ? { scenes: current.scenes } : {}),
+    ...(current && "presenterId" in current ? { presenterId: current.presenterId } : {}),
     subject: s(f.subject),
     room: s(f.room),
     base: s(f.base),
@@ -49,10 +53,17 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     patch.format = fr.format;
     patch.rig = fr.rig;
   }
-  if (body.frameSpec !== undefined) patch.frameSpec = cleanFrameSpec(body.frameSpec);
+  if (body.frameSpec !== undefined) patch.frameSpec = cleanFrameSpec(body.frameSpec, project.frameSpec);
+  // Who presents this video (null = the studio's default).
+  if (body.presenterId !== undefined) {
+    const presenter = await presenterForStudio(access.ownerId, project.studioId, body.presenterId);
+    if (presenter === undefined) return NextResponse.json({ error: "That presenter isn't in this studio." }, { status: 400 });
+    patch.presenter = presenter;
+  }
 
   // Anything that changes the prompts unlocks an approved script.
-  const changesPrompts = patch.format !== undefined || patch.rig !== undefined || patch.frameSpec !== undefined;
+  const changesPrompts =
+    patch.format !== undefined || patch.rig !== undefined || patch.frameSpec !== undefined || patch.presenter !== undefined;
   if (changesPrompts && project.status === "approved") {
     patch.status = "scripted";
     patch.approvedAt = null;

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq, inArray, isNull } from "drizzle-orm";
-import { inStudio, studioById } from "@/lib/creative-studio/studios";
+import { and, inArray } from "drizzle-orm";
+import { studioById } from "@/lib/creative-studio/studios";
 import { db } from "@/db";
 import { creativeAssets } from "@/lib/creative-studio/tables";
+import { referencesWhere } from "@/lib/creative-studio/presenters";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { projectDetail } from "@/lib/creative-studio/service";
 import { signPaths } from "@/lib/creative-studio/storage";
@@ -26,21 +27,23 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const shot = typeof body?.shot === "string" ? body.shot.trim().slice(0, 1500) : "";
   if (!shot) return NextResponse.json({ error: "Describe the shot you want" }, { status: 400 });
 
-  // Only this project's studio's references (Nexli's are Daniela; a client studio has its own).
+  // Only this video's presenter's photos, from its studio (Daniela's in Nexli's by default; a client studio has its own).
   const studio = await studioById(access.ownerId, project.studioId);
-  const refsQuery = and(
-    eq(creativeAssets.ownerId, access.ownerId),
-    eq(creativeAssets.kind, "reference"),
-    isNull(creativeAssets.projectId),
-    inStudio(creativeAssets.studioId, studio)
-  );
+  const presenter = project.presenter ?? null;
+  const refsQuery = referencesWhere(access.ownerId, studio, presenter?.id || null);
   const ids = Array.isArray(body?.referenceIds) ? body.referenceIds.filter((x) => typeof x === "string") : [];
   const refs = await db
     .select()
     .from(creativeAssets)
     .where(ids.length ? and(refsQuery, inArray(creativeAssets.id, ids)) : refsQuery)
     .limit(6);
-  if (studio.kind === "client" && refs.length === 0) {
+  if (presenter && refs.length === 0 && !presenter.look) {
+    return NextResponse.json(
+      { error: `Manus doesn't know what ${presenter.name} looks like yet. Add photos of ${presenter.name}, or describe how they look, then try again.` },
+      { status: 400 }
+    );
+  }
+  if (!presenter && studio.kind === "client" && refs.length === 0) {
     return NextResponse.json(
       {
         error: `${studio.name}'s studio has no reference pictures yet, so Manus doesn't know who presents. Paste or upload a frame instead, or add reference pictures first.`,
@@ -58,6 +61,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       count: body?.count === 1 ? 1 : 2,
       referenceUrls,
       client: studio.kind === "client",
+      presenter: presenter ? { name: presenter.name, pronoun: presenter.pronoun, look: presenter.look } : null,
     });
     await db.insert(creativeAssets).values({
       projectId: project.id,

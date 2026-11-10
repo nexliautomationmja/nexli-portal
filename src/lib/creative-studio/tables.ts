@@ -133,6 +133,8 @@ export interface FrameSpec {
    * scene 1). Absent on a classic one-frame video.
    */
   scenes?: SceneSpec[];
+  /** The presenter a story script was written for (null = the studio's default). */
+  presenterId?: string | null;
 }
 
 export interface ListenerReaction {
@@ -182,6 +184,31 @@ export const creativeStudios = pgTable("creative_studios", {
   website: text("website"),
   /** The firm's portal client account, when it has one (name/logo come from there). */
   clientUserId: uuid("client_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdBy: uuid("created_by"),
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * Someone who presents videos in a studio, other than the default (Daniela
+ * in Nexli's studio): name, pronoun, how they sound and how they look.
+ * Their reference photos are creative_assets kind "reference" with
+ * presenter_id set.
+ */
+export const creativePresenters = pgTable("creative_presenters", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** null = Nexli's studio. */
+  studioId: uuid("studio_id"),
+  name: text("name").notNull(),
+  pronoun: text("pronoun").$type<Pronoun>().notNull().default("she"),
+  /** How they sound, in plain words (the portal adds "{name}'s voice, the same in every clip: …"). */
+  voice: text("voice").notNull().default(""),
+  /** How they look (Manus works from this when there are no photos). */
+  look: text("look").notNull().default(""),
   createdBy: uuid("created_by"),
   archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -256,6 +283,8 @@ export const creativeAssets = pgTable("creative_assets", {
   ownerId: uuid("owner_id"),
   /** Workspace-wide assets (reference, copy_job): their client studio; null = Nexli's own. */
   studioId: uuid("studio_id"),
+  /** A reference photo of a saved presenter (null = the studio's default presenter). */
+  presenterId: uuid("presenter_id"),
   /** frame | frame_option | manus_task | reference | clip | cut_part | rough_cut | final_cut | render */
   kind: text("kind").notNull(),
   storagePath: text("storage_path"),
@@ -768,6 +797,23 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "scenes" jsonb`);
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "presenter" jsonb`);
       await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "kind" text NOT NULL DEFAULT 'to_camera'`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_presenters" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "studio_id" uuid,
+          "name" text NOT NULL,
+          "pronoun" text NOT NULL DEFAULT 'she',
+          "voice" text NOT NULL DEFAULT '',
+          "look" text NOT NULL DEFAULT '',
+          "created_by" uuid,
+          "archived_at" timestamp,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_presenters_owner_idx" ON "creative_presenters" ("owner_id", "studio_id")`);
+      await db.execute(sql`ALTER TABLE "creative_assets" ADD COLUMN IF NOT EXISTS "presenter_id" uuid`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_kling_connections" (
           "owner_id" uuid PRIMARY KEY REFERENCES "users"("id") ON DELETE CASCADE,

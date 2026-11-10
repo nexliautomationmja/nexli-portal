@@ -6,6 +6,7 @@ import { EMPTY_BRIEF } from "@/lib/creative-studio/prompts";
 import { cleanBrief, cleanFormatRig } from "@/lib/creative-studio/validate";
 import { requireStudioAdmin } from "@/lib/creative-studio/access";
 import { inStudio, studioFromRequest, studioNotFound } from "@/lib/creative-studio/studios";
+import { presenterForStudio } from "@/lib/creative-studio/presenters";
 import { signPaths } from "@/lib/creative-studio/storage";
 
 /** The videos in one studio (`?studio=`; Nexli's by default). */
@@ -103,6 +104,9 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const title = typeof body?.title === "string" && body.title.trim() ? body.title.trim().slice(0, 200) : "Untitled video";
   const { format, rig } = cleanFormatRig(body?.format, body?.rig);
+  // Who presents (a saved presenter of this studio; absent = the studio's default).
+  const presenter = await presenterForStudio(access.ownerId, studio.id, body?.presenterId);
+  if (presenter === undefined) return NextResponse.json({ error: "That presenter isn't in this studio." }, { status: 400 });
 
   const [created] = await db
     .insert(creativeProjects)
@@ -114,6 +118,7 @@ export async function POST(req: NextRequest) {
       format,
       rig,
       brief: body?.brief ? cleanBrief(body.brief) : { ...EMPTY_BRIEF, direction: "" },
+      presenter,
     })
     .returning({ id: creativeProjects.id });
   return NextResponse.json({ ok: true, id: created.id });

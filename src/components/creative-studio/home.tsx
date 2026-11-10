@@ -8,6 +8,7 @@ import { SYNE } from "@/components/launch-pad";
 import { uploadFrameFile } from "@/components/creative-studio/upload";
 import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { Composer, type ComposerSubmit } from "@/components/creative-studio/composer";
+import { PresenterPicker } from "@/components/creative-studio/presenter-picker";
 import { BatchPlanCard, type BatchPlan, type ManusMode } from "@/components/creative-studio/batch-plan-card";
 import { META_LIME, MetaChip, MetaLogo } from "@/components/creative-studio/meta";
 import { assignFrames, BATCH_MAX } from "@/lib/creative-studio/batch-shared";
@@ -71,6 +72,8 @@ export function StudioHome({ studio }: { studio: StudioView }) {
   const [seed, setSeed] = useState(0);
   const [prefill, setPrefill] = useState<string | null>(null);
   const [count, setCount] = useState(1);
+  // Who presents the next video (null = the studio's default: Daniela in Nexli's).
+  const [presenter, setPresenter] = useState<{ id: string; name: string } | null>(null);
   const [batches, setBatches] = useState<BatchRow[]>([]);
   const [plan, setPlan] = useState<BatchPlan | null>(null);
   const [planning, setPlanning] = useState<string | null>(null);
@@ -197,7 +200,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
       const r = await fetch(`/api/dashboard/creative-studio/projects${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief: { direction: text }, format: fmt }),
+        body: JSON.stringify({ brief: { direction: text }, format: fmt, ...(presenter ? { presenterId: presenter.id } : {}) }),
       });
       const b = await r.json().catch(() => null);
       if (!r.ok || !b?.id) throw new Error(b?.error || "Couldn't start the video");
@@ -243,7 +246,17 @@ export function StudioHome({ studio }: { studio: StudioView }) {
           </p>
         )}
 
-        <div className="lp-card mt-8" style={{ animationDelay: "0.15s" }}>
+        {count === 1 && (
+          <div className="lp-card mt-6 flex justify-center" style={{ animationDelay: "0.13s" }}>
+            <PresenterPicker
+              studio={studio}
+              value={presenter}
+              label="Who presents"
+              onPick={(id, option) => setPresenter(id && option ? { id, name: option.name } : null)}
+            />
+          </div>
+        )}
+        <div className={`lp-card ${count === 1 ? "mt-4" : "mt-8"}`} style={{ animationDelay: "0.15s" }}>
           <Composer
             key={seed}
             large

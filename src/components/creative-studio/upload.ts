@@ -130,3 +130,28 @@ async function toPng(blob: Blob): Promise<{ blob: Blob; mime: string }> {
   );
   return { blob: png, mime: "image/png" };
 }
+
+/**
+ * Save an image as a reference photo — `qs` is "?studio=…" plus
+ * "&presenter=…" for a saved presenter's photos. Returns the refreshed list.
+ */
+export async function uploadReferenceFile(qs: string, file: File): Promise<{ id: string; url: string | null }[]> {
+  const base = `/api/dashboard/creative-studio/references${qs}`;
+  const prepared = await prepareFrame(file, false);
+  const sign = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "sign", mime: prepared.mime }),
+  });
+  const target = await sign.json().catch(() => null);
+  if (!sign.ok || !target?.token) throw new Error(target?.error || "Couldn't start the upload");
+  await uploadToTarget(target, prepared.blob, prepared.mime);
+  const reg = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "register", path: target.path, mime: prepared.mime, width: prepared.width, height: prepared.height }),
+  });
+  const b = await reg.json().catch(() => null);
+  if (!reg.ok) throw new Error(b?.error || "Couldn't save the photo");
+  return b.references;
+}

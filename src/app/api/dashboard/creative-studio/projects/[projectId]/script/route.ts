@@ -6,6 +6,7 @@ import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio
 import { framesOf, projectDetail, replaceScript, scenesOf, scriptInputFor } from "@/lib/creative-studio/service";
 import { claudeError, generateScript } from "@/lib/creative-studio/script";
 import { cleanFormatRig } from "@/lib/creative-studio/validate";
+import { presenterForStudio } from "@/lib/creative-studio/presenters";
 
 // A full VSL script (30–50 clips) can take a couple of minutes.
 export const maxDuration = 300;
@@ -45,6 +46,15 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const missing = scenesOf(project, frames).findIndex((sc) => !sc.frameId);
   if (missing >= 0) {
     return NextResponse.json({ error: `Scene ${missing + 1} doesn't have a frame yet. The script is written from every scene.` }, { status: 400 });
+  }
+
+  // The presenter as saved now (their voice or look may have been edited since they were picked).
+  if (project.presenter?.id) {
+    const fresh = await presenterForStudio(access.ownerId, project.studioId, project.presenter.id);
+    if (fresh && JSON.stringify(fresh) !== JSON.stringify(project.presenter)) {
+      const [updated] = await db.update(creativeProjects).set({ presenter: fresh }).where(eq(creativeProjects.id, project.id)).returning();
+      project = updated;
+    }
   }
 
   try {

@@ -8,6 +8,7 @@ import { inStudioQs, api, send } from "@/components/creative-studio/client";
 import { prepareFrame, uploadFrameFile, uploadToTarget } from "@/components/creative-studio/upload";
 import { AssistantCard, Chip, SP, SvgIcon } from "@/components/creative-studio/canvas";
 import { ManusActivity } from "@/components/creative-studio/manus-activity";
+import { PresenterPicker, defaultPresenterName } from "@/components/creative-studio/presenter-picker";
 import { useIsTouch } from "@/lib/use-media";
 
 interface Reference {
@@ -42,9 +43,13 @@ export function FrameCard({
   const p = detail.project;
   const frame = detail.frames[0];
   const scenes = detail.scenes;
-  // References belong to this video's studio (Daniela's in Nexli's; a client firm's own).
-  const qs = inStudioQs(p.studio.key);
+  // References belong to this video's studio and presenter (Daniela's in Nexli's by default; a client firm's own; a saved presenter's).
+  const presenter = p.presenter;
+  const qs = `${inStudioQs(p.studio.key)}${presenter?.id ? `&presenter=${encodeURIComponent(presenter.id)}` : ""}`;
   const client = p.studio.kind === "client";
+  const who = presenter?.name || defaultPresenterName(p.studio);
+  // Approved or rendering: the presenter is part of what Kling renders.
+  const locked = !["draft", "scripted"].includes(p.status);
   const touch = useIsTouch();
   const [storyOpen, setStoryOpen] = useState(false);
   const story = scenes.length > 1 || storyOpen;
@@ -55,6 +60,7 @@ export function FrameCard({
   const [busy, setBusy] = useState<string | null>(null);
   const [zoneActive, setZoneActive] = useState(false);
   const [tileZone, setTileZone] = useState<Target | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
   const refInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<Target>({ kind: "classic" });
@@ -197,8 +203,32 @@ export function FrameCard({
     return () => document.removeEventListener("paste", onPaste);
   }, [tileZone]);
 
+  async function choosePresenter(id: string | null) {
+    setBusy("Changing the presenter…");
+    const r = await send(api(p.id), "PATCH", { presenterId: id });
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
+
+  /** Keep a frame (e.g. a scene Manus made) as a photo of this video's presenter. */
+  async function saveToPhotos(frameId: string) {
+    setBusy(`Saving to ${who}'s photos…`);
+    const r = await fetch(`/api/dashboard/creative-studio/references${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "fromFrame", assetId: frameId }),
+    }).catch(() => null);
+    const b = await r?.json().catch(() => null);
+    setBusy(null);
+    if (r?.ok && b?.references) {
+      setRefs(b.references);
+      setSaved(frameId);
+    } else onError(b?.error || "Couldn't save the photo");
+  }
+
   async function removeReference(id: string) {
-    if (!confirm(client ? "Remove this reference picture?" : "Remove this image from your Daniela references?")) return;
+    if (!confirm(presenter || client ? "Remove this reference picture?" : "Remove this image from your Daniela references?")) return;
     const r = await fetch(`/api/dashboard/creative-studio/references${qs}&assetId=${encodeURIComponent(id)}`, { method: "DELETE" });
     const b = await r.json().catch(() => null);
     if (r.ok && b?.references) setRefs(b.references);
@@ -294,6 +324,19 @@ export function FrameCard({
             </>
           )}
         </p>
+        {target.kind === "scene" && (() => {
+          const frameId = scenes.find((sc) => sc.id === target.id)?.frameId;
+          return frameId ? (
+            <button
+              type="button"
+              onClick={() => void saveToPhotos(frameId)}
+              disabled={!!busy || saved === frameId}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-xs font-semibold text-neutral-300 hover:border-cyan-400/50 hover:text-white disabled:opacity-60"
+            >
+              {saved === frameId ? `✓ Saved to ${who}'s photos` : `Save scene ${target.number} to ${who}'s photos`}
+            </button>
+          ) : null;
+        })()}
         {target.kind !== "classic" && (
           <button
             type="button"
@@ -326,7 +369,7 @@ export function FrameCard({
         }`}
       >
         <div className="mb-2 flex items-center justify-between gap-2">
-          <span className={`${labelCls} !mb-0`}>{client ? "Reference pictures" : "Daniela references"}</span>
+          <span className={`${labelCls} !mb-0`}>{presenter ? `${presenter.name}'s photos` : client ? "Reference pictures" : "Daniela references"}</span>
           <span className="text-[11px] text-neutral-500">
             {zoneActive ? "Paste or drop to save a reference" : <><span className="[@media(hover:none)]:hidden">Hover here and paste to add</span><span className="hidden [@media(hover:none)]:inline">Tap + to add a reference</span></>}
           </span>
@@ -338,7 +381,7 @@ export function FrameCard({
               <div key={r.id} className="group relative w-28 shrink-0 overflow-hidden rounded-xl border bg-black sm:w-24" style={{ aspectRatio: "3 / 4", borderColor: ticked ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.1)" }}>
                 {r.url && (
                   // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
-                  <img src={r.url} alt={client ? "Reference picture" : "Daniela reference"} className="h-full w-full object-cover" />
+                  <img src={r.url} alt={presenter ? `${presenter.name} photo` : client ? "Reference picture" : "Daniela reference"} className="h-full w-full object-cover" />
                 )}
                 <button
                   type="button"
@@ -387,17 +430,19 @@ export function FrameCard({
         </div>
         {refs && refs.length === 0 && (
           <p className="mt-1 text-[11px] text-neutral-400">
-            {client
-              ? `This is ${p.studio.name}'s own library (Daniela's pictures stay in Nexli's studio). Once you've decided who presents for the firm, add 3–6 photos of them and Manus copies that look.`
-              : "Add 3–6 photos of Daniela (face close-up, outfits, your office setups). Manus copies her look from them."}
+            {presenter
+              ? `Add 3–6 photos of ${presenter.name} (face close-up, outfits, settings) and Manus copies that look.${presenter.look ? " Until then Manus works from how they look in their presenter card." : ""}`
+              : client
+                ? `This is ${p.studio.name}'s own library (Daniela's pictures stay in Nexli's studio). Once you've decided who presents for the firm, add 3–6 photos of them and Manus copies that look.`
+                : "Add 3–6 photos of Daniela (face close-up, outfits, your office setups). Manus copies her look from them."}
           </p>
         )}
       </div>
 
-      {/* Manus — a client studio needs its own reference pictures first (no Daniela there) */}
-      {client && refs !== null && refs.length === 0 ? (
+      {/* Manus — needs photos (or, for a saved presenter, a description) of who presents */}
+      {refs !== null && refs.length === 0 && (presenter ? !presenter.look : client) ? (
         <p className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2.5 text-[11px] leading-relaxed text-neutral-400">
-          <b className="text-white">Manus</b> makes frames from this studio&apos;s reference pictures, so it&apos;s off until you add some. For now, paste or upload the frame.
+          <b className="text-white">Manus</b> makes frames from {presenter ? `${presenter.name}'s photos or how they look` : "this studio's reference pictures"}, so it&apos;s off until you add {presenter ? "either" : "some"}. For now, paste or upload the frame.
         </p>
       ) : (
         <div className="space-y-2">
@@ -407,7 +452,13 @@ export function FrameCard({
               value={shot}
               onChange={(e) => setShot(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && shot.trim() && !busy && active.length === 0 && generate()}
-              placeholder={client ? "At a light wooden desk in a navy blazer, warm office light" : "Daniela at a light wooden desk in a navy blazer, warm office light"}
+              placeholder={
+                presenter
+                  ? `${presenter.name} at a light wooden desk in a navy blazer, warm office light`
+                  : client
+                    ? "At a light wooden desk in a navy blazer, warm office light"
+                    : "Daniela at a light wooden desk in a navy blazer, warm office light"
+              }
               className="lp-input !rounded-full !px-4"
             />
             <button type="button" onClick={() => generate()} disabled={!shot.trim() || !!busy || active.length > 0} className={`${CTA_CLASSES} shrink-0 !py-2`}>
@@ -415,7 +466,8 @@ export function FrameCard({
             </button>
           </div>
           <p className="text-[11px] text-neutral-400">
-            {p.format === "vsl_16x9" ? "Made 16:9 for a VSL." : "Made 9:16 for an ad."} Uses the references marked ✓ Manus.
+            {p.format === "vsl_16x9" ? "Made 16:9 for a VSL." : "Made 9:16 for an ad."}{" "}
+            {refs && refs.length > 0 ? "Uses the photos marked ✓ Manus." : presenter?.look ? `Works from how ${presenter.name} looks.` : "Uses the references marked ✓ Manus."}
           </p>
         </div>
       )}
@@ -447,7 +499,7 @@ export function FrameCard({
         id="stage-frame"
         accent="blue"
         icon={SP.image}
-        title={story ? "The scenes" : client ? "The frame" : "Daniela's frame"}
+        title={story ? "The scenes" : presenter ? `${presenter.name}'s frame` : client ? "The frame" : "Daniela's frame"}
         right={
           story ? (
             <div className="flex items-center gap-2">
@@ -469,6 +521,10 @@ export function FrameCard({
           ) : null
         }
       >
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <PresenterPicker studio={p.studio} value={presenter} onPick={choosePresenter} disabled={locked || !!busy} />
+          {locked && <span className="text-[11px] text-neutral-500">Unlock the script to change who presents.</span>}
+        </div>
         {story ? (
           <div className="space-y-4">
             <p className="text-xs text-neutral-400">
@@ -588,16 +644,28 @@ export function FrameCard({
               <p className="text-xs text-neutral-400">
                 Every clip starts from this frame{frame.width && frame.height ? ` (${frame.width}×${frame.height})` : ""}.
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setStoryOpen(true);
-                  setTarget({ kind: "new" });
-                }}
-                className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-cyan-300 hover:text-white"
-              >
-                + Add a scene <span className="font-normal text-neutral-400">· tell a story across several frames</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-x-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStoryOpen(true);
+                    setTarget({ kind: "new" });
+                  }}
+                  className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-cyan-300 hover:text-white"
+                >
+                  + Add a scene <span className="font-normal text-neutral-400">· tell a story across several frames</span>
+                </button>
+                {presenter && (
+                  <button
+                    type="button"
+                    onClick={() => void saveToPhotos(frame.id)}
+                    disabled={!!busy || saved === frame.id}
+                    className="inline-flex min-h-9 items-center text-xs font-semibold text-neutral-400 hover:text-white disabled:opacity-60"
+                  >
+                    {saved === frame.id ? `✓ Saved to ${presenter.name}'s photos` : `Save to ${presenter.name}'s photos`}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ) : (

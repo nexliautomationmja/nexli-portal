@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { creativeProjects } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipsOf, projectDetail } from "@/lib/creative-studio/service";
+import { scriptPresenterMismatch } from "@/lib/creative-studio/prompts";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -15,6 +16,13 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
   if (!project) return notFound();
   if ((await clipsOf(project.id)).length === 0) {
     return NextResponse.json({ error: "There's no script to approve yet" }, { status: 400 });
+  }
+  // Kling would get the old presenter's name and look with the new presenter's frames.
+  if (scriptPresenterMismatch(project.frameSpec, project.presenter)) {
+    return NextResponse.json(
+      { error: `This script was written for someone else. Rewrite it for ${project.presenter?.name || "the studio's presenter"} first.` },
+      { status: 400 }
+    );
   }
   const [updated] = await db
     .update(creativeProjects)

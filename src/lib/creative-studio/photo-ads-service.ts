@@ -176,7 +176,7 @@ export async function listBatches(ownerId: string, studio: Studio): Promise<Phot
   });
 }
 
-/** The studio's reference pictures (Daniela's in Nexli's studio), signed for Manus. */
+/** The studio's default presenter's reference pictures (Daniela's in Nexli's studio), signed for Manus. */
 export async function referenceFiles(ownerId: string, studio: Studio): Promise<{ url: string; filename: string }[]> {
   const refs = await db
     .select({ storagePath: creativeAssets.storagePath })
@@ -186,7 +186,9 @@ export async function referenceFiles(ownerId: string, studio: Studio): Promise<{
         eq(creativeAssets.ownerId, ownerId),
         eq(creativeAssets.kind, "reference"),
         isNull(creativeAssets.projectId),
-        inStudio(creativeAssets.studioId, studio)
+        inStudio(creativeAssets.studioId, studio),
+        // Other presenters' photos aren't the default presenter's.
+        isNull(creativeAssets.presenterId)
       )
     )
     .orderBy(desc(creativeAssets.createdAt))

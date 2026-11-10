@@ -51,6 +51,19 @@ export const STUDIO_PRESENTER: PresenterInfo = {
   look: "",
 };
 
+/** How a new presenter sounds unless you change it: Daniela's wording, with their pronoun. */
+export function defaultVoice(pronoun: Pronoun, client: boolean): string {
+  const person = pronoun === "he" ? "man" : "woman";
+  return `a confident ${person} talking to a ${client ? "business" : "firm"} owner ${pronoun} respects, warm, honest and direct, no hype and no sales tone, neutral American accent, medium-low pitch, natural conversational pace`;
+}
+
+/** The script was written for someone other than the video's presenter now (it names the wrong person). */
+export function scriptPresenterMismatch(frame: FrameSpec | null, presenter: PresenterInfo | null | undefined): boolean {
+  if (!frame) return false;
+  const wrote = frame.scenes?.length ? frame.presenterId ?? null : null;
+  return wrote !== (presenter?.id || null);
+}
+
 /** Who presents this video: the chosen presenter, else the studio's default. */
 export function presenterOf(project: { studioId: string | null; presenter?: PresenterInfo | null }): PresenterInfo {
   return project.presenter ?? (project.studioId ? STUDIO_PRESENTER : DANIELA);

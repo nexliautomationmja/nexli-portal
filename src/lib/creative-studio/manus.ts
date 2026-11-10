@@ -47,6 +47,28 @@ export interface FrameRequest {
   referenceUrls: string[];
   /** A client firm's studio: the presenter is whoever is in its reference pictures (never Daniela). */
   client?: boolean;
+  /** A chosen presenter (not the studio's default): their photos are the references, or Manus works from the look. */
+  presenter?: { name: string; pronoun: "she" | "he"; look: string } | null;
+}
+
+/** A chosen presenter: the same person as their photos, or exactly as their look describes. */
+function presenterFramePrompt(req: FrameRequest & { presenter: NonNullable<FrameRequest["presenter"]> }, size: string): string {
+  const { name, look } = req.presenter;
+  const he = req.presenter.pronoun === "he";
+  const P = { subj: he ? "he" : "she", Subj: he ? "He" : "She", poss: he ? "his" : "her", obj: he ? "him" : "her" };
+  const who = req.referenceUrls.length
+    ? `The attached photos are reference images of ${name}. ${P.Subj} must clearly be the same person in every image: same face, hair, skin tone and build.${look ? ` ${name}: ${look}` : ""}`
+    : `${name}: ${look}. Make ${P.obj} look exactly like that, and clearly the same person in every image.`;
+  return [
+    `Create ${req.count} photorealistic still photographs of ${name} to use as the opening frame of a video.`,
+    who,
+    `The shot: ${req.shot.trim()}`,
+    `Format: ${size}. ${req.aspect === "9:16" ? `Framed for a vertical Facebook/Instagram ad, with room above ${P.poss} head.` : `Framed for a landscape video, with ${P.obj} centred.`}`,
+    `Unless the shot says otherwise, ${P.subj} faces the camera with ${P.poss} mouth relaxed and closed, in a natural pose ${P.subj} can start talking from. Realistic skin, hair and fabric, natural light, shallow depth of field.`,
+    "No text, captions, logos or watermarks anywhere in the image.",
+    `Save each image as a separate PNG file and attach all ${req.count} files in your final message.`,
+    "This request comes from an automated tool: nobody is available to answer questions or approve steps. Never stop to ask — make sensible choices yourself and finish the task.",
+  ].join("\n\n");
 }
 
 /** A client studio's presenter isn't Daniela: the person in that studio's reference pictures. */
@@ -65,6 +87,7 @@ function clientFramePrompt(req: FrameRequest, size: string): string {
 
 export function framePrompt(req: FrameRequest): string {
   const size = req.aspect === "9:16" ? "1080×1920 pixels, vertical 9:16" : "1920×1080 pixels, horizontal 16:9";
+  if (req.presenter) return presenterFramePrompt({ ...req, presenter: req.presenter }, size);
   if (req.client) return clientFramePrompt(req, size);
   const refs = req.referenceUrls.length
     ? "The attached photos are reference images of Daniela. She must be clearly the same woman in every image: same face, hair, skin tone and build."
@@ -84,7 +107,8 @@ export function framePrompt(req: FrameRequest): string {
 export async function startFrameTask(req: FrameRequest): Promise<{ taskId: string; taskUrl: string | null }> {
   const content: Record<string, unknown>[] = [{ type: "text", text: framePrompt(req) }];
   req.referenceUrls.slice(0, 6).forEach((url, i) => {
-    content.push({ type: "file", file_url: url, filename: `${req.client ? "presenter" : "daniela"}-reference-${i + 1}.png` });
+    const who = req.presenter ? req.presenter.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "presenter" : req.client ? "presenter" : "daniela";
+    content.push({ type: "file", file_url: url, filename: `${who}-reference-${i + 1}.png` });
   });
   const res = await manus<{ task_id: string; task_url?: string }>("task.create", {
     method: "POST",
@@ -94,7 +118,7 @@ export async function startFrameTask(req: FrameRequest): Promise<{ taskId: strin
       interactive_mode: false,
       hide_in_task_list: true,
       share_visibility: "private",
-      title: req.client ? "Creative Studio · client frame" : "Nexli Creative Studio · Daniela frame",
+      title: req.presenter ? `Creative Studio · ${req.presenter.name} frame` : req.client ? "Creative Studio · client frame" : "Nexli Creative Studio · Daniela frame",
     }),
   });
   if (!res.task_id) throw new ManusError("Manus didn't return a task id");
