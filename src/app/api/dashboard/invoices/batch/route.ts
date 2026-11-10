@@ -93,6 +93,9 @@ export async function POST(req: NextRequest) {
   );
 
   const hasRecurring = processedItems.some((p) => p.billingType !== "one_time");
+  /** The first recurring line's frequency — what a single New Invoice sends as recurringInterval. */
+  const firstRecurring = processedItems.find((p) => p.billingType !== "one_time")?.billingType;
+  const recurringInterval = firstRecurring && firstRecurring !== "one_time" ? firstRecurring : null;
 
   const { subtotal, taxAmount, total } = calculateInvoiceTotals(
     processedItems,
@@ -130,6 +133,10 @@ export async function POST(req: NextRequest) {
           amountPaid: 0,
           balanceDue: total,
           isRecurring: hasRecurring,
+          // Same as a single New Invoice (invoices/route.ts): without these the
+          // recurring cron never picks the invoice up, so it never repeated.
+          recurringInterval: hasRecurring ? recurringInterval : null,
+          nextRecurrenceDate: hasRecurring ? dueDateObj : null,
           dueDate: dueDateObj,
           notes: notes || null,
           terms: terms || null,

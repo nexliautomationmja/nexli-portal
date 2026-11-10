@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { invoices, invoiceLineItems, users } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { getOwnerBranding } from "@/lib/branding";
 import {
   generateInvoiceNumber,
   generateInvoiceToken,
@@ -53,8 +54,12 @@ export async function GET() {
     .where(eq(users.id, session.user.id))
     .limit(1);
 
+  // The firm's own logo/color for the in-dashboard preview (emails already use it).
+  const branding = await getOwnerBranding(session.user.id);
+
   return NextResponse.json({
     invoices: enriched,
+    branding,
     from: {
       name: owner?.name || "",
       company: owner?.companyName || "",

@@ -147,7 +147,7 @@ export function InvoiceDocumentPreview({
       <div
         style={{
           background: "#0a0a0f",
-          padding: "20px 48px",
+          padding: "20px clamp(16px, 5vw, 48px)",
           borderRadius: "4px 4px 0 0",
           borderTop: branding.brandColor
             ? `4px solid ${branding.brandColor}`
@@ -178,7 +178,7 @@ export function InvoiceDocumentPreview({
       </div>
 
       {/* From / Bill To */}
-      <div style={{ padding: "28px 48px 0" }}>
+      <div style={{ padding: "28px clamp(16px, 5vw, 48px) 0" }}>
         <div
           style={{
             display: "grid",
@@ -223,7 +223,7 @@ export function InvoiceDocumentPreview({
       </div>
 
       {/* Line Items Table */}
-      <div style={{ padding: "24px 48px" }}>
+      <div style={{ padding: "24px clamp(16px, 5vw, 48px)" }}>
         <table
           style={{
             width: "100%",
@@ -249,7 +249,7 @@ export function InvoiceDocumentPreview({
                   textAlign: "right",
                   padding: "0 0 8px",
                   margin: 0,
-                  width: 60,
+                  width: "clamp(36px, 9vw, 60px)",
                 }}
               >
                 Qty
@@ -260,7 +260,7 @@ export function InvoiceDocumentPreview({
                   textAlign: "right",
                   padding: "0 0 8px",
                   margin: 0,
-                  width: 100,
+                  width: "clamp(64px, 18vw, 100px)",
                 }}
               >
                 Rate
@@ -271,7 +271,7 @@ export function InvoiceDocumentPreview({
                   textAlign: "right",
                   padding: "0 0 8px",
                   margin: 0,
-                  width: 100,
+                  width: "clamp(64px, 18vw, 100px)",
                 }}
               >
                 Amount
@@ -423,7 +423,7 @@ export function InvoiceDocumentPreview({
       {(notes || terms) && (
         <div
           style={{
-            padding: "0 48px 28px",
+            padding: "0 clamp(16px, 5vw, 48px) 28px",
             borderTop: "1px solid #f3f4f6",
           }}
         >

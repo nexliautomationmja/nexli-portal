@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button, Chip, FIELD, NUM_FONT, Notice, Section, StatusDot, Surface } from "@/components/rainmaker";
 
 // Mercury bank transfers on the Invoices page (Nexli admin only — the API
 // answers 403 for everyone else and this renders nothing). Shows whether the
@@ -117,133 +118,110 @@ export function MercuryPanel({ onInvoicesChanged }: { onInvoicesChanged: () => v
 
   if (!status.configured) {
     return (
-      <div className="glass-card flex flex-wrap items-center gap-3 p-4 text-sm" style={{ color: "var(--text-muted)" }}>
-        <MercuryDot tone="off" />
-        <span>
-          <b style={{ color: "var(--text-main)" }}>Mercury isn&apos;t connected.</b> Setup, annual, renewal and Enterprise
-          invoices still go through Stripe until <code>MERCURY_API_TOKEN</code> is added in Vercel.
-        </span>
-      </div>
+      <Section id="bank-transfers" eyebrow="Mercury" title="Bank transfers">
+        <Notice tone="warn" title="Mercury isn't connected">
+          Setup, annual, renewal and Enterprise invoices still go through Stripe until MERCURY_API_TOKEN is added in Vercel.
+        </Notice>
+      </Section>
     );
   }
 
   const healthy = !status.lastError && Boolean(status.lastOkAt);
   return (
-    <div className="space-y-3">
-      <div className="glass-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3 text-sm">
-          <MercuryDot tone={healthy ? "ok" : "warn"} />
-          <div className="min-w-0">
-            <p className="font-semibold" style={{ color: "var(--text-main)" }}>
-              Mercury bank transfers{status.account ? ` · ${status.account}` : ""}
-            </p>
-            <p className="text-xs [overflow-wrap:anywhere]" style={{ color: status.lastError ? "#F43F5E" : "var(--text-muted)" }}>
-              {status.lastError
-                ? status.lastError
-                : `Checked ${ago(status.lastOkAt)} · checks every 10 minutes${status.creditsSeen != null ? ` · ${status.creditsSeen} incoming in the last 35 days` : ""}`}
-            </p>
+    <Section
+      id="bank-transfers"
+      eyebrow="Mercury"
+      title="Bank transfers"
+      sub="ACH and wire payments land in Mercury and are matched to invoices automatically."
+    >
+      <div className="space-y-3">
+        <Surface className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3 text-sm">
+            <StatusDot tone={healthy ? "green" : "amber"} className="mt-1.5" />
+            <div className="min-w-0">
+              <div className="font-semibold text-white">Mercury{status.account ? ` · ${status.account}` : ""}</div>
+              <div className={`text-xs [overflow-wrap:anywhere] ${status.lastError ? "text-rose-300" : "text-neutral-400"}`}>
+                {status.lastError
+                  ? status.lastError
+                  : `Checked ${ago(status.lastOkAt)} · checks every 10 minutes${status.creditsSeen != null ? ` · ${status.creditsSeen} incoming in the last 35 days` : ""}`}
+              </div>
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => void checkNow()}
-          disabled={checking}
-          className="min-h-10 shrink-0 rounded-lg border px-4 text-sm font-semibold transition-colors hover:bg-[var(--input-bg)] disabled:opacity-60"
-          style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
-        >
-          {checking ? "Checking…" : "Check now"}
-        </button>
-      </div>
+          <Button variant="secondary" size="sm" busy={checking} onClick={() => void checkNow()} className="shrink-0 self-start sm:self-center">
+            {checking ? "Checking…" : "Check now"}
+          </Button>
+        </Surface>
 
-      {message && (
-        <p className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}>
-          {message}
-        </p>
-      )}
+        {message && <Notice tone="info">{message}</Notice>}
 
-      {status.review.length > 0 && (
-        <div className="glass-card overflow-hidden">
-          <div className="border-b border-[var(--card-border)] p-4">
-            <p className="section-header mb-0">Needs review · {status.review.length}</p>
-            <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-              Money that arrived in Mercury but couldn&apos;t be matched to an invoice with certainty.
-            </p>
-          </div>
-          <ul className="divide-y divide-[var(--card-border)]">
-            {status.review.map((item) => {
-              const options = [...item.suggestions, ...status.openInvoices.filter((o) => !item.suggestions.some((s) => s.id === o.id))];
-              const choice = picked[item.id] ?? item.suggestions[0]?.id ?? options[0]?.id ?? "";
-              const chosen = options.find((o) => o.id === choice);
-              const short = chosen && item.amountCents < chosen.balanceDueCents;
-              return (
-                <li key={item.id} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
-                  <div className="min-w-0 flex-1 text-sm">
-                    <p className="font-semibold" style={{ color: "var(--text-main)" }}>
-                      {usd(item.amountCents)} {item.counterpartyName ? `from ${item.counterpartyName}` : ""}
-                      <span className="ml-2 text-xs font-normal" style={{ color: "var(--text-muted)" }}>
-                        {item.postedAt ? new Date(item.postedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
-                      </span>
-                    </p>
-                    {item.memo && (
-                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: "var(--text-muted)" }}>
-                        Memo: {item.memo}
-                      </p>
-                    )}
-                    {item.reason && <p className="text-xs text-amber-700 dark:text-amber-500">{item.reason}</p>}
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    {options.length > 0 ? (
-                      <select
-                        value={choice}
-                        onChange={(e) => setPicked((p) => ({ ...p, [item.id]: e.target.value }))}
-                        className="min-h-10 max-w-full rounded-lg border px-3 text-sm sm:max-w-xs"
-                        style={{ borderColor: "var(--card-border)", background: "var(--input-bg)", color: "var(--text-main)" }}
-                        aria-label="Invoice this payment is for"
+        {status.review.length > 0 && (
+          <Surface className="overflow-hidden">
+            <div className="border-b border-white/10 p-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-white">Needs a look</span>
+                <Chip tone="amber" size="xs">
+                  {status.review.length}
+                </Chip>
+              </div>
+              <p className="mt-1 text-xs text-neutral-400">Money that arrived in Mercury but couldn&apos;t be matched to an invoice with certainty.</p>
+            </div>
+            <ul className="divide-y divide-white/5">
+              {status.review.map((item) => {
+                const options = [...item.suggestions, ...status.openInvoices.filter((o) => !item.suggestions.some((s) => s.id === o.id))];
+                const choice = picked[item.id] ?? item.suggestions[0]?.id ?? options[0]?.id ?? "";
+                const chosen = options.find((o) => o.id === choice);
+                const short = chosen && item.amountCents < chosen.balanceDueCents;
+                return (
+                  <li key={item.id} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
+                    <div className="min-w-0 flex-1 text-sm">
+                      <div className="font-semibold text-white" style={NUM_FONT}>
+                        {usd(item.amountCents)} {item.counterpartyName ? `from ${item.counterpartyName}` : ""}
+                        <span className="ml-2 text-xs font-normal text-neutral-400">
+                          {item.postedAt ? new Date(item.postedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
+                        </span>
+                      </div>
+                      {item.memo && <div className="text-xs text-neutral-400 [overflow-wrap:anywhere]">Memo: {item.memo}</div>}
+                      {item.reason && <div className="text-xs text-amber-300">{item.reason}</div>}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      {options.length > 0 ? (
+                        <select
+                          value={choice}
+                          onChange={(e) => setPicked((p) => ({ ...p, [item.id]: e.target.value }))}
+                          className={`${FIELD} sm:max-w-xs`}
+                          aria-label="Invoice this payment is for"
+                        >
+                          {options.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {optionLabel(o)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-neutral-400">No open bank-transfer invoices</span>
+                      )}
+                      <Button
+                        size="sm"
+                        disabled={!choice}
+                        busy={busyId === item.id}
+                        onClick={() => {
+                          if (short && !confirm(`${usd(item.amountCents)} is less than the ${usd(chosen!.balanceDueCents)} due. Record it as a partial payment?`)) return;
+                          void review(item, { invoiceId: choice });
+                        }}
                       >
-                        {options.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {optionLabel(o)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        No open bank-transfer invoices
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      disabled={!choice || busyId === item.id}
-                      onClick={() => {
-                        if (short && !confirm(`${usd(item.amountCents)} is less than the ${usd(chosen!.balanceDueCents)} due. Record it as a partial payment?`)) return;
-                        void review(item, { invoiceId: choice });
-                      }}
-                      className="min-h-10 rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-50"
-                      style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-                    >
-                      {busyId === item.id ? "Saving…" : "Apply payment"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busyId === item.id}
-                      onClick={() => void review(item, { dismiss: true })}
-                      className="min-h-10 rounded-lg border px-3 text-sm font-semibold disabled:opacity-50"
-                      style={{ borderColor: "var(--card-border)", color: "var(--text-muted)" }}
-                    >
-                      Not an invoice payment
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-    </div>
+                        {busyId === item.id ? "Saving…" : "Apply payment"}
+                      </Button>
+                      <Button variant="secondary" size="sm" disabled={busyId === item.id} onClick={() => void review(item, { dismiss: true })}>
+                        Not an invoice payment
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Surface>
+        )}
+      </div>
+    </Section>
   );
-}
-
-function MercuryDot({ tone }: { tone: "ok" | "warn" | "off" }) {
-  const color = tone === "ok" ? "#10B981" : tone === "warn" ? "#F59E0B" : "#64748B";
-  return <span aria-hidden="true" className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color, boxShadow: `0 0 0 4px ${color}22` }} />;
 }
