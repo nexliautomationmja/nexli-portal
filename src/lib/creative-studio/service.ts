@@ -226,12 +226,21 @@ export async function projectDetail(project: Project) {
       source: f.source,
       sort: f.sort,
     })),
-    frameOptions: options.map((o) => ({ id: o.id, url: url(o.storagePath), width: o.width, height: o.height })),
+    frameOptions: options.map((o) => ({
+      id: o.id,
+      url: url(o.storagePath),
+      width: o.width,
+      height: o.height,
+      /** The scene Manus made it for (a scene's own redo), else any. */
+      sceneId: ((o.metadata ?? {}) as { sceneId?: string }).sceneId ?? null,
+    })),
     manus: manusTasks.map((t) => ({
       id: t.id,
       status: t.status,
       error: t.error,
       shot: ((t.metadata ?? {}) as { shot?: string }).shot ?? "",
+      /** The scenes it's making: a storyboard's, or one scene's redo. */
+      scenes: ((t.metadata ?? {}) as { storyboard?: string[] }).storyboard ?? (((t.metadata ?? {}) as { sceneId?: string }).sceneId ? [((t.metadata ?? {}) as { sceneId: string }).sceneId] : []),
       taskUrl: ((t.metadata ?? {}) as { taskUrl?: string | null }).taskUrl ?? null,
       activity: ((t.metadata ?? {}) as { activity?: ManusActivitySnapshot }).activity ?? null,
       waiting:

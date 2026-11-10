@@ -104,6 +104,82 @@ export function framePrompt(req: FrameRequest): string {
   ].join("\n\n");
 }
 
+export interface StoryboardRequest {
+  scenes: { label: string; shot: string }[];
+  aspect: "9:16" | "16:9";
+  referenceUrls: string[];
+  /** Who presents: their name and pronoun, plus their look when there are no photos. */
+  presenter: { name: string; pronoun: "she" | "he"; look: string };
+}
+
+/**
+ * Every scene of a story in one Manus task (one person, one look, made
+ * together), saved as scene-1.png … scene-N.png so each lands in its scene.
+ */
+export function storyboardPrompt(req: StoryboardRequest): string {
+  const n = req.scenes.length;
+  const size = req.aspect === "9:16" ? "1080×1920 pixels, vertical 9:16" : "1920×1080 pixels, horizontal 16:9";
+  const he = req.presenter.pronoun === "he";
+  const P = { obj: he ? "him" : "her" };
+  const name = req.presenter.name || "The presenter";
+  const who = req.referenceUrls.length
+    ? `The attached photos are reference images of ${name}. Wherever ${name} appears, ${he ? "he" : "she"} must clearly be the same person as in the photos: same face, hair, skin tone and build.${req.presenter.look ? ` ${name}: ${req.presenter.look}` : ""}`
+    : `${name}: ${req.presenter.look || "a confident professional in their thirties or forties"}. Make ${P.obj} look exactly like that, and identical in every scene.`;
+  return [
+    `Create ${n} photorealistic still photographs: the opening frames of the ${n} scenes of one short ${req.aspect === "9:16" ? "vertical ad" : "landscape video"}, in story order. Each image is one scene, described below.`,
+    who,
+    `Keep ${name}'s look consistent across the scenes (the same outfit unless a scene says otherwise), and keep the whole set consistent: realistic photography, natural light, the same color feel.`,
+    req.scenes.map((sc, i) => `Scene ${i + 1}${sc.label ? ` (${sc.label})` : ""}: ${sc.shot.trim()}`).join("\n"),
+    `Format: ${size}, every image. ${req.aspect === "9:16" ? "Framed for a vertical Facebook/Instagram ad, with room above people's heads." : "Framed for a landscape video."}`,
+    "Anyone who will talk in a scene has their mouth relaxed and closed, in a natural pose to start from. Realistic skin, hair and fabric, shallow depth of field.",
+    "No text, captions, logos or watermarks anywhere in the images.",
+    `Save each scene as a separate PNG named exactly ${n <= 3 ? Array.from({ length: n }, (_, i) => `scene-${i + 1}.png`).join(", ") : `scene-1.png, scene-2.png … scene-${n}.png`} (one per scene, in order), and attach all ${n} files in your final message.`,
+    "This request comes from an automated tool: nobody is available to answer questions or approve steps. Never stop to ask — make sensible choices yourself and finish the task.",
+  ].join("\n\n");
+}
+
+export async function startStoryboardTask(req: StoryboardRequest): Promise<{ taskId: string; taskUrl: string | null }> {
+  const who = req.presenter.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "presenter";
+  return startManusTask({
+    prompt: storyboardPrompt(req),
+    files: req.referenceUrls.slice(0, 6).map((url, i) => ({ url, filename: `${who}-reference-${i + 1}.png` })),
+    title: `Creative Studio · ${req.scenes.length} story scenes`,
+  });
+}
+
+/** The scene number in a storyboard file name ("scene-3.png" → 3), else null. */
+export function sceneNumberOf(filename: string | null): number | null {
+  const m = filename?.match(/scene[\s_-]*(\d+)/i);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Which scene (1-based) each storyboard image belongs to: by file name
+ * first, then the unclaimed images fill the unclaimed scenes in order;
+ * 0 = an extra image no scene is left for.
+ */
+export function storyboardPlacement(filenames: (string | null)[], count: number): number[] {
+  const taken = new Set<number>();
+  const out = filenames.map((f) => {
+    const n = sceneNumberOf(f);
+    if (n && n >= 1 && n <= count && !taken.has(n)) {
+      taken.add(n);
+      return n;
+    }
+    return 0;
+  });
+  return out.map((n) => {
+    if (n) return n;
+    for (let i = 1; i <= count; i++) {
+      if (!taken.has(i)) {
+        taken.add(i);
+        return i;
+      }
+    }
+    return 0;
+  });
+}
+
 export async function startFrameTask(req: FrameRequest): Promise<{ taskId: string; taskUrl: string | null }> {
   const content: Record<string, unknown>[] = [{ type: "text", text: framePrompt(req) }];
   req.referenceUrls.slice(0, 6).forEach((url, i) => {

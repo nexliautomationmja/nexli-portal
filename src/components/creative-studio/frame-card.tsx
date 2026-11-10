@@ -249,11 +249,55 @@ export function FrameCard({
   async function generate(shotText: string = shot) {
     setBusy("Starting Manus…");
     const referenceIds = (refs ?? []).filter((r) => !unticked.has(r.id)).map((r) => r.id);
-    const r = await send(api(`${p.id}/frame/generate`), "POST", { shot: shotText, referenceIds });
+    const scene = target?.kind === "scene" ? scenes.find((sc) => sc.id === target.id) : undefined;
+    // A scene's own shot line follows what you asked Manus for.
+    if (scene && shotText.trim() !== scene.shot) {
+      await send(api(`${p.id}/frames`), "PATCH", {
+        scenes: scenes.map((sc) => ({ id: sc.id, label: sc.label, shot: sc.id === scene.id ? shotText.trim() : sc.shot })),
+      });
+    }
+    const r = await send(api(`${p.id}/frame/generate`), "POST", { shot: shotText, referenceIds, ...(scene ? { scene: scene.id } : {}) });
     setBusy(null);
     if (r.ok) {
       onChange(r.data);
-      setShot("");
+      setShot(scene ? shotText : "");
+    } else onError(r.error);
+  }
+
+  /** Claude splits the story into scenes (or re-plans the ones still waiting for a frame). */
+  async function plan(note = "") {
+    setBusy("Claude is planning the scenes… (about half a minute)");
+    const r = await send(api(`${p.id}/scenes/plan`), "POST", note ? { note } : {});
+    setBusy(null);
+    if (r.ok) {
+      onChange(r.data);
+      setStoryOpen(true);
+      setTarget(null);
+    } else onError(r.error);
+  }
+
+  /** Manus makes every scene still waiting for a frame, in one go. */
+  async function makeScenes() {
+    const n = scenes.filter((sc) => !sc.frameId).length;
+    if (!confirm(`Have Manus make ${n} scene${n === 1 ? "" : "s"} in one go? It uses ${who}'s ${refs && refs.length ? "photos" : "look"} and takes a few minutes.`)) return;
+    setBusy("Starting Manus…");
+    const referenceIds = (refs ?? []).filter((r) => !unticked.has(r.id)).map((r) => r.id);
+    const r = await send(api(`${p.id}/frame/generate`), "POST", { storyboard: true, referenceIds });
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
+
+  /** A Manus option made for one scene goes to that scene; any other follows the picker. */
+  async function pickOption(o: { id: string; sceneId: string | null }) {
+    const scene = o.sceneId ? scenes.find((sc) => sc.id === o.sceneId) : undefined;
+    if (!scene) return pick(o.id);
+    setBusy(`Using it for scene ${scene.number}…`);
+    const r = await send(api(`${p.id}/frame/pick`), "POST", { assetId: o.id, scene: scene.id });
+    setBusy(null);
+    if (r.ok) {
+      onChange(r.data);
+      setTarget(null);
     } else onError(r.error);
   }
 
@@ -295,12 +339,21 @@ export function FrameCard({
     } else onError(r.error);
   }
 
+  function openScene(to: Target | null) {
+    setTarget(to);
+    if (to?.kind === "scene") setShot(scenes.find((sc) => sc.id === to.id)?.shot ?? "");
+  }
+
   function openUpload(to: Target) {
     uploadTarget.current = to;
     fileInput.current?.click();
   }
 
   const stale = new Set((p.frameSpec?.scenes ?? []).filter((s) => s.stale).map((s) => s.frameId));
+  const making = new Set(active.flatMap((t) => t.scenes ?? []));
+  const waitingScenes = scenes.filter((sc) => !sc.frameId);
+  const boardRunning = active.some((t) => (t.scenes?.length ?? 0) > 1);
+  const hasDirection = Boolean(p.direction.trim());
   const clipsIn = (frameId: string | null) => (frameId ? detail.clips.filter((c) => c.frameId === frameId).length : 0);
   const pickLabel =
     target?.kind === "scene" ? `Use for scene ${target.number}` : target?.kind === "new" ? "Add as a scene" : "Use as frame";
@@ -312,7 +365,7 @@ export function FrameCard({
         <p className="text-sm text-neutral-300">
           {target.kind === "scene" ? (
             <>
-              <b className="text-white">New frame for scene {target.number}.</b> Upload one, use a reference, or let Manus make it.
+              <b className="text-white">{scenes.find((sc) => sc.id === target.id)?.frameId ? `New frame for scene ${target.number}.` : `Make scene ${target.number}.`}</b> Upload one, use a reference, or let Manus make it from the shot below.
             </>
           ) : target.kind === "new" ? (
             <>
@@ -446,7 +499,7 @@ export function FrameCard({
         </p>
       ) : (
         <div className="space-y-2">
-          <span className={labelCls}>Or have Manus create it</span>
+          <span className={labelCls}>{target.kind === "scene" ? `Or have Manus make scene ${target.number}` : "Or have Manus create it"}</span>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               value={shot}
@@ -482,8 +535,8 @@ export function FrameCard({
                   // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
                   <img src={o.url} alt="Frame option" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
                 )}
-                <button type="button" onClick={() => pick(o.id)} disabled={!!busy} className="absolute inset-x-2 bottom-2 rounded-full bg-blue-600 py-2 text-[11px] font-bold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500">
-                  {pickLabel}
+                <button type="button" onClick={() => void pickOption(o)} disabled={!!busy} className="absolute inset-x-2 bottom-2 rounded-full bg-blue-600 py-2 text-[11px] font-bold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500">
+                  {o.sceneId && scenes.some((sc) => sc.id === o.sceneId) ? `Use for scene ${scenes.find((sc) => sc.id === o.sceneId)!.number}` : pickLabel}
                 </button>
               </div>
             ))}
@@ -527,10 +580,38 @@ export function FrameCard({
         </div>
         {story ? (
           <div className="space-y-4">
+            {p.brief?.plan && waitingScenes.length > 0 && (
+              <p className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] px-3.5 py-2.5 text-xs leading-relaxed text-violet-100/90">{p.brief.plan}</p>
+            )}
             <p className="text-xs text-neutral-400">
               The story plays in this order.{" "}
               {touch ? "Tap a scene to swap its frame." : "Hover a scene and paste to swap its frame, or hover + and paste to add one."}
             </p>
+            {(waitingScenes.length > 0 || hasDirection) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {waitingScenes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void makeScenes()}
+                    disabled={!!busy || boardRunning || making.size > 0 || locked}
+                    className={`${CTA_CLASSES} !py-2`}
+                  >
+                    <SvgIcon d={SP.wand} size={16} />
+                    {boardRunning ? "Manus is making the scenes…" : `Make ${waitingScenes.length === scenes.length ? "the" : "the other"} ${waitingScenes.length} scene${waitingScenes.length === 1 ? "" : "s"} with Manus`}
+                  </button>
+                )}
+                {hasDirection && !locked && (
+                  <button
+                    type="button"
+                    onClick={() => void plan()}
+                    disabled={!!busy || boardRunning}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/15 px-4 text-xs font-semibold text-neutral-200 hover:border-violet-400/50 hover:text-white disabled:opacity-50"
+                  >
+                    <SvgIcon d={SP.sparkles} size={14} /> {waitingScenes.length > 0 ? "Re-plan the scenes" : "Plan more scenes"}
+                  </button>
+                )}
+              </div>
+            )}
             <ol className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 sm:gap-3" aria-label="Scenes in story order">
               {scenes.map((sc, i) => {
                 const zone: Target = { kind: "scene", id: sc.id, number: sc.number };
@@ -554,15 +635,28 @@ export function FrameCard({
                         void uploadFiles(Array.from(e.dataTransfer.files), zone);
                       }}
                       className={`group relative overflow-hidden rounded-xl border bg-black outline-none transition-colors ${
-                        chosen || activeZone ? "border-blue-400 ring-2 ring-blue-500/30" : "border-white/15"
+                        chosen || activeZone ? "border-blue-400 ring-2 ring-blue-500/30" : sc.frameId || making.has(sc.id) ? "border-white/15" : "border-transparent"
                       }`}
                       style={{ aspectRatio: aspect }}
                     >
                       {sc.url ? (
                         // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
                         <img src={sc.url} alt={`Scene ${sc.number}${sc.label ? `: ${sc.label}` : ""}`} className="h-full w-full object-cover" />
+                      ) : making.has(sc.id) ? (
+                        <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-blue-500/15 to-cyan-400/5 px-2 text-center">
+                          <span className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-300/30 border-t-cyan-300 motion-reduce:animate-none" aria-hidden="true" />
+                          <span className="text-[10px] font-bold text-cyan-200">Manus is making it</span>
+                        </div>
                       ) : (
-                        <div className="flex h-full items-center justify-center text-[11px] text-neutral-500">No frame</div>
+                        <button
+                          type="button"
+                          onClick={() => openScene(zone)}
+                          className="flex h-full w-full flex-col items-start justify-end gap-1 border-2 border-dashed border-white/15 bg-white/[0.02] p-2 text-left"
+                          aria-label={`Scene ${sc.number} isn't made yet. Make it`}
+                        >
+                          <span className="line-clamp-5 text-[10px] leading-snug text-neutral-300">{sc.shot || "No shot yet"}</span>
+                          <span className="text-[10px] font-bold text-cyan-300">Not made yet</span>
+                        </button>
                       )}
                       <span className="absolute left-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-md bg-black/75 px-1.5 text-[11px] font-black text-white">{sc.number}</span>
                       {sc.frameId && stale.has(sc.frameId) && (
@@ -575,8 +669,8 @@ export function FrameCard({
                         <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || !!busy} className="flex h-7 w-7 items-center justify-center rounded-md text-white/80 hover:bg-white/10 disabled:opacity-30" aria-label={`Move scene ${sc.number} earlier`}>
                           ‹
                         </button>
-                        <button type="button" onClick={() => setTarget(chosen ? null : zone)} className="min-h-7 flex-1 rounded-md text-[10px] font-bold text-white hover:bg-white/10" aria-label={`Swap scene ${sc.number}'s frame`}>
-                          Swap
+                        <button type="button" onClick={() => openScene(chosen ? null : zone)} className="min-h-7 flex-1 rounded-md text-[10px] font-bold text-white hover:bg-white/10" aria-label={sc.frameId ? `Swap scene ${sc.number}'s frame` : `Make scene ${sc.number}`}>
+                          {sc.frameId ? "Swap" : "Make"}
                         </button>
                         <button type="button" onClick={() => removeScene(sc)} disabled={!!busy} className="flex h-7 w-7 items-center justify-center rounded-md text-white/80 hover:bg-rose-500/30" aria-label={`Remove scene ${sc.number}`}>
                           <SvgIcon d={SP.x} size={12} />
@@ -655,6 +749,16 @@ export function FrameCard({
                 >
                   + Add a scene <span className="font-normal text-neutral-400">· tell a story across several frames</span>
                 </button>
+                {hasDirection && !locked && (
+                  <button
+                    type="button"
+                    onClick={() => void plan()}
+                    disabled={!!busy}
+                    className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-violet-300 hover:text-white disabled:opacity-50"
+                  >
+                    <SvgIcon d={SP.sparkles} size={13} /> Plan it as a story
+                  </button>
+                )}
                 {presenter && (
                   <button
                     type="button"
@@ -670,10 +774,27 @@ export function FrameCard({
           </div>
         ) : (
           <div className="space-y-5">
+            {!frame && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-400/25 bg-violet-500/[0.06] px-3.5 py-3">
+                <p className="min-w-0 flex-1 text-sm text-neutral-300">
+                  <b className="text-white">Telling a story?</b>{" "}
+                  {hasDirection ? `Claude splits it into scenes and Manus makes each one with ${who}.` : "Tell me the story in the box below first, then Claude splits it into scenes."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void plan()}
+                  disabled={!hasDirection || !!busy}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-violet-600 px-4 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-50"
+                >
+                  <SvgIcon d={SP.sparkles} size={14} /> Plan it as a story
+                </button>
+              </div>
+            )}
             {picker}
             {busy && <p className="text-xs text-neutral-400">{busy}</p>}
           </div>
         )}
+        {busy && !story && frame && !target && <p className="mt-3 text-xs text-neutral-400">{busy}</p>}
         <input
           ref={fileInput}
           type="file"

@@ -78,7 +78,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (!access.ok) return access.response;
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
-  const body = (await req.json().catch(() => null)) as { primaryId?: string; scenes?: { id?: unknown; label?: unknown }[] } | null;
+  const body = (await req.json().catch(() => null)) as { primaryId?: string; scenes?: { id?: unknown; label?: unknown; shot?: unknown }[] } | null;
 
   // Reorder / relabel the scenes (the same scenes, in a new order).
   if (Array.isArray(body?.scenes)) {
@@ -86,7 +86,15 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const byId = new Map(current.map((sc) => [sc.id, sc]));
     const next = body.scenes.flatMap((x) => {
       const sc = typeof x?.id === "string" ? byId.get(x.id) : undefined;
-      return sc ? [{ ...sc, label: typeof x.label === "string" ? x.label.trim().slice(0, 80) : sc.label }] : [];
+      return sc
+        ? [
+            {
+              ...sc,
+              label: typeof x.label === "string" ? x.label.trim().slice(0, 80) : sc.label,
+              shot: typeof x.shot === "string" ? x.shot.trim().slice(0, 1200) : sc.shot,
+            },
+          ]
+        : [];
     });
     if (next.length !== current.length || new Set(next.map((sc) => sc.id)).size !== current.length) {
       return NextResponse.json({ error: "Those aren't this video's scenes. Reload and try again." }, { status: 400 });

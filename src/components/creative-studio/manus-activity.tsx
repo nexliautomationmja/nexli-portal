@@ -198,14 +198,14 @@ export function ManusActivity({
             </div>
           )}
 
-          {/* Placeholders for the two frames */}
+          {/* Placeholders for the frames: two options, or one per scene of a storyboard */}
           {!waiting && (
-            <div className="flex gap-3">
-              {[1, 2].map((n) => (
-                <div key={n} className="cs-sweep w-28 rounded-xl border border-white/10 bg-white/[0.03] sm:w-32" style={{ aspectRatio: aspect }}>
+            <div className="flex flex-wrap gap-3">
+              {Array.from({ length: (task.scenes?.length ?? 0) > 1 ? task.scenes.length : 2 }, (_, i) => i + 1).map((n) => (
+                <div key={n} className="cs-sweep w-24 rounded-xl border border-white/10 bg-white/[0.03] sm:w-28" style={{ aspectRatio: aspect }}>
                   <div className="flex h-full flex-col items-center justify-center gap-1.5 text-neutral-600">
                     <SvgIcon d={SP.image} size={20} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Image {n}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider">{(task.scenes?.length ?? 0) > 1 ? "Scene" : "Image"} {n}</span>
                   </div>
                 </div>
               ))}

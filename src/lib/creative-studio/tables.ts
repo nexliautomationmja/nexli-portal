@@ -100,6 +100,8 @@ export interface CreativeBrief {
    * one question it asks (for the frames listed in `frames`).
    */
   ask?: SceneAsk;
+  /** Claude's note on how it split the story into scenes (the storyboard plan). */
+  plan?: string;
   oldBelief: string;
   newBelief: string;
   proof: string;

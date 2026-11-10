@@ -267,7 +267,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
                 ? `Describe the batch, e.g. “${count} ${format === "vsl_16x9" ? "VSLs" : "ads"} on scope creep” — paste frames if you have them`
                 : client
                   ? "Describe the video — paste the frame if you have it"
-                  : "Describe the video — paste Daniela's frame if you have it"
+                  : `Describe the video — paste ${presenter ? `${presenter.name}'s frames` : "Daniela's frame"} if you have ${presenter ? "them" : "it"} (several = a story)`
             }
             hint={count > 1 ? "Enter → Claude plans the batch for you to review" : "Enter to start · Shift+Enter for a new line"}
             busy={busy || Boolean(planning) || Boolean(creating)}

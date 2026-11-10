@@ -248,7 +248,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
         // A pasted image is the frame.
         const hadScript = d.clips.length > 0;
         if (hadScript && !confirm("Use this image as the new frame? You can rewrite the script for it afterwards.")) return false;
-        setWorking({ label: p.studio.kind === "client" ? "Setting the frame…" : "Setting Daniela's frame…", accent: "blue" });
+        setWorking({ label: p.presenter?.name ? `Setting ${p.presenter.name}'s frame…` : p.studio.kind === "client" ? "Setting the frame…" : "Setting Daniela's frame…", accent: "blue" });
         const fresh = await uploadFrameFile(p.id, images[0], (hadScript ? d.project.format : fmt) === "ad_9x16");
         d = fresh as ProjectDetail;
         apply(d);
@@ -265,6 +265,15 @@ export function StudioThread({ projectId }: { projectId: string }) {
         if (!r.ok) throw new Error(r.error);
         apply(r.data);
         if (r.data.frames.length > 0) await writeScriptWith(r.data, text, fmt);
+        return true;
+      }
+      // A story still being planned: the note changes the plan (scenes without a frame yet).
+      if (st === "frame" && d.scenes.length > 1) {
+        setWorking({ label: "Claude is changing the plan…", detail: `“${text}”`, accent: "violet" });
+        const r = await send(api(`${p.id}/scenes/plan`), "POST", { note: text });
+        setWorking(null);
+        if (!r.ok) throw new Error(r.error);
+        apply(r.data);
         return true;
       }
       if (st === "frame") {
@@ -367,9 +376,16 @@ export function StudioThread({ projectId }: { projectId: string }) {
       ? DESCRIBE_EDIT
       : stage === "direction" && detail.frames.length > 0
         ? { placeholder: "Tell me the story: the angle, who it's for, where it should send people…", hint: "Enter saves it and writes the script" }
-        : COMPOSER[stage];
-  // A client firm's studio has no Daniela.
-  const composer = p.studio.kind === "client" ? { ...base, placeholder: base.placeholder.replace("Daniela's frame", "the frame") } : base;
+        : stage === "frame" && detail.scenes.length > 1
+          ? { placeholder: "Change the plan, e.g. “add a scene at the gym” · “make scene 2 his kitchen”", hint: "Enter → Claude re-plans the scenes that aren't made yet" }
+          : COMPOSER[stage];
+  // The chat box talks about whoever presents (a client firm's studio has no Daniela).
+  const who = p.presenter?.name ? `${p.presenter.name}'s frame` : p.studio.kind === "client" ? "the frame" : "Daniela's frame";
+  const placeholder = base.placeholder.replace("Daniela's frame", who);
+  const composer = {
+    ...base,
+    placeholder: p.presenter?.pronoun === "he" ? placeholder.replace(/\bshe\b/g, "he").replace(/\bShe\b/g, "He") : placeholder,
+  };
   const showFormat = stage === "direction" || stage === "frame" || stage === "write";
 
   return (

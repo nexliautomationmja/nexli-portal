@@ -5,27 +5,42 @@ import { db } from "@/db";
 import { creativeAssets } from "@/lib/creative-studio/tables";
 import { referencesWhere } from "@/lib/creative-studio/presenters";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
-import { projectDetail } from "@/lib/creative-studio/service";
+import { framesOf, projectDetail, scenesOf } from "@/lib/creative-studio/service";
 import { signPaths } from "@/lib/creative-studio/storage";
-import { ManusError, startFrameTask } from "@/lib/creative-studio/manus";
+import { ManusError, startFrameTask, startStoryboardTask } from "@/lib/creative-studio/manus";
+import { presenterOf } from "@/lib/creative-studio/prompts";
 
 export const maxDuration = 60;
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
 /**
- * Ask Manus for Daniela frame options from a one-line shot description + the
- * reference images: 2 to choose from, or 1 when a batch makes frames for
- * many videos at once (body.count).
+ * Ask Manus for frames from the video's presenter's reference photos:
+ * • { shot, count?, scene? } — options from a one-line shot description: 2 to
+ *   choose from, or 1 when a batch makes frames for many videos at once. With
+ *   `scene` the options are for that scene.
+ * • { storyboard: true } — every scene still waiting for a frame, made
+ *   together in one task (same person, same look), each landing in its scene.
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
   const project = await loadProject(access.ownerId, (await params).projectId);
   if (!project) return notFound();
-  const body = (await req.json().catch(() => null)) as { shot?: string; referenceIds?: string[]; count?: number } | null;
+  const body = (await req.json().catch(() => null)) as {
+    shot?: string;
+    referenceIds?: string[];
+    count?: number;
+    scene?: string;
+    storyboard?: boolean;
+  } | null;
+  const storyboard = body?.storyboard === true;
   const shot = typeof body?.shot === "string" ? body.shot.trim().slice(0, 1500) : "";
-  if (!shot) return NextResponse.json({ error: "Describe the shot you want" }, { status: 400 });
+  const scenes = scenesOf(project, await framesOf(project.id));
+  const waiting = scenes.filter((sc) => !sc.frameId && sc.shot.trim());
+  if (storyboard && waiting.length === 0) return NextResponse.json({ error: "Every scene already has a frame." }, { status: 400 });
+  if (!storyboard && !shot) return NextResponse.json({ error: "Describe the shot you want" }, { status: 400 });
+  const sceneId = typeof body?.scene === "string" && scenes.some((sc) => sc.id === body.scene) ? body.scene : null;
 
   // Only this video's presenter's photos, from its studio (Daniela's in Nexli's by default; a client studio has its own).
   const studio = await studioById(access.ownerId, project.studioId);
@@ -53,24 +68,49 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
   const signed = await signPaths(refs.map((r) => r.storagePath), 2 * 3600);
   const referenceUrls = refs.map((r) => (r.storagePath ? signed.get(r.storagePath) : undefined)).filter(Boolean) as string[];
+  const aspect = project.format === "vsl_16x9" ? "16:9" : "9:16";
 
   try {
-    const task = await startFrameTask({
-      shot,
-      aspect: project.format === "vsl_16x9" ? "16:9" : "9:16",
-      count: body?.count === 1 ? 1 : 2,
-      referenceUrls,
-      client: studio.kind === "client",
-      presenter: presenter ? { name: presenter.name, pronoun: presenter.pronoun, look: presenter.look } : null,
-    });
-    await db.insert(creativeAssets).values({
-      projectId: project.id,
-      kind: "manus_task",
-      source: "manus",
-      providerTaskId: task.taskId,
-      status: "running",
-      metadata: { shot, taskUrl: task.taskUrl, references: refs.map((r) => r.id) },
-    });
+    if (storyboard) {
+      const who = presenterOf(project);
+      const task = await startStoryboardTask({
+        scenes: waiting.map((sc) => ({ label: sc.label, shot: sc.shot })),
+        aspect,
+        referenceUrls,
+        presenter: { name: who.name, pronoun: who.pronoun, look: who.look },
+      });
+      await db.insert(creativeAssets).values({
+        projectId: project.id,
+        kind: "manus_task",
+        source: "manus",
+        providerTaskId: task.taskId,
+        status: "running",
+        metadata: {
+          shot: `${waiting.length} story scenes`,
+          taskUrl: task.taskUrl,
+          references: refs.map((r) => r.id),
+          // scene-1.png … scene-N.png land in these scenes, in this order.
+          storyboard: waiting.map((sc) => sc.id),
+        },
+      });
+    } else {
+      const task = await startFrameTask({
+        shot,
+        aspect,
+        count: body?.count === 1 ? 1 : 2,
+        referenceUrls,
+        client: studio.kind === "client",
+        presenter: presenter ? { name: presenter.name, pronoun: presenter.pronoun, look: presenter.look } : null,
+      });
+      await db.insert(creativeAssets).values({
+        projectId: project.id,
+        kind: "manus_task",
+        source: "manus",
+        providerTaskId: task.taskId,
+        status: "running",
+        metadata: { shot, taskUrl: task.taskUrl, references: refs.map((r) => r.id), ...(sceneId ? { sceneId } : {}) },
+      });
+    }
   } catch (err) {
     const message = err instanceof ManusError ? err.message : "Couldn't start Manus";
     console.error("[creative-studio] Manus start failed:", err instanceof Error ? err.message : err);

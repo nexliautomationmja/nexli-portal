@@ -1,6 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { askClaude } from "@/lib/creative-studio/script";
-import type { CreativeFormat, PresenterInfo, SceneAsk } from "@/lib/creative-studio/tables";
+import { KLING_FRAMEWORK } from "@/lib/creative-studio/rules.generated";
+import { withoutNexliSections } from "@/lib/creative-studio/framework-sections";
+import { MAX_SCENES } from "@/lib/creative-studio/prompts";
+import type { CreativeFormat, PresenterInfo, SceneAsk, SceneSlot } from "@/lib/creative-studio/tables";
 
 /**
  * Frames that arrived without a direction: Claude says what it sees in each
@@ -76,4 +79,122 @@ export async function readScenes(args: {
     question: (raw.question ?? "").trim().slice(0, 400) || "What's this video about, and where should it send people?",
     suggestion: (raw.suggestion ?? "").trim().slice(0, 600),
   };
+}
+
+// ── Storyboard: Claude splits the story into scenes for Manus ───────────
+
+const PLAN_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["scenes", "notes"],
+  properties: {
+    scenes: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["keep", "label", "shot"],
+        properties: { keep: { type: "integer" }, label: STR, shot: STR },
+      },
+    },
+    notes: STR,
+  },
+} as const;
+
+const STORYBOARD = `
+---
+
+# Planning the scenes of a story video (Creative Studio)
+
+Before any script is written, plan the scenes this story moves through. Each scene is one place and moment with its own opening frame; an image maker (Manus) makes the frames from your shot lines, and the script is written from those frames afterwards.
+
+- Split the user's story into 3–6 scenes (never more than ${MAX_SCENES}), in story order. Follow the framework's structure for the format: an ad hooks in the first scene and still ends on the qualifier and call to action unless the user's direction says otherwise. Think in places and moments: where we are, who's there, what the presenter is doing.
+- label: 2–4 words.
+- shot: one line for the image maker: the place, the presenter (by name) with outfit, pose and expression, anyone else in the frame, the camera (locked-off on a stand, a selfie the presenter holds, or handheld), and the light. A scene can have nobody in it (a calendar, a street), or other people. Keep the presenter's look consistent unless the story changes it (a different day, a different outfit).
+- Scenes the user already has (their frames are attached, labeled "Scene N, keep") stay in the plan: list them with keep = N, where they belong in the story (normally the order given), with a short label; their shot can be "". New scenes have keep = 0.
+- notes: one or two plain sentences on the story arc, scene by scene.`;
+
+export async function planScenes(args: {
+  direction: string;
+  note: string;
+  format: CreativeFormat;
+  presenter: PresenterInfo;
+  firmBrief: string;
+  /** Scenes that already have a frame (kept), with signed URLs. */
+  kept: { label: string; url: string }[];
+  /** The current plan for scenes without a frame yet (when re-planning). */
+  planned: { label: string; shot: string }[];
+}): Promise<{ scenes: { keep: number; label: string; shot: string }[]; notes: string }> {
+  const content: Anthropic.ContentBlockParam[] = [
+    ...args.kept.flatMap((k, i) => [
+      { type: "text" as const, text: `Scene ${i + 1}, keep${k.label ? ` (${k.label})` : ""}:` },
+      { type: "image" as const, source: { type: "url" as const, url: k.url } },
+    ]),
+    {
+      type: "text",
+      text: [
+        `Format: ${args.format === "vsl_16x9" ? "VSL, 16:9 horizontal" : "ad creative, 9:16 vertical"}`,
+        `The presenter: ${args.presenter.name || "the person in the frames"} (${args.presenter.pronoun === "he" ? "he/him" : "she/her"})${args.presenter.look ? `. How they look: ${args.presenter.look}` : ""}`,
+        `The story, in the user's words:\n${args.direction.trim()}`,
+        args.planned.length
+          ? `Current plan for the scenes without frames yet:\n${args.planned.map((p, i) => `- ${p.label || `Scene ${i + 1}`}: ${p.shot}`).join("\n")}`
+          : "",
+        args.note ? `What the user wants changed in the plan: ${args.note}` : "Plan the scenes.",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    },
+  ];
+  const system = args.firmBrief ? `${withoutNexliSections(KLING_FRAMEWORK)}${STORYBOARD}${args.firmBrief}` : `${KLING_FRAMEWORK}${STORYBOARD}`;
+  const raw = (await askClaude({
+    system,
+    content,
+    schema: PLAN_SCHEMA,
+    maxTokens: 8_000,
+    effort: "medium",
+    refusal: "Claude declined to plan these scenes. Try rewording the story.",
+    tooLong: "The plan came out too long. Try a shorter story.",
+    unreadable: "Claude returned an unreadable plan. Please try again.",
+  })) as { scenes?: { keep?: number; label?: string; shot?: string }[]; notes?: string };
+  const scenes = (raw.scenes ?? [])
+    .map((x) => ({
+      keep: Number.isInteger(x?.keep) ? (x!.keep as number) : 0,
+      label: (x?.label ?? "").trim().slice(0, 80),
+      shot: (x?.shot ?? "").trim().slice(0, 1200),
+    }))
+    .filter((x) => x.keep > 0 || x.shot);
+  if (scenes.length === 0) throw new Error("Claude returned no scenes. Please try again.");
+  return { scenes, notes: (raw.notes ?? "").trim().slice(0, 1200) };
+}
+
+/**
+ * The new scene list from Claude's plan: kept scenes (they have frames) where
+ * Claude put them, new ones as planned slots, every framed scene kept even if
+ * Claude left it out, and planned slots dropped from the end past the limit.
+ */
+export function mergePlan(
+  current: SceneSlot[],
+  planned: { keep: number; label: string; shot: string }[],
+  newId: () => string,
+  max = MAX_SCENES
+): SceneSlot[] {
+  const framed = current.filter((sc) => sc.frameId);
+  const used = new Set<string>();
+  const next: SceneSlot[] = [];
+  for (const x of planned) {
+    const kept = x.keep > 0 ? framed[x.keep - 1] : undefined;
+    if (kept && !used.has(kept.id)) {
+      used.add(kept.id);
+      next.push({ ...kept, label: kept.label || x.label });
+    } else if (!kept && x.shot) {
+      next.push({ id: newId(), label: x.label, shot: x.shot, frameId: null });
+    }
+  }
+  for (const sc of framed) if (!used.has(sc.id)) next.push(sc);
+  while (next.length > max) {
+    const at = next.map((sc) => !sc.frameId).lastIndexOf(true);
+    if (at < 0) break;
+    next.splice(at, 1);
+  }
+  return next;
 }
