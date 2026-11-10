@@ -71,15 +71,23 @@ export function ButtonLink({
   );
 }
 
-/** Round icon-only button. `label` is required: it is the accessible name. */
-export function IconButton({ label, className = "", children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+/** Round icon-only button. `label` is required: it is the accessible name. `danger` = destructive (rose on hover). */
+export function IconButton({
+  label,
+  danger = false,
+  className = "",
+  children,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; danger?: boolean }) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       {...rest}
-      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 ${FOCUS_RING} ${className}`}
+      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-400 transition-colors disabled:opacity-40 ${
+        danger ? "hover:bg-rose-500/10 hover:text-rose-300" : "hover:bg-white/10 hover:text-white"
+      } ${FOCUS_RING} ${className}`}
     >
       {children}
     </button>

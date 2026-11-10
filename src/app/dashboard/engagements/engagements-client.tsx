@@ -1,71 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PenLineIcon, XIcon, PlusIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
-import { DocumentPreview } from "@/components/engagement-document";
+import { EngagementsView, type Engagement } from "./engagements-view";
 
-interface Signer {
-  id: string;
-  name: string;
-  email: string;
-  order: number;
-  role: string | null;
-  status: "draft" | "sent" | "viewed" | "signed" | "declined" | "expired";
-  sentAt: string | null;
-  viewedAt: string | null;
-  signedAt: string | null;
-  declinedAt: string | null;
-  signatureData: string | null;
-}
-
-interface Engagement {
-  id: string;
-  subject: string;
-  content: string;
-  status: "draft" | "sent" | "viewed" | "signed" | "declined" | "expired";
-  sentAt: string | null;
-  expiresAt: string;
-  createdAt: string;
-  signers: Signer[];
-}
-
-const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  draft: { label: "Draft", color: "text-gray-500", bg: "bg-gray-500/10" },
-  sent: { label: "Sent", color: "text-blue-500", bg: "bg-blue-500/10" },
-  viewed: { label: "Viewed", color: "text-yellow-500", bg: "bg-yellow-500/10" },
-  signed: { label: "Signed", color: "text-emerald-500", bg: "bg-emerald-500/10" },
-  declined: { label: "Declined", color: "text-red-500", bg: "bg-red-500/10" },
-  expired: { label: "Expired", color: "text-gray-400", bg: "bg-gray-400/10" },
-};
-
+/** Engagement letters: loads them and runs void / delete / onboarding; EngagementsView draws it. */
 export function EngagementsClient() {
   const router = useRouter();
   const [engagements, setEngagements] = useState<Engagement[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [showDetail, setShowDetail] = useState<Engagement | null>(null);
-
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
 
-  useEffect(() => {
-    Promise.all([fetch("/api/dashboard/engagements").then((r) => r.json())])
-      .then(([engData]) => {
-        const list: Engagement[] = engData.engagements || [];
-        setEngagements(list);
-        if (engData.from) {
-          setFirmInfo(engData.from);
-        }
-        // /dashboard/engagements?id=… opens that letter (Clients page, the composer's success screen).
-        const id = new URLSearchParams(window.location.search).get("id");
-        const linked = id ? list.find((e) => e.id === id) : undefined;
-        if (linked) setShowDetail(linked);
-      })
-      .catch(() => {
-        setEngagements([]);
-      })
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/dashboard/engagements");
+      if (!r.ok) throw new Error(String(r.status));
+      const engData = await r.json();
+      const list: Engagement[] = engData.engagements || [];
+      setEngagements(list);
+      if (engData.from) setFirmInfo(engData.from);
+      // /dashboard/engagements?id=… opens that letter (Clients page, the composer's success screen).
+      const id = new URLSearchParams(window.location.search).get("id");
+      const linked = id ? list.find((e) => e.id === id) : undefined;
+      if (linked) setShowDetail(linked);
+      setState("ready");
+    } catch {
+      setEngagements([]);
+      setState("error");
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function handleVoid(id: string) {
     if (!confirm("Void this letter? The signing link stops working.")) return;
@@ -75,15 +43,7 @@ export function EngagementsClient() {
       body: JSON.stringify({ action: "void" }),
     });
     setEngagements((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? {
-              ...e,
-              status: "expired" as const,
-              signers: e.signers.map((s) => ({ ...s, status: "expired" as const })),
-            }
-          : e
-      )
+      prev.map((e) => (e.id === id ? { ...e, status: "expired" as const, signers: e.signers.map((s) => ({ ...s, status: "expired" as const })) } : e))
     );
     setShowDetail(null);
   }
@@ -95,457 +55,26 @@ export function EngagementsClient() {
     setShowDetail(null);
   }
 
-  // The page scrolls on <html>; hold it still while a letter is open (full-screen on phones).
-  useEffect(() => {
-    if (!showDetail) return;
-    const root = document.documentElement;
-    root.style.overflow = "hidden";
-    return () => {
-      root.style.overflow = "";
-    };
-  }, [showDetail]);
-
-  function formatDate(dateStr: string | null) {
-    if (!dateStr) return "—";
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+  async function startOnboarding(id: string) {
+    await fetch(`/api/dashboard/engagements/${id}/onboarding`, { method: "POST" });
+    router.push("/dashboard/onboarding");
   }
-
-  // Helper: client signers exclude the sender (order=0), which is auto-signed.
-  function clientSigners(signers: Signer[]): Signer[] {
-    return signers.filter((s) => s.order > 0);
-  }
-
-  function getSignerSummary(signers: Signer[]): string {
-    const clients = clientSigners(signers);
-    if (clients.length === 0) return "—";
-    if (clients.length === 1) return clients[0].name;
-    return `${clients[0].name} +${clients.length - 1} more`;
-  }
-
-  function getSignerEmails(signers: Signer[]): string {
-    const clients = clientSigners(signers);
-    if (clients.length === 0) return "";
-    if (clients.length === 1) return clients[0].email;
-    return `${clients.length} recipients`;
-  }
-
-  function getOverallStatus(eng: Engagement): string {
-    const clients = clientSigners(eng.signers);
-    if (clients.length === 0) return eng.status;
-    if (clients.every((s) => s.status === "signed")) return "signed";
-    if (clients.some((s) => s.status === "declined")) return "declined";
-    if (clients.some((s) => s.status === "viewed")) return "viewed";
-    return eng.status;
-  }
-
-  function getSignedCount(signers: Signer[]): string {
-    const clients = clientSigners(signers);
-    const signed = clients.filter((s) => s.status === "signed").length;
-    return `${signed}/${clients.length} signed`;
-  }
-
-  const stats = {
-    total: engagements.length,
-    pending: engagements.filter((e) => {
-      const s = getOverallStatus(e);
-      return s === "sent" || s === "viewed";
-    }).length,
-    signed: engagements.filter((e) => getOverallStatus(e) === "signed").length,
-    declined: engagements.filter((e) => getOverallStatus(e) === "declined").length,
-  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1
-            className="text-2xl font-bold tracking-tight"
-            style={{ color: "var(--text-main)" }}
-          >
-            Engagement Letters
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Send engagement letters for clients to review and sign.
-          </p>
-        </div>
-        <button
-          onClick={() => router.push("/dashboard/engagements/new")}
-          className="flex min-h-11 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 sm:w-auto sm:rounded-lg"
-          style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-        >
-          <PlusIcon className="w-4 h-4" />
-          New Engagement
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {[
-          { label: "Total Sent", value: stats.total },
-          { label: "Pending", value: stats.pending },
-          { label: "Signed", value: stats.signed },
-          { label: "Declined", value: stats.declined },
-        ].map((stat) => (
-          <div key={stat.label} className="glass-card p-3 sm:p-4">
-            <p className="text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
-              {stat.label}
-            </p>
-            <p className="stat-value" style={{ color: "var(--text-main)" }}>
-              {loading ? "..." : stat.value}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div className="glass-card overflow-hidden">
-        <div className="p-4 border-b border-[var(--card-border)]">
-          <p className="section-header mb-0">All Engagements</p>
-        </div>
-
-        {loading ? (
-          <div className="p-12 text-center">
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          </div>
-        ) : engagements.length === 0 ? (
-          <div className="py-16 text-center">
-            <div className="mx-auto mb-3 w-10 h-10" style={{ color: "var(--text-muted)" }}>
-              <PenLineIcon className="w-10 h-10" />
-            </div>
-            <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-              No engagement letters yet
-            </p>
-            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-              Create your first engagement letter to get started.
-            </p>
-          </div>
-        ) : (
-          <>
-          {/* Phones: one tappable card per letter */}
-          <div className="divide-y divide-[var(--card-border)] md:hidden">
-            {engagements.map((eng) => {
-              const overallStatus = getOverallStatus(eng);
-              const sc = statusConfig[overallStatus] || statusConfig.draft;
-              return (
-                <button
-                  key={eng.id}
-                  type="button"
-                  onClick={() => setShowDetail(eng)}
-                  className="block w-full px-4 py-3.5 text-left transition-colors active:bg-[var(--input-bg)]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold" style={{ color: "var(--text-main)" }}>
-                        {getSignerSummary(eng.signers)}
-                      </p>
-                      <p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
-                        {getSignerEmails(eng.signers)}
-                      </p>
-                    </div>
-                    <span className={`inline-flex shrink-0 items-center rounded px-2 py-0.5 text-[11px] font-semibold ${sc.color} ${sc.bg}`}>
-                      {sc.label}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 line-clamp-2 text-sm" style={{ color: "var(--text-main)" }}>
-                    {eng.subject}
-                  </p>
-                  <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                    Sent {formatDate(eng.sentAt)}
-                    {eng.signers.length > 1 ? ` · ${getSignedCount(eng.signers)}` : ""}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[var(--card-border)]">
-                  {["Recipients", "Subject", "Status", "Sent", "Actions"].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {engagements.map((eng) => {
-                  const overallStatus = getOverallStatus(eng);
-                  const sc = statusConfig[overallStatus] || statusConfig.draft;
-                  return (
-                    <tr
-                      key={eng.id}
-                      className="border-b border-[var(--card-border)] hover:bg-[var(--input-bg)] transition-colors cursor-pointer"
-                      onClick={() => setShowDetail(eng)}
-                    >
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                          {getSignerSummary(eng.signers)}
-                        </p>
-                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          {getSignerEmails(eng.signers)}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-sm" style={{ color: "var(--text-main)" }}>
-                          {eng.subject}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${sc.color} ${sc.bg}`}>
-                          {sc.label}
-                        </span>
-                        {eng.signers.length > 1 && (
-                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                            {getSignedCount(eng.signers)}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                        {formatDate(eng.sentAt)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setShowDetail(eng); }}
-                            className="p-2 rounded-lg hover:bg-[var(--input-bg)] transition-colors"
-                            title="View"
-                          >
-                            <EyeIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                          </button>
-                          {(overallStatus === "sent" || overallStatus === "viewed") && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleVoid(eng.id); }}
-                              className="p-1.5 rounded hover:bg-red-500/10 transition-colors"
-                              title="Void"
-                            >
-                              <XIcon className="w-3.5 h-3.5 text-red-400" />
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(eng.id); }}
-                            className="p-1.5 rounded hover:bg-red-500/10 transition-colors"
-                            title="Delete"
-                          >
-                            <TrashIcon className="w-3.5 h-3.5 text-red-400" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          </>
-        )}
-      </div>
-
-      {/* Detail Modal — portaled above the mobile top bar; a full-screen sheet on phones */}
-      {showDetail && createPortal(
-        <>
-          <div className="fixed inset-0 z-[90] bg-black/40" onClick={() => setShowDetail(null)} />
-          <div
-            className="fixed inset-0 z-[91] flex flex-col overflow-hidden sm:inset-x-4 sm:bottom-[5%] sm:top-[5%] sm:mx-auto sm:max-w-2xl sm:rounded-lg sm:border"
-            style={{ background: "var(--card-bg)", borderColor: "var(--card-border)" }}
-          >
-            {/* Header */}
-            <div
-              className="flex items-center justify-between gap-3 border-b border-[var(--card-border)] p-4"
-              style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
-            >
-              <div className="min-w-0">
-                <h2 className="text-base font-bold sm:text-lg" style={{ color: "var(--text-main)" }}>
-                  {showDetail.subject}
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {clientSigners(showDetail.signers).length} recipient{clientSigners(showDetail.signers).length !== 1 ? "s" : ""}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDetail(null)}
-                aria-label="Close"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--input-bg)]"
-              >
-                <XIcon className="w-4 h-4 text-[var(--text-muted)]" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 sm:p-4">
-              {/* Signers status — clients only (sender is auto-signed) */}
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--text-muted)" }}>
-                  Signers
-                </p>
-                <div className="space-y-2">
-                  {clientSigners(showDetail.signers).map((signer) => {
-                    const sc = statusConfig[signer.status] || statusConfig.draft;
-                    return (
-                      <div
-                        key={signer.id}
-                        className="flex items-center justify-between gap-3 rounded-lg border p-3"
-                        style={{ borderColor: "var(--card-border)", background: "var(--input-bg)" }}
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium" style={{ color: "var(--text-main)" }}>
-                            {signer.name}
-                          </p>
-                          <p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
-                            {signer.email}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${sc.color} ${sc.bg}`}>
-                            {sc.label}
-                          </span>
-                          {signer.signedAt && (
-                            <p className="text-[10px] mt-0.5 text-emerald-700 dark:text-emerald-500">
-                              {formatDate(signer.signedAt)}
-                            </p>
-                          )}
-                          {signer.viewedAt && !signer.signedAt && (
-                            <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                              Viewed {formatDate(signer.viewedAt)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Letter content — document view (renders both signature blocks) */}
-              {(() => {
-                const sender = showDetail.signers.find((s) => s.order === 0);
-                const firstClient = clientSigners(showDetail.signers)[0];
-                return (
-                  <DocumentPreview
-                    content={showDetail.content}
-                    subject={showDetail.subject}
-                    clientName={firstClient?.name || ""}
-                    fromName={firmInfo.name}
-                    fromCompany={firmInfo.company}
-                    date={showDetail.sentAt ? new Date(showDetail.sentAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : undefined}
-                    senderSignatureData={sender?.signatureData}
-                    senderSignedAt={sender?.signedAt}
-                    senderRole={sender?.role}
-                    clientSignatureData={firstClient?.signatureData}
-                    clientSignedAt={firstClient?.signedAt}
-                    clientSignedName={firstClient?.name}
-                  />
-                );
-              })()}
-
-              {/* Timeline */}
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                  Activity
-                </p>
-                <div className="space-y-1.5">
-                  <TimelineItem label="Created" date={showDetail.createdAt} />
-                  {showDetail.sentAt && <TimelineItem label="Sent" date={showDetail.sentAt} />}
-                  {clientSigners(showDetail.signers).map((signer) => (
-                    <div key={signer.id}>
-                      {signer.viewedAt && (
-                        <TimelineItem label={`Viewed by ${signer.name}`} date={signer.viewedAt} />
-                      )}
-                      {signer.signedAt && (
-                        <TimelineItem label={`Signed by ${signer.name}`} date={signer.signedAt} color="text-emerald-500" />
-                      )}
-                      {signer.declinedAt && (
-                        <TimelineItem label={`Declined by ${signer.name}`} date={signer.declinedAt} color="text-red-500" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer actions — stacked full width on phones, primary first */}
-            <div
-              className="flex flex-col gap-2 border-t border-[var(--card-border)] p-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:p-4 [&>button]:min-h-11 [&>button]:w-full sm:[&>button]:w-auto"
-              style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
-            >
-              {getOverallStatus(showDetail) === "signed" && (
-                <button
-                  onClick={async () => {
-                    await fetch(
-                      `/api/dashboard/engagements/${showDetail.id}/onboarding`,
-                      { method: "POST" }
-                    );
-                    router.push("/dashboard/onboarding");
-                  }}
-                  className="px-4 py-2 rounded-lg text-sm font-bold text-white transition-all active:scale-[0.98]"
-                  style={{ background: "linear-gradient(135deg, #2563EB, #06B6D4)" }}
-                >
-                  Start Onboarding 🚀
-                </button>
-              )}
-              {(getOverallStatus(showDetail) === "sent" || getOverallStatus(showDetail) === "viewed") && (
-                <button
-                  onClick={() => handleVoid(showDetail.id)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
-                >
-                  Void
-                </button>
-              )}
-              <button
-                onClick={() => handleDelete(showDetail.id)}
-                className="px-4 py-2 rounded-lg text-sm font-medium border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setShowDetail(null)}
-                className="px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors hover:bg-[var(--input-bg)]"
-                style={{ borderColor: "var(--card-border)", color: "var(--text-main)" }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </>,
-        document.body
-      )}
-    </div>
-  );
-}
-
-function TimelineItem({
-  label,
-  date,
-  color,
-}: {
-  label: string;
-  date: string;
-  color?: string;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-      <span className={`text-xs ${color || ""}`} style={color ? undefined : { color: "var(--text-main)" }}>
-        {label}
-      </span>
-      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-        {new Date(date).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        })}
-      </span>
-    </div>
+    <EngagementsView
+      state={state}
+      engagements={engagements}
+      open={showDetail}
+      firmInfo={firmInfo}
+      onOpen={setShowDetail}
+      onClose={() => setShowDetail(null)}
+      onVoid={handleVoid}
+      onDelete={handleDelete}
+      onStartOnboarding={startOnboarding}
+      onRetry={() => {
+        setState("loading");
+        void load();
+      }}
+    />
   );
 }
