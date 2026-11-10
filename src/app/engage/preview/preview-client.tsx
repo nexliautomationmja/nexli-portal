@@ -113,11 +113,11 @@ export function EngagePreviewClient() {
       <section className="lp-card" style={{ animationDelay: "0.05s" }}>
         <div className="flex flex-col sm:flex-row items-center gap-8">
           <div className="flex-1 text-center sm:text-left">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
               Digital Rainmaker System
             </p>
             <h1
-              className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white mt-1"
+              className="text-3xl sm:text-4xl font-bold tracking-tight text-white mt-1"
               style={SYNE}
             >
               Your{" "}
@@ -128,7 +128,7 @@ export function EngagePreviewClient() {
             <p className="text-sm mt-3 leading-relaxed text-neutral-300">
               Prepared for <span className="font-semibold text-white">Sample Client</span>, {SAMPLE_FIRM} · Nexli Automation LLC
             </p>
-            <p className="text-xs mt-2 text-neutral-500">
+            <p className="text-xs mt-2 text-neutral-400">
               {sections.length} sections · each one starts with a plain-English summary. Sign at the bottom.
             </p>
           </div>
@@ -160,7 +160,7 @@ export function EngagePreviewClient() {
         {signed ? (
           <ShimmerCard className="lp-card">
             <div className="text-3xl mb-1">🎉</div>
-            <h2 className="text-xl font-black text-white" style={SYNE}>
+            <h2 className="text-xl font-bold text-white" style={SYNE}>
               Signed — welcome aboard
             </h2>
             <p className="text-sm mt-1 text-neutral-300">
@@ -259,10 +259,10 @@ export function EngagePreviewClient() {
       </div>
 
       <footer className="text-center pb-6 space-y-2">
-        <p className="text-[11px] text-neutral-500">
+        <p className="text-[11px] text-neutral-400">
           Questions before you sign? Your Nexli team is one message away.
         </p>
-        <p className="text-[10px] text-neutral-600">
+        <p className="text-[10px] text-neutral-400">
           Nexli Automation LLC • Powered by the Digital Rainmaker System
         </p>
       </footer>

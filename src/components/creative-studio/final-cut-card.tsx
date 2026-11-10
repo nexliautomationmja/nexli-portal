@@ -66,7 +66,7 @@ export function FinalCutCard({
               {f.url && <video src={f.url} controls playsInline preload="metadata" className="w-full bg-black" />}
               <div className="space-y-1 p-3 text-xs">
                 <p className="font-semibold text-white">{f.filename}</p>
-                <p className="text-neutral-500">{new Date(f.uploadedAt).toLocaleString()}</p>
+                <p className="text-neutral-400">{new Date(f.uploadedAt).toLocaleString()}</p>
                 {f.note && <p className="text-neutral-300">“{f.note}”</p>}
               </div>
             </div>
@@ -113,7 +113,7 @@ export function FinalCutCard({
         </span>
       </button>
       <input ref={input} type="file" accept="video/mp4,video/quicktime" hidden onChange={(e) => upload(e.target.files?.[0])} />
-      <p className="mt-3 text-[11px] text-neutral-500">
+      <p className="mt-3 text-[11px] text-neutral-400">
         Approving the auto-cut puts it here automatically. You can also drop your own edit. The Remotion edit below (captions, title and graphics from your editing rulebook) runs on the newest one.
       </p>
     </AssistantCard>

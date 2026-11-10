@@ -63,7 +63,7 @@ export function GenericBody({ paragraphs }: { paragraphs: string[] }) {
       {paragraphs.map((p, i) => {
         if (GROUP_TITLES.has(p)) {
           return (
-            <h4 key={i} className="pt-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+            <h4 key={i} className="pt-2 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
               {p}
             </h4>
           );
@@ -173,7 +173,7 @@ export function ScopeBody({ paragraphs }: { paragraphs: string[] }) {
                     <Icon d={meta.icon} size={22} className={ACCENT[meta.accent].icon} />
                   </IconChip>
                 </div>
-                <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-white">{g.title}</h4>
+                <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-white">{g.title}</h4>
               </div>
               <ul className="space-y-2.5">
                 {g.clauses.map((c) => (

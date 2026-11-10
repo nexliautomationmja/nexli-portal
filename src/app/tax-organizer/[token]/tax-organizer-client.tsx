@@ -233,7 +233,7 @@ function RepeaterField({
   return (
     <div>
       {rows.length === 0 && (
-        <p className="text-xs text-[#4a4a5a] mb-2">
+        <p className="text-xs text-[#9999a8] mb-2">
           No entries added. Click below to add one.
         </p>
       )}
@@ -760,7 +760,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
           </div>
           <h1 className="text-xl font-bold text-white mb-3">Link Unavailable</h1>
           <p className="text-sm text-[#808090] leading-relaxed">{error}</p>
-          <p className="text-xs text-[#4a4a5a] mt-4">
+          <p className="text-xs text-[#9999a8] mt-4">
             If you believe this is an error, please contact your service provider.
           </p>
         </div>
@@ -785,7 +785,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
               : "responses have"}{" "}
             been securely submitted.
           </p>
-          <p className="text-xs text-[#4a4a5a] mt-4">
+          <p className="text-xs text-[#9999a8] mt-4">
             Your provider will review everything before your appointment. You can close this page.
           </p>
         </div>
@@ -817,7 +817,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#808090]">
               Tax Organizer
             </p>
-            <p className="text-xs text-[#4a4a5a]">
+            <p className="text-xs text-[#9999a8]">
               {meta.taxYear} &bull;{" "}
               {RETURN_TYPE_LABELS[meta.returnType] || meta.returnType}
             </p>
@@ -932,7 +932,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
             <p className="text-sm text-[#808090] mb-1">
               Drag &amp; drop files here
             </p>
-            <p className="text-xs text-[#4a4a5a] mb-4">or</p>
+            <p className="text-xs text-[#9999a8] mb-4">or</p>
             <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-[#1e1e2a] text-white cursor-pointer hover:border-blue-500/30 transition-colors">
               <UploadIcon className="w-4 h-4" />
               Choose Files
@@ -944,7 +944,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
                 accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.csv,.txt"
               />
             </label>
-            <p className="text-[10px] text-[#4a4a5a] mt-3">
+            <p className="text-[10px] text-[#9999a8] mt-3">
               PDF, images, spreadsheets &bull; 25MB max per file
             </p>
           </div>
@@ -960,7 +960,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
                   <FileIcon className="w-4 h-4 text-blue-400 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{f.file.name}</p>
-                    <p className="text-[10px] text-[#4a4a5a]">
+                    <p className="text-[10px] text-[#9999a8]">
                       {formatFileSize(f.file.size)} &bull; {f.category}
                     </p>
                   </div>
@@ -997,7 +997,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
           )}
         </button>
 
-        <p className="text-[10px] text-center text-[#4a4a5a]">
+        <p className="text-[10px] text-center text-[#9999a8]">
           Your information is encrypted and transmitted securely. This link
           expires{" "}
           {new Date(meta.expiresAt).toLocaleDateString("en-US", {
@@ -1011,7 +1011,7 @@ export function TaxOrganizerClient({ token }: { token: string }) {
 
       {/* Footer */}
       <div className="border-t border-[#1e1e2a] py-6 text-center">
-        <p className="text-[10px] text-[#4a4a5a]">
+        <p className="text-[10px] text-[#9999a8]">
           Protected by Nexli Automation &bull; Secure &amp; Encrypted
         </p>
       </div>

@@ -231,8 +231,8 @@ export function TaxOrganizersClient() {
             <div className="text-right text-xs space-y-0.5" style={{ color: "var(--text-muted)" }}>
               <p>Sent {formatDate(org.createdAt)}</p>
               <p>Expires {formatDate(org.expiresAt)}</p>
-              {org.lastAccessedAt && <p className="text-amber-400">Opened {formatDate(org.lastAccessedAt)}</p>}
-              {org.submittedAt && <p className="text-emerald-400">Submitted {formatDate(org.submittedAt)}</p>}
+              {org.lastAccessedAt && <p className="text-amber-700 dark:text-amber-400">Opened {formatDate(org.lastAccessedAt)}</p>}
+              {org.submittedAt && <p className="text-emerald-700 dark:text-emerald-400">Submitted {formatDate(org.submittedAt)}</p>}
             </div>
           </div>
         </div>

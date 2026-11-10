@@ -275,7 +275,7 @@ export function FrameCard({
                 />
               </div>
               {refs && refs.length === 0 && (
-                <p className="mt-1 text-[11px] text-neutral-500">
+                <p className="mt-1 text-[11px] text-neutral-400">
                   {client
                     ? `This is ${p.studio.name}'s own library (Daniela's pictures stay in Nexli's studio). Once you've decided who presents for the firm, add 3–6 photos of them and Manus copies that look.`
                     : "Add 3–6 photos of Daniela (face close-up, outfits, your office setups). Manus copies her look from them."}
@@ -303,7 +303,7 @@ export function FrameCard({
                   <SvgIcon d={SP.wand} size={16} /> Create 2 options
                 </button>
               </div>
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-[11px] text-neutral-400">
                 {p.format === "vsl_16x9" ? "Made 16:9 for a VSL." : "Made 9:16 for an ad."} Uses the references marked ✓ Manus.
               </p>
             </div>

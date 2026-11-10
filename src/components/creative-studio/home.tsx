@@ -219,7 +219,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
         <div className="lp-card flex justify-center">
           <StudioTabs active="videos" studioKey={studio.key} />
         </div>
-        <h1 className="lp-card mt-6 text-center text-4xl font-bold tracking-tighter text-white sm:text-5xl" style={{ ...SYNE, animationDelay: "0.05s" }}>
+        <h1 className="lp-card mt-6 text-center text-4xl font-bold tracking-tight text-white sm:text-5xl" style={{ ...SYNE, animationDelay: "0.05s" }}>
           What are we <GradientText>making?</GradientText>
         </h1>
         <p className="lp-card mx-auto mt-3 max-w-xl text-center text-sm text-neutral-400 sm:text-base" style={{ animationDelay: "0.1s" }}>
@@ -337,7 +337,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
                       <span className="text-[10px] text-neutral-500">{new Date(b.createdAt).toLocaleDateString()}</span>
                     </div>
                     <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{b.brief}</p>
-                    <p className="mt-1 truncate text-[11px] text-neutral-500">{b.titles.join(" · ")}</p>
+                    <p className="mt-1 truncate text-[11px] text-neutral-400">{b.titles.join(" · ")}</p>
                     {progress && <p className="mt-2 text-[11px] font-semibold text-cyan-200">{progress}</p>}
                   </Link>
                 );
@@ -360,7 +360,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
               ))}
             </div>
           ) : projects.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-white/10 py-8 text-center text-sm text-neutral-500">Your videos will show up here.</p>
+            <p className="rounded-2xl border border-dashed border-white/10 py-8 text-center text-sm text-neutral-400">Your videos will show up here.</p>
           ) : (
             // Masonry columns, so tall 9:16 ads and wide 16:9 VSLs sit together without gaps.
             <div className="columns-2 gap-3 sm:columns-3">
@@ -544,7 +544,7 @@ function ProjectCard({ p, delay }: { p: ProjectRow; delay: number }) {
       </div>
       <div className="p-3">
         <p className="truncate text-sm font-semibold text-white">{p.title}</p>
-        <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-neutral-500">{p.direction || "No direction yet"}</p>
+        <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-neutral-400">{p.direction || "No direction yet"}</p>
       </div>
     </Link>
     {touch && p.previewUrl && (

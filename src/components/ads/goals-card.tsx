@@ -144,7 +144,7 @@ export function GoalsCard({
         </div>
         <span className="text-[11px] text-neutral-500">Max digs deeper and uses more Manus credits.</span>
       </div>
-      <p className="mt-3 text-[11px] text-neutral-500">
+      <p className="mt-3 text-[11px] text-neutral-400">
         Meta Ads Manager connector in Manus:{" "}
         {settings.connector?.id ? <b className="text-emerald-300">connected{settings.connector.name ? ` (${settings.connector.name})` : ""}</b> : <span>not connected — connect it in Manus → Connectors and the next analysis uses it.</span>}
         <br />

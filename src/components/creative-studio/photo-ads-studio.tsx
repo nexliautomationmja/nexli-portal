@@ -235,7 +235,7 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
             <span className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-cyan-200">
               <SvgIcon d={SP.image} size={13} /> Photo Ads · Manus
             </span>
-            <h1 className="mt-4 text-3xl font-bold tracking-tighter text-white sm:text-5xl" style={SYNE}>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl" style={SYNE}>
               One prompt.{" "}
               <span className="bg-gradient-to-r from-cyan-200 via-sky-300 to-blue-400 bg-clip-text text-transparent">A wall of ads to test.</span>
             </h1>
@@ -367,7 +367,7 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-white">{b.prompt}</p>
-                        <p className="text-[11px] text-neutral-500" style={NUM_FONT}>
+                        <p className="text-[11px] text-neutral-400" style={NUM_FONT}>
                           {new Date(b.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} ·{" "}
                           {b.status === "planned" ? `${b.total} planned` : `${b.done}/${b.total} done`}
                           {b.working ? ` · ${b.working} in progress` : ""}
@@ -420,7 +420,7 @@ function PlanReview({
       right={<Chip tone="amber">Review</Chip>}
     >
       <p className="mb-1 text-sm text-neutral-300">&ldquo;{batch.prompt}&rdquo;</p>
-      {batch.notes && <p className="mb-3 text-xs text-neutral-500">{batch.notes}</p>}
+      {batch.notes && <p className="mb-3 text-xs text-neutral-400">{batch.notes}</p>}
       <div className="space-y-2">
         {batch.ads.map((ad) => {
           const gone = removed.includes(ad.id);
@@ -459,7 +459,7 @@ function PlanReview({
                         aria-label="Small line"
                         className={FIELD}
                       />
-                      {ad.angle && <p className="text-xs text-neutral-500">{ad.angle}</p>}
+                      {ad.angle && <p className="text-xs text-neutral-400">{ad.angle}</p>}
                       <button type="button" onClick={() => setOpenId(expanded ? null : ad.id)} className="min-h-8 text-xs font-semibold text-cyan-300 hover:underline">
                         {expanded ? "Hide the scene & look" : "Scene & look"}
                       </button>
@@ -625,7 +625,7 @@ function BatchBoard({
         </button>
       </div>
       {done < total && (
-        <p className="mt-2 text-[11px] text-neutral-500">Manus makes a few at a time; each takes a few minutes. Keep this page open — the rest start as soon as there&apos;s room.</p>
+        <p className="mt-2 text-[11px] text-neutral-400">Manus makes a few at a time; each takes a few minutes. Keep this page open — the rest start as soon as there&apos;s room.</p>
       )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

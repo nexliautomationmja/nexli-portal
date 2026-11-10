@@ -773,7 +773,7 @@ export function SiteEditorClient({ userId }: { userId: string }) {
 
         {liveValidation && !liveValidation.ok && (
           <GlassCard variant="compact">
-            <p className="text-xs font-bold text-red-400 mb-1">Fix before saving</p>
+            <p className="text-xs font-bold text-red-700 dark:text-red-400 mb-1">Fix before saving</p>
             <ul className="space-y-0.5">
               {liveValidation.errors.map((e, i) => (
                 <li key={i} className="text-xs text-red-400">
@@ -815,7 +815,7 @@ function setOpt<K extends "phone" | "email" | "address" | "hours">(
 function Message({ message }: { message: { tone: "ok" | "err"; text: string; errors?: string[] } }) {
   return (
     <div className="mb-4">
-      <p className={`text-xs font-medium ${message.tone === "ok" ? "text-emerald-400" : "text-red-400"}`}>{message.text}</p>
+      <p className={`text-xs font-medium ${message.tone === "ok" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>{message.text}</p>
       {message.errors && message.errors.length > 0 && (
         <ul className="mt-1 space-y-0.5">
           {message.errors.map((e, i) => (

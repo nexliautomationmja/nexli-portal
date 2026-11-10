@@ -130,7 +130,7 @@ export function ScriptCard({
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {tiles.map((t) => (
             <div key={t.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">{t.label}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">{t.label}</p>
               <p className="mt-0.5 text-lg font-extrabold text-white" style={NUM_FONT}>
                 {t.value}
               </p>
@@ -159,10 +159,10 @@ export function ScriptCard({
                   <div className="flex sm:gap-3">
                     <div className="hidden w-14 shrink-0 pt-0.5 text-right sm:block" style={NUM_FONT}>
                       <p className="text-xs font-bold text-white">#{clip.idx + 1}</p>
-                      <p className="text-[10px] text-neutral-500">
+                      <p className="text-[10px] text-neutral-400">
                         {clock(start)}–{clock(end)}
                       </p>
-                      <p className={`text-[10px] font-semibold ${clip.durationS >= 12 ? "text-rose-300" : "text-neutral-500"}`}>{clip.durationS}s</p>
+                      <p className={`text-[10px] font-semibold ${clip.durationS >= 12 ? "text-rose-300" : "text-neutral-400"}`}>{clip.durationS}s</p>
                     </div>
                     <div className="min-w-0 flex-1 sm:border-l sm:border-white/10 sm:pl-3">
                       {/* Phones: the clip's number, time and length on one line, so the line uses the full width. */}
@@ -178,8 +178,8 @@ export function ScriptCard({
                         {clip.register && <Chip>🎙 {clip.register}</Chip>}
                         {clip.action && <Chip>✋ {clip.action}</Chip>}
                       </div>
-                      {clip.editNote && <p className="mt-1.5 text-[11px] text-neutral-500">✂ {clip.editNote}</p>}
-                      {clip.cues && <p className="mt-1 text-[11px] text-neutral-500">🔤 {clip.cues}</p>}
+                      {clip.editNote && <p className="mt-1.5 text-[11px] text-neutral-400">✂ {clip.editNote}</p>}
+                      {clip.cues && <p className="mt-1 text-[11px] text-neutral-400">🔤 {clip.cues}</p>}
                       {flags.map((f) => (
                         <p key={f.message} className={`mt-1 text-[11px] font-semibold ${f.level === "risk" ? "text-rose-300" : "text-amber-300/90"}`}>
                           {f.level === "risk" ? "⚠ " : "• "}
@@ -237,7 +237,7 @@ export function ScriptCard({
           )}
         </div>
         {!locked && kling?.connected && kling.credits !== null && (
-          <p className="mt-2 text-right text-[11px] text-neutral-500" style={NUM_FONT}>
+          <p className="mt-2 text-right text-[11px] text-neutral-400" style={NUM_FONT}>
             {kling.credits.toLocaleString("en-US")} Kling credits available
           </p>
         )}

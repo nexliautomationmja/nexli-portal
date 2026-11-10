@@ -235,7 +235,7 @@ export function BatchBoard({ batchId }: { batchId: string }) {
             <h1 className="truncate text-base font-bold text-white sm:text-lg" style={SYNE}>
               Batch · {vids.length} {noun}
             </h1>
-            <p className="truncate text-xs text-neutral-500">
+            <p className="truncate text-xs text-neutral-400">
               <Link href={studioHref(summary.studio.key)} className={`font-semibold hover:text-white ${summary.studio.kind === "client" ? "text-violet-300" : "text-neutral-400"}`}>
                 {summary.studio.name} studio
               </Link>

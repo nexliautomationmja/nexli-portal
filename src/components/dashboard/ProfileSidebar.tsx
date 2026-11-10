@@ -272,13 +272,13 @@ export function ProfileSidebar({ business, websiteUrl, isActive, clientId, ghlLo
                         </div>
 
                         {ghlStatus === "success" && !ghlError && (
-                            <p className="text-[11px] text-green-400">Connected successfully.</p>
+                            <p className="text-[11px] text-green-700 dark:text-green-400">Connected successfully.</p>
                         )}
                         {ghlStatus === "success" && ghlError && (
-                            <p className="text-[11px] text-yellow-400">{ghlError}</p>
+                            <p className="text-[11px] text-yellow-700 dark:text-yellow-400">{ghlError}</p>
                         )}
                         {ghlStatus === "error" && (
-                            <p className="text-[11px] text-red-400">{ghlError}</p>
+                            <p className="text-[11px] text-red-700 dark:text-red-400">{ghlError}</p>
                         )}
 
                         <div className="flex gap-2">

@@ -35,7 +35,7 @@ function Insights({ title, tone, items }: { title: string; tone: string; items: 
     <div className="bg-[#0b1220] p-4 sm:p-5">
       <p className={`text-[11px] font-black uppercase tracking-[0.15em] ${tone}`}>{title}</p>
       {items.length === 0 ? (
-        <p className="mt-2 text-xs text-neutral-500">Nothing stood out.</p>
+        <p className="mt-2 text-xs text-neutral-400">Nothing stood out.</p>
       ) : (
         <ul className="mt-3 space-y-3">
           {items.map((it, i) => (
@@ -125,7 +125,7 @@ function BriefCard({ b, ads, s, studioKey }: { b: ResearchBrief; ads: ResearchAd
         </div>
       )}
       <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-neutral-500">Creative Studio prompt</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-neutral-400">Creative Studio prompt</p>
         <p className={`mt-1 whitespace-pre-wrap text-xs leading-relaxed text-neutral-200 ${full ? "" : "line-clamp-4"}`}>{b.prompt}</p>
         <button type="button" onClick={() => setFull((x) => !x)} className="mt-1 min-h-8 text-[11px] font-semibold text-cyan-300 hover:underline">
           {full ? "Show less" : "Show the full prompt"}
@@ -262,7 +262,7 @@ export function ResearchPanel({
             </button>
             <span className="text-xs text-neutral-500">20–45 minutes · uses Manus credits</span>
           </div>
-          <p className="mt-3 text-[11px] text-neutral-500">
+          <p className="mt-3 text-[11px] text-neutral-400">
             {competitorsCount ? `It will always check the ${competitorsCount} competitor${competitorsCount > 1 ? "s" : ""} you listed in Goals.` : (
               <>
                 Know competitors already?{" "}
@@ -293,13 +293,13 @@ export function ResearchPanel({
                 {result.headline}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-neutral-300">{result.summary}</p>
-              <p className="mt-2 text-[11px] text-neutral-500" style={NUM_FONT}>
+              <p className="mt-2 text-[11px] text-neutral-400" style={NUM_FONT}>
                 {when(shown.finishedAt, tz)} · {count(result.ads.length)} ads · {result.briefs.length} briefs
                 {result.screenshots ? ` · ${result.screenshots.found} of ${result.screenshots.expected} screenshots` : ""}
                 {result.searched.blocked.length ? ` · ${result.searched.blocked.length} pages blocked` : ""}
               </p>
               {!hasConnector && result.searched.blocked.length > 0 && (
-                <p className="mt-1 text-[11px] text-neutral-500">Tip: an Ad Library connector in Manus (Manus → Connectors) helps when pages are blocked — the next research uses it automatically.</p>
+                <p className="mt-1 text-[11px] text-neutral-400">Tip: an Ad Library connector in Manus (Manus → Connectors) helps when pages are blocked — the next research uses it automatically.</p>
               )}
               <div className="mt-4 flex flex-wrap gap-2">
                 {shown.hasReport && (
@@ -406,7 +406,7 @@ export function ResearchPanel({
                         )}
                       </p>
                       <p className="text-xs text-neutral-400">{c.offer}</p>
-                      {c.notes && <p className="mt-0.5 text-[11px] text-neutral-500">{c.notes}</p>}
+                      {c.notes && <p className="mt-0.5 text-[11px] text-neutral-400">{c.notes}</p>}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 text-[10px]" style={NUM_FONT}>
                       <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-bold text-neutral-300">{c.type.replace(/_/g, " ")}</span>

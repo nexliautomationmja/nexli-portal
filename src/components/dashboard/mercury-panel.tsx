@@ -189,7 +189,7 @@ export function MercuryPanel({ onInvoicesChanged }: { onInvoicesChanged: () => v
                         Memo: {item.memo}
                       </p>
                     )}
-                    {item.reason && <p className="text-xs text-amber-500">{item.reason}</p>}
+                    {item.reason && <p className="text-xs text-amber-700 dark:text-amber-500">{item.reason}</p>}
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     {options.length > 0 ? (

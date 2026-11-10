@@ -56,7 +56,7 @@ export function EngagementLetterView({
         {/* Parties (preamble, verbatim) */}
         {titleLines && (
           <LpCard className="lp-card" style={{ animationDelay: "0.12s" }}>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 whitespace-pre-line">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 whitespace-pre-line">
               {titleLines}
             </p>
             <div className="mt-3 space-y-3">

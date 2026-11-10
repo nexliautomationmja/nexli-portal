@@ -499,7 +499,7 @@ export function EditCard({
                         {current && <Chip>Current</Chip>}
                       </div>
                       <p className="mt-1 text-xs leading-relaxed text-neutral-400">{s.blurb}</p>
-                      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500">{s.slots}</p>
+                      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">{s.slots}</p>
                     </div>
                   </button>
                 );
@@ -656,7 +656,7 @@ export function EditCard({
                       That spot is outside the Feed-safe band: the 4:5 Feed crop or the Reels caption and buttons will cover it. It&apos;ll still go where you put it.
                     </p>
                   )}
-                  <p className="text-[11px] leading-relaxed text-neutral-500">
+                  <p className="text-[11px] leading-relaxed text-neutral-400">
                     {vertical ? "Stay between the dashed lines so nothing gets cropped in the Feed or covered by Reels buttons. " : ""}
                     It snaps to the centre line. Anything you don&apos;t move keeps its rulebook spot.
                   </p>
@@ -691,7 +691,7 @@ export function EditCard({
                     },
                   ].map((t) => (
                     <div key={t.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">{t.label}</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">{t.label}</p>
                       <p className="truncate text-lg font-extrabold text-white" style={NUM_FONT}>
                         {t.value}
                       </p>
@@ -794,7 +794,7 @@ export function EditCard({
                   )}
                 </div>
                 {lastDone && lastDone.id !== latest.id && lastDone.outputUrl && (
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-neutral-400">
                     Last render: v{lastDone.version} · {STYLE_LABEL[lastDone.style]} ·{" "}
                     <SaveVideoLink
                       url={lastDone.outputUrl}
@@ -817,7 +817,7 @@ export function EditCard({
 
             {elements.length > 0 && (
               <div className="mt-4 space-y-1.5">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">
                   On screen <span className="normal-case tracking-normal text-neutral-600">· ✎ to change the words or when it shows</span>
                 </p>
                 {elements.map((el, i) => {
@@ -934,7 +934,7 @@ export function EditCard({
                                   </div>
                                 );
                               })}
-                              <p className="text-[10px] text-neutral-500">Tap a version to see it on the video, then Use the one you want.</p>
+                              <p className="text-[10px] text-neutral-400">Tap a version to see it on the video, then Use the one you want.</p>
                             </div>
                           )}
 
@@ -1014,7 +1014,7 @@ export function EditCard({
             {chunks.length > 0 && latest.style !== "pov" && latest.props?.overlays.captions !== false && (
               <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">
                     Captions{" "}
                     <span className="normal-case tracking-normal text-neutral-600">
                       · {chunks.length} lines{savedLook ? " · your look" : " · Nexli look"}
@@ -1082,7 +1082,7 @@ export function EditCard({
                         );
                       })}
                     </div>
-                    <p className="text-[10px] text-neutral-500">The preview shows it as you click. Nexli is the rulebook look (3 words, ALL CAPS, brand gradient).</p>
+                    <p className="text-[10px] text-neutral-400">The preview shows it as you click. Nexli is the rulebook look (3 words, ALL CAPS, brand gradient).</p>
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
@@ -1149,12 +1149,12 @@ export function EditCard({
                         <button type="button" onClick={() => setLineEdit(null)} className="px-1 text-xs font-semibold text-neutral-500 hover:text-white">
                           Cancel
                         </button>
-                        <p className="w-full text-[10px] text-neutral-500">
+                        <p className="w-full text-[10px] text-neutral-400">
                           The new words keep this line&apos;s timing. Leave it empty to take these words out of the captions (the audio stays).
                         </p>
                       </div>
                     )}
-                    {!lineEdit && <p className="text-[10px] text-neutral-500">Click a line to jump there and retype it.</p>}
+                    {!lineEdit && <p className="text-[10px] text-neutral-400">Click a line to jump there and retype it.</p>}
                   </div>
                 )}
               </div>

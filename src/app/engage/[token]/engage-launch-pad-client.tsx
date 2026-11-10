@@ -72,7 +72,7 @@ function HeroTitle({ text }: { text: string }) {
   const tail = words.slice(words.length - accentCount).join(" ");
   return (
     <h1
-      className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white mt-1 break-words"
+      className="text-3xl sm:text-4xl font-bold tracking-tight text-white mt-1 break-words"
       style={SYNE}
     >
       {lead && <>{lead} </>}
@@ -268,10 +268,10 @@ export function EngageLaunchPadClient({
 
   const footer = (
     <footer className="text-center pb-6 space-y-2">
-      <p className="text-[11px] text-neutral-500">
+      <p className="text-[11px] text-neutral-400">
         Questions before you sign? Your Nexli team is one message away.
       </p>
-      <p className="text-[10px] text-neutral-600">
+      <p className="text-[10px] text-neutral-400">
         {NEXLI_LEGAL.name} • Electronic signatures are legally binding under the
         ESIGN Act and UETA
       </p>
@@ -285,7 +285,7 @@ export function EngageLaunchPadClient({
         <ShimmerCard className="lp-card">
           <div className="text-3xl mb-1">🎉</div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">{eyebrow}</p>
-          <h1 className="text-xl sm:text-2xl font-black text-white mt-1" style={SYNE}>
+          <h1 className="text-xl sm:text-2xl font-bold text-white mt-1" style={SYNE}>
             Agreement signed
           </h1>
           <p className="text-sm mt-2 text-neutral-300">
@@ -308,14 +308,14 @@ export function EngageLaunchPadClient({
       <section className="lp-card" style={{ animationDelay: "0.05s" }}>
         <div className="flex flex-col sm:flex-row items-center gap-8">
           <div className="flex-1 min-w-0 text-center sm:text-left">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">{eyebrow}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">{eyebrow}</p>
             <HeroTitle text={subjectGist(data.subject, eyebrow)} />
             <p className="text-sm mt-3 leading-relaxed text-neutral-300">
               Prepared for <span className="font-semibold text-white">{data.clientName}</span>
               {data.clientCompany ? `, ${data.clientCompany}` : ""} ·{" "}
               {NEXLI_LEGAL.name}
             </p>
-            <p className="text-xs mt-2 text-neutral-500">
+            <p className="text-xs mt-2 text-neutral-400">
               {sections.length > 0 && `${sections.length} sections`}
               {sections.length > 0 && (summaries ? " · each one starts with a plain-English summary. " : ". ")}
               Sign at the bottom.
@@ -361,7 +361,7 @@ export function EngageLaunchPadClient({
               <Icon d={PATHS.circleCheck} size={22} className={ACCENT.emerald.icon} />
             </IconChip>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Service provider</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Service provider</p>
               <h2 className="text-base sm:text-lg font-bold text-white" style={SYNE}>
                 Provider signature
               </h2>
@@ -381,7 +381,7 @@ export function EngageLaunchPadClient({
                   (company ? `Authorized Representative, ${company}` : "Authorized Representative")}
               </p>
               {sender.signedAt && (
-                <p className="mt-1 text-[11px] text-neutral-500">Signed {formatSignedDate(sender.signedAt)}</p>
+                <p className="mt-1 text-[11px] text-neutral-400">Signed {formatSignedDate(sender.signedAt)}</p>
               )}
             </div>
           </div>

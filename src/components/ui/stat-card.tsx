@@ -37,8 +37,8 @@ export function StatCard({
         <p
           className={cn(
             "text-xs font-semibold mt-2",
-            deltaType === "positive" && "text-emerald-500",
-            deltaType === "negative" && "text-rose-500",
+            deltaType === "positive" && "text-emerald-700 dark:text-emerald-500",
+            deltaType === "negative" && "text-rose-700 dark:text-rose-500",
             deltaType === "neutral" && "text-[var(--text-muted)]"
           )}
         >

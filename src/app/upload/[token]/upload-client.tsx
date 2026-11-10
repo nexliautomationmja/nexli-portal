@@ -158,7 +158,7 @@ export function UploadClient({ token }: { token: string }) {
               <path d="M15 9l-6 6M9 9l6 6" />
             </svg>
           </div>
-          <h1 className="text-xl font-black text-white mb-2">Link Unavailable</h1>
+          <h1 className="text-xl font-bold text-white mb-2">Link Unavailable</h1>
           <p className="text-sm text-gray-400">{error}</p>
         </div>
       </div>
@@ -175,7 +175,7 @@ export function UploadClient({ token }: { token: string }) {
               <path d="M20 6 9 17l-5-5" />
             </svg>
           </div>
-          <h1 className="text-xl font-black text-white mb-2">Upload Complete!</h1>
+          <h1 className="text-xl font-bold text-white mb-2">Upload Complete!</h1>
           <p className="text-sm text-gray-400 mb-6">
             Your documents have been securely uploaded and encrypted. Your CPA will be notified.
           </p>
@@ -223,7 +223,7 @@ export function UploadClient({ token }: { token: string }) {
             </div>
             <span className="text-lg font-black tracking-tight">NEXLI</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight mb-2">
+          <h1 className="text-2xl font-bold tracking-tight mb-2">
             Secure Document Upload
           </h1>
           {meta?.clientName && (
@@ -271,7 +271,7 @@ export function UploadClient({ token }: { token: string }) {
         {/* Required documents checklist */}
         {meta?.requiredDocuments && meta.requiredDocuments.length > 0 && (
           <div className="mb-6 p-4 rounded-xl bg-white/5 border border-white/10">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
               Requested Documents
             </p>
             <div className="flex flex-wrap gap-2">
@@ -316,7 +316,7 @@ export function UploadClient({ token }: { token: string }) {
           <p className="text-sm font-medium text-gray-300 mb-1">
             Drag and drop files here, or click to browse
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-400">
             PDF, JPG, PNG, XLSX &middot; Max 25MB per file
           </p>
         </div>

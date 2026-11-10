@@ -333,7 +333,7 @@ export function EngageClient({
                     </svg>
                     <span className="text-sm font-medium">Signature Required</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">Click &ldquo;Start&rdquo; to begin signing</p>
+                  <p className="text-xs text-gray-500 mt-1">Click &ldquo;Start&rdquo; to begin signing</p>
                 </div>
               )}
             </div>

@@ -336,7 +336,7 @@ export function CreateFirmDialog({ open, onClose, onCreated }: CreateFirmDialogP
               </label>
             </div>
 
-            {error && <p className="text-red-400 text-sm font-medium">{error}</p>}
+            {error && <p className="text-red-700 dark:text-red-400 text-sm font-medium">{error}</p>}
 
             <div className="flex gap-2 justify-end pt-2">
               <button

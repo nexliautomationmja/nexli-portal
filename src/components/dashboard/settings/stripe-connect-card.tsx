@@ -122,7 +122,7 @@ export function StripeConnectCard() {
       </p>
 
       {connectParam === "refresh" && badge !== "active" && (
-        <p className="text-sm text-yellow-400">
+        <p className="text-sm text-yellow-700 dark:text-yellow-400">
           Your onboarding link expired. Click below to continue where you left
           off.
         </p>
@@ -135,7 +135,7 @@ export function StripeConnectCard() {
         </p>
       )}
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-red-700 dark:text-red-400">{error}</p>}
 
       <div className="flex items-center gap-3 flex-wrap">
         {badge !== "active" && (

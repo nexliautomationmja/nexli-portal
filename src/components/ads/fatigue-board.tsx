@@ -133,11 +133,11 @@ export function FatigueBoard({
 function Stat({ label, value, sub }: { label: string; value: string; sub?: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{label}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">{label}</p>
       <p className="truncate text-sm font-bold text-white" style={NUM_FONT}>
         {value}
       </p>
-      {sub && <p className="truncate text-[10px] text-neutral-500" style={NUM_FONT}>{sub}</p>}
+      {sub && <p className="truncate text-[10px] text-neutral-400" style={NUM_FONT}>{sub}</p>}
     </div>
   );
 }
@@ -198,7 +198,7 @@ function CreativeCard({
       <div className="flex flex-1 flex-col gap-3 p-3.5">
         <div className="min-w-0">
           <h3 className="line-clamp-2 text-sm font-bold text-white">{ad.name}</h3>
-          <p className="truncate text-[11px] text-neutral-500">{[campaign, adset].filter(Boolean).join(" › ") || "—"}</p>
+          <p className="truncate text-[11px] text-neutral-400">{[campaign, adset].filter(Boolean).join(" › ") || "—"}</p>
         </div>
 
         <div>
@@ -245,7 +245,7 @@ function CreativeCard({
         {ctrDaily.filter((v) => v !== null).length >= 4 && (
           <div>
             <Sparkline values={ctrDaily} height={24} />
-            <p className="mt-0.5 text-[10px] text-neutral-500">Link CTR, last 28 days</p>
+            <p className="mt-0.5 text-[10px] text-neutral-400">Link CTR, last 28 days</p>
           </div>
         )}
 

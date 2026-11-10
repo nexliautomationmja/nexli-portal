@@ -327,7 +327,7 @@ export function MessageThread({
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
         {sendError && (
-          <p className="text-xs text-rose-400 mb-2" role="alert">
+          <p className="text-xs text-rose-700 dark:text-rose-400 mb-2" role="alert">
             {sendError}
           </p>
         )}

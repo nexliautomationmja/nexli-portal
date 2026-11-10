@@ -89,7 +89,7 @@ export function LoginForm({ initialErrorCode }: { initialErrorCode?: string | nu
       </div>
 
       {error && (
-        <p className="text-red-400 text-sm font-medium">{error}</p>
+        <p className="text-red-700 dark:text-red-400 text-sm font-medium">{error}</p>
       )}
 
       <button

@@ -151,7 +151,7 @@ export function EsignClient({ token }: { token: string }) {
               <line x1="9" y1="9" x2="15" y2="15" />
             </svg>
           </div>
-          <h1 className="text-xl font-black text-white">{error}</h1>
+          <h1 className="text-xl font-bold text-white">{error}</h1>
           <p className="text-sm text-white/50">
             This signing link may have expired or already been used.
           </p>
@@ -170,7 +170,7 @@ export function EsignClient({ token }: { token: string }) {
               <path d="M20 6 9 17l-5-5" />
             </svg>
           </div>
-          <h1 className="text-xl font-black text-white">Document Signed</h1>
+          <h1 className="text-xl font-bold text-white">Document Signed</h1>
           <p className="text-sm text-white/50">
             Thank you, {data?.signerName}. Your signature has been recorded securely.
           </p>
@@ -196,7 +196,7 @@ export function EsignClient({ token }: { token: string }) {
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <h1 className="text-xl font-black text-white">Signature Declined</h1>
+          <h1 className="text-xl font-bold text-white">Signature Declined</h1>
           <p className="text-sm text-white/50">
             You have declined to sign this document. The sender has been notified.
           </p>
@@ -234,14 +234,14 @@ export function EsignClient({ token }: { token: string }) {
       <main className="max-w-3xl mx-auto px-6 pt-6 pb-32 space-y-6">
         {/* Document info */}
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-          <h1 className="text-xl font-black text-white mb-2">
+          <h1 className="text-xl font-bold text-white mb-2">
             Signature Request
           </h1>
           <p className="text-sm text-white/60 mb-4">
             Hi {data?.signerName}, you have been asked to sign the following document.
           </p>
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-            <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">
+            <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest mb-1">
               Document
             </p>
             <p className="text-white font-bold">{data?.documentName}</p>
@@ -324,7 +324,7 @@ export function EsignClient({ token }: { token: string }) {
               </span>
             )}
           </div>
-          <p className="text-[10px] text-white/30 text-center">
+          <p className="text-[10px] text-white/60 text-center">
             Your typed name will be your legal electronic signature
           </p>
 

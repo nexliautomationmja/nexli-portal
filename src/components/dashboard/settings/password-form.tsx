@@ -67,10 +67,10 @@ export function PasswordForm() {
       </div>
 
       {status === "success" && (
-        <p className="text-sm text-green-400">Password updated successfully.</p>
+        <p className="text-sm text-green-700 dark:text-green-400">Password updated successfully.</p>
       )}
       {status === "error" && (
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
       )}
 
       <button

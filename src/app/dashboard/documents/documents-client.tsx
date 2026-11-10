@@ -588,7 +588,7 @@ export function DocumentsClient() {
                           {es.signerEmail}
                         </p>
                         {es.signedAt && (
-                          <p className="text-[10px] text-emerald-400 mt-1">
+                          <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1">
                             Signed {formatDate(es.signedAt)}
                           </p>
                         )}
@@ -602,7 +602,7 @@ export function DocumentsClient() {
                           </div>
                         )}
                         {es.declineReason && (
-                          <p className="text-[10px] text-rose-400 mt-1 italic">
+                          <p className="text-[10px] text-rose-700 dark:text-rose-400 mt-1 italic">
                             &quot;{es.declineReason}&quot;
                           </p>
                         )}

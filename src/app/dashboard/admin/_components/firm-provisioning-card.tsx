@@ -443,7 +443,7 @@ export function FirmProvisioningCard({ client, onChanged }: FirmProvisioningCard
 
       {message && (
         <p
-          className={`mt-3 text-xs font-medium ${message.tone === "ok" ? "text-emerald-400" : "text-red-400"}`}
+          className={`mt-3 text-xs font-medium ${message.tone === "ok" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
         >
           {message.text}
         </p>

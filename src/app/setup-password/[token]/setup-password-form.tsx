@@ -103,7 +103,7 @@ export function SetupPasswordForm({ token }: { token: string }) {
         />
       </div>
 
-      {error && <p className="text-red-400 text-sm font-medium">{error}</p>}
+      {error && <p className="text-red-700 dark:text-red-400 text-sm font-medium">{error}</p>}
 
       <button
         type="submit"

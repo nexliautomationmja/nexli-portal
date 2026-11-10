@@ -128,7 +128,7 @@ export function TeamCard() {
           <button type="submit" disabled={busy} className="btn-primary px-6 py-2.5 text-sm">
             {busy ? "Adding…" : "Add team member"}
           </button>
-          {msg && <p className={`text-sm ${msg.ok ? "text-green-400" : "text-red-400"}`}>{msg.text}</p>}
+          {msg && <p className={`text-sm ${msg.ok ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>{msg.text}</p>}
         </div>
       </form>
     </div>

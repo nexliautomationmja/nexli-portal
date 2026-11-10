@@ -129,7 +129,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div className="glass-card p-4">
             <p className="stat-label">Collected</p>
-            <p className="stat-value text-emerald-500">
+            <p className="stat-value text-emerald-700 dark:text-emerald-500">
               {analyticsLoading ? "—" : formatCentsToDollars(analytics?.stats.totalCollected ?? 0)}
             </p>
           </div>
@@ -141,7 +141,7 @@ export function OverviewClient({ docStats, isAdmin }: OverviewProps) {
           </div>
           <div className="glass-card p-4">
             <p className="stat-label">Overdue</p>
-            <p className="stat-value text-rose-500">
+            <p className="stat-value text-rose-700 dark:text-rose-500">
               {analyticsLoading ? "—" : analytics?.stats.overdueCount ?? 0}
             </p>
           </div>

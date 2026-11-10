@@ -113,7 +113,7 @@ export function KpiRow({ s }: { s: AdsSnapshot }) {
           </p>
           <div className="mt-auto pt-3">
             <Sparkline values={cpbLine} height={34} color={VIZ.current} />
-            <p className="mt-1 text-[10px] text-neutral-500">Rolling 7-day cost per booked call</p>
+            <p className="mt-1 text-[10px] text-neutral-400">Rolling 7-day cost per booked call</p>
           </div>
         </div>
         {primary.map((t) => (

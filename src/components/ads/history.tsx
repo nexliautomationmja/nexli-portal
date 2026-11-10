@@ -17,7 +17,7 @@ export function History({ rows, tz, onOpen }: { rows: AnalysisSummaryRow[]; tz: 
         <button key={h.id} type="button" onClick={() => onOpen(h.id)} disabled={h.status !== "done"} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.03] disabled:cursor-default">
           <div className="w-16 shrink-0 text-center" style={NUM_FONT}>
             <p className="text-lg font-black text-white">{h.healthScore ?? "—"}</p>
-            <p className="text-[9px] font-bold uppercase tracking-wider text-neutral-500">health</p>
+            <p className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">health</p>
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">

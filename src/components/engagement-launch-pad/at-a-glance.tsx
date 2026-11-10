@@ -40,8 +40,8 @@ function GlanceCard({ tiles, steps }: { tiles: Tile[]; steps: Step[] }) {
           <Icon d={PATHS.circleDollar} size={22} className={ACCENT.emerald.icon} />
         </IconChip>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">The short version</p>
-          <h2 className="text-lg sm:text-xl font-extrabold text-white tracking-tight" style={SYNE}>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">The short version</p>
+          <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight" style={SYNE}>
             At a glance
           </h2>
         </div>

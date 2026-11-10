@@ -534,7 +534,7 @@ export function TrimEditor({
                 </button>
               </div>
             </div>
-            <p className="text-center text-[11px] text-neutral-500" style={NUM_FONT}>
+            <p className="text-center text-[11px] text-neutral-400" style={NUM_FONT}>
               {fmt(time)} / {fmt(duration)}
               <span className="hidden [@media(hover:hover)]:inline"> · ← → one frame · Space plays</span>
             </p>
@@ -821,7 +821,7 @@ export function TrimEditor({
                       Done
                     </button>
                   </div>
-                  <p className="text-[10px] text-neutral-500">The preview can hiccup at a join while the browser seeks. The finished clip is smooth.</p>
+                  <p className="text-[10px] text-neutral-400">The preview can hiccup at a join while the browser seeks. The finished clip is smooth.</p>
                 </div>
               )}
             </div>
@@ -850,7 +850,7 @@ export function TrimEditor({
                 <span className="hidden text-[11px] text-neutral-500 [@media(hover:hover)]:inline">· Alt-click a word to end there · ✕ cuts a single word</span>
               </div>
               {words.length === 0 ? (
-                <p className="rounded-xl border border-white/10 px-3 py-3 text-xs text-neutral-500">No word timings for this take yet. Use the handles to trim.</p>
+                <p className="rounded-xl border border-white/10 px-3 py-3 text-xs text-neutral-400">No word timings for this take yet. Use the handles to trim.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {words.map((w, i) => {

@@ -109,7 +109,7 @@ function StepCard({
           {step.why && <p className="text-sm leading-relaxed text-neutral-300">{step.why}</p>}
           {step.how && (
             <div>
-              <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-neutral-500">How, in Ads Manager</p>
+              <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-neutral-400">How, in Ads Manager</p>
               <HowList how={step.how} />
             </div>
           )}
@@ -349,7 +349,7 @@ export function NextSteps({
         if (!list.length) return null;
         return (
           <div key={g.id}>
-            <p className="mb-2 text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500">
+            <p className="mb-2 text-[11px] font-black uppercase tracking-[0.2em] text-neutral-400">
               {g.label} <span style={NUM_FONT}>· {list.length}</span>
             </p>
             <div className="space-y-2">
@@ -362,7 +362,7 @@ export function NextSteps({
       })}
       {tests.length > 0 && (
         <div>
-          <p className="mb-2 text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500">Tests Manus suggests</p>
+          <p className="mb-2 text-[11px] font-black uppercase tracking-[0.2em] text-neutral-400">Tests Manus suggests</p>
           <div className="grid gap-2 md:grid-cols-2">
             {tests.map((t, i) => (
               <Glass key={i} className="p-3.5">
@@ -371,7 +371,7 @@ export function NextSteps({
                   <b className="text-neutral-200">Control:</b> {t.control} · <b className="text-neutral-200">Variant:</b> {t.variant}
                 </p>
                 <p className="mt-1 text-xs text-neutral-400">{t.setup}</p>
-                <p className="mt-1 text-[11px] text-neutral-500" style={NUM_FONT}>
+                <p className="mt-1 text-[11px] text-neutral-400" style={NUM_FONT}>
                   {t.durationDays} days{t.dailyBudgetCents ? ` · ${money(t.dailyBudgetCents)}/day` : ""}
                   {t.minSample ? ` · ${t.minSample}` : ""}
                 </p>

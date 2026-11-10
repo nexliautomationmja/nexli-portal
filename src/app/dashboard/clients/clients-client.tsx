@@ -656,7 +656,7 @@ function MessagesTab({ messages, clientEmail }: { messages: ClientDetail["messag
         {messages.totalCount} message{messages.totalCount !== 1 ? "s" : ""}
       </p>
       {messages.unreadCount > 0 && (
-        <p className="text-sm text-blue-400 mb-1">
+        <p className="text-sm text-blue-700 dark:text-blue-400 mb-1">
           {messages.unreadCount} unread
         </p>
       )}

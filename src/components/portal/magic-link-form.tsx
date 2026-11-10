@@ -120,7 +120,7 @@ export function MagicLinkForm() {
       </div>
 
       {errorMsg && (
-        <p className="text-sm text-red-400">{errorMsg}</p>
+        <p className="text-sm text-red-700 dark:text-red-400">{errorMsg}</p>
       )}
 
       <button

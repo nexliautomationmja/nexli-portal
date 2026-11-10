@@ -410,7 +410,7 @@ export function EngagementsClient() {
                             {sc.label}
                           </span>
                           {signer.signedAt && (
-                            <p className="text-[10px] mt-0.5 text-emerald-500">
+                            <p className="text-[10px] mt-0.5 text-emerald-700 dark:text-emerald-500">
                               {formatDate(signer.signedAt)}
                             </p>
                           )}

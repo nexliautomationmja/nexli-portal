@@ -229,7 +229,7 @@ export function AnalysisPanel({
   const r = latest?.result ?? null;
 
   const scheduleLine = (
-    <p className="text-[11px] text-neutral-500" style={NUM_FONT}>
+    <p className="text-[11px] text-neutral-400" style={NUM_FONT}>
       {nextWeeklyAt ? <>Next automatic analysis {when(nextWeeklyAt, tz)} · </> : <>Weekly analysis is off · </>}
       {manus.connector ? <>Manus also uses its Meta Ads Manager connector</> : <>Tip: connect Meta Ads Manager in Manus → Connectors to let it dig deeper</>}
     </p>
@@ -279,7 +279,7 @@ export function AnalysisPanel({
                 {r.headline}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-neutral-300">{r.summary}</p>
-              <p className="mt-2 text-[11px] text-neutral-500" style={NUM_FONT}>
+              <p className="mt-2 text-[11px] text-neutral-400" style={NUM_FONT}>
                 {latest.trigger === "weekly" ? "Weekly analysis" : "On-demand analysis"} · {when(latest.finishedAt, tz)} · data through {latest.throughDate ?? "—"} · confidence {r.dataConfidence}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -309,7 +309,7 @@ export function AnalysisPanel({
                     {col.title}
                   </p>
                   {col.list.length === 0 ? (
-                    <p className="mt-2 text-xs text-neutral-500">Nothing to flag.</p>
+                    <p className="mt-2 text-xs text-neutral-400">Nothing to flag.</p>
                   ) : (
                     <ul className="mt-3 space-y-3">
                       {col.list.map((f, i) => (
@@ -364,7 +364,7 @@ export function AnalysisPanel({
             )}
             {r.dataNotes.length > 0 && <p className="text-[11px] text-amber-200/80">Data notes: {r.dataNotes.join(" · ")}</p>}
             {scheduleLine}
-            {!settings.weeklyAuto && <p className="text-[11px] text-neutral-500">Turn the weekly run back on in Goals below.</p>}
+            {!settings.weeklyAuto && <p className="text-[11px] text-neutral-400">Turn the weekly run back on in Goals below.</p>}
           </div>
         </div>
       ) : (

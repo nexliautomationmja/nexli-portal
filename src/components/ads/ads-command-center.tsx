@@ -216,7 +216,7 @@ export function Hero({
         <MetaLogo className="h-auto w-[18px]" />
         <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white">Ads command center</span>
       </ShimmerPill>
-      <h1 className="mt-5 text-4xl font-bold tracking-tighter text-white sm:text-6xl" style={SYNE}>
+      <h1 className="mt-5 text-4xl font-bold tracking-tight text-white sm:text-6xl" style={SYNE}>
         Ads that <GradientText>book calls.</GradientText>
       </h1>
       <p className="mx-auto mt-3 max-w-2xl text-sm text-neutral-400 sm:text-base">
@@ -233,7 +233,7 @@ export function Hero({
       )}
       <div className="mt-5 flex flex-col items-center gap-2">
         <RangeControl value={range} onChange={onRange} busy={loading} />
-        <p className="text-[11px] text-neutral-500" style={NUM_FONT}>
+        <p className="text-[11px] text-neutral-400" style={NUM_FONT}>
           {s ? (
             <>
               {shortDay(s.range.since)} – {shortDay(s.range.until)} vs {shortDay(s.range.prevSince)} – {shortDay(s.range.prevUntil)} · updated {ago(s.fetchedAt, now)} ·{" "}
@@ -245,7 +245,7 @@ export function Hero({
           </button>
         </p>
         {s && (
-          <p className="text-[10px] text-neutral-600" title="Ads Manager's Last N days use the ad account's timezone and complete days; the Overview counts back from now, so the two can differ slightly.">
+          <p className="text-[10px] text-neutral-400" title="Ads Manager's Last N days use the ad account's timezone and complete days; the Overview counts back from now, so the two can differ slightly.">
             Complete days in the ad account&apos;s timezone, like Ads Manager
           </p>
         )}

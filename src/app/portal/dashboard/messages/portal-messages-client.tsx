@@ -193,7 +193,7 @@ export function PortalMessagesClient() {
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
         {error && (
-          <p className="text-xs text-rose-400 mb-2" role="alert">
+          <p className="text-xs text-rose-700 dark:text-rose-400 mb-2" role="alert">
             {error}
           </p>
         )}

@@ -193,7 +193,7 @@ export function CutCard({
                     { label: "Max pause", value: `${shown.settings.gap}s` },
                   ].map((t) => (
                     <div key={t.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">{t.label}</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">{t.label}</p>
                       <p className="text-lg font-extrabold text-white" style={NUM_FONT}>
                         {t.value}
                       </p>
@@ -241,7 +241,7 @@ export function CutCard({
                       <p className="text-[10px] font-bold text-white" style={NUM_FONT}>
                         #{r.clip.idx + 1} · {r.out.toFixed(1)}s
                       </p>
-                      <p className="text-[10px] text-neutral-500" style={NUM_FONT}>
+                      <p className="text-[10px] text-neutral-400" style={NUM_FONT}>
                         {trimmed ? "✂ trimmed" : `from ${(r.plan?.sourceS ?? 0).toFixed(1)}s`}
                       </p>
                     </button>
@@ -280,7 +280,7 @@ export function CutCard({
                       )}
                     </p>
                   ))}
-                  <p className="text-[10px] text-neutral-500">
+                  <p className="text-[10px] text-neutral-400">
                     <span className="text-cyan-300">⌁</span> = pause shortened · <span className="line-through">struck</span> = cut
                   </p>
                 </div>

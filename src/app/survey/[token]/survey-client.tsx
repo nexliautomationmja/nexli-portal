@@ -422,7 +422,7 @@ export function SurveyClient({
       {done && (
         <ShimmerCard className="lp-card">
           <div className="text-3xl mb-1">🎉</div>
-          <h2 className="text-xl font-black text-white" style={SYNE}>
+          <h2 className="text-xl font-bold text-white" style={SYNE}>
             Thanks — Marcel reads every one of these.
           </h2>
           <p className="text-sm mt-1 text-neutral-300">
@@ -440,11 +440,11 @@ export function SurveyClient({
                 Preview — nothing you enter here is saved
               </p>
             )}
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
               Week of {weekLabel(meta.weekStart)}
             </p>
             <h1
-              className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white mt-1"
+              className="text-3xl sm:text-4xl font-bold tracking-tight text-white mt-1"
               style={SYNE}
             >
               Quick pulse check,{" "}
@@ -553,7 +553,7 @@ export function SurveyClient({
             </div>
           </div>
           {!complete && (
-            <p className="mt-3 text-[11px] text-neutral-500">
+            <p className="mt-3 text-[11px] text-neutral-400">
               {answeredRequired} of {SURVEY_REQUIRED_COUNT} required answers in — finish the
               rest to send.
             </p>

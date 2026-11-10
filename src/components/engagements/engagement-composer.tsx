@@ -253,7 +253,7 @@ export function EngagementComposer() {
           <span className="hidden w-[108px] sm:block" aria-hidden="true" />
         </header>
 
-        <h1 className="lp-card mt-5 text-center text-3xl font-bold tracking-tighter text-white sm:mt-8 sm:text-5xl" style={SYNE}>
+        <h1 className="lp-card mt-5 text-center text-3xl font-bold tracking-tight text-white sm:mt-8 sm:text-5xl" style={SYNE}>
           {heading}
         </h1>
 
@@ -342,7 +342,7 @@ export function EngagementComposer() {
                   {visibleLeads.length === 0 ? (
                     <div className="py-10 text-center">
                       <p className="text-sm font-semibold text-white">{leads.length ? "No open lead matches that." : "No open leads in your pipeline yet."}</p>
-                      <p className="mt-1 text-xs text-neutral-500">
+                      <p className="mt-1 text-xs text-neutral-400">
                         {leads.length ? "Try a different spelling, or " : "Add them in "}
                         {leads.length ? (
                           <button type="button" onClick={() => setTab("new")} className="font-semibold text-cyan-300 hover:text-white">
@@ -417,7 +417,7 @@ export function EngagementComposer() {
                       if (c.company) setCompany(c.company);
                     }}
                   />
-                  <p className="mt-2 text-[11px] text-neutral-500">
+                  <p className="mt-2 text-[11px] text-neutral-400">
                     Pick a contact to fill the signer below. Not connected to GoHighLevel, or not finding them? Use{" "}
                     <button type="button" onClick={() => setTab("new")} className="font-semibold text-cyan-300 hover:text-white">
                       Someone new
@@ -430,7 +430,7 @@ export function EngagementComposer() {
               {/* Signer panel */}
               <div ref={signerRef} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">{leadId ? "Signing · from your pipeline" : "Signing"}</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">{leadId ? "Signing · from your pipeline" : "Signing"}</p>
                   {leadId && <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold text-cyan-200">Linked to the lead · turns Won when the setup is paid</span>}
                 </div>
                 <div className="space-y-3">
@@ -480,7 +480,7 @@ export function EngagementComposer() {
                   })}
                   <div>
                     <input value={company} onChange={(e) => setCompany(e.target.value)} maxLength={200} placeholder="Firm / company, e.g. Smith & Co. CPAs" className={inputCls} />
-                    <p className="mt-1 text-[10px] text-neutral-500">Shown as the client on the letter. Left blank, the signer&apos;s name is used.</p>
+                    <p className="mt-1 text-[10px] text-neutral-400">Shown as the client on the letter. Left blank, the signer&apos;s name is used.</p>
                   </div>
                   {signers.length < 5 && (
                     <button type="button" onClick={() => setSigners((cur) => [...cur, { name: "", email: "" }])} className="inline-flex min-h-10 items-center text-xs font-semibold text-cyan-300 hover:text-white">
@@ -561,7 +561,7 @@ export function EngagementComposer() {
 
               {saved.length > 0 && (
                 <div>
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Your templates</p>
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Your templates</p>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {saved.map((t) => {
                       const on = offer === `tpl:${t.id}`;
@@ -573,7 +573,7 @@ export function EngagementComposer() {
                           className={`rounded-2xl border p-3 text-left transition ${on ? "border-cyan-400/60 bg-cyan-500/10" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
                         >
                           <p className="truncate text-sm font-bold text-white">{t.name}</p>
-                          <p className="mt-0.5 line-clamp-2 text-[11px] text-neutral-500">{t.content.replace(/\s+/g, " ").slice(0, 110)}</p>
+                          <p className="mt-0.5 line-clamp-2 text-[11px] text-neutral-400">{t.content.replace(/\s+/g, " ").slice(0, 110)}</p>
                         </button>
                       );
                     })}
@@ -610,7 +610,7 @@ export function EngagementComposer() {
             <div className="grid gap-5 lg:grid-cols-[minmax(0,380px)_1fr]">
               <div className="space-y-4">
                 <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Signing</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Signing</p>
                   <div className="mt-2 space-y-2">
                     {signers.map((s, i) => (
                       <div key={i} className="flex items-center gap-2.5">
@@ -627,12 +627,12 @@ export function EngagementComposer() {
                   </div>
 
                   <div className="mt-4 border-t border-white/5 pt-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Agreement</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Agreement</p>
                     <p className="mt-1 text-sm font-bold text-white">{offerSummary?.title}</p>
                     <p className="text-xs text-cyan-200" style={NUM_FONT}>
                       {offerSummary?.price}
                     </p>
-                    <p className="mt-1 text-[11px] text-neutral-500">Expires {expiresInDays} days after sending</p>
+                    <p className="mt-1 text-[11px] text-neutral-400">Expires {expiresInDays} days after sending</p>
                   </div>
 
                   <div className="mt-4 border-t border-white/5 pt-4">

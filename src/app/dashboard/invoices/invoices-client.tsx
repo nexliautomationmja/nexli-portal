@@ -2176,7 +2176,7 @@ function MarkPaidPanel({
         Use for wire, check, or bank transfers outside Stripe. This triggers the same next steps as
         an online payment.
       </p>
-      {error && <p className="text-xs font-semibold text-red-400">{error}</p>}
+      {error && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{error}</p>}
     </div>
   );
 }

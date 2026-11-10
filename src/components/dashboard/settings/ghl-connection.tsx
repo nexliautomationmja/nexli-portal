@@ -140,15 +140,15 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
         </div>
 
         {status === "success" && !error && (
-          <p className="text-sm text-green-400">
+          <p className="text-sm text-green-700 dark:text-green-400">
             GoHighLevel connected successfully.
           </p>
         )}
         {status === "success" && error && (
-          <p className="text-sm text-yellow-400">{error}</p>
+          <p className="text-sm text-yellow-700 dark:text-yellow-400">{error}</p>
         )}
         {status === "error" && (
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         )}
 
         <div className="flex items-center gap-3">
@@ -193,7 +193,7 @@ export function GHLConnection({ currentLocationId }: GHLConnectionProps) {
                 : "border-rose-400/30 bg-rose-400/[0.06]"
             }`}
           >
-            <p className={`font-semibold ${testResult.ok ? "text-emerald-400" : "text-rose-400"}`}>
+            <p className={`font-semibold ${testResult.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
               {testResult.ok ? "✓ " : "✕ "}{testResult.message}
             </p>
             {testResult.checks && testResult.checks.length > 0 && (

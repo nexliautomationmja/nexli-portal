@@ -317,7 +317,7 @@ export function AdCopyStudio({ studio }: { studio: StudioView }) {
         <div className="space-y-5 py-6">
           <div className="text-center">
             <MetaChip>Meta Ad Copy</MetaChip>
-            <h1 className="mt-4 text-3xl font-bold tracking-tighter text-white sm:text-5xl" style={SYNE}>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl" style={SYNE}>
               Drop it in. <span className="bg-gradient-to-r from-lime-200 via-lime-300 to-lime-400 bg-clip-text text-transparent">Get the copy.</span>
             </h1>
             <p className="mx-auto mt-2 max-w-xl text-sm text-neutral-400">
@@ -629,7 +629,7 @@ export function AdCopyStudio({ studio }: { studio: StudioView }) {
                         </div>
                         <div className="p-2.5">
                           <p className="line-clamp-2 text-xs font-semibold text-white">{batch ? `${r.jobs.length} creatives` : (v?.headlines[0] ?? "No copy yet")}</p>
-                          <p className="mt-0.5 truncate text-[10px] text-neutral-500">
+                          <p className="mt-0.5 truncate text-[10px] text-neutral-400">
                             {batch ? r.jobs.map((j) => j.filename).join(", ") : first.filename} · {new Date(r.createdAt).toLocaleDateString()}
                           </p>
                         </div>

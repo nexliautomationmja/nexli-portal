@@ -90,11 +90,11 @@ export function InvoiceHero({
     <section className="lp-card" style={{ animationDelay: "0.05s" }}>
       <div className="flex flex-col sm:flex-row sm:items-end gap-6">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
             Invoice <span style={NUM_FONT}>{invoiceNumber}</span>
           </p>
           <h1
-            className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white mt-1"
+            className="text-3xl sm:text-4xl font-bold tracking-tight text-white mt-1"
             style={SYNE}
           >
             {firstName ? (
@@ -120,7 +120,7 @@ export function InvoiceHero({
             <span style={NUM_FONT}>{fmtDay(due)}</span>
           </p>
           {billedTo && (
-            <p className="text-xs mt-1 text-neutral-500" style={READ_FONT}>
+            <p className="text-xs mt-1 text-neutral-400" style={READ_FONT}>
               Billed to {billedTo}
             </p>
           )}
@@ -171,7 +171,7 @@ export function PaidReceipt({
   return (
     <ShimmerCard className="lp-card">
       <div className="text-3xl mb-1">🎉</div>
-      <h2 className="text-xl font-black text-white" style={SYNE}>
+      <h2 className="text-xl font-bold text-white" style={SYNE}>
         Payment received — thank you
       </h2>
       <dl className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left sm:text-center">
@@ -379,7 +379,7 @@ export function TotalsCard({
       <div className="mt-4 pt-4 border-t border-white/10 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div>
           <p className={labelCls}>Balance due</p>
-          <p className="text-[11px] text-neutral-500">Bank transfer (ACH) price</p>
+          <p className="text-[11px] text-neutral-400">Bank transfer (ACH) price</p>
         </div>
         <p className={`text-3xl font-extrabold ${paid ? "text-emerald-300" : "text-white"}`} style={NUM_FONT}>
           {money(balanceCents, currency)}
@@ -471,7 +471,7 @@ export function PayCard({
             {money(achCents, currency)}
             {autopay && <span className="text-sm font-semibold text-neutral-400">/mo</span>}
           </p>
-          <p className="text-[11px] text-neutral-500 mt-0.5">
+          <p className="text-[11px] text-neutral-400 mt-0.5">
             {autopay ? "by bank transfer · autopay" : "Bank transfer (ACH) price"}
           </p>
           <button
@@ -506,7 +506,7 @@ export function PayCard({
               {money(cardCents, currency)}
               {autopay && <span className="text-sm font-semibold text-neutral-400">/mo</span>}
             </p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">{autopay ? "by card · autopay" : savings > 0 ? "Card price" : "Same price by card"}</p>
+            <p className="text-[11px] text-neutral-400 mt-0.5">{autopay ? "by card · autopay" : savings > 0 ? "Card price" : "Same price by card"}</p>
             <button
               type="button"
               onClick={() => onPay("card")}
@@ -532,7 +532,7 @@ export function PayCard({
           <p className="text-xs text-neutral-400" style={READ_FONT}>
             Card payments are not accepted on this invoice. Work is scheduled once funds clear.
           </p>
-          <p className="text-xs text-neutral-500" style={READ_FONT}>
+          <p className="text-xs text-neutral-400" style={READ_FONT}>
             Wire instructions available on request.
           </p>
         </div>
@@ -546,13 +546,13 @@ export function PayCard({
           Secure checkout by Stripe
         </p>
         {autopay && (
-          <p className="text-[11px] text-neutral-500" style={READ_FONT}>
+          <p className="text-[11px] text-neutral-400" style={READ_FONT}>
             Autopay uses the method you choose today. To change card or bank details later, use Manage
             autopay. Your initial term and cancellation terms are in your agreement.
           </p>
         )}
         {!achOnly && savings > 0 && (
-          <p className="text-[11px] text-neutral-500" style={READ_FONT}>
+          <p className="text-[11px] text-neutral-400" style={READ_FONT}>
             Amounts shown are the bank transfer (ACH) price; card payments are charged at the card price.
           </p>
         )}
@@ -968,7 +968,7 @@ export function NotesCard({ notes, terms }: { notes?: string | null; terms?: str
     >
       <div className="flex items-center gap-2 mb-3">
         <Icon d={P.fileText} size={15} className="text-neutral-500" />
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Notes &amp; terms</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Notes &amp; terms</p>
       </div>
       {notes && (
         <p className="text-xs leading-relaxed text-neutral-400 whitespace-pre-line [overflow-wrap:anywhere]" style={READ_FONT}>
@@ -976,7 +976,7 @@ export function NotesCard({ notes, terms }: { notes?: string | null; terms?: str
         </p>
       )}
       {terms && (
-        <p className={`text-xs leading-relaxed text-neutral-500 whitespace-pre-line [overflow-wrap:anywhere] ${notes ? "mt-2" : ""}`} style={READ_FONT}>
+        <p className={`text-xs leading-relaxed text-neutral-400 whitespace-pre-line [overflow-wrap:anywhere] ${notes ? "mt-2" : ""}`} style={READ_FONT}>
           <span className="font-semibold text-neutral-400">Terms:</span> {terms}
         </p>
       )}
@@ -989,7 +989,7 @@ export function NotesCard({ notes, terms }: { notes?: string | null; terms?: str
 export function InvoiceFooter() {
   return (
     <footer className="text-center pb-6 space-y-2">
-      <p className="text-[11px] text-neutral-500">
+      <p className="text-[11px] text-neutral-400">
         Questions about this invoice? Your Nexli team is one message away.
       </p>
       {/* This Launch Pad pay page only renders Nexli's own invoices. */}

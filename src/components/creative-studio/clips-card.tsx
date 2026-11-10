@@ -169,7 +169,7 @@ export function ClipsCard({
         </div>
 
         <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">QA checklist</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">QA checklist</p>
           <ul className="mt-2 space-y-1 text-xs text-neutral-300">
             <li>☐ C-P-A said as letters in the hooks</li>
             <li>☐ Every number said once and correctly{numberClips.length ? ` (clips ${numberClips.join(", ")})` : ""}</li>

@@ -156,12 +156,12 @@ export function PortalEngagementsClient() {
                       )}
                     </div>
                     {eng.signerStatus === "signed" && eng.signedAt && (
-                      <p className="text-xs mt-1 text-emerald-400">
+                      <p className="text-xs mt-1 text-emerald-700 dark:text-emerald-400">
                         Signed on {formatDate(eng.signedAt)}
                       </p>
                     )}
                     {eng.signerStatus === "declined" && eng.declinedAt && (
-                      <p className="text-xs mt-1 text-red-400">
+                      <p className="text-xs mt-1 text-red-700 dark:text-red-400">
                         Declined on {formatDate(eng.declinedAt)}
                       </p>
                     )}

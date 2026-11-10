@@ -104,7 +104,7 @@ export function StudioPicker({ editKey }: { editKey?: string }) {
     <StudioCanvas>
       <div className="mx-auto max-w-4xl px-4 pb-16 pt-10 sm:px-6 sm:pt-20">
         <p className="lp-card text-center text-[11px] font-black uppercase tracking-[0.2em] text-cyan-300/80">Creative Studio</p>
-        <h1 className="lp-card mt-3 text-center text-4xl font-bold tracking-tighter text-white sm:text-5xl" style={{ ...SYNE, animationDelay: "0.05s" }}>
+        <h1 className="lp-card mt-3 text-center text-4xl font-bold tracking-tight text-white sm:text-5xl" style={{ ...SYNE, animationDelay: "0.05s" }}>
           What creative studio are <GradientText>we going for?</GradientText>
         </h1>
         <p className="lp-card mx-auto mt-3 max-w-xl text-center text-sm text-neutral-400 sm:text-base" style={{ animationDelay: "0.1s" }}>
@@ -277,7 +277,7 @@ function StudioTile({
             <p className="text-sm font-bold text-white">
               {studio.videos} video{studio.videos === 1 ? "" : "s"}
             </p>
-            <p className="text-[11px] text-neutral-500">{studio.videos ? `Active ${ago(studio.lastActivity)}` : "Starts fresh"}</p>
+            <p className="text-[11px] text-neutral-400">{studio.videos ? `Active ${ago(studio.lastActivity)}` : "Starts fresh"}</p>
           </div>
         </div>
         <p className={`mt-4 text-sm font-bold ${client ? "text-violet-200" : "text-cyan-200"}`}>Open studio →</p>
@@ -420,9 +420,9 @@ function StudioModal({ editing, onClose, onSaved }: { editing: Editing; onClose:
                   <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search your portal clients" className={field} aria-label="Search your portal clients" />
                   <div className="mt-2 space-y-1">
                     {clients === null ? (
-                      <p className="px-1 text-xs text-neutral-500">Loading clients…</p>
+                      <p className="px-1 text-xs text-neutral-400">Loading clients…</p>
                     ) : matches.length === 0 ? (
-                      <p className="px-1 text-xs text-neutral-500">{clients.length === 0 ? "No client firms in the portal yet." : "No client matches that."} Type the firm&apos;s name below instead.</p>
+                      <p className="px-1 text-xs text-neutral-400">{clients.length === 0 ? "No client firms in the portal yet." : "No client matches that."} Type the firm&apos;s name below instead.</p>
                     ) : (
                       matches.map((c) =>
                         c.studioKey ? (

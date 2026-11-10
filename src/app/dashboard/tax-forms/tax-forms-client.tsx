@@ -345,7 +345,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                   <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: "var(--text-muted)" }}>
                     {scenario.description}
                   </p>
-                  <p className="text-[10px] mt-2 text-blue-400 font-bold">
+                  <p className="text-[10px] mt-2 text-blue-700 dark:text-blue-400 font-bold">
                     {scenario.requirements.length} documents
                   </p>
                 </div>
@@ -555,7 +555,7 @@ function RequestDocumentsTab({ onSwitchToReference }: { onSwitchToReference: () 
                   <p className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
                     Documents selected
                   </p>
-                  <p className="text-sm font-bold text-blue-400">{totalChecked}</p>
+                  <p className="text-sm font-bold text-blue-700 dark:text-blue-400">{totalChecked}</p>
                 </div>
 
                 <button

@@ -449,7 +449,7 @@ export function PipelineClient() {
                 </label>
                 {pickedContact ? (
                   <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 border border-cyan-400/30 bg-cyan-400/[0.06]">
-                    <p className="text-sm font-semibold text-cyan-400 truncate">
+                    <p className="text-sm font-semibold text-cyan-700 dark:text-cyan-400 truncate">
                       ✓ {contactName(pickedContact)}
                       <span className="font-normal" style={{ color: "var(--text-muted)" }}>
                         {pickedContact.email ? ` · ${pickedContact.email}` : ""}
@@ -563,7 +563,7 @@ export function PipelineClient() {
                 className={`${inputCls} resize-none`}
                 style={inputStyle}
               />
-              {addError && <p className="text-xs font-semibold text-rose-400">{addError}</p>}
+              {addError && <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{addError}</p>}
               <button
                 onClick={addLead}
                 disabled={adding}

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* `dark:` follows the app's theme (.dark on <html>, or a .dark "island" such as the
+   Rainmaker canvas), not the operating system's setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   /* Nexli Brand Colors */
   --color-nexli-blue: #2563EB;
@@ -100,18 +104,27 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, h4, h5, h6 {
-  letter-spacing: -0.025em;
-  font-weight: 700;
-  color: var(--text-main);
-}
+/* Default heading/paragraph look. Kept in the base layer so a Tailwind class on the
+   element (text-white, font-semibold, leading-none…) always wins. These used to sit
+   outside any layer, which silently overrode every such class.
+   --tw-leading keeps today's line-height when only a size class (text-sm…) is set:
+   Tailwind's size utilities read var(--tw-leading, …), and the property does not
+   inherit, so it never leaks into children. */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.025em;
+    font-weight: 700;
+    color: var(--text-main);
+  }
 
-h1 { line-height: 1.1; }
-h2 { line-height: 1.15; }
+  h1 { line-height: 1.1; --tw-leading: 1.1; }
+  h2 { line-height: 1.15; --tw-leading: 1.15; }
 
-p {
-  line-height: 1.6;
-  color: var(--text-muted);
+  p {
+    line-height: 1.6;
+    --tw-leading: 1.6;
+    color: var(--text-muted);
+  }
 }
 
 ::selection {

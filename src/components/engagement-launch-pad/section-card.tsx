@@ -47,12 +47,12 @@ export function SectionCard({
             <Icon d={meta.icon} size={22} className={ACCENT[meta.accent].icon} />
           </IconChip>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
               Section {section.num}
             </p>
             <h2
               id={`sec-${section.num}-title`}
-              className="text-lg sm:text-xl font-extrabold text-white tracking-tight"
+              className="text-lg sm:text-xl font-bold text-white tracking-tight"
               style={SYNE}
             >
               {section.title}

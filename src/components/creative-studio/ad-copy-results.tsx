@@ -120,7 +120,7 @@ export function AdCopyResults({
             <span className="shrink-0 rounded-md bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white">{copy.cta}</span>
           </div>
         </article>
-        <p className="text-center text-[10px] text-neutral-500">
+        <p className="text-center text-[10px] text-neutral-400">
           Showing primary text {sel.text + 1} with headline {sel.headline + 1}. Click any version to preview it.
         </p>
       </div>
@@ -128,7 +128,7 @@ export function AdCopyResults({
       <div className="min-w-0 space-y-4">
         {/* Primary texts */}
         <div className="space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">Primary text · {copy.primaryTexts.length} versions</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">Primary text · {copy.primaryTexts.length} versions</p>
           {copy.primaryTexts.map((t, i) => {
             const active = i === sel.text;
             const lines = t.split("\n").filter((l) => l.trim());
@@ -173,7 +173,7 @@ export function AdCopyResults({
 
         {/* Headlines */}
         <div className="space-y-1.5">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">Headline · {copy.headlines.length} versions</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">Headline · {copy.headlines.length} versions</p>
           {copy.headlines.map((h, i) => (
             <div
               key={i}

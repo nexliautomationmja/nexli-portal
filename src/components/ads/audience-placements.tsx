@@ -82,7 +82,7 @@ export function AudiencePlacements({ s }: { s: AdsSnapshot }) {
             </tbody>
           </table>
         </div>
-        {s.ghl.platformUnknown > 0 && <p className="mt-2 text-[11px] text-neutral-500">Leads with no platform count in the totals but can&apos;t be split.</p>}
+        {s.ghl.platformUnknown > 0 && <p className="mt-2 text-[11px] text-neutral-400">Leads with no platform count in the totals but can&apos;t be split.</p>}
       </Glass>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -92,7 +92,7 @@ export function AudiencePlacements({ s }: { s: AdsSnapshot }) {
           </h3>
           <p className="mt-0.5 text-[11px] text-neutral-400">Placements by spend this period</p>
           {top.length === 0 ? (
-            <p className="py-6 text-center text-xs text-neutral-500">No placement data</p>
+            <p className="py-6 text-center text-xs text-neutral-400">No placement data</p>
           ) : (
             <ul className="mt-3 space-y-2.5">
               {[...top, ...(restSpend > 0 ? [{ key: "rest", label: "Other placements", spendCents: restSpend, share: div(restSpend, spendTotal), ctr: null, cpmCents: null, lpvRate: null } as Partial<BreakdownRow> & { key: string; label: string; spendCents: number }] : [])].map((p) => (
@@ -116,7 +116,7 @@ export function AudiencePlacements({ s }: { s: AdsSnapshot }) {
 
         <Demographics rows={s.demographics} />
       </div>
-      <p className="text-[11px] text-neutral-500">Meta shares delivery by placement, age and gender, but not who booked — booked calls can only be split by platform and creative.</p>
+      <p className="text-[11px] text-neutral-400">Meta shares delivery by placement, age and gender, but not who booked — booked calls can only be split by platform and creative.</p>
     </div>
   );
 }
@@ -139,7 +139,7 @@ function Demographics({ rows }: { rows: BreakdownRow[] }) {
       </h3>
       <p className="mt-0.5 text-[11px] text-neutral-400">Share of spend by age and gender (darker = less)</p>
       {ages.length === 0 ? (
-        <p className="py-6 text-center text-xs text-neutral-500">No age & gender data</p>
+        <p className="py-6 text-center text-xs text-neutral-400">No age & gender data</p>
       ) : (
         <table className="mt-3 w-full border-separate text-xs" style={{ ...NUM_FONT, borderSpacing: 2 }}>
           <thead>

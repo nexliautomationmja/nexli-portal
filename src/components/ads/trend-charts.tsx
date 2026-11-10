@@ -303,7 +303,7 @@ function WeeklyFrequency({ s }: { s: AdsSnapshot }) {
           </BarChart>
         </ResponsiveContainer>
       ) : (
-        <p className="flex h-full items-center justify-center text-xs text-neutral-500">No weekly data yet</p>
+        <p className="flex h-full items-center justify-center text-xs text-neutral-400">No weekly data yet</p>
       )}
     </ChartCard>
   );

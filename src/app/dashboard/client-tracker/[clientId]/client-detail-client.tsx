@@ -401,7 +401,7 @@ function ClientSetupPanel({
             )}
           </div>
 
-          {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
+          {error && <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{error}</p>}
         </div>
       )}
     </div>
@@ -575,7 +575,7 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
             </p>
           )}
           {youCollect.outstanding > 0 && (
-            <p className="text-sm text-rose-400 font-semibold">
+            <p className="text-sm text-rose-700 dark:text-rose-400 font-semibold">
               {money(youCollect.outstanding)} outstanding
             </p>
           )}
@@ -617,7 +617,7 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
                       {money(c.revenue)}
                     </p>
                     {c.mrr > 0 && (
-                      <p className="text-xs text-cyan-400">{money(c.mrr)}/mo</p>
+                      <p className="text-xs text-cyan-700 dark:text-cyan-400">{money(c.mrr)}/mo</p>
                     )}
                   </div>
                 </div>

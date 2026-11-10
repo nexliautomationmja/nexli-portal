@@ -258,7 +258,7 @@ export function BrandingCard() {
             )}
           </div>
           {colorInvalid && (
-            <p className="mt-1 text-xs text-red-400">Enter a hex color like #0f766e.</p>
+            <p className="mt-1 text-xs text-red-700 dark:text-red-400">Enter a hex color like #0f766e.</p>
           )}
         </div>
 
@@ -288,13 +288,13 @@ export function BrandingCard() {
         </div>
 
         {status === "success" && !error && (
-          <p className="text-sm text-green-400">Branding saved.</p>
+          <p className="text-sm text-green-700 dark:text-green-400">Branding saved.</p>
         )}
         {status === "error" && error && (
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         )}
         {status !== "error" && error && (
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         )}
 
         <button

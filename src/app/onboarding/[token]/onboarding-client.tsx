@@ -376,7 +376,7 @@ export function OnboardingClient({ token }: { token: string }) {
       {allDone && (
         <ShimmerCard className="lp-card">
           <div className="text-3xl mb-1">🎉</div>
-          <h2 className="text-xl font-black text-white" style={SYNE}>
+          <h2 className="text-xl font-bold text-white" style={SYNE}>
             Everything&apos;s done — you&apos;re cleared for launch!
           </h2>
           <p className="text-sm mt-1 text-neutral-300">
@@ -390,7 +390,7 @@ export function OnboardingClient({ token }: { token: string }) {
         <div className="flex flex-col sm:flex-row items-center gap-8">
           <div className="flex-1 text-center sm:text-left">
             <h1
-              className="text-3xl sm:text-4xl font-extrabold leading-tight tracking-tighter text-white"
+              className="text-3xl sm:text-4xl font-bold tracking-tight text-white"
               style={SYNE}
             >
               Welcome aboard,{" "}
@@ -619,13 +619,13 @@ export function OnboardingClient({ token }: { token: string }) {
 
       {/* ─── Footer ─── */}
       <footer className="text-center pb-6 space-y-2">
-        <p className="text-[11px] text-neutral-500">
+        <p className="text-[11px] text-neutral-400">
           Questions? Your Nexli team is one message away.
         </p>
         {data.nexli ? (
           <NexliLegalFooter />
         ) : (
-          <p className="text-[10px] text-neutral-600">
+          <p className="text-[10px] text-neutral-400">
             {data.from.company || data.from.name} • Powered by the Digital
             Rainmaker System
           </p>
@@ -757,7 +757,7 @@ function CenterpiecePhaseCard({ phase }: { phase: PhaseData }) {
                 <Icon d={PATHS.star} size={11} className="text-cyan-400" style={{ fill: "currentColor" }} />
                 The Centerpiece
               </span>
-              <h4 className="text-lg sm:text-xl font-black tracking-tight text-white">
+              <h4 className="text-lg sm:text-xl font-bold tracking-tight text-white">
                 {phase.title}
               </h4>
             </div>
@@ -1084,7 +1084,7 @@ function StripeSetup({
     <div className="space-y-4">
       {/* Ground rules — have these ready */}
       <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 mb-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">
           Have these ready
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1099,7 +1099,7 @@ function StripeSetup({
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-neutral-500 mt-2">
+        <p className="text-[11px] text-neutral-400 mt-2">
           Stripe verifies your identity (KYC) — answer their prompts exactly as
           your business is registered.
         </p>

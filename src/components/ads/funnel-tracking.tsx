@@ -81,7 +81,7 @@ export function TrackingHealth({ s }: { s: AdsSnapshot }) {
       </div>
       <p className="mt-0.5 text-[11px] text-neutral-400">If tracking is off, every number above is off — so this comes first.</p>
       {items.length === 0 ? (
-        <p className="py-4 text-xs text-neutral-500">Nothing to check yet.</p>
+        <p className="py-4 text-xs text-neutral-400">Nothing to check yet.</p>
       ) : (
         <ul className="mt-3 space-y-2.5">
           {items.map((t) => (
