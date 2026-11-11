@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import type { CaptionStyle, EditLayout, EditOverlays, EditProps, EditStyle, MovableSlot, PipSize } from "@/remotion/types";
+import { SIZE_MAX, SIZE_MIN, type CaptionStyle, type EditLayout, type EditOverlays, type EditProps, type EditStyle, type MovableSlot, type PipSize, type SizeSlot } from "@/remotion/types";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
 import { sameTarget, setText, setWindow, slotClashes, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
@@ -61,6 +61,14 @@ const LOOK_OPTIONS: { label: string; key: keyof CaptionStyle; values: { v: Capti
   { label: "Font", key: "font", values: [{ v: "outfit", label: "Outfit" }, { v: "jakarta", label: "Jakarta" }] },
 ];
 const LOOK_DEFAULT: Required<CaptionStyle> = { perLine: 3, scale: 1, case: "caps", highlight: "gradient", box: false, font: "outfit" };
+
+/** The size a text element shares (every sticker one size, every card one size); pills and tags have none. */
+function sizeSlotOf(t: TextTarget): SizeSlot | null {
+  if (t.slot === "title" || t.slot === "qualifier" || t.slot === "cta") return t.slot;
+  if (t.slot === "sticker") return "stickers";
+  if (t.slot === "card") return "cards";
+  return null;
+}
 
 /** "2.4", "0:02.4" or "1:05" → seconds (NaN if unreadable). */
 function parseClock(v: string): number {
@@ -334,6 +342,8 @@ export function EditCard({
     loading: boolean;
     /** When it shows — the whole video, or a From/To typed (or taken from the playhead). */
     timing: { mode: "whole" | "custom"; start: string; end: string };
+    /** Its size (1 = the rulebook size), dragged live on the preview. */
+    size: number;
   } | null>(null);
   const playhead = useRef<() => number>(() => 0);
   const onPlayer = useCallback((now: () => number) => {
@@ -353,8 +363,18 @@ export function EditCard({
       aboutYours: "",
       loading: false,
       timing: { mode: whole ? "whole" : "custom", start: clock(start), end: clock(end) },
+      size: (sizeSlotOf(target) && latest?.props?.overlays.sizes?.[sizeSlotOf(target)!]) || 1,
     });
     still(Math.min(start + 0.6, D));
+  }
+  async function saveSize() {
+    const slot = editing ? sizeSlotOf(editing.target) : null;
+    if (!editing || !slot) return;
+    setBusy({ label: "Saving the size…" });
+    const r = await send(api(`${p.id}/edit/size`), "POST", { slot, scale: editing.size });
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
   }
   async function saveTiming() {
     if (!editing || !draftWindow) return;
@@ -418,7 +438,13 @@ export function EditCard({
   const withText = withLayout && editing && draftText !== null ? setText(withLayout.overlays, editing.target, draftText) : null;
   const withTime = withText && editing && draftWindow ? setWindow(withText, editing.target, draftWindow.start, draftWindow.end) : withText;
   const baseOverlays = withTime ?? withLayout?.overlays ?? null;
-  const lookOverlays = baseOverlays && captionDraft ? withLook(baseOverlays, captionDraft) : baseOverlays;
+  // The size being dragged, live on the preview.
+  const draftSlot = editing ? sizeSlotOf(editing.target) : null;
+  const sizedOverlays =
+    baseOverlays && editing && draftSlot && editing.size !== (baseOverlays.sizes?.[draftSlot] ?? 1)
+      ? { ...baseOverlays, sizes: { ...baseOverlays.sizes, [draftSlot]: editing.size } }
+      : baseOverlays;
+  const lookOverlays = sizedOverlays && captionDraft ? withLook(sizedOverlays, captionDraft) : sizedOverlays;
   const previewProps = withLayout && lookOverlays ? { ...withLayout, overlays: lookOverlays } : withLayout;
   const lookChanged = captionDraft !== null && JSON.stringify(plainLook(captionDraft)) !== JSON.stringify(plainLook(savedLook ?? {}));
 
@@ -1010,6 +1036,57 @@ export function EditCard({
                               <p className="text-[10px] text-neutral-400">Tap a version to see it on the video, then Use the one you want.</p>
                             </div>
                           )}
+
+                          {/* Size, like Instagram's text size: the whole box scales */}
+                          {sizeSlotOf(editing.target) && (() => {
+                            const slot = sizeSlotOf(editing.target)!;
+                            const saved = latest.props?.overlays.sizes?.[slot] ?? 1;
+                            const pct = Math.round(editing.size * 100);
+                            return (
+                              <div className="space-y-2 border-t border-white/5 pt-2.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500">
+                                    Size{slot === "stickers" ? " · every sticker" : slot === "cards" ? " · every card" : ""}
+                                  </span>
+                                  <span className="text-xs font-bold text-white" style={NUM_FONT}>
+                                    {pct}%
+                                  </span>
+                                  {editing.size !== 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditing((e) => (e ? { ...e, size: 1 } : e))}
+                                      className="min-h-8 px-1 text-[11px] font-semibold text-neutral-500 hover:text-white"
+                                    >
+                                      Back to 100%
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs font-black text-neutral-400" aria-hidden="true">A</span>
+                                  <input
+                                    type="range"
+                                    min={SIZE_MIN}
+                                    max={SIZE_MAX}
+                                    step={0.05}
+                                    value={editing.size}
+                                    onChange={(e) => setEditing((x) => (x ? { ...x, size: Number(e.target.value) } : x))}
+                                    className="h-9 min-w-0 flex-1 accent-cyan-500"
+                                    aria-label="Text size"
+                                    aria-valuetext={`${pct}%`}
+                                  />
+                                  <span className="text-lg font-black text-neutral-300" aria-hidden="true">A</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void saveSize()}
+                                  disabled={Math.abs(editing.size - saved) < 0.005 || Boolean(busy)}
+                                  className="min-h-9 rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                                >
+                                  Save size
+                                </button>
+                              </div>
+                            );
+                          })()}
 
                           {/* When it shows */}
                           <div className="space-y-2 border-t border-white/5 pt-2.5">

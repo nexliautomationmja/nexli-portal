@@ -21,6 +21,15 @@ export function placed(at: Anchor, box: number, width: number, height: number): 
   };
 }
 
+/**
+ * A hand-set text size: the whole box scales (line breaks stay), from its
+ * top edge in its default slot or from its centre when placed by hand.
+ * No scale (or 1) = no transform at all, so untouched edits render as before.
+ */
+function sized(scale: number | undefined, at: Anchor | undefined, defaultOrigin = "50% 0%"): React.CSSProperties {
+  return scale && scale !== 1 ? { transform: `scale(${scale})`, transformOrigin: at ? "50% 50%" : defaultOrigin } : {};
+}
+
 /** Money tokens inside a line render green (rulebook: money / positive). */
 const Rich: React.FC<{ text: string }> = ({ text }) => (
   <>
@@ -31,7 +40,7 @@ const Rich: React.FC<{ text: string }> = ({ text }) => (
 );
 
 /** Solo / ladder: the one title banner, at the top of the safe band. */
-export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean; at?: Anchor }> = ({ title, vertical, at }) => {
+export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean; at?: Anchor; scale?: number }> = ({ title, vertical, at, scale }) => {
   const { width, height } = useVideoConfig();
   return (
   <Pop
@@ -66,6 +75,7 @@ export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean; at?: A
         textAlign: "center",
         letterSpacing: "-0.01em",
         boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+        ...sized(scale, at),
       }}
     >
       {title.text}
@@ -75,7 +85,7 @@ export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean; at?: A
 };
 
 /** Red qualifier band — bottom chrome slot (above the captions). */
-export const QualifierBand: React.FC<{ q: TimedText; vertical: boolean; at?: Anchor }> = ({ q, vertical, at }) => {
+export const QualifierBand: React.FC<{ q: TimedText; vertical: boolean; at?: Anchor; scale?: number }> = ({ q, vertical, at, scale }) => {
   const { width, height } = useVideoConfig();
   return (
   <Pop start={q.start} end={q.end} style={at ? placed(at, width, width, height) : { position: "absolute", left: 0, right: 0, top: vertical ? 960 : undefined, bottom: vertical ? undefined : 230, display: "flex", justifyContent: "center" }}>
@@ -93,6 +103,7 @@ export const QualifierBand: React.FC<{ q: TimedText; vertical: boolean; at?: Anc
         textTransform: "uppercase",
         textAlign: "center",
         boxShadow: "0 14px 40px rgba(153,27,27,0.45)",
+        ...sized(scale, at, vertical ? "50% 0%" : "50% 100%"),
       }}
     >
       {q.text}
@@ -102,13 +113,13 @@ export const QualifierBand: React.FC<{ q: TimedText; vertical: boolean; at?: Anc
 };
 
 /** CTA with a directional cue instead of a redundant subline. */
-export const CtaCard: React.FC<{ cta: TimedText; vertical: boolean; at?: Anchor }> = ({ cta, vertical, at }) => {
+export const CtaCard: React.FC<{ cta: TimedText; vertical: boolean; at?: Anchor; scale?: number }> = ({ cta, vertical, at, scale }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const bob = Math.sin((frame / fps) * Math.PI * 2 * 1.2) * 8;
   return (
     <Pop start={cta.start} end={cta.end} style={at ? placed(at, width, width, height) : { position: "absolute", left: 0, right: 0, top: vertical ? 960 : undefined, bottom: vertical ? undefined : 230, display: "flex", justifyContent: "center" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "16px 28px", borderRadius: 18, background: BRAND.panel, border: "2px solid rgba(6,182,212,0.6)", color: "#fff", fontFamily: OUTFIT, fontWeight: 800, fontSize: vertical ? 42 : 36, textTransform: "uppercase" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "16px 28px", borderRadius: 18, background: BRAND.panel, border: "2px solid rgba(6,182,212,0.6)", color: "#fff", fontFamily: OUTFIT, fontWeight: 800, fontSize: vertical ? 42 : 36, textTransform: "uppercase", ...sized(scale, at, vertical ? "50% 0%" : "50% 100%") }}>
         <span>{cta.text}</span>
         <span style={{ display: "inline-block", transform: `translateY(${bob}px)`, backgroundImage: BRAND.gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", fontSize: vertical ? 52 : 44 }}>↓</span>
       </div>
@@ -148,11 +159,11 @@ export const LadderRungs: React.FC<{ rungs: LadderRung[]; width: number }> = ({ 
 };
 
 /** POV: Instagram's own white text-sticker idiom — no brand palette, no dark glass. */
-export const PovSticker: React.FC<{ s: TimedText; at?: Anchor }> = ({ s, at }) => {
+export const PovSticker: React.FC<{ s: TimedText; at?: Anchor; scale?: number }> = ({ s, at, scale }) => {
   const { width, height } = useVideoConfig();
   return (
   <Pop start={s.start} end={s.end} style={at ? placed(at, width, width, height) : { position: "absolute", top: FB_SAFE_TOP + 90, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
-    <div style={{ maxWidth: 860, padding: "16px 26px", borderRadius: 18, background: "#ffffff", color: "#000000", fontFamily: JAKARTA, fontWeight: 800, fontSize: 46, lineHeight: 1.15, textAlign: "center", boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+    <div style={{ maxWidth: 860, padding: "16px 26px", borderRadius: 18, background: "#ffffff", color: "#000000", fontFamily: JAKARTA, fontWeight: 800, fontSize: 46, lineHeight: 1.15, textAlign: "center", boxShadow: "0 6px 18px rgba(0,0,0,0.18)", ...sized(scale, at) }}>
       {s.text}
     </div>
   </Pop>
@@ -160,7 +171,7 @@ export const PovSticker: React.FC<{ s: TimedText; at?: Anchor }> = ({ s, at }) =
 };
 
 /** VSL left column: one slot, cards sequenced; fit-content with a 500px ceiling. */
-export const VslCardView: React.FC<{ card: VslCard; at?: Anchor }> = ({ card, at }) => {
+export const VslCardView: React.FC<{ card: VslCard; at?: Anchor; scale?: number }> = ({ card, at, scale }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const t = frame / fps;
@@ -183,7 +194,7 @@ export const VslCardView: React.FC<{ card: VslCard; at?: Anchor }> = ({ card, at
         : { ...base, background: BRAND.panel, border: "1px solid rgba(255,255,255,0.12)" };
   return (
     <Pop start={card.start} end={card.end} from="up" style={at ? placed(at, 560, width, height) : { position: "absolute", left: 48, top: "51%", transform: "translateY(-50%)" }}>
-      <div style={style}>
+      <div style={{ ...style, ...sized(scale, at, "0% 50%") }}>
         <div style={{ fontSize: card.kind === "stat" ? 64 : 38, lineHeight: 1.05, textTransform: "uppercase", color: card.kind === "stat" ? BRAND.money : "#fff" }}>
           <Rich text={card.text} />
           {card.kind === "cta" && <span style={{ marginLeft: 12, backgroundImage: BRAND.gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>↓</span>}

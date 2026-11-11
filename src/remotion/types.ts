@@ -59,6 +59,13 @@ export type MovableSlot = "title" | "qualifier" | "cta" | "captions" | "stickers
 
 export type EditLayout = Partial<Record<MovableSlot, Anchor>>;
 
+/** Text overlays whose size can be set by hand (the whole box scales, like Instagram's text size). */
+export type SizeSlot = "title" | "qualifier" | "cta" | "stickers" | "cards";
+
+/** Bounds for a hand-set text size (1 = the rulebook size). */
+export const SIZE_MIN = 0.5;
+export const SIZE_MAX = 1.6;
+
 /** How the captions look. Absence of a field = the rulebook's captions. */
 export interface CaptionStyle {
   /** Words per caption line (rulebook: 3). */
@@ -95,6 +102,8 @@ export interface EditOverlays {
   layout?: EditLayout;
   /** Hand-set caption look. Absence = the rulebook's captions. */
   captionStyle?: CaptionStyle;
+  /** Hand-set text sizes per element (1 = rulebook). Absence of a slot = the rulebook size. */
+  sizes?: Partial<Record<SizeSlot, number>>;
 }
 
 /** A reaction video: one part of the video in the corner that plays, placed on the cut. */

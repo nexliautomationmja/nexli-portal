@@ -17,7 +17,7 @@ export const VslRig: React.FC<EditProps> = ({ videoUrl, words, overlays, pip, du
     <Captions words={words} size={48} vertical={false} at={overlays.layout?.captions} look={overlays.captionStyle} hide={pip ? pipSpans(pip) : undefined} />
     {pip && <SourceCaptions pip={pip} durationS={durationS} size={48} vertical={false} at={overlays.layout?.captions} look={overlays.captionStyle} />}
     {overlays.cards.map((c, i) => (
-      <VslCardView key={i} card={c} at={overlays.layout?.cards} />
+      <VslCardView key={i} card={c} at={overlays.layout?.cards} scale={overlays.sizes?.cards} />
     ))}
   </AbsoluteFill>
 );

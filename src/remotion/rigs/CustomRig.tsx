@@ -27,18 +27,18 @@ export const CustomRig: React.FC<EditProps> = ({ videoUrl, words, overlays, form
       {overlays.captions !== false && pip && (
         <SourceCaptions pip={pip} durationS={durationS} size={vertical ? 52 : 48} vertical={vertical} at={at.captions} look={overlays.captionStyle} />
       )}
-      {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} at={at.title} />}
+      {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} at={at.title} scale={overlays.sizes?.title} />}
       {vertical && <LadderRungs rungs={overlays.rungs} width={width} />}
-      {overlays.qualifier && <QualifierBand q={overlays.qualifier} vertical={vertical} at={at.qualifier} />}
-      {overlays.cta && <CtaCard cta={overlays.cta} vertical={vertical} at={at.cta} />}
+      {overlays.qualifier && <QualifierBand q={overlays.qualifier} vertical={vertical} at={at.qualifier} scale={overlays.sizes?.qualifier} />}
+      {overlays.cta && <CtaCard cta={overlays.cta} vertical={vertical} at={at.cta} scale={overlays.sizes?.cta} />}
       {/* Stickers sit below the title when both are on (unless placed by hand). */}
       <AbsoluteFill style={{ transform: overlays.title && !at.stickers ? "translateY(150px)" : undefined }}>
         {overlays.stickers.map((s, i) => (
-          <PovSticker key={i} s={s} at={at.stickers} />
+          <PovSticker key={i} s={s} at={at.stickers} scale={overlays.sizes?.stickers} />
         ))}
       </AbsoluteFill>
       {overlays.cards.map((c, i) => (
-        <VslCardView key={i} card={c} at={at.cards} />
+        <VslCardView key={i} card={c} at={at.cards} scale={overlays.sizes?.cards} />
       ))}
     </AbsoluteFill>
   );

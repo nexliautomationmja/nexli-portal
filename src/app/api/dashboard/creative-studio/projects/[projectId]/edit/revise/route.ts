@@ -62,6 +62,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
           ...result.overlays,
           ...(edit.props.overlays.layout ? { layout: edit.props.overlays.layout } : {}),
           ...(edit.props.overlays.captionStyle ? { captionStyle: edit.props.overlays.captionStyle } : {}),
+          ...(edit.props.overlays.sizes ? { sizes: edit.props.overlays.sizes } : {}),
         },
       },
       notes: `${result.notes}${fixed}`.trim() || null,

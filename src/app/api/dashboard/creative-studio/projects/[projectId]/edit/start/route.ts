@@ -45,6 +45,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const keep = sameCut || (body?.keepLook === true && prev);
     const layout = keep ? prev.props.overlays.layout : undefined;
     const captionStyle = keep ? prev.props.overlays.captionStyle : undefined;
+    const sizes = keep ? prev.props.overlays.sizes : undefined;
     const durationS = await durationOf(finalCut, body.durationS, words);
     // A reaction video: the video she reacts to, in the corner (its size and captions carry over on the same cut).
     const reaction = await reactionTrack(project, built.lines, keep ? prev.props.pip : undefined);
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         format: project.format,
         durationS,
         words,
-        overlays: { ...result.overlays, ...(layout ? { layout } : {}), ...(captionStyle ? { captionStyle } : {}) },
+        overlays: { ...result.overlays, ...(layout ? { layout } : {}), ...(captionStyle ? { captionStyle } : {}), ...(sizes ? { sizes } : {}) },
         ...(instruction ? { instruction } : {}),
         ...(reaction.pip ? { pip: reaction.pip } : {}),
       },

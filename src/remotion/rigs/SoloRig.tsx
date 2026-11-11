@@ -15,7 +15,7 @@ export const SoloRig: React.FC<EditProps> = ({ videoUrl, words, overlays, format
       {pip && <SourcePip pip={pip} vertical={vertical} titled={Boolean(overlays.title)} at={overlays.layout?.pip} />}
       <Captions words={words} size={vertical ? 54 : 48} vertical={vertical} at={overlays.layout?.captions} look={overlays.captionStyle} hide={pip ? pipSpans(pip) : undefined} />
       {pip && <SourceCaptions pip={pip} durationS={durationS} size={vertical ? 54 : 48} vertical={vertical} at={overlays.layout?.captions} look={overlays.captionStyle} />}
-      {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} at={overlays.layout?.title} />}
+      {overlays.title && <TitleBanner title={overlays.title} vertical={vertical} at={overlays.layout?.title} scale={overlays.sizes?.title} />}
     </AbsoluteFill>
   );
 };
