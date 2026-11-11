@@ -64,7 +64,22 @@ export interface PhotoBatchView {
   notes: string | null;
   status: string;
   createdAt: string;
+  /** Reference ads these mimic (signed). */
+  styleRefs: string[];
   ads: PhotoAdView[];
+}
+
+/** Where a workspace's reference ads (to mimic) are uploaded. */
+export const styleRefPrefix = (ownerId: string) => `photo-ads/${ownerId}/style/`;
+
+/** A batch's reference ads, signed for Manus and named so the prompt can point at them. */
+async function styleRefFiles(batch: Batch, seconds = 3 * 3600): Promise<{ url: string; filename: string }[]> {
+  const paths = batch.styleRefs ?? [];
+  if (!paths.length) return [];
+  const signed = await signPaths(paths, seconds);
+  return paths
+    .map((p, i) => ({ url: signed.get(p) ?? "", filename: `style-reference-${i + 1}.${p.split(".").pop() ?? "png"}` }))
+    .filter((f) => f.url);
 }
 
 export interface PhotoBatchSummary {
@@ -104,7 +119,7 @@ const adsOf = (batchId: string) =>
 
 export async function batchView(batch: Batch): Promise<PhotoBatchView> {
   const ads = await adsOf(batch.id);
-  const signed = await signPaths(ads.flatMap((a) => [a.storyPath, a.feedPath]), 6 * 3600);
+  const signed = await signPaths([...ads.flatMap((a) => [a.storyPath, a.feedPath]), ...(batch.styleRefs ?? [])], 6 * 3600);
   const url = (p: string | null) => (p ? (signed.get(p) ?? null) : null);
   return {
     id: batch.id,
@@ -112,6 +127,7 @@ export async function batchView(batch: Batch): Promise<PhotoBatchView> {
     notes: batch.notes,
     status: batch.status,
     createdAt: batch.createdAt.toISOString(),
+    styleRefs: (batch.styleRefs ?? []).map((p) => signed.get(p) ?? "").filter(Boolean),
     ads: ads.map((a) => ({
       id: a.id,
       idx: a.idx,
@@ -290,7 +306,7 @@ async function checkAd(ad: Ad): Promise<void> {
 }
 
 /** Start one queued ad on Manus. Returns false when Manus is at its limit (stop starting more). */
-async function startAd(ad: Ad, studio: Studio, refs: { url: string; filename: string }[]): Promise<boolean> {
+async function startAd(ad: Ad, studio: Studio, refs: { url: string; filename: string }[], style: { url: string; filename: string }[] = []): Promise<boolean> {
   const [claimed] = await db
     .update(creativePhotoAds)
     .set({ status: "starting", updatedAt: new Date() })
@@ -299,8 +315,9 @@ async function startAd(ad: Ad, studio: Studio, refs: { url: string; filename: st
   if (!claimed) return true;
   try {
     const task = await startManusTask({
-      prompt: photoAdPrompt(ad, { client: studio.kind === "client", hasReferences: refs.length > 0 }),
-      files: refs,
+      prompt: photoAdPrompt(ad, { client: studio.kind === "client", hasReferences: refs.length > 0, ...(style.length ? { styleRefs: style.length } : {}) }),
+      // The person's photos first, then the ads to mimic (named style-reference-N).
+      files: [...refs, ...style],
       title: studio.kind === "client" ? `Creative Studio · ${studio.name} photo ad` : "Nexli Creative Studio · photo ad",
     });
     await setAd(ad.id, {
@@ -376,9 +393,10 @@ export async function advanceBatch(batch: Batch): Promise<void> {
   if (free <= 0) return;
   const studio = await studioById(batch.ownerId, batch.studioId);
   const refs = await referenceFiles(batch.ownerId, studio);
+  const style = await styleRefFiles(batch);
   for (const ad of queued) {
     if (free <= 0) break;
-    if (!(await startAd(ad, studio, refs))) break;
+    if (!(await startAd(ad, studio, refs, style))) break;
     free--;
   }
 }
@@ -429,6 +447,6 @@ export async function actOnAd(
 export async function deleteBatch(batch: Batch): Promise<void> {
   const ads = await adsOf(batch.id);
   await Promise.all(ads.filter((a) => a.manusTaskId && ACTIVE.includes(a.status)).map((a) => stopTask(a.manusTaskId!)));
-  await removePaths(ads.flatMap((a) => [a.storyPath, a.feedPath]));
+  await removePaths([...ads.flatMap((a) => [a.storyPath, a.feedPath]), ...(batch.styleRefs ?? [])]);
   await db.delete(creativePhotoBatches).where(eq(creativePhotoBatches.id, batch.id));
 }

@@ -12,10 +12,30 @@ import { downloadHref, inStudioQs } from "@/components/creative-studio/client";
 import { StudioSwitch } from "@/components/creative-studio/home";
 import { zipFiles } from "@/components/creative-studio/zip";
 import { useIsTouch } from "@/lib/use-media";
+import { uploadToTarget } from "@/components/creative-studio/upload";
 
 const BASE = "/api/dashboard/creative-studio/photo-ads";
 const WORKING = ["queued", "starting", "running", "waiting", "saving"];
 const QUICK_COUNTS = [4, 8, 12, 20];
+/** Reference ads to mimic, at most this many (the server takes three). */
+const MAX_STYLE_REFS = 3;
+const STYLE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+
+/** The ads a batch mimics, as small thumbnails (tap to open). */
+function StyleRefs({ urls }: { urls: string[] }) {
+  if (!urls.length) return null;
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <span className="text-[11px] font-semibold text-neutral-400">Mimicking</span>
+      {urls.map((u, i) => (
+        <a key={u} href={u} target="_blank" rel="noreferrer" className="block h-14 overflow-hidden rounded-lg border border-white/15" aria-label={`Open reference ad ${i + 1}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- signed storage URL */}
+          <img src={u} alt="" className="h-full w-auto object-cover" />
+        </a>
+      ))}
+    </div>
+  );
+}
 const FIELD =
   "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[16px] text-white placeholder:text-neutral-500 focus:border-cyan-400/50 focus:outline-none sm:text-sm";
 
@@ -70,7 +90,26 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState<{ ad: PhotoAdView; size: "story" | "feed" } | null>(null);
   const [fromAds, setFromAds] = useState<"analysis" | "research" | null>(null);
+  // Reference ads to mimic, picked before planning (uploaded when Plan is pressed).
+  const [styleRefs, setStyleRefs] = useState<{ id: string; file: File; url: string }[]>([]);
+  const styleInput = useRef<HTMLInputElement>(null);
   const polling = useRef(false);
+
+  function addStyleRefs(files: File[]) {
+    const images = files.filter((f) => STYLE_TYPES.includes(f.type));
+    if (!images.length) return;
+    setStyleRefs((cur) => {
+      const room = Math.max(0, MAX_STYLE_REFS - cur.length);
+      return [...cur, ...images.slice(0, room).map((file) => ({ id: `${file.name}-${file.size}-${Math.random()}`, file, url: URL.createObjectURL(file) }))];
+    });
+  }
+  function dropStyleRef(id: string) {
+    setStyleRefs((cur) => {
+      const gone = cur.find((r) => r.id === id);
+      if (gone) URL.revokeObjectURL(gone.url);
+      return cur.filter((r) => r.id !== id);
+    });
+  }
 
   const loadList = useCallback(() => {
     call<{ batches: PhotoBatchSummary[] }>(`${BASE}${qs}`, "GET")
@@ -149,9 +188,18 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
     setPlanning(true);
     setError(null);
     try {
-      const d = await call<{ batch: PhotoBatchView }>(`${BASE}${qs}`, "POST", { prompt, count });
+      // Reference ads go straight to storage first; the plan request carries their paths.
+      const paths: string[] = [];
+      for (const r of styleRefs) {
+        const target = await call<{ path: string; token: string }>(`${BASE}/style-ref${qs}`, "POST", { mime: r.file.type });
+        await uploadToTarget(target, r.file, r.file.type);
+        paths.push(target.path);
+      }
+      const d = await call<{ batch: PhotoBatchView }>(`${BASE}${qs}`, "POST", { prompt, count, ...(paths.length ? { styleRefs: paths } : {}) });
       show(d.batch);
       setPrompt("");
+      styleRefs.forEach((r) => URL.revokeObjectURL(r.url));
+      setStyleRefs([]);
       loadList();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Planning failed");
@@ -248,6 +296,13 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
           <AssistantCard accent="cyan" icon={SP.sparkles} title="What should the ads be about?" right={fromAds ? <Chip tone="blue">{fromAds === "research" ? "From your Ad Library research" : "From your Ads analysis"}</Chip> : null}>
             <textarea
               value={prompt}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files ?? []).filter((f) => STYLE_TYPES.includes(f.type));
+                if (files.length) {
+                  e.preventDefault();
+                  addStyleRefs(files);
+                }
+              }}
               onChange={(e) => setPrompt(e.target.value)}
               rows={4}
               disabled={planning}
@@ -258,6 +313,58 @@ export function PhotoAdsStudio({ studio }: { studio: StudioView }) {
               }
               className={FIELD}
             />
+            {/* A reference ad to mimic: Claude plans in its style and Manus copies its look. */}
+            <div
+              className="mt-3 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-3"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                addStyleRefs(Array.from(e.dataTransfer.files));
+              }}
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                {styleRefs.map((r, i) => (
+                  <div key={r.id} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- local preview */}
+                    <img src={r.url} alt={`Reference ad ${i + 1}`} className="h-20 w-auto max-w-[120px] rounded-xl border border-white/15 object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => dropStyleRef(r.id)}
+                      className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-[#020617] text-white/80 hover:text-white"
+                      aria-label={`Remove reference ad ${i + 1}`}
+                    >
+                      <SvgIcon d={SP.x} size={12} />
+                    </button>
+                  </div>
+                ))}
+                {styleRefs.length < MAX_STYLE_REFS && (
+                  <button
+                    type="button"
+                    onClick={() => styleInput.current?.click()}
+                    disabled={planning}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3.5 text-xs font-semibold text-neutral-200 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                  >
+                    <SvgIcon d={SP.image} size={14} /> {styleRefs.length ? "Add another" : "Add a reference ad to mimic"}
+                  </button>
+                )}
+                <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-neutral-500">
+                  {styleRefs.length
+                    ? `The ads will copy ${styleRefs.length === 1 ? "its" : "their"} layout, type and colours, with ${client ? "the presenter" : "Daniela"} and your own words.`
+                    : `Optional. Drop, paste or pick an ad you like and the new ones copy its look, with ${client ? "the presenter" : "Daniela"} and your own words.`}
+                </p>
+              </div>
+              <input
+                ref={styleInput}
+                type="file"
+                hidden
+                multiple
+                accept={STYLE_TYPES.join(",")}
+                onChange={(e) => {
+                  addStyleRefs(Array.from(e.target.files ?? []));
+                  e.target.value = "";
+                }}
+              />
+            </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-neutral-300">How many</span>
@@ -421,6 +528,7 @@ function PlanReview({
     >
       <p className="mb-1 text-sm text-neutral-300">&ldquo;{batch.prompt}&rdquo;</p>
       {batch.notes && <p className="mb-3 text-xs text-neutral-400">{batch.notes}</p>}
+      <StyleRefs urls={batch.styleRefs ?? []} />
       <div className="space-y-2">
         {batch.ads.map((ad) => {
           const gone = removed.includes(ad.id);
@@ -608,6 +716,11 @@ function BatchBoard({
       }
     >
       <p className="text-sm text-neutral-300">&ldquo;{batch.prompt}&rdquo;</p>
+      {(batch.styleRefs ?? []).length > 0 && (
+        <div className="mt-2">
+          <StyleRefs urls={batch.styleRefs} />
+        </div>
+      )}
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
         <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-500" style={{ width: `${Math.max(4, (done / Math.max(1, total)) * 100)}%` }} />
       </div>

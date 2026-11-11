@@ -92,13 +92,36 @@ export function cleanConcepts(ads: Partial<PhotoConcept>[], count: number): Phot
     .slice(0, count);
 }
 
+/**
+ * Reference ads to mimic: Claude studies them and writes every concept's
+ * scene and look in their style. Only in the request when there are some.
+ */
+function styleRefBlocks(urls: string[], client: boolean): Anthropic.ContentBlockParam[] {
+  const who = client ? "the presenter" : "Daniela";
+  return [
+    {
+      type: "text",
+      text: `The user attached ${urls.length === 1 ? "a reference ad" : `${urls.length} reference ads`} to mimic:`,
+    },
+    ...urls.map((url): Anthropic.ContentBlockParam => ({ type: "image", source: { type: "url", url } })),
+    {
+      type: "text",
+      text: `Make these ads look like ${urls.length === 1 ? "that one" : "those"}: study the layout (where the photo and the words sit), the type (weight, case, size, colour), the colour treatment and the overall feel, and write every ad's scene and look so it follows that style closely, with ${who} in place of whoever is in the reference. Don't copy its words, brand, logo or people: the headlines are still yours, from the user's idea. Say in notes what you took from the reference.`,
+    },
+  ];
+}
+
 export async function planPhotoAds(args: {
   prompt: string;
   count: number;
   /** A client studio's firm brief (studios.ts firmBrief); empty for Nexli. */
   firm?: string;
+  /** Signed URLs of reference ads to mimic (none = the request is exactly as before). */
+  styleRefUrls?: string[];
 }): Promise<{ ads: PhotoConcept[]; notes: string }> {
   const count = clampPhotoCount(args.count);
+  const ask = `Make ${count} static photo ad${count > 1 ? "s" : ""}.\n\nThe user's idea, in their words:\n${args.prompt.trim()}\n\nPlan the ${count} ad${count > 1 ? "s" : ""}.`;
+  const refs = args.styleRefUrls ?? [];
   const client = new Anthropic({ timeout: 280_000, maxRetries: 1 });
   const params = {
     model: MODEL,
@@ -108,7 +131,7 @@ export async function planPhotoAds(args: {
     messages: [
       {
         role: "user",
-        content: `Make ${count} static photo ad${count > 1 ? "s" : ""}.\n\nThe user's idea, in their words:\n${args.prompt.trim()}\n\nPlan the ${count} ad${count > 1 ? "s" : ""}.`,
+        content: refs.length ? [...styleRefBlocks(refs, Boolean(args.firm)), { type: "text", text: ask }] : ask,
       },
     ],
     output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
@@ -134,7 +157,10 @@ export async function planPhotoAds(args: {
 }
 
 /** What Manus is asked to make for one concept: the same ad in both sizes. */
-export function photoAdPrompt(concept: PhotoConcept & { note?: string | null }, opts: { client: boolean; hasReferences: boolean }): string {
+export function photoAdPrompt(
+  concept: PhotoConcept & { note?: string | null },
+  opts: { client: boolean; hasReferences: boolean; /** How many reference ads to mimic are attached after the photos of the person. */ styleRefs?: number }
+): string {
   const ad = opts.client ? { ...concept, scene: forClient(concept.scene), look: forClient(concept.look) } : concept;
   const who = opts.client ? "the presenter" : "Daniela";
   const reference = opts.client
@@ -143,9 +169,14 @@ export function photoAdPrompt(concept: PhotoConcept & { note?: string | null }, 
       ? "The attached photos are reference images of Daniela. She must clearly be the same woman: same face, hair, skin tone and build."
       : "Daniela is a confident woman in her thirties with long dark wavy hair.";
   const words = [`Headline: "${ad.headline}"`, ad.subline ? `Small line under it: "${ad.subline}"` : null].filter(Boolean).join("\n");
+  const styleRefs = opts.styleRefs ?? 0;
+  const mimic = styleRefs
+    ? `${styleRefs === 1 ? "The file named style-reference-1 is an example ad" : `The files named style-reference-1 to style-reference-${styleRefs} are example ads`} the user wants this one to look like. Copy ${styleRefs === 1 ? "its" : "their"} layout, composition, typography style, colour treatment and overall feel as closely as you can — but with ${who} (from the reference photos) instead of whoever is in ${styleRefs === 1 ? "it" : "them"}, and only the words below. Don't copy ${styleRefs === 1 ? "its" : "their"} words, logos, brand names or people.`
+    : null;
   return [
     `Create one finished static Facebook/Instagram ad, in two sizes. Both files are the same ad — the same photo of ${who}, the same words and the same look — laid out for each size.`,
     reference,
+    mimic,
     `The photo: ${ad.scene}`,
     `The words on the ad, exactly as written here (same spelling, capitals and punctuation; add no other words):\n${words}`,
     ad.look ? `The look: ${ad.look}` : null,

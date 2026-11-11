@@ -579,6 +579,8 @@ export const creativePhotoBatches = pgTable("creative_photo_batches", {
   notes: text("notes"),
   /** planned (in review) | started */
   status: text("status").notNull().default("planned"),
+  /** Reference ads the user wants these to look like (storage paths; Claude and Manus both see them). */
+  styleRefs: jsonb("style_refs").$type<string[] | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -835,6 +837,8 @@ export function ensureCreativeStudioTables(): Promise<void> {
         )
       `);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_photo_batches_owner_idx" ON "creative_photo_batches" ("owner_id", "created_at")`);
+      // Nov 2026: a reference ad to mimic.
+      await db.execute(sql`ALTER TABLE "creative_photo_batches" ADD COLUMN IF NOT EXISTS "style_refs" jsonb`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_photo_ads" (
           "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
