@@ -332,7 +332,7 @@ function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) =
   const [error, setError] = useState<{ text: string; avatarId?: string } | null>(null);
   const [over, setOver] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
-  const previews = usePreviews(pick?.photos ?? []);
+  const previews = usePreviews(pick?.photos ?? NO_FILES);
 
   async function take(files: File[]) {
     if (!files.length) return;
@@ -492,12 +492,19 @@ function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) =
   );
 }
 
+/** One stable empty list (a new [] each render would re-run the previews effect forever). */
+const NO_FILES: File[] = [];
+
 /** Object URLs for local photos (revoked when they change). */
 function usePreviews(files: File[]): string[] {
   const [urls, setUrls] = useState<string[]>([]);
   useEffect(() => {
+    if (files.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- previews follow the picked files
+      setUrls((u) => (u.length ? [] : u));
+      return;
+    }
     const made = files.slice(0, AVATAR_MAX_PHOTOS).map((f) => URL.createObjectURL(f));
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- previews follow the picked files
     setUrls(made);
     return () => made.forEach((u) => URL.revokeObjectURL(u));
   }, [files]);
