@@ -2,6 +2,7 @@
 
 import { NEXLI_BRANDING, type OwnerBranding } from "@/lib/branding";
 import { NEXLI_IDENTITY_LINE, NEXLI_POLICY_LINKS, nexliLetterKind, nexliPaymentDisclosure } from "@/lib/nexli-legal";
+import { FIRM_PLATFORM_LINE, firmPaymentDisclosure } from "@/lib/engagement-export";
 
 interface DocumentPreviewProps {
   /** Firm branding for the letterhead; defaults to Nexli. */
@@ -266,19 +267,7 @@ export function DocumentPreview({
           {nexliKind ? (
             nexliPaymentDisclosure(nexliKind)
           ) : (
-            <>
-              Payments for services rendered under this engagement are processed
-              through Stripe, Inc., a third-party payment processor. By executing
-              this agreement, you acknowledge and agree that{" "}
-              {fromCompany || fromName} is not responsible for any payment holds,
-              account freezes, processing delays, or disputes imposed by Stripe or
-              your financial institution. To minimize processing issues, we
-              recommend maintaining a complete and accurate business profile with
-              your payment provider. All payment data is handled directly by
-              Stripe in accordance with their security and privacy policies;{" "}
-              {fromCompany || fromName} does not store your full payment
-              credentials.
-            </>
+            firmPaymentDisclosure(fromCompany || fromName)
           )}
         </p>
         <p
@@ -303,10 +292,7 @@ export function DocumentPreview({
               ))}
             </>
           ) : (
-            <>
-              This document is delivered through the Nexli Portal platform. The
-              platform provider is not a party to this agreement.
-            </>
+            FIRM_PLATFORM_LINE
           )}
         </p>
       </div>

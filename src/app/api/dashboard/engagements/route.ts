@@ -14,6 +14,7 @@ import { type BillingPlan, TERM_MONTHS } from "@/lib/drs-pricing";
 import { ENTERPRISE, isEnterpriseTier, isEnterpriseTemplateName } from "@/lib/enterprise-pricing";
 import { createEngagement } from "@/lib/engagements";
 import { fillClientPlaceholder } from "@/lib/engagement-defaults";
+import { getOwnerBranding } from "@/lib/branding";
 
 export async function GET() {
   const session = await auth();
@@ -58,6 +59,8 @@ export async function GET() {
       name: owner?.name || "",
       company: owner?.companyName || "",
     },
+    // The letterhead the client saw (Nexli's for admins) — the letter view and its PDF use it.
+    branding: await getOwnerBranding(session.user.id),
   });
 }
 

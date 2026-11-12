@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { NEXLI_BRANDING, type OwnerBranding } from "@/lib/branding";
 import { EngagementsView, type Engagement } from "./engagements-view";
 
 /** Engagement letters: loads them and runs void / delete / onboarding; EngagementsView draws it. */
@@ -11,6 +12,7 @@ export function EngagementsClient() {
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [showDetail, setShowDetail] = useState<Engagement | null>(null);
   const [firmInfo, setFirmInfo] = useState<{ name: string; company: string }>({ name: "", company: "" });
+  const [branding, setBranding] = useState<OwnerBranding>(NEXLI_BRANDING);
 
   const load = useCallback(async () => {
     try {
@@ -20,6 +22,7 @@ export function EngagementsClient() {
       const list: Engagement[] = engData.engagements || [];
       setEngagements(list);
       if (engData.from) setFirmInfo(engData.from);
+      if (engData.branding?.logoUrl) setBranding(engData.branding);
       // /dashboard/engagements?id=… opens that letter (Clients page, the composer's success screen).
       const id = new URLSearchParams(window.location.search).get("id");
       const linked = id ? list.find((e) => e.id === id) : undefined;
@@ -66,6 +69,7 @@ export function EngagementsClient() {
       engagements={engagements}
       open={showDetail}
       firmInfo={firmInfo}
+      branding={branding}
       onOpen={setShowDetail}
       onClose={() => setShowDetail(null)}
       onVoid={handleVoid}

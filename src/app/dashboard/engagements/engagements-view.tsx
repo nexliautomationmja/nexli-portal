@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Eye, PenLine, Plus, Rocket, Trash2, XCircle } from "lucide-react";
 import {
   Button,
@@ -22,7 +23,10 @@ import {
   type Tone,
 } from "@/components/rainmaker";
 import { DocumentPreview } from "@/components/engagement-document";
+import type { OwnerBranding } from "@/lib/branding";
+import { letterDate, type LetterExport } from "@/lib/engagement-export";
 import { dateOrDash } from "@/lib/format";
+import { LetterActions } from "./letter-actions";
 
 export type LetterStatus = "draft" | "sent" | "viewed" | "signed" | "declined" | "expired";
 
@@ -38,6 +42,7 @@ export interface Signer {
   signedAt: string | null;
   declinedAt: string | null;
   signatureData: string | null;
+  signatureIp?: string | null;
 }
 
 export interface Engagement {
@@ -103,6 +108,7 @@ export interface EngagementsViewProps {
   engagements: Engagement[];
   open: Engagement | null;
   firmInfo: { name: string; company: string };
+  branding: OwnerBranding;
   onOpen: (e: Engagement) => void;
   onClose: () => void;
   onVoid: (id: string) => void;
@@ -239,7 +245,7 @@ export function EngagementsView(p: EngagementsViewProps) {
         </Section>
       </PageColumn>
 
-      {p.open && <LetterSheet eng={p.open} firmInfo={p.firmInfo} onClose={p.onClose} onVoid={p.onVoid} onDelete={p.onDelete} onStartOnboarding={p.onStartOnboarding} />}
+      {p.open && <LetterSheet eng={p.open} firmInfo={p.firmInfo} branding={p.branding} onClose={p.onClose} onVoid={p.onVoid} onDelete={p.onDelete} onStartOnboarding={p.onStartOnboarding} />}
     </RainmakerCanvas>
   );
 }
@@ -257,6 +263,7 @@ function TimelineRow({ tone, label, date }: { tone: Tone; label: string; date: s
 export function LetterSheet({
   eng,
   firmInfo,
+  branding,
   onClose,
   onVoid,
   onDelete,
@@ -264,11 +271,17 @@ export function LetterSheet({
 }: {
   eng: Engagement;
   firmInfo: { name: string; company: string };
+  branding: OwnerBranding;
   onClose: () => void;
   onVoid: (id: string) => void;
   onDelete: (id: string) => void;
   onStartOnboarding: (id: string) => void;
 }) {
+  // What Download / Share / Copy hand over: the letter as the client saw it.
+  const letter = useMemo<LetterExport>(
+    () => ({ subject: eng.subject, content: eng.content, date: letterDate(eng.sentAt), fromName: firmInfo.name, fromCompany: firmInfo.company, signers: eng.signers }),
+    [eng, firmInfo]
+  );
   const clients = clientSigners(eng.signers);
   const status = overallStatus(eng);
   const sender = eng.signers.find((s) => s.order === 0);
@@ -306,6 +319,8 @@ export function LetterSheet({
       }
     >
       <div className="space-y-5">
+        <LetterActions letter={letter} branding={branding} />
+
         <div>
           <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Signers</div>
           <ul className="space-y-2">
@@ -334,6 +349,7 @@ export function LetterSheet({
         </div>
 
         <DocumentPreview
+          branding={branding}
           content={eng.content}
           subject={eng.subject}
           clientName={firstClient?.name || ""}
