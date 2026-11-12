@@ -110,6 +110,30 @@ export interface AvatarVoiceOptions {
   at: string;
 }
 
+/** An avatar's 5-second Kling test clip (its face + voice, before a firm gets it). */
+export interface AvatarTestClip {
+  generationId: string;
+  status: "rendering" | "done" | "failed";
+  /** The mp4 in storage once it's done. */
+  path: string | null;
+  error: string | null;
+  line: string;
+  at: string;
+}
+
+/** Manus making more photos of an avatar (when the zip had too few angles). */
+export interface AvatarPhotoTask {
+  taskId: string;
+  taskUrl: string | null;
+  status: "running" | "waiting" | "failed";
+  /** What Manus is waiting on (an action only the user may approve, in Manus). */
+  waiting: string | null;
+  error: string | null;
+  /** Its first question was answered automatically. */
+  answered: boolean;
+  at: string;
+}
+
 /** What Claude saw in an avatar's photos (besides what's stored in its own columns). */
 export interface AvatarRead {
   age: string;
@@ -331,6 +355,8 @@ export const creativePresenters = pgTable("creative_presenters", {
   klingElementAt: timestamp("kling_element_at"),
   assignedAt: timestamp("assigned_at"),
   assignedBy: uuid("assigned_by"),
+  testClip: jsonb("test_clip").$type<AvatarTestClip | null>(),
+  photoTask: jsonb("photo_task").$type<AvatarPhotoTask | null>(),
   createdBy: uuid("created_by"),
   archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -983,7 +1009,9 @@ export function ensureCreativeStudioTables(): Promise<void> {
           ADD COLUMN IF NOT EXISTS "kling_element_error" text,
           ADD COLUMN IF NOT EXISTS "kling_element_at" timestamp,
           ADD COLUMN IF NOT EXISTS "assigned_at" timestamp,
-          ADD COLUMN IF NOT EXISTS "assigned_by" uuid
+          ADD COLUMN IF NOT EXISTS "assigned_by" uuid,
+          ADD COLUMN IF NOT EXISTS "test_clip" jsonb,
+          ADD COLUMN IF NOT EXISTS "photo_task" jsonb
       `);
       await db.execute(sql`ALTER TABLE "creative_studios" ADD COLUMN IF NOT EXISTS "default_presenter_id" uuid`);
       await db.execute(sql`

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { StudioView } from "@/lib/creative-studio/studios";
-import { AVATAR_MAX_PHOTOS, KLING_EXTRA_PHOTOS, SAMPLE_MAX, type AvatarView } from "@/lib/creative-studio/avatar-shared";
+import { AVATAR_MAX_PHOTOS, KLING_EXTRA_PHOTOS, SAMPLE_MAX, TEST_CLIP_CREDITS, TEST_CLIP_SECONDS, type AvatarView } from "@/lib/creative-studio/avatar-shared";
 import { CTA_CLASSES, SYNE } from "@/components/launch-pad";
 import { Button, FIELD, Segmented, Sheet } from "@/components/rainmaker";
 import { AssistantCard, Chip, ErrorStrip, SP, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
@@ -516,6 +516,18 @@ function AvatarSheet({
     setChosen(a.options?.voices[0]?.generatedVoiceId ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures what matters
   }, [sig]);
+  // While Manus makes photos or Kling renders the test clip: check every few seconds.
+  const working = a ? (a.photoTask && a.photoTask.status !== "failed" ? "photos" : a.test?.status === "rendering" ? "test" : null) : null;
+  useEffect(() => {
+    if (!id || !working) return;
+    const t = setInterval(() => {
+      void call<{ avatar: AvatarView }>(`${API}/${id}/${working}`, "GET")
+        .then((b) => onChange(b.avatar))
+        .catch(() => {});
+    }, working === "photos" ? 8000 : 15000);
+    return () => clearInterval(t);
+  }, [id, working, onChange]);
+
   useEffect(() => {
     // Reset per avatar.
     setError(null);
@@ -711,6 +723,7 @@ function AvatarSheet({
             }}
           />
           {a.read?.notes && <p className="mt-2 text-[11px] text-neutral-400">Claude: {a.read.notes}</p>}
+          {!a.locked && <MorePhotos a={a} busy={busy} usable={a.photos.length - flagged.size} onRun={run} />}
         </section>
 
         {/* Who they are */}
@@ -847,6 +860,7 @@ function AvatarSheet({
                 Rebuild
               </Button>
             </div>
+            <TestClip a={a} busy={busy} onRun={run} />
           </section>
         )}
 
@@ -922,5 +936,82 @@ function AvatarSheet({
         )}
       </div>
     </Sheet>
+  );
+}
+
+type Run = (label: string, fn: () => Promise<{ avatar?: AvatarView; note?: string } | void>) => Promise<void>;
+
+/** Manus makes 3 more angles of them — for a zip with too few (Kling needs the main photo plus one more). */
+function MorePhotos({ a, busy, usable, onRun }: { a: AvatarView; busy: string | null; usable: number; onRun: Run }) {
+  const t = a.photoTask;
+  if (t && t.status !== "failed") {
+    return (
+      <div className="mt-3 rounded-xl border border-violet-400/25 bg-violet-500/[0.06] px-3 py-2.5 text-xs text-violet-100">
+        {t.status === "waiting" ? (
+          <>
+            Manus is waiting for an OK: “{t.waiting}”.{" "}
+            {t.taskUrl && (
+              <a href={t.taskUrl} target="_blank" rel="noreferrer" className="font-bold underline">
+                Open it in Manus
+              </a>
+            )}
+          </>
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-violet-300" /> Manus is making 3 more photos of {a.name || "them"} — usually 3–8 minutes. They show up here.
+          </span>
+        )}
+      </div>
+    );
+  }
+  if (a.photos.length >= AVATAR_MAX_PHOTOS || a.photos.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <Button size="sm" variant={usable < 2 ? "primary" : "ghost"} busy={busy === "manus"} disabled={Boolean(busy)} onClick={() => void onRun("manus", () => call(`${API}/${a.id}/photos`, "POST"))}>
+        ✨ Manus: make 3 more angles
+      </Button>
+      <span className="text-[11px] text-neutral-500">
+        {t?.status === "failed" ? <span className="text-rose-300">Last try: {t.error}</span> : usable < 2 ? "Kling needs at least one more angle of them." : "From the main photo: head-and-shoulders, three-quarter, at a desk."}
+      </span>
+    </div>
+  );
+}
+
+/** A 5-second Kling clip of the avatar saying the start of its sample: the real check of face + voice. */
+function TestClip({ a, busy, onRun }: { a: AvatarView; busy: string | null; onRun: Run }) {
+  const ready = a.kling.status === "ready" || a.kling.status === "pending" || a.kling.status === "error";
+  const t = a.test;
+  return (
+    <div className="mt-2 border-t border-white/10 pt-3">
+      {t?.status === "done" && t.url && (
+        <div className="mb-3 flex flex-wrap items-start gap-3">
+          <video src={t.url} controls playsInline className="max-h-80 w-44 rounded-xl border border-white/10 bg-black" />
+          <p className="min-w-0 flex-1 text-xs leading-relaxed text-neutral-400">
+            Test clip: &ldquo;{t.line}&rdquo; — check the face matches the photos and the voice matches {a.pronoun === "he" ? "his" : "her"} voice above.
+          </p>
+        </div>
+      )}
+      {t?.status === "rendering" ? (
+        <p className="inline-flex items-center gap-2 text-xs text-neutral-300">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" /> Kling is making the test clip — usually 1–4 minutes.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            busy={busy === "test"}
+            disabled={Boolean(busy) || !ready}
+            onClick={() => {
+              if (!confirm(`Make a ${TEST_CLIP_SECONDS}-second test clip of ${a.name} on Kling? About ${TEST_CLIP_CREDITS} Kling credits.`)) return;
+              void onRun("test", () => call(`${API}/${a.id}/test`, "POST"));
+            }}
+          >
+            {t?.status === "done" ? "Make another test clip" : `Make a ${TEST_CLIP_SECONDS}-second test clip`}
+          </Button>
+          <span className="text-[11px] text-neutral-500">{t?.status === "failed" ? <span className="text-rose-300">Kling: {t.error}</span> : `About ${TEST_CLIP_CREDITS} Kling credits.`}</span>
+        </div>
+      )}
+    </div>
   );
 }

@@ -4,9 +4,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeClips, creativePresenters, creativeProjects, type FrameSpec } from "@/lib/creative-studio/tables";
 import { avatarPhotos, loadAvatar, type AvatarRow } from "@/lib/creative-studio/avatar";
-import { KLING_EXTRA_PHOTOS } from "@/lib/creative-studio/avatar-shared";
-import { readStorage } from "@/lib/creative-studio/frames";
-import { createElement, KlingNotConnectedError, uploadFrame, uuidv7 } from "@/lib/creative-studio/kling-mcp";
+import { KLING_EXTRA_PHOTOS, TEST_CLIP_SECONDS } from "@/lib/creative-studio/avatar-shared";
+import { readStorage, writeStorage } from "@/lib/creative-studio/frames";
+import { createElement, KlingNotConnectedError, queryTask, submitClip, uploadFrame, uuidv7 } from "@/lib/creative-studio/kling-mcp";
 
 /**
  * An AI avatar on Kling: a Kling Element made from its main photo, up to 3
@@ -102,4 +102,79 @@ export async function avatarElementFor(token: string, project: Project): Promise
   if (!row || !row.lockedAt) return null;
   const id = row.klingElementId ?? (await ensureElement(token, row));
   return id ? { id, name: row.name } : null;
+}
+
+// ---------------------------------------------------------------------------
+// The 5-second test clip: the avatar's main photo, its Element, its voice.
+
+/**
+ * The start of the voice sample, short enough for 5 seconds: whole sentences
+ * up to about 14 words; a first sentence longer than that is cut at a comma
+ * (or after 12 words).
+ */
+export function testLine(sample: string, maxWords = 14): string {
+  const sentences = sample.replace(/\s+/g, " ").trim().match(/[^.!?]+[.!?]+["”']?|[^.!?]+$/g) ?? [];
+  let out = "";
+  for (const raw of sentences) {
+    const next = `${out} ${raw.trim()}`.trim();
+    if (next.split(" ").length > maxWords) break;
+    out = next;
+  }
+  if (out) return out;
+  const words = (sentences[0] ?? sample).trim().split(" ").slice(0, 12).join(" ");
+  const comma = words.lastIndexOf(",");
+  return `${(comma > 10 ? words.slice(0, comma) : words).replace(/[,;:—–-]+$/, "")}.`;
+}
+
+/** What Kling is asked for in the test clip (the Element lead is added when it's sent). */
+export function testPrompt(row: Pick<AvatarRow, "name" | "pronoun" | "voice">, line: string): string {
+  const he = row.pronoun === "he";
+  return [
+    "Static locked-off camera, single continuous shot, no cuts.",
+    `${row.name} looks into the lens and starts speaking within the first half-second, with natural lip-sync and subtle head movement, saying: "${line}"`,
+    `${row.voice.trim() ? `Voice: ${row.voice.trim().replace(/[.]+$/, "")}. ` : ""}Delivery: warm, confident and conversational.`,
+    `${he ? "He" : "She"} says the line once, word for word, then holds a natural expression until the end.`,
+    `Realistic skin, hair and fabric; everything in the scene stays unchanged. Only ${he ? "his" : "her"} voice is heard: no background music, no on-screen text.`,
+  ].join(" ");
+}
+
+export async function startTestClip(token: string, row: AvatarRow): Promise<void> {
+  const elementId = row.klingElementId ?? (await ensureElement(token, row));
+  if (!elementId) throw new Error(row.klingElementError ?? "Set the avatar up on Kling first.");
+  const main = (await avatarPhotos(row.ownerId, row.id)).find((p) => p.id === row.mainPhotoId && p.storagePath);
+  if (!main?.storagePath) throw new Error("The avatar's main photo is missing.");
+  const trace = uuidv7();
+  const frameUrl = await uploadFrame(token, { bytes: await asKlingJpeg(await readStorage(main.storagePath)), mime: "image/jpeg", filename: `avatar-${row.id}-test.jpg` }, trace);
+  const line = testLine(row.voiceSample ?? `Hi, I'm ${row.name}.`);
+  const { generationId } = await submitClip(token, {
+    multiPerson: false,
+    prompt: testPrompt(row, line),
+    durationS: TEST_CLIP_SECONDS,
+    frameUrl,
+    taskTraceId: trace,
+    element: { id: elementId, name: row.name },
+    rationale: `Nexli Creative Studio: a 5-second test of the AI presenter "${row.name}" (its saved character and voice) before it's used in a firm's ads.`,
+  });
+  await db
+    .update(creativePresenters)
+    .set({ testClip: { generationId, status: "rendering", path: null, error: null, line, at: new Date().toISOString() }, updatedAt: new Date() })
+    .where(eq(creativePresenters.id, row.id));
+}
+
+/** Check a rendering test clip; store it when it's done. */
+export async function pollTestClip(token: string, row: AvatarRow): Promise<void> {
+  const t = row.testClip;
+  if (!t || t.status !== "rendering") return;
+  const state = await queryTask(token, t.generationId);
+  if (state.state === "running") return;
+  let next = { ...t };
+  if (state.state === "failed") next = { ...t, status: "failed", error: state.error.slice(0, 400) };
+  else {
+    const res = await fetch(state.videoUrl).catch(() => null);
+    if (!res?.ok) return; // try again on the next poll
+    const path = `avatars/${row.ownerId}/${row.id}/test-${Date.now()}.mp4`;
+    await writeStorage(path, Buffer.from(await res.arrayBuffer()), "video/mp4");
+    next = { ...t, status: "done", path, error: null };
+  }
+  await db.update(creativePresenters).set({ testClip: next, updatedAt: new Date() }).where(eq(creativePresenters.id, row.id));
 }

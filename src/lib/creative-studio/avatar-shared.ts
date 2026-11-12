@@ -61,8 +61,16 @@ export interface AvatarView {
   assigned: { studioKey: string; studioName: string; at: string } | null;
   /** Videos made with it (assignment can only be undone at 0). */
   videos: number;
+  /** The 5-second Kling test clip (its face + voice), if one was made. */
+  test: { status: "rendering" | "done" | "failed"; url: string | null; error: string | null; line: string } | null;
+  /** Manus making more photos of them, while it runs (or failed). */
+  photoTask: { status: "running" | "waiting" | "failed"; taskUrl: string | null; waiting: string | null; error: string | null } | null;
   createdAt: string;
 }
+
+/** Kling credits for the 5-second test clip (12 a second, as the renders count them). */
+export const TEST_CLIP_SECONDS = 5;
+export const TEST_CLIP_CREDITS = TEST_CLIP_SECONDS * 12;
 
 /** The main photo first, then the Kling picks — what Kling's Element is built from. */
 export function klingPhotosOf(a: Pick<AvatarView, "mainPhotoId" | "klingPhotoIds" | "photos">): string[] {

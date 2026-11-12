@@ -98,6 +98,7 @@ export async function avatarViews(ownerId: string, rows: AvatarRow[]): Promise<A
     ...photos.map((p) => p.storagePath),
     ...rows.map((r) => r.voicePath),
     ...rows.flatMap((r) => (r.lockedAt ? [] : r.voiceOptions?.options.map((o) => o.path) ?? [])),
+    ...rows.map((r) => r.testClip?.path),
   ].filter((p): p is string => Boolean(p));
   const signed = await signPaths(paths, 6 * 3600);
   const url = (p: string | null | undefined) => (p ? signed.get(p) ?? null : null);
@@ -133,6 +134,8 @@ export async function avatarViews(ownerId: string, rows: AvatarRow[]): Promise<A
       kling: { status: klingStatus(r, photoIds), error: r.klingElementError },
       assigned: r.studioId ? { studioKey: r.studioId, studioName: studioName.get(r.studioId) ?? "A client firm", at: (r.assignedAt ?? r.updatedAt).toISOString() } : null,
       videos: counts.get(r.id) ?? 0,
+      test: r.testClip ? { status: r.testClip.status, url: url(r.testClip.path), error: r.testClip.error, line: r.testClip.line } : null,
+      photoTask: r.photoTask ? { status: r.photoTask.status, taskUrl: r.photoTask.taskUrl, waiting: r.photoTask.waiting, error: r.photoTask.error } : null,
       createdAt: r.createdAt.toISOString(),
     };
   });
@@ -155,7 +158,7 @@ You get numbered photos that should all show the same AI-generated person. Look 
 - bestFor — one sentence: the kind of firm and clients this presenter suits best, and why (e.g. "Wealth managers serving retirees and pre-retirees: reads seasoned, calm and trustworthy").
 - names — 3 first names that suit them: common, easy to say and spell, not a famous person. If the user already gave a name, return it as the first.
 - voice — a description of their voice for a voice designer, 1–3 sentences, at most 400 characters: gender, age, accent, pitch, tone and texture, pace, energy. It must fit the face you see and the job: a trusted professional talking to business owners — warm, confident, clear, conversational. No announcer, radio, hype, sales or cartoon voices. American English unless the photos or the user's note say otherwise. Make it clearly different from the voices of the avatars already in the library (listed below, if any): a firm's audience must never hear the same voice twice.
-- sample — what they say in their voice sample, 240–420 characters, first person, natural spoken English: they introduce themselves by name and talk to a firm owner the way the start of a good ad would. Spell numbers as words. No prices, guarantees, promised results, firm names, or the word Nexli.
+- sample — what they say in their voice sample, 240–420 characters, first person, natural spoken English: they introduce themselves by name and talk to a firm owner the way the start of a good ad would. Open with one complete sentence of 8–12 words that works on its own (it's also their 5-second test clip), e.g. "Hi, I'm Marcus, and I help firm owners keep more of what they earn." Spell numbers as words. No prices, guarantees, promised results, firm names, or the word Nexli.
 - main — the number of the best main photo: face clearly visible and facing the camera, sharp and well lit, ideally head-and-shoulders or waist-up, no text on it.
 - kling — up to ${KLING_EXTRA_PHOTOS} other photo numbers that add the most: different angles, framing or outfits of the same person, sharp, no text. Never the main photo, never a photo of someone else.
 - otherPerson — the numbers of any photos that show a different person, no person, or several people. Empty when they're all the same person.
