@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PresenterInfo, Pronoun } from "@/lib/creative-studio/tables";
 import { Button, FIELD, Segmented, Sheet } from "@/components/rainmaker";
-import { inStudioQs } from "@/components/creative-studio/client";
+import { avatarsHref, inStudioQs } from "@/components/creative-studio/client";
 import { uploadReferenceFile } from "@/components/creative-studio/upload";
 import { SP, SvgIcon } from "@/components/creative-studio/canvas";
 
@@ -16,6 +16,8 @@ export interface PresenterOption {
   look: string;
   photos: number;
   thumbUrl: string | null;
+  /** An AI avatar given to this firm: its own voice, changed only in the Avatars tab. */
+  avatar?: true;
 }
 
 interface StudioLite {
@@ -119,7 +121,11 @@ export function PresenterPicker({
               active={value?.id === x.id}
               onClick={() => void choose(x.id)}
               name={x.name}
-              sub={`${x.pronoun === "he" ? "He/him" : "She/her"} · ${x.photos ? `${x.photos} photo${x.photos === 1 ? "" : "s"}` : x.look ? "Described, no photos yet" : "No photos yet"}`}
+              sub={
+                x.avatar
+                  ? `AI avatar · own voice · ${x.pronoun === "he" ? "he/him" : "she/her"}`
+                  : `${x.pronoun === "he" ? "He/him" : "She/her"} · ${x.photos ? `${x.photos} photo${x.photos === 1 ? "" : "s"}` : x.look ? "Described, no photos yet" : "No photos yet"}`
+              }
               url={x.thumbUrl}
             />
           ))}
@@ -136,7 +142,12 @@ export function PresenterPicker({
           >
             + New presenter
           </button>
-          {current && (
+          {current?.avatar && (
+            <a role="menuitem" href={avatarsHref()} className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-semibold text-neutral-300 hover:bg-white/5">
+              <SvgIcon d={SP.pen} size={14} /> {current.name} is an AI avatar · change in Avatars
+            </a>
+          )}
+          {current && !current.avatar && (
             <button
               type="button"
               role="menuitem"

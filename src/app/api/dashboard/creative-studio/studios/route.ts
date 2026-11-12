@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { creativeAssets, creativeProjects, creativeStudios } from "@/lib/creative-studio/tables";
+import { creativeAssets, creativePresenters, creativeProjects, creativeStudios } from "@/lib/creative-studio/tables";
 import { requireStudioAdmin } from "@/lib/creative-studio/access";
 import { NEXLI_KEY, type StudioCard } from "@/lib/creative-studio/studios";
 import { signPaths } from "@/lib/creative-studio/storage";
@@ -53,7 +53,24 @@ export async function GET() {
   for (const f of [...frames].sort((a, b) => a.sort - b.sort)) {
     if (f.projectId && f.path && !firstFrame.has(f.projectId)) firstFrame.set(f.projectId, f.path);
   }
-  const signed = await signPaths([...firstFrame.values()], 6 * 3600);
+  // Each firm's AI avatar: its default presenter, else any avatar assigned to it.
+  const avatars = await db
+    .select({ id: creativePresenters.id, name: creativePresenters.name, studioId: creativePresenters.studioId, mainPhotoId: creativePresenters.mainPhotoId })
+    .from(creativePresenters)
+    .where(and(eq(creativePresenters.ownerId, access.ownerId), eq(creativePresenters.avatar, true), isNotNull(creativePresenters.studioId), isNull(creativePresenters.archivedAt)))
+    .orderBy(asc(creativePresenters.assignedAt));
+  const mainIds = avatars.map((a) => a.mainPhotoId).filter((id): id is string => Boolean(id));
+  const mains = mainIds.length
+    ? await db.select({ id: creativeAssets.id, path: creativeAssets.storagePath }).from(creativeAssets).where(and(eq(creativeAssets.ownerId, access.ownerId), inArray(creativeAssets.id, mainIds)))
+    : [];
+  const mainPath = new Map(mains.map((m) => [m.id, m.path]));
+  const signed = await signPaths([...firstFrame.values(), ...mains.map((m) => m.path)], 6 * 3600);
+  const avatarOf = (studioId: string, defaultId: string | null) => {
+    const a = avatars.find((x) => x.studioId === studioId && x.id === defaultId) ?? avatars.find((x) => x.studioId === studioId);
+    if (!a) return null;
+    const path = a.mainPhotoId ? mainPath.get(a.mainPhotoId) : null;
+    return { id: a.id, name: a.name, thumbUrl: path ? signed.get(path) ?? null : null };
+  };
   const thumbsOf = (key: string) =>
     (byStudio.get(key)?.recent ?? [])
       .map((id) => firstFrame.get(id))
@@ -76,6 +93,7 @@ export async function GET() {
       clientName: null,
       archived: false,
       ...stats(NEXLI_KEY),
+      avatar: null,
     },
     ...studios.map(({ studio, logoUrl, clientName, clientPerson }) => ({
       key: studio.id,
@@ -88,6 +106,7 @@ export async function GET() {
       clientName: clientName ?? clientPerson ?? null,
       archived: Boolean(studio.archivedAt),
       ...stats(studio.id, studio.createdAt),
+      avatar: avatarOf(studio.id, studio.defaultPresenterId),
     })),
   ];
   return NextResponse.json({ studios: cards });

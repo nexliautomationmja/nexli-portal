@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { sql } from "drizzle-orm";
-import { integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "@/db/schema";
 import type { CaptionWord, EditOverlays, EditStyle, PipTrack } from "@/remotion/types";
 
@@ -90,6 +90,35 @@ export interface PresenterInfo {
   voice: string;
   /** What they look like (Manus uses it when there are no photos). */
   look: string;
+  /** An AI avatar from the Avatars tab: `voice` is its designed voice, the same in every clip (absent = any other presenter). */
+  avatar?: true;
+}
+
+/** One of the 3 voices ElevenLabs designed for an avatar (an mp3 in storage). */
+export interface AvatarVoiceOption {
+  generatedVoiceId: string;
+  path: string;
+  durationS: number | null;
+}
+
+/** The voices on offer for an avatar that isn't locked in yet. */
+export interface AvatarVoiceOptions {
+  /** The description they were designed from, and the line they say. */
+  description: string;
+  sample: string;
+  options: AvatarVoiceOption[];
+  at: string;
+}
+
+/** What Claude saw in an avatar's photos (besides what's stored in its own columns). */
+export interface AvatarRead {
+  age: string;
+  /** Name ideas when none was typed. */
+  names: string[];
+  /** Photo (asset) ids that look like someone else — left out of Kling and Manus. */
+  otherPerson: string[];
+  notes: string;
+  at: string;
 }
 
 export interface CreativeBrief {
@@ -240,6 +269,8 @@ export const creativeStudios = pgTable("creative_studios", {
   website: text("website"),
   /** The firm's portal client account, when it has one (name/logo come from there). */
   clientUserId: uuid("client_user_id").references(() => users.id, { onDelete: "set null" }),
+  /** The firm's own AI avatar (a creative_presenters row assigned here): new videos, batches and Photo Ads use it. */
+  defaultPresenterId: uuid("default_presenter_id"),
   createdBy: uuid("created_by"),
   archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -261,10 +292,45 @@ export const creativePresenters = pgTable("creative_presenters", {
   studioId: uuid("studio_id"),
   name: text("name").notNull(),
   pronoun: text("pronoun").$type<Pronoun>().notNull().default("she"),
-  /** No longer used: Kling picks a presenter's voice from the frame (kept for old rows). */
+  /**
+   * An avatar's designed voice description (the same "Voice:" line in every
+   * clip). Not used for other presenters: Kling picks their voice from the
+   * frame (old rows may still hold text).
+   */
   voice: text("voice").notNull().default(""),
   /** How they look (Manus works from this when there are no photos). */
   look: text("look").notNull().default(""),
+  /**
+   * AI avatars (Nov 2026): made in the Avatars tab from a zip of photos, with
+   * a voice ElevenLabs designed from what Claude saw, locked in, then
+   * assigned to ONE client firm's studio (studio_id moves there with its
+   * photos). Unassigned avatars (studio_id null) are only in the library —
+   * never offered in Nexli's own videos.
+   */
+  avatar: boolean("avatar").notNull().default(false),
+  /** Marcel's note when creating it ("for estate-planning attorneys"). */
+  note: text("note"),
+  /** What kind of firm it suits (Claude, editable). */
+  bestFor: text("best_for"),
+  avatarRead: jsonb("avatar_read").$type<AvatarRead | null>(),
+  /** The 3 designed voices to pick from (cleared at lock-in). */
+  voiceOptions: jsonb("voice_options").$type<AvatarVoiceOptions | null>(),
+  /** The ElevenLabs voice kept at lock-in (null if ElevenLabs couldn't keep it; the sample still works). */
+  voiceId: text("voice_id"),
+  /** The chosen voice sample (mp3 in storage) and the line it says — Kling's element voice. */
+  voicePath: text("voice_path"),
+  voiceSample: text("voice_sample"),
+  /** The main photo and up to 3 more angles for Kling (asset ids). */
+  mainPhotoId: uuid("main_photo_id"),
+  klingPhotoIds: jsonb("kling_photo_ids").$type<string[] | null>(),
+  lockedAt: timestamp("locked_at"),
+  /** Kling Element (face + voice): id, what it was built from, the last error. */
+  klingElementId: text("kling_element_id"),
+  klingElementHash: text("kling_element_hash"),
+  klingElementError: text("kling_element_error"),
+  klingElementAt: timestamp("kling_element_at"),
+  assignedAt: timestamp("assigned_at"),
+  assignedBy: uuid("assigned_by"),
   createdBy: uuid("created_by"),
   archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -898,6 +964,28 @@ export function ensureCreativeStudioTables(): Promise<void> {
       `);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_presenters_owner_idx" ON "creative_presenters" ("owner_id", "studio_id")`);
       await db.execute(sql`ALTER TABLE "creative_assets" ADD COLUMN IF NOT EXISTS "presenter_id" uuid`);
+      // Nov 2026: AI avatars (own voice + Kling Element), assigned to one client firm.
+      await db.execute(sql`
+        ALTER TABLE "creative_presenters"
+          ADD COLUMN IF NOT EXISTS "avatar" boolean NOT NULL DEFAULT false,
+          ADD COLUMN IF NOT EXISTS "note" text,
+          ADD COLUMN IF NOT EXISTS "best_for" text,
+          ADD COLUMN IF NOT EXISTS "avatar_read" jsonb,
+          ADD COLUMN IF NOT EXISTS "voice_options" jsonb,
+          ADD COLUMN IF NOT EXISTS "voice_id" text,
+          ADD COLUMN IF NOT EXISTS "voice_path" text,
+          ADD COLUMN IF NOT EXISTS "voice_sample" text,
+          ADD COLUMN IF NOT EXISTS "main_photo_id" uuid,
+          ADD COLUMN IF NOT EXISTS "kling_photo_ids" jsonb,
+          ADD COLUMN IF NOT EXISTS "locked_at" timestamp,
+          ADD COLUMN IF NOT EXISTS "kling_element_id" text,
+          ADD COLUMN IF NOT EXISTS "kling_element_hash" text,
+          ADD COLUMN IF NOT EXISTS "kling_element_error" text,
+          ADD COLUMN IF NOT EXISTS "kling_element_at" timestamp,
+          ADD COLUMN IF NOT EXISTS "assigned_at" timestamp,
+          ADD COLUMN IF NOT EXISTS "assigned_by" uuid
+      `);
+      await db.execute(sql`ALTER TABLE "creative_studios" ADD COLUMN IF NOT EXISTS "default_presenter_id" uuid`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_kling_connections" (
           "owner_id" uuid PRIMARY KEY REFERENCES "users"("id") ON DELETE CASCADE,

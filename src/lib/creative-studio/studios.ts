@@ -1,7 +1,7 @@
 import { and, eq, isNull, type AnyColumn, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { creativeStudios } from "@/lib/creative-studio/tables";
+import { creativePresenters, creativeStudios } from "@/lib/creative-studio/tables";
 
 /**
  * Studios: Nexli's own Creative Studio plus one per client firm. Nexli's is
@@ -28,6 +28,8 @@ export interface Studio {
   logoUrl: string | null;
   clientUserId: string | null;
   archived: boolean;
+  /** The firm's AI avatar (creative_presenters id): new videos, batches and Photo Ads use it. Null for Nexli. */
+  defaultPresenterId: string | null;
 }
 
 /** Just what the browser needs to show where you are and link back. */
@@ -43,9 +45,29 @@ export const NEXLI_STUDIO: Studio = {
   logoUrl: null,
   clientUserId: null,
   archived: false,
+  defaultPresenterId: null,
 };
 
 export const studioRef = (s: Studio): StudioRef => ({ key: s.key, kind: s.kind, name: s.name });
+
+/** The firm's AI avatar (its default presenter), if it still has it. */
+export async function studioAvatar(ownerId: string, studio: Studio): Promise<{ id: string; name: string } | null> {
+  if (!studio.id || !studio.defaultPresenterId) return null;
+  const [row] = await db
+    .select({ id: creativePresenters.id, name: creativePresenters.name })
+    .from(creativePresenters)
+    .where(
+      and(
+        eq(creativePresenters.id, studio.defaultPresenterId),
+        eq(creativePresenters.ownerId, ownerId),
+        eq(creativePresenters.studioId, studio.id),
+        eq(creativePresenters.avatar, true),
+        isNull(creativePresenters.archivedAt)
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,6 +84,7 @@ function fromRow(row: StudioRow, logoUrl: string | null): Studio {
     logoUrl,
     clientUserId: row.clientUserId,
     archived: Boolean(row.archivedAt),
+    defaultPresenterId: row.defaultPresenterId ?? null,
   };
 }
 
@@ -150,6 +173,8 @@ export interface StudioView {
   /** A client studio's "About this firm" is filled in (the writers sell the firm from it). */
   hasAbout: boolean;
   archived: boolean;
+  /** The firm's AI avatar, picked by default for new videos (absent = the studio's default presenter). */
+  avatar?: { id: string; name: string } | null;
 }
 
 /** A studio on the picker ("What creative studio are we going for?"). */
@@ -168,4 +193,6 @@ export interface StudioCard {
   lastActivity: string | null;
   /** Opening frames of its 3 newest videos (signed URLs). */
   thumbs: string[];
+  /** The firm's AI avatar (its default presenter), when it has one. */
+  avatar: { id: string; name: string; thumbUrl: string | null } | null;
 }

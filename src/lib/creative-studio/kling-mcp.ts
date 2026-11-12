@@ -381,8 +381,32 @@ export async function uploadFrame(
   const res = await fetch(uploadUrl, { method: "POST", body: form });
   const body = await res.json().catch(() => null);
   const url = findValue(body, ["url", "fileUrl", "file_url"]) as string | undefined;
-  if (!res.ok || !url) throw new KlingToolError(`Kling frame upload failed (${res.status})`, "tool");
+  if (!res.ok || !url) throw new KlingToolError(`Kling ${file.mime.startsWith("audio/") ? "voice" : "frame"} upload failed (${res.status})`, "tool");
   return url;
+}
+
+/**
+ * A Kling Element (a reusable character): a cover photo plus 1–3 more angles
+ * and an optional mp3 voice, all as Kling URLs (uploadFrame). Returns its id.
+ */
+export async function createElement(
+  token: string,
+  args: { name: string; description: string; cover: string; secondary: string[]; voice?: string; taskTraceId: string }
+): Promise<string> {
+  const result = await callTool(token, "element_create", {
+    name: args.name.slice(0, 60),
+    description: args.description.slice(0, 500),
+    resource: {
+      cover: args.cover,
+      secondary: args.secondary.map((url, i) => ({ name: `angle-${i + 1}`, inputType: "URL", url })),
+      ...(args.voice ? { voice: args.voice } : {}),
+    },
+    tags: ["Characters"],
+    taskTraceId: args.taskTraceId,
+  });
+  const id = findValue(result, ["elementId", "element_id", "id"]);
+  if (id === undefined || id === null || id === "") throw new KlingToolError("Kling made the character but returned no id", "tool");
+  return String(id);
 }
 
 export async function submitClip(
@@ -396,16 +420,20 @@ export async function submitClip(
     rationale: string;
     /** Omni needs the aspect ratio (its default is 16:9): 9:16 for ads, 16:9 for VSLs. */
     aspectRatio?: "9:16" | "16:9";
+    /** An AI avatar's Kling Element (same face and voice in every clip); absent = exactly as before. */
+    element?: { id: string; name: string };
   }
 ): Promise<{ generationId: string; model: string }> {
   const model = args.multiPerson ? "kling-video-v3_0_omni" : "kling-video-v3_0";
+  const prompt = args.element ? `${elementLead(args.element)} ${args.prompt}` : args.prompt;
   const common = [
-    { name: "prompt", value: args.prompt },
+    { name: "prompt", value: prompt },
     { name: "duration", value: String(Math.min(12, Math.max(3, Math.round(args.durationS)))) },
     { name: "resolution", value: "1080p" },
     { name: "imageCount", value: "1" },
     { name: "prefer_multi_shots", value: "false" },
     { name: "enable_audio", value: "true" },
+    ...(args.element ? [{ name: "elements", value: JSON.stringify([{ id: args.element.id, bindName: args.element.name }]) }] : []),
   ];
   const result = await callTool(token, "image_to_video", {
     model,
@@ -418,6 +446,9 @@ export async function submitClip(
   if (!generationId) throw new KlingToolError("Kling accepted the job but returned no generation id", "tool");
   return { generationId: String(generationId), model };
 }
+
+/** Where the Element goes in the prompt (Kling binds it at <<<id>>>). */
+export const elementLead = (e: { id: string; name: string }) => `${e.name} is <<<${e.id}>>>: the same face and the same voice as always.`;
 
 export type TaskState =
   | { state: "running"; raw: string }

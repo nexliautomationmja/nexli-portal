@@ -352,7 +352,20 @@ const STUDIO_TABS = [
     label: "Meta Ad Copy",
     sub: "Drop creatives, get the copy",
   },
+  {
+    id: "avatars",
+    label: "Avatars",
+    sub: "A face + voice per firm",
+  },
 ] as const;
+
+/** A person icon for the Avatars tab. */
+const AVATAR_ICON = (
+  <>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </>
+);
 
 /**
  * The studio's tabs — Videos, Photo Ads and Meta Ad Copy — as a glass segmented
@@ -362,12 +375,14 @@ const STUDIO_TABS = [
  */
 export function StudioTabs({ active, studioKey }: { active: StudioTab; studioKey: string }) {
   const frame = active === "adcopy" ? META_LIME_CONIC : SHIMMER_CONIC;
+  // The avatar library is made in Nexli's studio, then each avatar is given to one firm.
+  const tabs = STUDIO_TABS.filter((t) => t.id !== "avatars" || studioKey === "nexli");
   return (
-    <nav aria-label="Creative Studio" className="relative inline-flex w-full max-w-2xl overflow-hidden rounded-[22px] p-[1.5px] sm:w-auto">
+    <nav aria-label="Creative Studio" className={`relative inline-flex w-full ${tabs.length === 4 ? "max-w-4xl" : "max-w-2xl"} overflow-hidden rounded-[22px] p-[1.5px] sm:w-auto`}>
       <span aria-hidden="true" className="pointer-events-none absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-70" style={{ background: frame }} />
       <span aria-hidden="true" className="pointer-events-none absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-40 blur-md" style={{ background: frame }} />
-      <div className="relative z-10 grid w-full grid-cols-3 gap-1 rounded-[21px] bg-[#0b1220]/95 p-1 backdrop-blur-xl">
-        {STUDIO_TABS.map((t) => {
+      <div className={`relative z-10 grid w-full gap-1 rounded-[21px] bg-[#0b1220]/95 p-1 backdrop-blur-xl ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+        {tabs.map((t) => {
           const on = t.id === active;
           const meta = t.id === "adcopy";
           const tabClass = on
@@ -388,7 +403,7 @@ export function StudioTabs({ active, studioKey }: { active: StudioTab; studioKey
               }
             >
               <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors sm:h-9 sm:w-9 sm:rounded-xl ${
+                className={`${tabs.length === 4 ? "hidden sm:flex" : "flex"} h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors sm:h-9 sm:w-9 sm:rounded-xl ${
                   on
                     ? meta
                       ? "bg-[#0a0f1c] ring-1 ring-lime-300/40"
@@ -398,7 +413,7 @@ export function StudioTabs({ active, studioKey }: { active: StudioTab; studioKey
                       : "bg-white/5 text-neutral-400 group-hover:bg-blue-500/20 group-hover:text-blue-200"
                 }`}
               >
-                {meta ? <MetaLogo className="h-auto w-[19px]" /> : <SvgIcon d={t.id === "photos" ? SP.image : SP.film} size={18} />}
+                {meta ? <MetaLogo className="h-auto w-[19px]" /> : <SvgIcon d={t.id === "photos" ? SP.image : t.id === "avatars" ? AVATAR_ICON : SP.film} size={18} />}
               </span>
               <span className="min-w-0 flex-1 text-left">
                 <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-sm font-bold leading-tight" style={SYNE}>

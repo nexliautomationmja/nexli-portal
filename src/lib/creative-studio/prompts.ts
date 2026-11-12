@@ -46,13 +46,15 @@ export const DANIELA: PresenterInfo = { id: "", name: "Daniela", pronoun: "she",
 export const STUDIO_PRESENTER: PresenterInfo = { id: "", name: "", pronoun: "she", voice: "", look: "" };
 
 /**
- * Only Daniela has a set voice (Marcel, Nov 10 2026). Anyone else (another
- * presenter, a client studio's presenter, anyone else in the frame) gets no
- * voice line, so Kling gives them the voice that fits the person it sees in
- * the frame — a man sounds like a man, two people sound like two people.
+ * Only Daniela has a set voice (Marcel, Nov 10 2026) — and AI avatars (Nov
+ * 2026), whose voice was designed for them and is the same in every clip.
+ * Anyone else (another presenter, a client studio's presenter, anyone else
+ * in the frame) gets no voice line, so Kling gives them the voice that fits
+ * the person it sees in the frame — a man sounds like a man, two people
+ * sound like two people.
  */
 export function hasSetVoice(presenter: PresenterInfo): boolean {
-  return !presenter.id && presenter.name === DANIELA.name;
+  return (!presenter.id && presenter.name === DANIELA.name) || Boolean(presenter.avatar && presenter.voice.trim());
 }
 
 /** "Voice: …. Delivery: …." — the voice part only when there's one to give. */
@@ -177,8 +179,10 @@ export function buildKlingPrompt(args: {
     });
   }
   const { format, rig, clip } = args;
-  // Daniela's voice line, or none (a client studio's one-frame video): Kling picks it from the frame.
-  const daniela = hasSetVoice(args.presenter ?? DANIELA);
+  // Daniela's voice line (an AI avatar's own), or none (a client studio's one-frame video): Kling picks it from the frame.
+  const presenter = args.presenter ?? DANIELA;
+  const daniela = hasSetVoice(presenter);
+  const own = presenter.avatar ? presenter.voice.trim() : null;
   const frame: FrameSpec = args.frame ?? { subject: "", room: "", base: "", positions: [] };
   const orientation = format === "vsl_16x9" ? "Horizontal 16:9" : "Vertical 9:16";
   const line = clip.line.trim();
@@ -222,7 +226,7 @@ export function buildKlingPrompt(args: {
         ? "The other two women never speak and keep their lips closed the whole time, but they behave like real people listening, not statues, with natural blinking, breathing and small shifts of weight."
         : "The other woman never speaks and keeps her lips closed the whole time, but she behaves like a real person listening, not a statue, with natural blinking, breathing and small shifts of weight.",
       reactions,
-      voiceAndDelivery(daniela ? MULTI_VOICE : "", register, cues),
+      voiceAndDelivery(daniela ? own ?? MULTI_VOICE : "", register, cues),
       room,
       "Only one voice is heard: no background music, no other people talking, no on-screen text.",
     ]
@@ -239,7 +243,7 @@ export function buildKlingPrompt(args: {
     opening,
     action,
     `She starts speaking within the first half-second, looking into the lens with natural lip-sync and subtle head movement, saying: "${line}"`,
-    voiceAndDelivery(daniela ? DANIELA_VOICE : "", register, cues),
+    voiceAndDelivery(daniela ? own ?? DANIELA_VOICE : "", register, cues),
     "She says the line once, word for word, then holds a natural expression until the end.",
     room,
     "Realistic skin, hair and fabric; everything in the scene stays unchanged. Only her voice is heard: no background music, no on-screen text.",
@@ -292,8 +296,9 @@ function speakerIn(scene: SceneSpec, clip: ClipFields): ScenePerson | null {
 }
 
 /**
- * The voice line for whoever is heard: Daniela's set voice when it's her,
- * otherwise nothing, so Kling picks the voice from the person in the frame.
+ * The voice line for whoever is heard: Daniela's set voice when it's her
+ * (or an AI avatar's own), otherwise nothing, so Kling picks the voice from
+ * the person in the frame.
  * A narrator who isn't in the frame gives Kling nothing to go on, so a saved
  * presenter narrating off screen gets just "a man's / a woman's voice".
  */

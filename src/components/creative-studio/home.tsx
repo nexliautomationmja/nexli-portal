@@ -74,8 +74,8 @@ export function StudioHome({ studio }: { studio: StudioView }) {
   const [seed, setSeed] = useState(0);
   const [prefill, setPrefill] = useState<string | null>(null);
   const [count, setCount] = useState(1);
-  // Who presents the next video (null = the studio's default: Daniela in Nexli's).
-  const [presenter, setPresenter] = useState<{ id: string; name: string } | null>(null);
+  // Who presents the next video (null = the studio's default: Daniela in Nexli's; a firm's AI avatar when it has one).
+  const [presenter, setPresenter] = useState<{ id: string; name: string } | null>(studio.avatar ?? null);
   const [batches, setBatches] = useState<BatchRow[]>([]);
   const [plan, setPlan] = useState<BatchPlan | null>(null);
   const [planning, setPlanning] = useState<string | null>(null);
@@ -95,7 +95,8 @@ export function StudioHome({ studio }: { studio: StudioView }) {
       .then((b) => !cancelled && setBatches(b?.batches ?? []))
       .catch(() => {});
     if (client) {
-      fetch(`/api/dashboard/creative-studio/references${qs}`)
+      // The firm's AI avatar's photos when it has one (batches use them too), else the studio's own.
+      fetch(`/api/dashboard/creative-studio/references${qs}${studio.avatar ? `&presenter=${encodeURIComponent(studio.avatar.id)}` : ""}`)
         .then((r) => r.json())
         .then((b) => !cancelled && setClientRefs(Array.isArray(b?.references) ? b.references.length : 0))
         .catch(() => !cancelled && setClientRefs(0));
@@ -103,7 +104,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
     return () => {
       cancelled = true;
     };
-  }, [qs, client]);
+  }, [qs, client, studio.avatar]);
 
   function changeFormat(f: CreativeFormat) {
     setFormat(f);
@@ -206,7 +207,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
       const r = await fetch(`/api/dashboard/creative-studio/projects${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief: { direction: text }, format: fmt, ...(presenter ? { presenterId: presenter.id } : {}) }),
+        body: JSON.stringify({ brief: { direction: text }, format: fmt, ...(presenter ? { presenterId: presenter.id } : studio.avatar ? { presenterId: null } : {}) }),
       });
       const b = await r.json().catch(() => null);
       if (!r.ok || !b?.id) throw new Error(b?.error || "Couldn't start the video");

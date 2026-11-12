@@ -10,10 +10,14 @@ export function api(path: string) {
 export const inStudioQs = (key: string) => `?studio=${encodeURIComponent(key)}`;
 
 /** A studio's home page ("nexli" = Nexli's own studio). */
-export type StudioTab = "videos" | "photos" | "adcopy";
+export type StudioTab = "videos" | "photos" | "adcopy" | "avatars";
 
-export const studioHref = (key: string, tab: StudioTab = "videos") =>
-  `/dashboard/creative-studio/s/${encodeURIComponent(key)}${tab === "adcopy" ? "/ad-copy" : tab === "photos" ? "/photos" : ""}`;
+const TAB_PATH: Record<StudioTab, string> = { videos: "", photos: "/photos", adcopy: "/ad-copy", avatars: "/avatars" };
+
+export const studioHref = (key: string, tab: StudioTab = "videos") => `/dashboard/creative-studio/s/${encodeURIComponent(key)}${TAB_PATH[tab]}`;
+
+/** The AI avatar library lives in Nexli's studio (avatars are made there, then given to a firm). */
+export const avatarsHref = () => studioHref("nexli", "avatars");
 
 export async function send(
   url: string,

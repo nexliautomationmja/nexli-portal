@@ -106,8 +106,8 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const title = typeof body?.title === "string" && body.title.trim() ? body.title.trim().slice(0, 200) : "Untitled video";
   const { format, rig } = cleanFormatRig(body?.format, body?.rig);
-  // Who presents (a saved presenter of this studio; absent = the studio's default).
-  const presenter = await presenterForStudio(access.ownerId, studio.id, body?.presenterId);
+  // Who presents (a saved presenter of this studio; null = the studio's default; not sent = the firm's AI avatar, if it has one).
+  const presenter = await presenterForStudio(access.ownerId, studio.id, body && "presenterId" in body ? body.presenterId : studio.defaultPresenterId);
   if (presenter === undefined) return NextResponse.json({ error: "That presenter isn't in this studio." }, { status: 400 });
 
   const [created] = await db

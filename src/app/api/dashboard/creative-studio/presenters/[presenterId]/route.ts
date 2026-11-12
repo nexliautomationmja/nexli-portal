@@ -8,6 +8,10 @@ import { cleanPresenter, listPresenters, loadPresenter } from "@/lib/creative-st
 
 type Ctx = { params: Promise<{ presenterId: string }> };
 
+/** AI avatars are changed in the Avatars tab (their voice and Kling Element go with them). */
+const avatarElsewhere = (name: string) =>
+  NextResponse.json({ error: `${name} is an AI avatar. Change it in Creative Studio → Nexli → Avatars.` }, { status: 409 });
+
 /**
  * PATCH { name?, pronoun?, voice?, look? } → update. Videos keep the snapshot
  * they were written with; the next script picks up the change.
@@ -20,6 +24,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (!studio) return studioNotFound();
   const row = await loadPresenter(access.ownerId, (await params).presenterId);
   if (!row || (row.studioId ?? null) !== (studio.id ?? null)) return NextResponse.json({ error: "Presenter not found" }, { status: 404 });
+  if (row.avatar) return avatarElsewhere(row.name);
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const fields = cleanPresenter({ ...row, ...(body ?? {}) });
   if (!fields.name) return NextResponse.json({ error: "Give the presenter a name." }, { status: 400 });
@@ -34,6 +39,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   if (!studio) return studioNotFound();
   const row = await loadPresenter(access.ownerId, (await params).presenterId);
   if (!row || (row.studioId ?? null) !== (studio.id ?? null)) return NextResponse.json({ error: "Presenter not found" }, { status: 404 });
+  if (row.avatar) return avatarElsewhere(row.name);
   await db.update(creativePresenters).set({ archivedAt: new Date(), updatedAt: new Date() }).where(eq(creativePresenters.id, row.id));
   return NextResponse.json({ presenters: await listPresenters(access.ownerId, studio) });
 }

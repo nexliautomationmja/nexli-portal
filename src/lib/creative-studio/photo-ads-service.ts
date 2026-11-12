@@ -21,6 +21,7 @@ import {
 import { FEED_SIZE, PHOTO_AUTO_REPLY, photoAdPrompt, sizeOf, STORY_SIZE } from "@/lib/creative-studio/photo-ads";
 import { writeStorage } from "@/lib/creative-studio/frames";
 import { removePaths, signPaths } from "@/lib/creative-studio/storage";
+import { avatarPhotos, loadAvatar } from "@/lib/creative-studio/avatar";
 import { inStudio, studioById, type Studio } from "@/lib/creative-studio/studios";
 
 /**
@@ -192,8 +193,25 @@ export async function listBatches(ownerId: string, studio: Studio): Promise<Phot
   });
 }
 
-/** The studio's default presenter's reference pictures (Daniela's in Nexli's studio), signed for Manus. */
+/**
+ * The studio's presenter's reference pictures, signed for Manus: a firm's AI
+ * avatar's (main photo first) when it has one, else the studio's default
+ * presenter's (Daniela's in Nexli's studio).
+ */
 export async function referenceFiles(ownerId: string, studio: Studio): Promise<{ url: string; filename: string }[]> {
+  const avatar = studio.defaultPresenterId ? await loadAvatar(ownerId, studio.defaultPresenterId) : null;
+  if (avatar && avatar.studioId === studio.id) {
+    const skip = new Set(avatar.avatarRead?.otherPerson ?? []);
+    const rank = (id: string) => (id === avatar.mainPhotoId ? 0 : (avatar.klingPhotoIds ?? []).includes(id) ? 1 : 2);
+    const photos = (await avatarPhotos(ownerId, avatar.id)).filter((p) => p.storagePath && !skip.has(p.id)).sort((a, b) => rank(a.id) - rank(b.id)).slice(0, 6);
+    if (photos.length) {
+      const signed = await signPaths(photos.map((p) => p.storagePath), 3 * 3600);
+      return photos
+        .map((p) => (p.storagePath ? signed.get(p.storagePath) : undefined))
+        .filter((u): u is string => Boolean(u))
+        .map((url, i) => ({ url, filename: `presenter-reference-${i + 1}.png` }));
+    }
+  }
   const refs = await db
     .select({ storagePath: creativeAssets.storagePath })
     .from(creativeAssets)

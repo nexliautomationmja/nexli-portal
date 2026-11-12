@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CTA_CLASSES, SYNE } from "@/components/launch-pad";
 import { CANVAS_VARS, ErrorStrip, GradientText, SP, StudioCanvas, SvgIcon } from "@/components/creative-studio/canvas";
-import { studioHref } from "@/components/creative-studio/client";
+import { avatarsHref, studioHref } from "@/components/creative-studio/client";
+import type { AvatarView } from "@/lib/creative-studio/avatar-shared";
 import type { StudioCard } from "@/lib/creative-studio/studios";
 
 interface PortalClient {
@@ -260,6 +261,19 @@ function StudioTile({
             {studio.about || "No “About this firm” yet: add what they offer so Claude sells the right thing."}
           </p>
         )}
+        {client && (
+          <p className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-1 pr-3 text-[11px] text-neutral-300">
+            {studio.avatar?.thumbUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+              <img src={studio.avatar.thumbUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
+            ) : (
+              <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5 text-[10px] text-neutral-500">
+                ?
+              </span>
+            )}
+            <span className="truncate">{studio.avatar ? <>Avatar · <span className="font-semibold text-white">{studio.avatar.name}</span></> : "No AI avatar yet"}</span>
+          </p>
+        )}
         <div className="mt-4 flex items-end justify-between gap-3">
           <div className="flex -space-x-3">
             {studio.thumbs.length ? (
@@ -468,6 +482,7 @@ function StudioModal({ editing, onClose, onSaved }: { editing: Editing; onClose:
               Claude writes this studio&apos;s scripts, batch plans and Meta ad copy for the firm from this, never Nexli&apos;s offer. You can fill it in later.
             </span>
           </label>
+          {existing && <AvatarRow studio={existing} />}
           {error && <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>}
         </div>
 
@@ -482,5 +497,102 @@ function StudioModal({ editing, onClose, onSaved }: { editing: Editing; onClose:
       </div>
     </div>,
     document.body
+  );
+}
+
+/**
+ * The firm's AI avatar in its details: the one it has, or pick a locked-in
+ * avatar from the library to give it (it's theirs alone from then on).
+ */
+function AvatarRow({ studio }: { studio: StudioCard }) {
+  const [current, setCurrent] = useState(studio.avatar);
+  const [library, setLibrary] = useState<AvatarView[] | null>(null);
+  const [pick, setPick] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/dashboard/creative-studio/avatars", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((b: { avatars?: AvatarView[] }) => !cancelled && setLibrary((b?.avatars ?? []).filter((a) => a.locked && !a.assigned)))
+      .catch(() => !cancelled && setLibrary([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function assign() {
+    const a = library?.find((x) => x.id === pick);
+    if (!a || !confirm(`Give ${a.name} to ${studio.name}? ${a.pronoun === "he" ? "He" : "She"} becomes their presenter, and no other firm can ever use ${a.pronoun === "he" ? "him" : "her"}.`)) return;
+    setBusy(true);
+    setError(null);
+    const r = await fetch(`/api/dashboard/creative-studio/avatars/${a.id}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studioKey: studio.key }),
+    }).catch(() => null);
+    const b = (await r?.json().catch(() => null)) as { avatar?: AvatarView; error?: string } | null;
+    setBusy(false);
+    if (!r?.ok || !b?.avatar) {
+      setError(b?.error ?? "That didn't work. Try again.");
+      return;
+    }
+    const main = b.avatar.photos.find((p) => p.id === b.avatar!.mainPhotoId);
+    setCurrent({ id: b.avatar.id, name: b.avatar.name, thumbUrl: main?.url ?? null });
+    setLibrary((l) => (l ?? []).filter((x) => x.id !== a.id));
+    setPick("");
+  }
+
+  const label = "mb-1.5 block text-[11px] font-black uppercase tracking-[0.14em] text-neutral-500";
+  return (
+    <div>
+      <span className={label}>AI avatar</span>
+      {current ? (
+        <div className="flex items-center gap-3 rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2.5">
+          {current.thumbUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+            <img src={current.thumbUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+          ) : null}
+          <span className="min-w-0 flex-1 text-sm text-neutral-200">
+            <span className="font-bold text-white">{current.name}</span> is {studio.name}&apos;s presenter — no other firm can use them.
+          </span>
+          <Link href={avatarsHref()} className="shrink-0 text-xs font-semibold text-violet-200 hover:text-white">
+            Avatars →
+          </Link>
+        </div>
+      ) : library === null ? (
+        <p className="text-xs text-neutral-500">Loading the avatar library…</p>
+      ) : library.length === 0 ? (
+        <p className="text-xs leading-relaxed text-neutral-400">
+          No avatars ready to give.{" "}
+          <Link href={avatarsHref()} className="font-semibold text-violet-200 underline">
+            Make one in Avatars
+          </Link>{" "}
+          from a zip of photos, lock it in, then give it to {studio.name}.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={pick}
+            onChange={(e) => setPick(e.target.value)}
+            aria-label={`Avatar for ${studio.name}`}
+            className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 text-base text-white focus:border-violet-400/60 focus:outline-none sm:text-sm"
+          >
+            <option value="">Pick an avatar from the library…</option>
+            {library.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+                {a.bestFor ? ` — ${a.bestFor.slice(0, 60)}` : ""}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={() => void assign()} disabled={!pick || busy} className="min-h-11 rounded-full bg-violet-500 px-5 text-sm font-bold text-white hover:bg-violet-400 disabled:opacity-50">
+            {busy ? "Assigning…" : "Assign"}
+          </button>
+        </div>
+      )}
+      {error && <p className="mt-1.5 text-xs text-rose-300">{error}</p>}
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
+import { presenterForStudio } from "@/lib/creative-studio/presenters";
 import { creativeBatches, creativeProjects, type BatchPlanItem } from "@/lib/creative-studio/tables";
 import { EMPTY_BRIEF } from "@/lib/creative-studio/prompts";
 import { cleanFormatRig } from "@/lib/creative-studio/validate";
@@ -74,6 +75,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `A batch can be at most ${BATCH_MAX[format]} ${format === "vsl_16x9" ? "VSLs" : "ads"}` }, { status: 400 });
   }
 
+  // A firm with an AI avatar: every video in the batch is theirs (Manus frames use its photos).
+  const presenter = (await presenterForStudio(access.ownerId, studio.id, studio.defaultPresenterId)) ?? null;
+
   const [batch] = await db
     .insert(creativeBatches)
     .values({ ownerId: access.ownerId, createdBy: access.actorId, studioId: studio.id, format, count: items.length, brief, plan: items })
@@ -91,6 +95,7 @@ export async function POST(req: NextRequest) {
         brief: { ...EMPTY_BRIEF, direction: it.direction },
         batchId: batch.id,
         batchIndex: i,
+        ...(presenter ? { presenter } : {}),
       }))
     )
     .returning({ id: creativeProjects.id, index: creativeProjects.batchIndex });

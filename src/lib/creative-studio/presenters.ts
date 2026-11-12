@@ -15,11 +15,18 @@ type PresenterRow = typeof creativePresenters.$inferSelect;
  */
 
 
-/** The snapshot a video keeps (no voice line: Kling picks the voice from the frame). */
-export function presenterInfo(row: Pick<PresenterRow, "id" | "name" | "pronoun" | "look">): PresenterInfo {
+/**
+ * The snapshot a video keeps. No voice line (Kling picks the voice from the
+ * frame) — except an AI avatar, whose designed voice is the same in every clip.
+ */
+export function presenterInfo(row: Pick<PresenterRow, "id" | "name" | "pronoun" | "look"> & Partial<Pick<PresenterRow, "avatar" | "voice">>): PresenterInfo {
   const pronoun: Pronoun = row.pronoun === "he" ? "he" : "she";
+  if (row.avatar) return { id: row.id, name: row.name.trim(), pronoun, voice: (row.voice ?? "").trim(), look: row.look.trim(), avatar: true };
   return { id: row.id, name: row.name.trim(), pronoun, voice: "", look: row.look.trim() };
 }
+
+/** An avatar still in the library (not assigned to a firm): not anyone's presenter yet. */
+export const inLibrary = (row: Pick<PresenterRow, "avatar" | "studioId">) => row.avatar && !row.studioId;
 
 export async function loadPresenter(ownerId: string, id: string): Promise<PresenterRow | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
@@ -42,23 +49,44 @@ export function referencesWhere(ownerId: string, studio: Studio, presenterId: st
   );
 }
 
-/** The studio's presenters (not archived) with their photo count and a thumbnail. */
+/**
+ * The studio's presenters (not archived) with their photo count and a
+ * thumbnail. Avatars still in the library aren't anyone's presenter, so
+ * Nexli's studio never lists them; a firm's assigned avatar is listed in its
+ * studio (thumbnail = its main photo).
+ */
 export async function listPresenters(ownerId: string, studio: Studio) {
   const rows = await db
     .select()
     .from(creativePresenters)
-    .where(and(eq(creativePresenters.ownerId, ownerId), inStudio(creativePresenters.studioId, studio), isNull(creativePresenters.archivedAt)))
+    .where(
+      and(
+        eq(creativePresenters.ownerId, ownerId),
+        inStudio(creativePresenters.studioId, studio),
+        isNull(creativePresenters.archivedAt),
+        studio.id ? undefined : eq(creativePresenters.avatar, false)
+      )
+    )
     .orderBy(asc(creativePresenters.createdAt));
   const ids = rows.map((r) => r.id);
   const photos = ids.length
     ? await db
-        .select({ presenterId: creativeAssets.presenterId, path: creativeAssets.storagePath, n: sql<number>`count(*) over (partition by ${creativeAssets.presenterId})::int` })
+        .select({
+          id: creativeAssets.id,
+          presenterId: creativeAssets.presenterId,
+          path: creativeAssets.storagePath,
+          n: sql<number>`count(*) over (partition by ${creativeAssets.presenterId})::int`,
+        })
         .from(creativeAssets)
-        .where(and(eq(creativeAssets.kind, "reference"), isNull(creativeAssets.projectId), inArray(creativeAssets.presenterId, ids)))
+        .where(and(eq(creativeAssets.ownerId, ownerId), eq(creativeAssets.kind, "reference"), isNull(creativeAssets.projectId), inArray(creativeAssets.presenterId, ids)))
         .orderBy(asc(creativeAssets.createdAt))
     : [];
+  const mainOf = new Map(rows.map((r) => [r.id, r.mainPhotoId]));
   const first = new Map<string, { path: string | null; n: number }>();
-  for (const p of photos) if (p.presenterId && !first.has(p.presenterId)) first.set(p.presenterId, { path: p.path, n: p.n });
+  for (const p of photos) {
+    if (!p.presenterId) continue;
+    if (!first.has(p.presenterId) || mainOf.get(p.presenterId) === p.id) first.set(p.presenterId, { path: p.path, n: p.n });
+  }
   const signed = await signPaths([...first.values()].map((f) => f.path), 6 * 3600);
   return rows.map((r) => ({
     id: r.id,
@@ -68,6 +96,7 @@ export async function listPresenters(ownerId: string, studio: Studio) {
     look: r.look,
     photos: first.get(r.id)?.n ?? 0,
     thumbUrl: first.get(r.id)?.path ? signed.get(first.get(r.id)!.path!) ?? null : null,
+    ...(r.avatar ? { avatar: true as const } : {}),
   }));
 }
 
@@ -94,6 +123,6 @@ export async function presenterForStudio(ownerId: string, studioId: string | nul
   if (id === null || id === "" || id === undefined) return null;
   if (typeof id !== "string") return undefined;
   const row = await loadPresenter(ownerId, id);
-  if (!row || row.archivedAt || (row.studioId ?? null) !== (studioId ?? null)) return undefined;
+  if (!row || row.archivedAt || inLibrary(row) || (row.studioId ?? null) !== (studioId ?? null)) return undefined;
   return presenterInfo(row);
 }

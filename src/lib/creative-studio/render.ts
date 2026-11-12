@@ -17,6 +17,7 @@ import {
   uuidv7,
 } from "@/lib/creative-studio/kling-mcp";
 import { framesOf } from "@/lib/creative-studio/service";
+import { avatarElementFor, avatarOnScreen } from "@/lib/creative-studio/avatar-kling";
 
 /**
  * Kling batch pipeline (framework §11), adapted to serverless:
@@ -108,6 +109,8 @@ export async function submitClips(token: string, project: Project, clips: Clip[]
 
   const frames = await framesOf(project.id);
   const primary = frames[0]?.id;
+  // An AI avatar's Kling Element: the same face and voice in every clip it's on screen in.
+  const element = await avatarElementFor(token, project).catch(() => null);
   // Per clip: a story's scene with two or more people renders on Omni (its model is stored on the clip).
   const multiFor = (clip: Clip) => (clip.model ? clip.model === "kling-video-v3_0_omni" : isMultiPerson(project.rig));
   const pending = [...affordable];
@@ -143,6 +146,7 @@ export async function submitClips(token: string, project: Project, clips: Clip[]
             durationS: clip.durationS,
             frameUrl,
             taskTraceId,
+            ...(element && avatarOnScreen(project.frameSpec, clip) ? { element } : {}),
             rationale: `Nexli Creative Studio: clip ${clip.idx + 1} of the approved ${clip.kind && clip.kind !== "to_camera" ? "story" : "talking-head"} script "${project.title}", rendered with native audio as the framework specifies.`,
           });
           await db

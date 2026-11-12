@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeAssets, creativeProjects } from "@/lib/creative-studio/tables";
 import { requireStudioAdmin } from "@/lib/creative-studio/access";
@@ -8,6 +8,7 @@ import { sameStudio, studioFromRequest, studioNotFound, type Studio } from "@/li
 import { createUploadTarget, FRAME_MIME_TYPES, removePaths, signPaths } from "@/lib/creative-studio/storage";
 import { loadPresenter, referencesWhere } from "@/lib/creative-studio/presenters";
 import { readStorage, writeStorage } from "@/lib/creative-studio/frames";
+import { AVATAR_MAX_PHOTOS } from "@/lib/creative-studio/avatar-shared";
 
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
@@ -32,14 +33,33 @@ async function list(ownerId: string, studio: Studio, presenterId: string | null)
  * Nexli's studio). Undefined when it isn't one of this studio's presenters.
  */
 async function presenterFrom(ownerId: string, studio: Studio, req: NextRequest): Promise<string | null | undefined> {
+  return (await presenterRowFrom(ownerId, studio, req))?.id ?? (req.nextUrl.searchParams.get("presenter")?.trim() ? undefined : null);
+}
+
+async function presenterRowFrom(ownerId: string, studio: Studio, req: NextRequest) {
   const id = req.nextUrl.searchParams.get("presenter")?.trim();
   if (!id) return null;
   const row = await loadPresenter(ownerId, id);
   if (!row || (row.studioId ?? null) !== (studio.id ?? null)) return undefined;
-  return row.id;
+  return row;
 }
 
 const noPresenter = () => NextResponse.json({ error: "That presenter isn't in this studio." }, { status: 404 });
+
+/** Why this photo change isn't allowed for an AI avatar (null = fine): at most 12, fixed once locked in (its Kling Element is built from them). */
+async function avatarRefusal(ownerId: string, studio: Studio, req: NextRequest, adding: boolean): Promise<string | null> {
+  const row = await presenterRowFrom(ownerId, studio, req);
+  if (!row?.avatar) return null;
+  if (row.lockedAt) return `${row.name} is locked in, so the photos are fixed. Rebuild the avatar in the Avatars tab to change them.`;
+  if (adding) {
+    const [{ n }] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(creativeAssets)
+      .where(referencesWhere(ownerId, studio, row.id));
+    if (n >= AVATAR_MAX_PHOTOS) return `An avatar takes up to ${AVATAR_MAX_PHOTOS} photos.`;
+  }
+  return null;
+}
 
 /**
  * Reference images — one library per studio (`?studio=`) and presenter
@@ -69,6 +89,8 @@ export async function POST(req: NextRequest) {
   const presenterId = await presenterFrom(access.ownerId, studio, req);
   if (presenterId === undefined) return noPresenter();
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+  const refused = body?.action === "sign" ? null : await avatarRefusal(access.ownerId, studio, req, true);
+  if (refused) return NextResponse.json({ error: refused }, { status: 409 });
 
   if (body?.action === "fromFrame") {
     const assetId = typeof body.assetId === "string" ? body.assetId : "";
@@ -140,6 +162,8 @@ export async function DELETE(req: NextRequest) {
   if (!studio) return studioNotFound();
   const presenterId = await presenterFrom(access.ownerId, studio, req);
   if (presenterId === undefined) return noPresenter();
+  const refused = await avatarRefusal(access.ownerId, studio, req, false);
+  if (refused) return NextResponse.json({ error: refused }, { status: 409 });
   const id = req.nextUrl.searchParams.get("assetId") ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const [ref] = await db
