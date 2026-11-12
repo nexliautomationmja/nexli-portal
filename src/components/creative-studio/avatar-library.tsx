@@ -10,7 +10,7 @@ import { AssistantCard, Chip, ErrorStrip, SP, StudioCanvas, StudioTabs, SvgIcon,
 import { inStudioQs, studioHref } from "@/components/creative-studio/client";
 import { StudioSwitch } from "@/components/creative-studio/home";
 import { uploadReferenceFile } from "@/components/creative-studio/upload";
-import { photosFromDrop, type PhotoPick } from "@/components/creative-studio/avatar-zip";
+import { entriesOf, filesFromEntries, photosFromDrop, type PhotoPick } from "@/components/creative-studio/avatar-zip";
 
 const API = "/api/dashboard/creative-studio/avatars";
 
@@ -332,16 +332,20 @@ function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) =
   const [error, setError] = useState<{ text: string; avatarId?: string } | null>(null);
   const [over, setOver] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+  const folderPicker = useRef<HTMLInputElement>(null);
   const previews = usePreviews(pick?.photos ?? NO_FILES);
 
-  async function take(files: File[]) {
-    if (!files.length) return;
+  async function take(files: File[], from?: string) {
+    if (!files.length) {
+      setError({ text: "That folder is empty." });
+      return;
+    }
     setOpening(true);
     setError(null);
     try {
       const p = await photosFromDrop(files);
-      setPick({ ...p, from: files.length === 1 ? files[0].name : `${files.length} files` });
-      if (!p.photos.length) setError({ text: "No photos in there. Use a zip (or photos) with JPG, PNG or WebP pictures." });
+      setPick({ ...p, from: from ?? folderName(files) ?? (files.length === 1 ? files[0].name : `${files.length} files`) });
+      if (!p.photos.length) setError({ text: "No photos in there. Use a folder (or a zip, or photos) with JPG, PNG or WebP pictures." });
     } catch (err) {
       setError({ text: err instanceof Error ? err.message : "Couldn't open that." });
     } finally {
@@ -400,7 +404,14 @@ function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) =
             onDrop={(e) => {
               e.preventDefault();
               setOver(false);
-              void take(Array.from(e.dataTransfer.files));
+              // Read the folder entries now: the browser only hands them out during the drop.
+              const { entries, files } = entriesOf(e.dataTransfer);
+              const folder = entries.length === 1 && entries[0].isDirectory ? entries[0].name : undefined;
+              setOpening(true);
+              void filesFromEntries(entries)
+                .then((inFolders) => take([...files, ...inFolders], folder))
+                .catch(() => setError({ text: "Couldn't read that folder. Try Pick a folder instead." }))
+                .finally(() => setOpening(false));
             }}
             className={`rounded-2xl border-2 border-dashed p-4 transition-colors ${over ? "border-violet-400/70 bg-violet-500/10" : "border-white/15 bg-black/20"}`}
           >
@@ -433,16 +444,35 @@ function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) =
                 </button>
               </div>
             ) : (
-              <button type="button" onClick={() => picker.current?.click()} className="flex w-full flex-col items-center gap-2 py-4 text-center" disabled={opening}>
+              <div className="flex w-full flex-col items-center gap-2 py-4 text-center">
                 <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-200">
                   <SvgIcon d={SP.upload} size={22} />
                 </span>
-                <span className="text-sm font-bold text-white">{opening ? "Opening…" : "Drop the zip of photos here"}</span>
+                <span className="text-sm font-bold text-white">{opening ? "Opening…" : "Drop the folder of photos here"}</span>
                 <span className="max-w-sm text-xs text-neutral-400">
-                  Or tap to pick it (loose photos work too). Up to {AVATAR_MAX_PHOTOS} photos of the same person are used — include a selfie-style one: their trial video starts from it.
+                  A zip or loose photos work too. Up to {AVATAR_MAX_PHOTOS} photos of the same person are used — include a selfie-style one: their trial video starts from it.
                 </span>
-              </button>
+                <span className="mt-1 flex flex-wrap justify-center gap-2">
+                  <button type="button" onClick={() => folderPicker.current?.click()} disabled={opening} className="min-h-10 rounded-full bg-violet-500 px-4 text-xs font-bold text-white hover:bg-violet-400 disabled:opacity-50">
+                    Pick a folder
+                  </button>
+                  <button type="button" onClick={() => picker.current?.click()} disabled={opening} className="min-h-10 rounded-full border border-white/15 px-4 text-xs font-semibold text-neutral-200 hover:bg-white/5 disabled:opacity-50">
+                    Pick photos or a zip
+                  </button>
+                </span>
+              </div>
             )}
+            <input
+              ref={folderPicker}
+              type="file"
+              multiple
+              hidden
+              {...FOLDER_INPUT}
+              onChange={(e) => {
+                void take(Array.from(e.target.files ?? []));
+                e.target.value = "";
+              }}
+            />
             <input
               ref={picker}
               type="file"
@@ -490,6 +520,15 @@ function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) =
       )}
     </AssistantCard>
   );
+}
+
+/** A folder picker (Chrome, Safari, Edge and Firefox all read these). */
+const FOLDER_INPUT = { webkitdirectory: "", directory: "" } as Record<string, string>;
+
+/** The folder picked files came from ("Marcus" for Marcus/IMG_01.jpg), when they all share one. */
+function folderName(files: File[]): string | undefined {
+  const tops = new Set(files.map((f) => (f.webkitRelativePath || "").split("/")[0]).filter(Boolean));
+  return tops.size === 1 ? [...tops][0] : undefined;
 }
 
 /** One stable empty list (a new [] each render would re-run the previews effect forever). */
@@ -742,7 +781,8 @@ function AvatarSheet({
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
-                  void addPhotos(Array.from(e.dataTransfer.files));
+                  const { entries, files } = entriesOf(e.dataTransfer);
+                  void filesFromEntries(entries).then((inFolders) => addPhotos([...files, ...inFolders]));
                 }}
                 className="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-white/15 text-neutral-400 transition-colors hover:border-violet-400/50 hover:text-white"
                 style={{ aspectRatio: "3 / 4" }}

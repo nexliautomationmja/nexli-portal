@@ -4,10 +4,11 @@ import { unzip, type UnzipFileInfo } from "fflate";
 import { AVATAR_MAX_PHOTOS, spread } from "@/lib/creative-studio/avatar-shared";
 
 /**
- * An avatar's photos from what Marcel drops: a zip (opened right here in the
- * browser, so only the photos upload) and/or loose photos. Keeps JPG, PNG and
- * WebP — at most 60, spread evenly through a bigger set (name order) so every
- * kind of shot has a chance — and says what it skipped and why.
+ * An avatar's photos from what Marcel drops or picks: a folder (with any
+ * subfolders), a zip (opened right here in the browser, so only the photos
+ * upload) and/or loose photos. Keeps JPG, PNG and WebP — at most 60, spread
+ * evenly through a bigger set (name order) so every kind of shot has a
+ * chance — and says what it skipped and why.
  */
 
 const TYPES: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
@@ -86,10 +87,60 @@ async function shrink(file: File): Promise<File> {
 }
 
 /** The photos to upload from a drop (zips opened, junk skipped, at most `room`). */
+/** A file's path inside the folder it came from (picked or dropped), else its name. */
+const pathOf = (f: File) => (f as File & { webkitRelativePath?: string; avatarPath?: string }).avatarPath || f.webkitRelativePath || f.name;
+
+/**
+ * What was dropped, with folders opened (subfolders too). Must be called
+ * during the drop event: the browser only hands out the entries then.
+ */
+export function entriesOf(dt: DataTransfer): { entries: FileSystemEntry[]; files: File[] } {
+  const entries: FileSystemEntry[] = [];
+  const files: File[] = [];
+  for (const item of Array.from(dt.items ?? [])) {
+    if (item.kind !== "file") continue;
+    const entry = typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null;
+    if (entry) entries.push(entry);
+    else {
+      const f = item.getAsFile();
+      if (f) files.push(f);
+    }
+  }
+  if (!entries.length && !files.length) files.push(...Array.from(dt.files ?? []));
+  return { entries, files };
+}
+
+/** Every file under the dropped entries (folders read all the way down), with its path kept for name order. */
+export async function filesFromEntries(entries: FileSystemEntry[]): Promise<File[]> {
+  const out: File[] = [];
+  const walk = async (entry: FileSystemEntry, path: string): Promise<void> => {
+    if (entry.isFile) {
+      const file = await new Promise<File | null>((resolve) => (entry as FileSystemFileEntry).file(resolve, () => resolve(null)));
+      if (file) out.push(Object.assign(file, { avatarPath: `${path}${entry.name}` }));
+      return;
+    }
+    if (!entry.isDirectory || entry.name === "__MACOSX") return;
+    const reader = (entry as FileSystemDirectoryEntry).createReader();
+    // readEntries hands them out in batches (about 100 at a time) until an empty one.
+    for (;;) {
+      const batch = await new Promise<FileSystemEntry[]>((resolve) => reader.readEntries(resolve, () => resolve([])));
+      if (!batch.length) break;
+      for (const child of batch) await walk(child, `${path}${entry.name}/`);
+    }
+  };
+  for (const e of entries) await walk(e, "");
+  return out;
+}
+
 export async function photosFromDrop(dropped: File[], room = AVATAR_MAX_PHOTOS): Promise<PhotoPick> {
   const skipped: string[] = [];
   let found: File[] = [];
-  for (const f of dropped) {
+  // Loose photos and a folder's photos go in name order (folder path included), like a zip's.
+  const loose = [...dropped].filter((f) => !isZip(f)).sort((a, b) => byName.compare(pathOf(a), pathOf(b)));
+  const zips = dropped.filter(isZip);
+  for (const f of [...zips, ...loose]) {
+    // A folder's hidden files (.DS_Store and the like) aren't worth a mention.
+    if (!isZip(f) && junk(pathOf(f))) continue;
     if (isZip(f)) {
       if (f.size > ZIP_MAX_BYTES) {
         skipped.push(`${f.name}: bigger than 400 MB`);
