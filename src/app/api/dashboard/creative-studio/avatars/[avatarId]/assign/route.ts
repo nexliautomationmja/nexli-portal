@@ -50,7 +50,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const row = await loadAvatar(access.ownerId, (await params).avatarId);
   if (!row) return NextResponse.json({ error: "Avatar not found" }, { status: 404 });
   if (!row.studioId) return NextResponse.json({ avatar: await avatarView(access.ownerId, row) });
-  const videos = await avatarVideoCount(access.ownerId, row.id);
+  const videos = await avatarVideoCount(access.ownerId, row);
   if (videos > 0) {
     return NextResponse.json(
       { error: `${row.name} is already in ${videos} of the firm's video${videos === 1 ? "" : "s"}, so it stays theirs. You can retire it instead.` },

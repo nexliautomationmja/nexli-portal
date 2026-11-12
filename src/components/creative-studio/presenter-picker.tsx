@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PresenterInfo, Pronoun } from "@/lib/creative-studio/tables";
+import type { AvatarView } from "@/lib/creative-studio/avatar-shared";
 import { Button, FIELD, Segmented, Sheet } from "@/components/rainmaker";
 import { avatarsHref, inStudioQs } from "@/components/creative-studio/client";
 import { uploadReferenceFile } from "@/components/creative-studio/upload";
@@ -68,8 +69,11 @@ export function PresenterPicker({
   disabled?: boolean;
   label?: string;
 }) {
-  const { list, setList } = usePresenters(studio.key);
+  const { list, setList, refresh } = usePresenters(studio.key);
   const [open, setOpen] = useState(false);
+  // A firm's studio: locked-in avatars still in the library, to give to this firm from here.
+  const [library, setLibrary] = useState<{ id: string; name: string; bestFor: string; thumbUrl: string | null; pronoun: Pronoun }[] | null>(null);
+  const [assigning, setAssigning] = useState<string | null>(null);
   const [editing, setEditing] = useState<PresenterOption | "new" | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const current = value?.id ? list?.find((x) => x.id === value.id) : null;
@@ -89,6 +93,48 @@ export function PresenterPicker({
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // Load the library the first time the menu opens in a firm's studio.
+  useEffect(() => {
+    if (!open || studio.kind !== "client" || library !== null) return;
+    let cancelled = false;
+    fetch("/api/dashboard/creative-studio/avatars")
+      .then((r) => r.json())
+      .then((b: { avatars?: AvatarView[] }) => {
+        if (cancelled) return;
+        setLibrary(
+          (b?.avatars ?? [])
+            .filter((a) => a.locked && !a.assigned)
+            .map((a) => ({ id: a.id, name: a.name, bestFor: a.bestFor, pronoun: a.pronoun, thumbUrl: a.photos.find((ph) => ph.id === a.mainPhotoId)?.url ?? null }))
+        );
+      })
+      .catch(() => !cancelled && setLibrary([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, studio.kind, library]);
+
+  /** Give a library avatar to this firm (theirs alone from now on), then present with it. */
+  const assign = async (a: { id: string; name: string; pronoun: Pronoun; thumbUrl: string | null }) => {
+    const him = a.pronoun === "he" ? "him" : "her";
+    if (!confirm(`Give ${a.name} to ${studio.name}? ${a.pronoun === "he" ? "He" : "She"} becomes their presenter, and no other firm can ever use ${him}.`)) return;
+    setAssigning(a.id);
+    const r = await fetch(`/api/dashboard/creative-studio/avatars/${encodeURIComponent(a.id)}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studioKey: studio.key }),
+    }).catch(() => null);
+    const b = await r?.json().catch(() => null);
+    setAssigning(null);
+    if (!r?.ok) {
+      alert(b?.error || "That didn't work. Try again.");
+      return;
+    }
+    setLibrary((l) => (l ?? []).filter((x) => x.id !== a.id));
+    await refresh();
+    setOpen(false);
+    await onPick(a.id, { id: a.id, name: a.name, pronoun: a.pronoun, voice: "", look: "", photos: 0, thumbUrl: a.thumbUrl, avatar: true });
+  };
 
   const choose = async (id: string | null) => {
     setOpen(false);
@@ -130,6 +176,22 @@ export function PresenterPicker({
             />
           ))}
           {list === null && <p className="px-3 py-2 text-xs text-neutral-400">Loading presenters…</p>}
+          {studio.kind === "client" && (library?.length ?? 0) > 0 && (
+            <>
+              <div className="my-1 h-px bg-white/10" />
+              <p className="px-3 pb-1 pt-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-violet-300/80">From the avatar library</p>
+              {library!.map((a) => (
+                <MenuRow
+                  key={a.id}
+                  active={false}
+                  onClick={() => void assign(a)}
+                  name={assigning === a.id ? `Giving ${a.name} to ${studio.name}…` : a.name}
+                  sub={`Give to ${studio.name}${a.bestFor ? ` · ${a.bestFor}` : ""}`}
+                  url={a.thumbUrl}
+                />
+              ))}
+            </>
+          )}
           <div className="my-1 h-px bg-white/10" />
           <button
             type="button"

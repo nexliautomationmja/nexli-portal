@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { creativeAssets, creativePresenters, type PresenterInfo, type Pronoun } from "@/lib/creative-studio/tables";
 import { inStudio, type Studio } from "@/lib/creative-studio/studios";
@@ -25,8 +25,8 @@ export function presenterInfo(row: Pick<PresenterRow, "id" | "name" | "pronoun" 
   return { id: row.id, name: row.name.trim(), pronoun, voice: "", look: row.look.trim() };
 }
 
-/** An avatar still in the library (not assigned to a firm): not anyone's presenter yet. */
-export const inLibrary = (row: Pick<PresenterRow, "avatar" | "studioId">) => row.avatar && !row.studioId;
+/** An AI avatar that isn't locked in yet: nobody's presenter (its voice and photos may still change). */
+export const avatarDraft = (row: Pick<PresenterRow, "avatar" | "lockedAt">) => row.avatar && !row.lockedAt;
 
 export async function loadPresenter(ownerId: string, id: string): Promise<PresenterRow | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
@@ -51,9 +51,9 @@ export function referencesWhere(ownerId: string, studio: Studio, presenterId: st
 
 /**
  * The studio's presenters (not archived) with their photo count and a
- * thumbnail. Avatars still in the library aren't anyone's presenter, so
- * Nexli's studio never lists them; a firm's assigned avatar is listed in its
- * studio (thumbnail = its main photo).
+ * thumbnail. AI avatars once they're locked in: Nexli's studio lists the
+ * library's (until one is given to a firm), a firm's studio lists its own
+ * (thumbnail = the main photo). Drafts are nobody's yet.
  */
 export async function listPresenters(ownerId: string, studio: Studio) {
   const rows = await db
@@ -64,7 +64,7 @@ export async function listPresenters(ownerId: string, studio: Studio) {
         eq(creativePresenters.ownerId, ownerId),
         inStudio(creativePresenters.studioId, studio),
         isNull(creativePresenters.archivedAt),
-        studio.id ? undefined : eq(creativePresenters.avatar, false)
+        or(eq(creativePresenters.avatar, false), isNotNull(creativePresenters.lockedAt))
       )
     )
     .orderBy(asc(creativePresenters.createdAt));
@@ -123,6 +123,6 @@ export async function presenterForStudio(ownerId: string, studioId: string | nul
   if (id === null || id === "" || id === undefined) return null;
   if (typeof id !== "string") return undefined;
   const row = await loadPresenter(ownerId, id);
-  if (!row || row.archivedAt || inLibrary(row) || (row.studioId ?? null) !== (studioId ?? null)) return undefined;
+  if (!row || row.archivedAt || avatarDraft(row) || (row.studioId ?? null) !== (studioId ?? null)) return undefined;
   return presenterInfo(row);
 }

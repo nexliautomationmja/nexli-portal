@@ -110,7 +110,7 @@ export interface AvatarVoiceOptions {
   at: string;
 }
 
-/** An avatar's 5-second Kling test clip (its face + voice, before a firm gets it). */
+/** An avatar's 5-second Kling test clip (Nov 12 2026; replaced by the trial video — kept for old rows). */
 export interface AvatarTestClip {
   generationId: string;
   status: "rendering" | "done" | "failed";
@@ -142,6 +142,12 @@ export interface AvatarRead {
   /** Photo (asset) ids that look like someone else — left out of Kling and Manus. */
   otherPerson: string[];
   notes: string;
+  /** Their aura in a few words ("calm, seasoned, quietly confident") — how the trial video is delivered. */
+  personality?: string;
+  /** The trial video's line: they introduce themselves, in character (absent on avatars read before Nov 12). */
+  intro?: string;
+  /** The selfie-style photo the trial video starts from (asset id; null = none, the main photo is used). */
+  selfie?: string | null;
   at: string;
 }
 
@@ -355,8 +361,11 @@ export const creativePresenters = pgTable("creative_presenters", {
   klingElementAt: timestamp("kling_element_at"),
   assignedAt: timestamp("assigned_at"),
   assignedBy: uuid("assigned_by"),
+  /** No longer used (the trial video replaced it). */
   testClip: jsonb("test_clip").$type<AvatarTestClip | null>(),
   photoTask: jsonb("photo_task").$type<AvatarPhotoTask | null>(),
+  /** Its trial video: a normal Creative Studio video where it introduces itself (auto-cut, captions, download). */
+  trialProjectId: uuid("trial_project_id"),
   createdBy: uuid("created_by"),
   archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1011,7 +1020,8 @@ export function ensureCreativeStudioTables(): Promise<void> {
           ADD COLUMN IF NOT EXISTS "assigned_at" timestamp,
           ADD COLUMN IF NOT EXISTS "assigned_by" uuid,
           ADD COLUMN IF NOT EXISTS "test_clip" jsonb,
-          ADD COLUMN IF NOT EXISTS "photo_task" jsonb
+          ADD COLUMN IF NOT EXISTS "photo_task" jsonb,
+          ADD COLUMN IF NOT EXISTS "trial_project_id" uuid
       `);
       await db.execute(sql`ALTER TABLE "creative_studios" ADD COLUMN IF NOT EXISTS "default_presenter_id" uuid`);
       await db.execute(sql`

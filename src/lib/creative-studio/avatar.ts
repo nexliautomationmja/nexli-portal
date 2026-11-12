@@ -43,20 +43,27 @@ export async function avatarPhotos(ownerId: string, avatarId: string) {
     .orderBy(asc(creativeAssets.createdAt));
 }
 
-/** How many videos use this avatar (its snapshot on creative_projects.presenter). */
-async function videoCounts(ownerId: string, ids: string[]): Promise<Map<string, number>> {
-  if (!ids.length) return new Map();
+/**
+ * How many videos in the avatar's own studio use it (its snapshot on
+ * creative_projects.presenter). Nexli's videos of a library avatar (its
+ * trial video) don't count once it belongs to a firm.
+ */
+async function videoCounts(ownerId: string, avatars: Pick<AvatarRow, "id" | "studioId">[]): Promise<Map<string, number>> {
+  if (!avatars.length) return new Map();
   const idExpr = sql<string>`${creativeProjects.presenter}->>'id'`;
   const rows = await db
-    .select({ id: idExpr, n: sql<number>`count(*)::int` })
+    .select({ id: idExpr, studioId: creativeProjects.studioId, n: sql<number>`count(*)::int` })
     .from(creativeProjects)
-    .where(and(eq(creativeProjects.ownerId, ownerId), inArray(idExpr, ids)))
-    .groupBy(idExpr);
-  return new Map(rows.map((r) => [r.id, r.n]));
+    .where(and(eq(creativeProjects.ownerId, ownerId), inArray(idExpr, avatars.map((a) => a.id))))
+    .groupBy(idExpr, creativeProjects.studioId);
+  const studioOf = new Map(avatars.map((a) => [a.id, a.studioId ?? null]));
+  const out = new Map<string, number>();
+  for (const r of rows) if ((r.studioId ?? null) === studioOf.get(r.id)) out.set(r.id, (out.get(r.id) ?? 0) + r.n);
+  return out;
 }
 
-export async function avatarVideoCount(ownerId: string, id: string): Promise<number> {
-  return (await videoCounts(ownerId, [id])).get(id) ?? 0;
+export async function avatarVideoCount(ownerId: string, avatar: Pick<AvatarRow, "id" | "studioId">): Promise<number> {
+  return (await videoCounts(ownerId, [avatar])).get(avatar.id) ?? 0;
 }
 
 function klingStatus(row: AvatarRow, photoIds: Set<string>): KlingStatus {
@@ -82,7 +89,8 @@ export async function avatarViews(ownerId: string, rows: AvatarRow[]): Promise<A
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const studioIds = [...new Set(rows.map((r) => r.studioId).filter((s): s is string => Boolean(s)))];
-  const [photos, studios, counts] = await Promise.all([
+  const trialIds = rows.map((r) => r.trialProjectId).filter((id): id is string => Boolean(id));
+  const [photos, studios, counts, trialRows] = await Promise.all([
     db
       .select()
       .from(creativeAssets)
@@ -91,14 +99,20 @@ export async function avatarViews(ownerId: string, rows: AvatarRow[]): Promise<A
     studioIds.length
       ? db.select({ id: creativeStudios.id, name: creativeStudios.name }).from(creativeStudios).where(and(eq(creativeStudios.ownerId, ownerId), inArray(creativeStudios.id, studioIds)))
       : Promise.resolve([] as { id: string; name: string }[]),
-    videoCounts(ownerId, ids),
+    videoCounts(ownerId, rows),
+    trialIds.length
+      ? db
+          .select({ id: creativeProjects.id, status: creativeProjects.status, title: creativeProjects.title })
+          .from(creativeProjects)
+          .where(and(eq(creativeProjects.ownerId, ownerId), inArray(creativeProjects.id, trialIds)))
+      : Promise.resolve([] as { id: string; status: string; title: string }[]),
   ]);
+  const trials = new Map(trialRows.map((t) => [t.id, { status: t.status, title: t.title }]));
   const studioName = new Map(studios.map((s) => [s.id, s.name]));
   const paths = [
     ...photos.map((p) => p.storagePath),
     ...rows.map((r) => r.voicePath),
     ...rows.flatMap((r) => (r.lockedAt ? [] : r.voiceOptions?.options.map((o) => o.path) ?? [])),
-    ...rows.map((r) => r.testClip?.path),
   ].filter((p): p is string => Boolean(p));
   const signed = await signPaths(paths, 6 * 3600);
   const url = (p: string | null | undefined) => (p ? signed.get(p) ?? null : null);
@@ -120,7 +134,10 @@ export async function avatarViews(ownerId: string, rows: AvatarRow[]): Promise<A
       photos: own.map((p) => ({ id: p.id, url: url(p.storagePath), width: p.width, height: p.height })),
       mainPhotoId: r.mainPhotoId && photoIds.has(r.mainPhotoId) ? r.mainPhotoId : own[0]?.id ?? null,
       klingPhotoIds: (r.klingPhotoIds ?? []).filter((id) => photoIds.has(id)),
-      read: read ? { age: read.age, names: read.names, otherPerson: read.otherPerson.filter((id) => photoIds.has(id)), notes: read.notes } : null,
+      read: read
+        ? { age: read.age, names: read.names, otherPerson: read.otherPerson.filter((id) => photoIds.has(id)), notes: read.notes, selfie: read.selfie && photoIds.has(read.selfie) ? read.selfie : null }
+        : null,
+      trialPhotoId: trialPhotoOf(r, own.map((p) => p.id)),
       options:
         !r.lockedAt && r.voiceOptions
           ? {
@@ -134,11 +151,21 @@ export async function avatarViews(ownerId: string, rows: AvatarRow[]): Promise<A
       kling: { status: klingStatus(r, photoIds), error: r.klingElementError },
       assigned: r.studioId ? { studioKey: r.studioId, studioName: studioName.get(r.studioId) ?? "A client firm", at: (r.assignedAt ?? r.updatedAt).toISOString() } : null,
       videos: counts.get(r.id) ?? 0,
-      test: r.testClip ? { status: r.testClip.status, url: url(r.testClip.path), error: r.testClip.error, line: r.testClip.line } : null,
+      personality: read?.personality ?? "",
+      intro: read?.intro ?? "",
+      trial: r.trialProjectId && trials.get(r.trialProjectId) ? { projectId: r.trialProjectId, ...trials.get(r.trialProjectId)! } : null,
       photoTask: r.photoTask ? { status: r.photoTask.status, taskUrl: r.photoTask.taskUrl, waiting: r.photoTask.waiting, error: r.photoTask.error } : null,
       createdAt: r.createdAt.toISOString(),
     };
   });
+}
+
+/** The photo the trial video starts from: the selfie-style one Claude picked (or Marcel chose), else the main photo. */
+export function trialPhotoOf(row: Pick<AvatarRow, "avatarRead" | "mainPhotoId">, photoIds: string[]): string | null {
+  const selfie = row.avatarRead?.selfie;
+  if (selfie && photoIds.includes(selfie)) return selfie;
+  if (row.mainPhotoId && photoIds.includes(row.mainPhotoId)) return row.mainPhotoId;
+  return photoIds[0] ?? null;
 }
 
 export async function avatarView(ownerId: string, row: AvatarRow): Promise<AvatarView> {
@@ -159,6 +186,9 @@ You get numbered photos that should all show the same AI-generated person. Look 
 - names — 3 first names that suit them: common, easy to say and spell, not a famous person. If the user already gave a name, return it as the first.
 - voice — a description of their voice for a voice designer, 1–3 sentences, at most 400 characters: gender, age, accent, pitch, tone and texture, pace, energy. It must fit the face you see and the job: a trusted professional talking to business owners — warm, confident, clear, conversational. No announcer, radio, hype, sales or cartoon voices. American English unless the photos or the user's note say otherwise. Make it clearly different from the voices of the avatars already in the library (listed below, if any): a firm's audience must never hear the same voice twice.
 - sample — what they say in their voice sample, 240–420 characters, first person, natural spoken English: they introduce themselves by name and talk to a firm owner the way the start of a good ad would. Open with one complete sentence of 8–12 words that works on its own (it's also their 5-second test clip), e.g. "Hi, I'm Marcus, and I help firm owners keep more of what they earn." Spell numbers as words. No prices, guarantees, promised results, firm names, or the word Nexli.
+- personality — their aura in 3–6 words, the way they come across (e.g. "calm, seasoned, quietly confident" or "bright, quick, disarmingly warm"). Their voice, sample and intro all carry it.
+- intro — the one line they say in their trial video, 15–25 words, first person, starting with their name (e.g. "Hey, I'm Marcus — and my whole job is making your firm the one people remember."). One idea that fits how they look and their personality, about helping a firm stand out or win the right clients. Spoken English, numbers as words. No prices, guarantees, promised results, firm names, or the word Nexli.
+- selfie — the number of the best selfie-style photo, the one their trial video starts from: they hold the phone at arm's length (or it clearly looks like a phone selfie), looking into the lens, face clear and well lit, ideally vertical, no text on it. 0 when there's no selfie-style photo. Never a photo of someone else.
 - main — the number of the best main photo: face clearly visible and facing the camera, sharp and well lit, ideally head-and-shoulders or waist-up, no text on it.
 - kling — up to ${KLING_EXTRA_PHOTOS} other photo numbers that add the most: different angles, framing or outfits of the same person, sharp, no text. Never the main photo, never a photo of someone else.
 - otherPerson — the numbers of any photos that show a different person, no person, or several people. Empty when they're all the same person.
@@ -167,7 +197,7 @@ You get numbered photos that should all show the same AI-generated person. Look 
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["pronoun", "age", "look", "bestFor", "names", "voice", "sample", "main", "kling", "otherPerson", "notes"],
+  required: ["pronoun", "age", "look", "bestFor", "names", "voice", "sample", "personality", "intro", "selfie", "main", "kling", "otherPerson", "notes"],
   properties: {
     pronoun: { type: "string", enum: ["she", "he"] },
     age: { type: "string" },
@@ -176,6 +206,9 @@ const SCHEMA = {
     names: { type: "array", items: { type: "string" } },
     voice: { type: "string" },
     sample: { type: "string" },
+    personality: { type: "string" },
+    intro: { type: "string" },
+    selfie: { type: "integer" },
     main: { type: "integer" },
     kling: { type: "array", items: { type: "integer" } },
     otherPerson: { type: "array", items: { type: "integer" } },
@@ -202,6 +235,9 @@ interface RawRead {
   names?: unknown;
   voice?: unknown;
   sample?: unknown;
+  personality?: unknown;
+  intro?: unknown;
+  selfie?: unknown;
   main?: unknown;
   kling?: unknown;
   otherPerson?: unknown;
@@ -227,6 +263,7 @@ export function mapRead(raw: RawRead, photoIds: string[], at = new Date().toISOS
     if (next) kling.push(next);
   }
   const names = (Array.isArray(raw.names) ? raw.names : []).map((n) => str(n, 40)).filter(Boolean).slice(0, 3);
+  const selfie = byNumber(raw.selfie);
   return {
     pronoun: raw.pronoun === "he" ? "he" : "she",
     look: str(raw.look, 1500),
@@ -235,7 +272,7 @@ export function mapRead(raw: RawRead, photoIds: string[], at = new Date().toISOS
     sample: str(raw.sample, SAMPLE_MAX),
     mainPhotoId: main,
     klingPhotoIds: kling,
-    read: { age: str(raw.age, 60), names, otherPerson: other, notes: str(raw.notes, 600), at },
+    read: { age: str(raw.age, 60), names, otherPerson: other, notes: str(raw.notes, 600), personality: str(raw.personality, 120), intro: str(raw.intro, 300), selfie: selfie && !other.includes(selfie) ? selfie : null, at },
   };
 }
 
@@ -250,9 +287,12 @@ export async function libraryVoices(ownerId: string, exceptId: string): Promise<
   return rows.filter((r) => r.id !== exceptId && r.voice.trim()).map((r) => ({ name: r.name, voice: r.voice.trim(), look: r.look.trim() }));
 }
 
+/** A photo as Claude gets it: a small JPEG (every photo fits, even a big set) or a URL. */
+export type ReadImage = { type: "base64"; media_type: "image/jpeg"; data: string } | { type: "url"; url: string };
+
 /** The user message: the library's voices, the numbered photos, then the ask. */
 export function readContent(args: {
-  photoUrls: string[];
+  images: ReadImage[];
   name: string;
   note: string;
   others: { name: string; voice: string; look: string }[];
@@ -266,16 +306,16 @@ export function readContent(args: {
         .join("\n")}`,
     });
   }
-  args.photoUrls.forEach((url, i) => {
+  args.images.forEach((source, i) => {
     blocks.push({ type: "text", text: `Photo ${i + 1}:` });
-    blocks.push({ type: "image", source: { type: "url", url } });
+    blocks.push({ type: "image", source });
   });
   const name = args.name.trim();
   const note = args.note.trim();
   blocks.push({
     type: "text",
     text: [
-      `Set up this avatar from the ${args.photoUrls.length} photo${args.photoUrls.length === 1 ? "" : "s"} above.`,
+      `Set up this avatar from the ${args.images.length} photo${args.images.length === 1 ? "" : "s"} above.`,
       name ? `The user named them ${name}: use that name in the sample and as the first name.` : "The user hasn't named them yet: suggest 3 names and use the first in the sample.",
       note ? `The user's note about them: ${note}` : null,
     ]
@@ -286,7 +326,7 @@ export function readContent(args: {
 }
 
 export async function readAvatar(args: {
-  photos: { id: string; url: string }[];
+  photos: { id: string; image: ReadImage }[];
   name: string;
   note: string;
   others: { name: string; voice: string; look: string }[];
@@ -297,7 +337,7 @@ export async function readAvatar(args: {
     model: MODEL,
     max_tokens: 4000,
     system: RULES,
-    messages: [{ role: "user", content: readContent({ photoUrls: args.photos.map((p) => p.url), name: args.name, note: args.note, others: args.others }) }],
+    messages: [{ role: "user", content: readContent({ images: args.photos.map((p) => p.image), name: args.name, note: args.note, others: args.others }) }],
     output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",

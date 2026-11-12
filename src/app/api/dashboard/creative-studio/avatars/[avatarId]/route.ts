@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 }
 
 /**
- * PATCH { name?, note?, bestFor?, look?, pronoun?, voice?, mainPhotoId?, klingPhotoIds? }.
+ * PATCH { name?, note?, bestFor?, look?, intro?, personality?, trialPhotoId?, pronoun?, voice?, mainPhotoId?, klingPhotoIds? }.
  * Once locked in, the voice, pronoun and photo picks are fixed (the Kling
  * Element is built from them) — "Rebuild" unlocks it first.
  */
@@ -43,6 +43,20 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (bestFor !== undefined) set.bestFor = bestFor || null;
   const look = s(body.look, 1500);
   if (look !== undefined) set.look = look;
+  // The trial video's line and delivery (they don't change the voice or photos, so fine after lock-in too).
+  const intro = s(body.intro, 300);
+  const personality = s(body.personality, 120);
+  // The photo the trial video starts from (any of its photos).
+  let selfie: string | undefined;
+  if (typeof body.trialPhotoId === "string") {
+    const ids = new Set((await avatarPhotos(access.ownerId, row.id)).map((p) => p.id));
+    if (!ids.has(body.trialPhotoId)) return NextResponse.json({ error: "That photo isn't one of the avatar's." }, { status: 400 });
+    selfie = body.trialPhotoId;
+  }
+  if (intro !== undefined || personality !== undefined || selfie !== undefined) {
+    const read = row.avatarRead ?? { age: "", names: [], otherPerson: [], notes: "", at: new Date().toISOString() };
+    set.avatarRead = { ...read, ...(intro !== undefined ? { intro } : {}), ...(personality !== undefined ? { personality } : {}), ...(selfie !== undefined ? { selfie } : {}) };
+  }
 
   const fixed = ["pronoun", "voice", "mainPhotoId", "klingPhotoIds"].filter((k) => k in body);
   if (fixed.length && row.lockedAt) {

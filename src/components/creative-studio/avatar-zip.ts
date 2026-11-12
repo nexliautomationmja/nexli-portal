@@ -1,12 +1,13 @@
 "use client";
 
 import { unzip, type UnzipFileInfo } from "fflate";
-import { AVATAR_MAX_PHOTOS } from "@/lib/creative-studio/avatar-shared";
+import { AVATAR_MAX_PHOTOS, spread } from "@/lib/creative-studio/avatar-shared";
 
 /**
  * An avatar's photos from what Marcel drops: a zip (opened right here in the
  * browser, so only the photos upload) and/or loose photos. Keeps JPG, PNG and
- * WebP, at most 12 (in name order), and says what it skipped and why.
+ * WebP — at most 60, spread evenly through a bigger set (name order) so every
+ * kind of shot has a chance — and says what it skipped and why.
  */
 
 const TYPES: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
@@ -104,8 +105,8 @@ export async function photosFromDrop(dropped: File[], room = AVATAR_MAX_PHOTOS):
     }
   }
   if (found.length > room) {
-    skipped.push(`${found.length - room} more photo${found.length - room === 1 ? "" : "s"}: an avatar takes ${AVATAR_MAX_PHOTOS}, so the first ones by name are used`);
-    found = found.slice(0, Math.max(0, room));
+    skipped.push(`${found.length - room} more photo${found.length - room === 1 ? "" : "s"}: an avatar takes ${AVATAR_MAX_PHOTOS}, so an even spread of them is used`);
+    found = spread(found, Math.max(0, room));
   }
   const photos: File[] = [];
   for (const f of found) {

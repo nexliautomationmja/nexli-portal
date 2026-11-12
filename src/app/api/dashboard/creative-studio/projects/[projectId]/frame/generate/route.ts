@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, inArray } from "drizzle-orm";
+import { and, asc, inArray } from "drizzle-orm";
 import { studioById } from "@/lib/creative-studio/studios";
 import { db } from "@/db";
 import { creativeAssets } from "@/lib/creative-studio/tables";
-import { referencesWhere } from "@/lib/creative-studio/presenters";
+import { loadPresenter, referencesWhere } from "@/lib/creative-studio/presenters";
+import { rankAvatarPhotos } from "@/lib/creative-studio/avatar-shared";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { framesOf, projectDetail, scenesOf } from "@/lib/creative-studio/service";
 import { signPaths } from "@/lib/creative-studio/storage";
@@ -47,11 +48,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const presenter = project.presenter ?? null;
   const refsQuery = referencesWhere(access.ownerId, studio, presenter?.id || null);
   const ids = Array.isArray(body?.referenceIds) ? body.referenceIds.filter((x) => typeof x === "string") : [];
-  const refs = await db
-    .select()
-    .from(creativeAssets)
-    .where(ids.length ? and(refsQuery, inArray(creativeAssets.id, ids)) : refsQuery)
-    .limit(6);
+  const where = ids.length ? and(refsQuery, inArray(creativeAssets.id, ids)) : refsQuery;
+  // An AI avatar has many photos: Manus gets its 6 best (main + Kling angles first, none of someone else).
+  const avatar = presenter?.avatar && presenter.id ? await loadPresenter(access.ownerId, presenter.id) : null;
+  const refs = avatar?.avatar
+    ? rankAvatarPhotos(await db.select().from(creativeAssets).where(where).orderBy(asc(creativeAssets.createdAt)), avatar).slice(0, 6)
+    : await db.select().from(creativeAssets).where(where).limit(6);
   if (presenter && refs.length === 0 && !presenter.look) {
     return NextResponse.json(
       { error: `Manus doesn't know what ${presenter.name} looks like yet. Add photos of ${presenter.name}, or describe how they look, then try again.` },

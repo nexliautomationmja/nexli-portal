@@ -8,16 +8,19 @@ import { sameStudio, studioFromRequest, studioNotFound, type Studio } from "@/li
 import { createUploadTarget, FRAME_MIME_TYPES, removePaths, signPaths } from "@/lib/creative-studio/storage";
 import { loadPresenter, referencesWhere } from "@/lib/creative-studio/presenters";
 import { readStorage, writeStorage } from "@/lib/creative-studio/frames";
-import { AVATAR_MAX_PHOTOS } from "@/lib/creative-studio/avatar-shared";
+import { AVATAR_MAX_PHOTOS, rankAvatarPhotos } from "@/lib/creative-studio/avatar-shared";
 
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
 async function list(ownerId: string, studio: Studio, presenterId: string | null) {
-  const refs = await db
+  let refs = await db
     .select()
     .from(creativeAssets)
     .where(referencesWhere(ownerId, studio, presenterId))
     .orderBy(asc(creativeAssets.createdAt));
+  // An AI avatar's: main photo and Kling angles first, never one Claude flagged as someone else.
+  const avatar = presenterId ? await loadPresenter(ownerId, presenterId) : null;
+  if (avatar?.avatar) refs = rankAvatarPhotos(refs, avatar);
   const signed = await signPaths(refs.map((r) => r.storagePath), 6 * 3600);
   return refs.map((r) => ({
     id: r.id,

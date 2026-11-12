@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { StudioView } from "@/lib/creative-studio/studios";
-import { AVATAR_MAX_PHOTOS, KLING_EXTRA_PHOTOS, SAMPLE_MAX, TEST_CLIP_CREDITS, TEST_CLIP_SECONDS, type AvatarView } from "@/lib/creative-studio/avatar-shared";
+import { AVATAR_MAX_PHOTOS, KLING_EXTRA_PHOTOS, SAMPLE_MAX, TRIAL_CREDITS, type AvatarView } from "@/lib/creative-studio/avatar-shared";
 import { CTA_CLASSES, SYNE } from "@/components/launch-pad";
 import { Button, FIELD, Segmented, Sheet } from "@/components/rainmaker";
 import { AssistantCard, Chip, ErrorStrip, SP, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
@@ -300,9 +300,28 @@ function AvatarTile({ a, onOpen }: { a: AvatarView; onOpen: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// New avatar: drop → upload → Claude reads → 3 voices
+// New avatar: drop → upload → Claude reads → 3 voices → lock in → trial video
 
 type Step = { label: string; detail?: string };
+
+/** The trial video: Claude writes it, then it goes to Kling (two requests, so each stays short). */
+async function makeTrial(a: AvatarView, fresh: boolean, onStep: (s: Step) => void): Promise<AvatarView> {
+  onStep({ label: `Claude is writing ${a.name}'s trial video…`, detail: a.intro ? `“${a.intro}”` : "An intro in their own words" });
+  await call(`${API}/${a.id}/trial`, "POST", { step: "write", fresh });
+  onStep({ label: "Sending it to Kling…", detail: `About ${TRIAL_CREDITS} Kling credits` });
+  return (await call<{ avatar: AvatarView }>(`${API}/${a.id}/trial`, "POST", { step: "render" })).avatar;
+}
+
+const trialHref = (projectId: string) => `/dashboard/creative-studio/${encodeURIComponent(projectId)}`;
+
+/** Where the trial video is, in plain words. */
+function trialLabel(status: string): string {
+  if (status === "draft") return "Not written yet";
+  if (status === "scripted") return "Written, not sent to Kling yet";
+  if (status === "approved" || status === "rendering") return "Kling is making it — open it and the auto-cut starts by itself when the clips land";
+  if (status === "clips_ready") return "Clips are ready — open it to auto-cut";
+  return "Open it to edit, add captions and download";
+}
 
 function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) => void; onDone: (a: AvatarView) => void; onOpen: (id: string) => void }) {
   const [pick, setPick] = useState<(PhotoPick & { from: string }) | null>(null);
@@ -347,6 +366,14 @@ function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) =
       onCreated(avatar);
       setStep({ label: `ElevenLabs is making ${avatar.name ? `${avatar.name}'s` : "3"} voices…`, detail: avatar.voice });
       avatar = (await call<{ avatar: AvatarView }>(`${API}/${avatar.id}/voices`, "POST", {})).avatar;
+      onCreated(avatar);
+      // "You give them the voice": Voice A is locked in (Rebuild switches it later), then the trial video.
+      const first = avatar.options?.voices[0]?.generatedVoiceId;
+      if (!first) throw new Error("ElevenLabs didn't send any voices back. Open the avatar and tap Make 3 voices.");
+      setStep({ label: `Locking in ${avatar.name}'s voice and setting up Kling…`, detail: "Voice A — you can listen to all 3 and switch later (Rebuild)" });
+      avatar = (await call<{ avatar: AvatarView }>(`${API}/${avatar.id}/lock`, "POST", { generatedVoiceId: first })).avatar;
+      onCreated(avatar);
+      avatar = await makeTrial(avatar, false, setStep);
       setPick(null);
       setName("");
       setNote("");
@@ -412,7 +439,7 @@ function NewAvatar({ onCreated, onDone, onOpen }: { onCreated: (a: AvatarView) =
                 </span>
                 <span className="text-sm font-bold text-white">{opening ? "Opening…" : "Drop the zip of photos here"}</span>
                 <span className="max-w-sm text-xs text-neutral-400">
-                  Or tap to pick it (loose photos work too). Up to {AVATAR_MAX_PHOTOS} photos of the same person — a clear face close-up plus a few other angles works best.
+                  Or tap to pick it (loose photos work too). Up to {AVATAR_MAX_PHOTOS} photos of the same person are used — include a selfie-style one: their trial video starts from it.
                 </span>
               </button>
             )}
@@ -499,7 +526,7 @@ function AvatarSheet({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", look: "", bestFor: "", pronoun: "she" as "she" | "he" });
+  const [form, setForm] = useState({ name: "", look: "", bestFor: "", personality: "", intro: "", pronoun: "she" as "she" | "he" });
   const [voice, setVoice] = useState({ description: "", sample: "" });
   const [chosen, setChosen] = useState<string | null>(null);
   const [firm, setFirm] = useState("");
@@ -507,24 +534,24 @@ function AvatarSheet({
   const id = a?.id ?? null;
 
   // The form mirrors the avatar whenever another one opens (or the server changes it).
-  const sig = a ? `${a.id}|${a.name}|${a.look}|${a.bestFor}|${a.pronoun}|${a.voice}|${a.voiceSample}|${a.options?.voices.map((v) => v.generatedVoiceId).join(",")}` : "";
+  const sig = a ? `${a.id}|${a.name}|${a.look}|${a.bestFor}|${a.personality}|${a.intro}|${a.pronoun}|${a.voice}|${a.voiceSample}|${a.options?.voices.map((v) => v.generatedVoiceId).join(",")}` : "";
   useEffect(() => {
     if (!a) return;
     // The form mirrors the avatar being opened.
-    setForm({ name: a.name, look: a.look, bestFor: a.bestFor, pronoun: a.pronoun });
+    setForm({ name: a.name, look: a.look, bestFor: a.bestFor, personality: a.personality, intro: a.intro, pronoun: a.pronoun });
     setVoice({ description: a.options?.description ?? a.voice, sample: a.options?.sample ?? a.voiceSample });
     setChosen(a.options?.voices[0]?.generatedVoiceId ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures what matters
   }, [sig]);
-  // While Manus makes photos or Kling renders the test clip: check every few seconds.
-  const working = a ? (a.photoTask && a.photoTask.status !== "failed" ? "photos" : a.test?.status === "rendering" ? "test" : null) : null;
+  // While Manus makes photos: check every few seconds.
+  const working = a?.photoTask && a.photoTask.status !== "failed" ? "photos" : null;
   useEffect(() => {
     if (!id || !working) return;
     const t = setInterval(() => {
       void call<{ avatar: AvatarView }>(`${API}/${id}/${working}`, "GET")
         .then((b) => onChange(b.avatar))
         .catch(() => {});
-    }, working === "photos" ? 8000 : 15000);
+    }, 8000);
     return () => clearInterval(t);
   }, [id, working, onChange]);
 
@@ -550,14 +577,16 @@ function AvatarSheet({
   }
 
   if (!a) return null;
-  const dirty = form.name !== a.name || form.look !== a.look || form.bestFor !== a.bestFor || (!a.locked && form.pronoun !== a.pronoun);
+  const dirty =
+    form.name !== a.name || form.look !== a.look || form.bestFor !== a.bestFor || form.personality !== a.personality || form.intro !== a.intro || (!a.locked && form.pronoun !== a.pronoun);
+  const formBody = { name: form.name, look: form.look, bestFor: form.bestFor, personality: form.personality, intro: form.intro, ...(!a.locked ? { pronoun: form.pronoun } : {}) };
   const flagged = new Set(a.read?.otherPerson ?? []);
   const kling = klingLine(a);
   const firmOf = (key: string) => studios.find((s) => s.key === key);
 
   const save = () =>
     run("Saving…", () =>
-      call(`${API}/${a.id}`, "PATCH", { name: form.name, look: form.look, bestFor: form.bestFor, ...(!a.locked ? { pronoun: form.pronoun } : {}) })
+      call(`${API}/${a.id}`, "PATCH", formBody)
     );
   const setPicks = (mainPhotoId: string, klingPhotoIds: string[]) => run("Saving…", () => call(`${API}/${a.id}`, "PATCH", { mainPhotoId, klingPhotoIds }));
   const toggleKling = (photoId: string) => {
@@ -627,7 +656,7 @@ function AvatarSheet({
                 onClick={() =>
                   void run("lock", async () => {
                     // Lock-in keeps what's typed here too.
-                    if (dirty) await call(`${API}/${a.id}`, "PATCH", { name: form.name, look: form.look, bestFor: form.bestFor, pronoun: form.pronoun });
+                    if (dirty) await call(`${API}/${a.id}`, "PATCH", formBody);
                     return call(`${API}/${a.id}/lock`, "POST", { generatedVoiceId: chosen });
                   })
                 }
@@ -673,6 +702,11 @@ function AvatarSheet({
                   )}
                   {other && <span className="absolute inset-x-1 top-1 rounded bg-amber-500/90 px-1 py-0.5 text-center text-[9px] font-black uppercase text-black">Someone else?</span>}
                   {main && <span className="absolute left-1 top-1 rounded-md bg-violet-500 px-1.5 py-0.5 text-[10px] font-black text-white">★ Main</span>}
+                  {p.id === a.trialPhotoId && !other && (
+                    <span className="absolute right-1 top-1 rounded-md bg-cyan-500 px-1.5 py-0.5 text-[10px] font-black text-[#020617]" title="The trial video starts from this photo">
+                      Trial
+                    </span>
+                  )}
                   {!a.locked && (
                     <div className="absolute inset-x-1 bottom-1 flex gap-1">
                       {!main && (
@@ -765,6 +799,15 @@ function AvatarSheet({
             <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">How they look</span>
             <textarea value={form.look} onChange={(e) => setForm({ ...form, look: e.target.value })} rows={2} maxLength={1500} className={`${FIELD} resize-y`} />
             <span className="mt-1 block text-[11px] text-neutral-500">Manus works from this and the photos when it makes their frames.</span>
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">Personality</span>
+            <input value={form.personality} onChange={(e) => setForm({ ...form, personality: e.target.value })} maxLength={120} placeholder="How they come across, e.g. calm, seasoned, quietly confident" className={FIELD} />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">Trial video line</span>
+            <textarea value={form.intro} onChange={(e) => setForm({ ...form, intro: e.target.value })} rows={2} maxLength={300} placeholder={`Hey, I'm ${form.name || "…"} — and …`} className={`${FIELD} resize-y`} />
+            <span className="mt-1 block text-[11px] text-neutral-500">What they say to camera in their trial video. Change it, then tap Make the trial video again.</span>
           </label>
         </section>
 
@@ -860,7 +903,7 @@ function AvatarSheet({
                 Rebuild
               </Button>
             </div>
-            <TestClip a={a} busy={busy} onRun={run} />
+            <TrialRow a={a} busy={busy} dirty={dirty} onRun={run} onSave={() => call(`${API}/${a.id}`, "PATCH", formBody)} />
           </section>
         )}
 
@@ -977,41 +1020,87 @@ function MorePhotos({ a, busy, usable, onRun }: { a: AvatarView; busy: string | 
   );
 }
 
-/** A 5-second Kling clip of the avatar saying the start of its sample: the real check of face + voice. */
-function TestClip({ a, busy, onRun }: { a: AvatarView; busy: string | null; onRun: Run }) {
-  const ready = a.kling.status === "ready" || a.kling.status === "pending" || a.kling.status === "error";
-  const t = a.test;
+/**
+ * The trial video: the avatar introducing itself, made as a normal video (so
+ * its page has the auto-cut, captions and download). Made automatically when
+ * the avatar is created; "again" makes a new one (e.g. after a new line or voice).
+ */
+function TrialRow({ a, busy, dirty, onRun, onSave }: { a: AvatarView; busy: string | null; dirty: boolean; onRun: Run; onSave: () => Promise<unknown> }) {
+  const t = a.trial;
+  const [picking, setPicking] = useState(false);
+  const framePhoto = a.photos.find((p) => p.id === a.trialPhotoId);
+  const flagged = new Set(a.read?.otherPerson ?? []);
+  const isSelfie = Boolean(a.read?.selfie && a.read.selfie === a.trialPhotoId);
+  const sent = t && t.status !== "draft" && t.status !== "scripted";
+  const go = (fresh: boolean) => {
+    if (!confirm(`${fresh ? "Make a new trial video" : "Make the trial video"} of ${a.name} on Kling? About ${TRIAL_CREDITS} Kling credits.`)) return;
+    void onRun("trial", async () => {
+      if (dirty) await onSave();
+      await call(`${API}/${a.id}/trial`, "POST", { step: "write", fresh });
+      return call(`${API}/${a.id}/trial`, "POST", { step: "render" });
+    });
+  };
   return (
     <div className="mt-2 border-t border-white/10 pt-3">
-      {t?.status === "done" && t.url && (
-        <div className="mb-3 flex flex-wrap items-start gap-3">
-          <video src={t.url} controls playsInline className="max-h-80 w-44 rounded-xl border border-white/10 bg-black" />
-          <p className="min-w-0 flex-1 text-xs leading-relaxed text-neutral-400">
-            Test clip: &ldquo;{t.line}&rdquo; — check the face matches the photos and the voice matches {a.pronoun === "he" ? "his" : "her"} voice above.
-          </p>
-        </div>
-      )}
-      {t?.status === "rendering" ? (
-        <p className="inline-flex items-center gap-2 text-xs text-neutral-300">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" /> Kling is making the test clip — usually 1–4 minutes.
+      <h4 className="text-[11px] font-black uppercase tracking-[0.16em] text-neutral-400">Trial video</h4>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        {framePhoto?.url && (
+          // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+          <img src={framePhoto.url} alt="" className="h-16 w-12 rounded-lg border border-cyan-400/50 object-cover" />
+        )}
+        <p className="min-w-0 flex-1 text-xs text-neutral-400">
+          Starts from {isSelfie ? "their selfie-style photo" : "their main photo"}
+          {isSelfie ? "" : a.read ? " (Claude found no selfie-style photo)" : ""}.{" "}
+          <button type="button" onClick={() => setPicking((v) => !v)} className="font-semibold text-cyan-300 hover:text-white">
+            {picking ? "Done" : "Change"}
+          </button>
         </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            busy={busy === "test"}
-            disabled={Boolean(busy) || !ready}
-            onClick={() => {
-              if (!confirm(`Make a ${TEST_CLIP_SECONDS}-second test clip of ${a.name} on Kling? About ${TEST_CLIP_CREDITS} Kling credits.`)) return;
-              void onRun("test", () => call(`${API}/${a.id}/test`, "POST"));
-            }}
-          >
-            {t?.status === "done" ? "Make another test clip" : `Make a ${TEST_CLIP_SECONDS}-second test clip`}
-          </Button>
-          <span className="text-[11px] text-neutral-500">{t?.status === "failed" ? <span className="text-rose-300">Kling: {t.error}</span> : `About ${TEST_CLIP_CREDITS} Kling credits.`}</span>
+      </div>
+      {picking && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {a.photos
+            .filter((p) => !flagged.has(p.id))
+            .map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() =>
+                  void onRun("Saving…", async () => {
+                    const out = await call<{ avatar: AvatarView }>(`${API}/${a.id}`, "PATCH", { trialPhotoId: p.id });
+                    setPicking(false);
+                    return out;
+                  })
+                }
+                className={`h-16 w-12 overflow-hidden rounded-lg border ${p.id === a.trialPhotoId ? "border-cyan-400 ring-2 ring-cyan-400/40" : "border-white/10 hover:border-white/40"}`}
+                aria-label="Start the trial video from this photo"
+              >
+                {p.url && (
+                  // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+                  <img src={p.url} alt="" className="h-full w-full object-cover" />
+                )}
+              </button>
+            ))}
         </div>
       )}
+      {t ? (
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <p className="min-w-0 flex-1 text-xs leading-relaxed text-neutral-300">{trialLabel(t.status)}.</p>
+          <Link href={trialHref(t.projectId)} className="min-h-9 rounded-full bg-violet-500 px-4 py-2 text-xs font-bold text-white hover:bg-violet-400">
+            Open the trial video →
+          </Link>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-neutral-400">
+          {a.name} introducing {a.pronoun === "he" ? "himself" : "herself"} on camera — auto-cut, captions and download on its page.
+        </p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button size="sm" variant={t ? "ghost" : "secondary"} busy={busy === "trial"} disabled={Boolean(busy)} onClick={() => go(Boolean(sent))}>
+          {busy === "trial" ? "Making the trial video…" : !t ? "Make the trial video" : sent ? "Make the trial video again" : "Send it to Kling"}
+        </Button>
+        <span className="text-[11px] text-neutral-500">About {TRIAL_CREDITS} Kling credits.</span>
+      </div>
     </div>
   );
 }
