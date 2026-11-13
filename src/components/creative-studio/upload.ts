@@ -120,6 +120,34 @@ export async function uploadFrameFile(projectId: string, file: File, vertical: b
   return out;
 }
 
+/**
+ * Have Manus recreate a photo for this video: upload the photo (not as a
+ * frame), then start Manus with `change` (new suit colour, outfit,
+ * background… or empty to copy it as is). Its 2 options land in the frame
+ * card to pick from. Returns the fresh project detail.
+ */
+export async function recreateWithManus(projectId: string, file: File, change: string): Promise<ProjectDetail> {
+  const base = `/api/dashboard/creative-studio/projects/${projectId}`;
+  const prepared = await prepareFrame(file, false);
+  const png = /^image\/(png|jpeg)$/.test(prepared.mime) ? prepared : await toPng(prepared.blob);
+  const sign = await fetch(`${base}/frames`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "sign", purpose: "recreate", mime: png.mime }),
+  });
+  const target = await sign.json().catch(() => null);
+  if (!sign.ok || !target?.token) throw new Error(target?.error || "Couldn't start the upload");
+  await uploadToTarget(target, png.blob, png.mime);
+  const gen = await fetch(`${base}/frame/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recreate: target.path, shot: change }),
+  });
+  const detail = await gen.json().catch(() => null);
+  if (!gen.ok || !detail?.project) throw new Error(detail?.error || "Couldn't start Manus");
+  return detail as ProjectDetail;
+}
+
 /** A video's length and upright size as the browser reads it (null when it can't, e.g. HEVC in Chrome). */
 export function readVideo(file: File): Promise<{ durationS: number; width: number; height: number } | null> {
   return new Promise((resolve) => {

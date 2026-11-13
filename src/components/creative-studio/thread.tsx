@@ -9,7 +9,7 @@ import { MAX_SCENES, scriptPresenterMismatch } from "@/lib/creative-studio/promp
 import { defaultPresenterName } from "@/components/creative-studio/presenter-picker";
 import { SYNE } from "@/components/launch-pad";
 import { studioHref, api, send } from "@/components/creative-studio/client";
-import { uploadFrameFile, uploadSource } from "@/components/creative-studio/upload";
+import { recreateWithManus, uploadFrameFile, uploadSource } from "@/components/creative-studio/upload";
 import { SourceCard, presenterName } from "@/components/creative-studio/source-card";
 import {
   AssistantCard,
@@ -261,7 +261,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
     if (r.ok) apply(r.data);
   }
 
-  async function onSubmit({ text, images, video, format: fmt }: ComposerSubmit): Promise<boolean> {
+  async function onSubmit({ text, images, video, format: fmt, recreate }: ComposerSubmit): Promise<boolean> {
     if (!detail) return false;
     setError(null);
     let d = detail;
@@ -297,6 +297,16 @@ export function StudioThread({ projectId }: { projectId: string }) {
         d = await uploadFinalCut(p.id, video, text);
         apply(d);
         setWorking(null);
+        return true;
+      }
+
+      // A photo for Manus to recreate, with the text as the change: 2 options land in the frame card to pick from.
+      if (recreate && images[0]) {
+        setWorking({ label: "Sending your photo to Manus…", detail: text ? `“${text}”` : "Recreating it as is", accent: "blue" });
+        d = await recreateWithManus(p.id, images[0], text);
+        apply(d);
+        setWorking(null);
+        setTimeout(() => document.getElementById("stage-frame")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
         return true;
       }
 
@@ -762,6 +772,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
             format={format}
             onFormat={showFormat ? changeFormat : undefined}
             maxImages={locked ? 1 : MAX_SCENES}
+            allowRecreate
             onSubmit={onSubmit}
           />
         </div>

@@ -42,6 +42,11 @@ export async function sourceOf(project: Pick<Project, "id" | "reaction">): Promi
 
 /** Every file a stored asset keeps: its own, plus a source's light copy and stills. */
 export function assetFiles(a: Pick<Asset, "kind" | "storagePath" | "metadata">): string[] {
+  // A Manus task that recreated a photo: the photo you uploaded for it.
+  if (a.kind === "manus_task") {
+    const recreate = (a.metadata as { recreate?: unknown } | null)?.recreate;
+    return typeof recreate === "string" ? [recreate] : [];
+  }
   if (a.kind !== "source_video") return a.storagePath ? [a.storagePath] : [];
   const m = sourceMeta(a);
   return [a.storagePath, m.proxyPath, ...(m.stills ?? []).map((s) => s.path)].filter((p): p is string => Boolean(p));

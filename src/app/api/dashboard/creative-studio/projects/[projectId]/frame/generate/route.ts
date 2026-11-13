@@ -22,6 +22,9 @@ type Ctx = { params: Promise<{ projectId: string }> };
  *   `scene` the options are for that scene.
  * • { storyboard: true } — every scene still waiting for a frame, made
  *   together in one task (same person, same look), each landing in its scene.
+ * • { recreate, shot? } — recreate a photo you uploaded (frames "sign" with
+ *   purpose "recreate"); `shot` is what to change (a new suit colour, outfit,
+ *   background…). Works without reference photos too (the photo's own person).
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
@@ -34,13 +37,16 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     count?: number;
     scene?: string;
     storyboard?: boolean;
+    recreate?: string;
   } | null;
   const storyboard = body?.storyboard === true;
   const shot = typeof body?.shot === "string" ? body.shot.trim().slice(0, 1500) : "";
+  // Only a photo uploaded to this video's own recreate folder.
+  const recreatePath = !storyboard && typeof body?.recreate === "string" && body.recreate.startsWith(`${project.id}/recreate/`) && !body.recreate.includes("..") ? body.recreate : null;
   const scenes = scenesOf(project, await framesOf(project.id));
   const waiting = scenes.filter((sc) => !sc.frameId && sc.shot.trim());
   if (storyboard && waiting.length === 0) return NextResponse.json({ error: "Every scene already has a frame." }, { status: 400 });
-  if (!storyboard && !shot) return NextResponse.json({ error: "Describe the shot you want" }, { status: 400 });
+  if (!storyboard && !shot && !recreatePath) return NextResponse.json({ error: "Describe the shot you want" }, { status: 400 });
   const sceneId = typeof body?.scene === "string" && scenes.some((sc) => sc.id === body.scene) ? body.scene : null;
 
   // Only this video's presenter's photos, from its studio (Daniela's in Nexli's by default; a client studio has its own).
@@ -54,13 +60,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const refs = avatar?.avatar
     ? rankAvatarPhotos(await db.select().from(creativeAssets).where(where).orderBy(asc(creativeAssets.createdAt)), avatar).slice(0, 6)
     : await db.select().from(creativeAssets).where(where).limit(6);
-  if (presenter && refs.length === 0 && !presenter.look) {
+  if (presenter && refs.length === 0 && !presenter.look && !recreatePath) {
     return NextResponse.json(
       { error: `Manus doesn't know what ${presenter.name} looks like yet. Add photos of ${presenter.name}, or describe how they look, then try again.` },
       { status: 400 }
     );
   }
-  if (!presenter && studio.kind === "client" && refs.length === 0) {
+  if (!presenter && studio.kind === "client" && refs.length === 0 && !recreatePath) {
     return NextResponse.json(
       {
         error: `${studio.name}'s studio has no reference pictures yet, so Manus doesn't know who presents. Paste or upload a frame instead, or add reference pictures first.`,
@@ -68,7 +74,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       { status: 400 }
     );
   }
-  const signed = await signPaths(refs.map((r) => r.storagePath), 2 * 3600);
+  const signed = await signPaths([...refs.map((r) => r.storagePath), recreatePath], 2 * 3600);
+  const recreateUrl = recreatePath ? signed.get(recreatePath) : undefined;
+  if (recreatePath && !recreateUrl) return NextResponse.json({ error: "Couldn't find the photo to recreate. Attach it again." }, { status: 400 });
   const referenceUrls = refs.map((r) => (r.storagePath ? signed.get(r.storagePath) : undefined)).filter(Boolean) as string[];
   const aspect = project.format === "vsl_16x9" ? "16:9" : "9:16";
 
@@ -103,6 +111,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         referenceUrls,
         client: studio.kind === "client",
         presenter: presenter ? { name: presenter.name, pronoun: presenter.pronoun, look: presenter.look } : null,
+        ...(recreateUrl ? { recreateUrl } : {}),
       });
       await db.insert(creativeAssets).values({
         projectId: project.id,
@@ -110,7 +119,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         source: "manus",
         providerTaskId: task.taskId,
         status: "running",
-        metadata: { shot, taskUrl: task.taskUrl, references: refs.map((r) => r.id), ...(sceneId ? { sceneId } : {}) },
+        metadata: { shot: recreatePath ? `Recreate your photo${shot ? `: ${shot}` : ""}` : shot, ...(recreatePath ? { recreate: recreatePath } : {}), taskUrl: task.taskUrl, references: refs.map((r) => r.id), ...(sceneId ? { sceneId } : {}) },
       });
     }
   } catch (err) {

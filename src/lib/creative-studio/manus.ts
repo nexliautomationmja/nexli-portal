@@ -49,6 +49,29 @@ export interface FrameRequest {
   client?: boolean;
   /** A chosen presenter (not the studio's default): their photos are the references, or Manus works from the look. */
   presenter?: { name: string; pronoun: "she" | "he"; look: string } | null;
+  /** A photo to recreate (attached as photo-to-recreate): `shot` is then what to change about it. */
+  recreateUrl?: string;
+}
+
+/**
+ * Recreating a photo: Manus copies the attached photo and makes only the
+ * change asked for (a new suit colour, outfit, background…), with the
+ * presenter from the reference photos when there are any.
+ */
+function recreateParagraphs(req: FrameRequest, who: string): string[] {
+  const change = req.shot.trim();
+  return [
+    `The attached file named "photo-to-recreate" is the photo to recreate. Copy its composition, framing, camera angle, pose, setting, lighting and styling as closely as you can; where it differs from the general notes on pose and light further down, follow the photo (but keep the mouth relaxed and closed).`,
+    req.referenceUrls.length
+      ? `The person in the new images must be ${who} from the reference photos. If the person in the photo to recreate is someone else, replace them with ${who}, keeping the same pose and outfit unless the change says otherwise.`
+      : `Keep the person in the photo to recreate exactly as they are (same face, hair, skin tone and build).`,
+    change ? `The change to make: ${change}. Change only that, and keep everything else the same.` : "Recreate the photo as closely as you can, with no other changes.",
+  ];
+}
+
+/** The shot line of a frame prompt, or the recreate instructions. */
+function shotParagraphs(req: FrameRequest, who: string): string[] {
+  return req.recreateUrl ? recreateParagraphs(req, who) : [`The shot: ${req.shot.trim()}`];
 }
 
 /** A chosen presenter: the same person as their photos, or exactly as their look describes. */
@@ -62,7 +85,7 @@ function presenterFramePrompt(req: FrameRequest & { presenter: NonNullable<Frame
   return [
     `Create ${req.count} photorealistic still photographs of ${name} to use as the opening frame of a video.`,
     who,
-    `The shot: ${req.shot.trim()}`,
+    ...shotParagraphs(req, name),
     `Format: ${size}. ${req.aspect === "9:16" ? `Framed for a vertical Facebook/Instagram ad, with room above ${P.poss} head.` : `Framed for a landscape video, with ${P.obj} centred.`}`,
     `Unless the shot says otherwise, ${P.subj} faces the camera with ${P.poss} mouth relaxed and closed, in a natural pose ${P.subj} can start talking from. Realistic skin, hair and fabric, natural light, shallow depth of field.`,
     "No text, captions, logos or watermarks anywhere in the image.",
@@ -74,9 +97,9 @@ function presenterFramePrompt(req: FrameRequest & { presenter: NonNullable<Frame
 /** A client studio's presenter isn't Daniela: the person in that studio's reference pictures. */
 function clientFramePrompt(req: FrameRequest, size: string): string {
   return [
-    `Create ${req.count} photorealistic still photographs of the presenter shown in the attached reference photos, to use as the opening frame of a talking-head video.`,
-    "It must clearly be the same person as in the reference photos in every image: same face, hair, skin tone and build.",
-    `The shot: ${req.shot.trim()}`,
+    `Create ${req.count} photorealistic still photographs of the presenter${req.referenceUrls.length ? " shown in the attached reference photos" : ""}, to use as the opening frame of a talking-head video.`,
+    ...(req.referenceUrls.length ? ["It must clearly be the same person as in the reference photos in every image: same face, hair, skin tone and build."] : []),
+    ...shotParagraphs(req, "the presenter"),
     `Format: ${size}. ${req.aspect === "9:16" ? "Framed for a vertical Facebook/Instagram ad, with room above the presenter's head." : "Framed for a landscape video, with the presenter centred."}`,
     "The presenter faces the camera with the mouth relaxed and closed, in a natural pose to start talking from. Realistic skin, hair and fabric, natural light, shallow depth of field.",
     "No text, captions, logos or watermarks anywhere in the image.",
@@ -95,7 +118,7 @@ export function framePrompt(req: FrameRequest): string {
   return [
     `Create ${req.count} photorealistic still photographs of Daniela to use as the opening frame of a talking-head video.`,
     refs,
-    `The shot: ${req.shot.trim()}`,
+    ...shotParagraphs(req, "Daniela"),
     `Format: ${size}. ${req.aspect === "9:16" ? "Framed for a vertical Facebook/Instagram ad, with room above her head." : "Framed for a landscape video, with her centred."}`,
     "She faces the camera with her mouth relaxed and closed, in a natural pose she can start talking from. Realistic skin, hair and fabric, natural light, shallow depth of field.",
     "No text, captions, logos or watermarks anywhere in the image.",
@@ -182,6 +205,7 @@ export function storyboardPlacement(filenames: (string | null)[], count: number)
 
 export async function startFrameTask(req: FrameRequest): Promise<{ taskId: string; taskUrl: string | null }> {
   const content: Record<string, unknown>[] = [{ type: "text", text: framePrompt(req) }];
+  if (req.recreateUrl) content.push({ type: "file", file_url: req.recreateUrl, filename: "photo-to-recreate.png" });
   req.referenceUrls.slice(0, 6).forEach((url, i) => {
     const who = req.presenter ? req.presenter.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "presenter" : req.client ? "presenter" : "daniela";
     content.push({ type: "file", file_url: url, filename: `${who}-reference-${i + 1}.png` });

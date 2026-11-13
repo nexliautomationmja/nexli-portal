@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
 import { SYNE } from "@/components/launch-pad";
-import { uploadFrameFile, uploadSource } from "@/components/creative-studio/upload";
+import { recreateWithManus, uploadFrameFile, uploadSource } from "@/components/creative-studio/upload";
 import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { Composer, type ComposerSubmit } from "@/components/creative-studio/composer";
 import { PresenterPicker } from "@/components/creative-studio/presenter-picker";
@@ -186,7 +186,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
     }
   }
 
-  async function start({ text, images, video, format: fmt, count: n }: ComposerSubmit): Promise<boolean> {
+  async function start({ text, images, video, format: fmt, count: n, recreate }: ComposerSubmit): Promise<boolean> {
     if (video && n > 1) {
       setError("Reaction videos are made one at a time. Set it to 1 video, or take the video off to plan a batch.");
       return false;
@@ -207,12 +207,19 @@ export function StudioHome({ studio }: { studio: StudioView }) {
       const r = await fetch(`/api/dashboard/creative-studio/projects${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief: { direction: text }, format: fmt, ...(presenter ? { presenterId: presenter.id } : studio.avatar ? { presenterId: null } : {}) }),
+        // Recreating a photo: the text is what Manus changes, not the video's direction (Claude asks for that once a frame is picked).
+        body: JSON.stringify({ brief: { direction: recreate ? "" : text }, format: fmt, ...(presenter ? { presenterId: presenter.id } : studio.avatar ? { presenterId: null } : {}) }),
       });
       const b = await r.json().catch(() => null);
       if (!r.ok || !b?.id) throw new Error(b?.error || "Couldn't start the video");
       // A video makes it a reaction video: the presenter watches it on a phone and reacts (written once it's ready).
       if (video) await uploadSource(b.id, video);
+      // A photo for Manus to recreate (with the change you typed): its options wait in the frame card.
+      if (recreate && images[0]) {
+        await recreateWithManus(b.id, images[0], text);
+        router.push(`/dashboard/creative-studio/${b.id}`);
+        return true;
+      }
       // One image is the frame; several are the story's scenes, in the order attached.
       if (images.length === 1) await uploadFrameFile(b.id, images[0], fmt === "ad_9x16");
       for (const file of images.length > 1 ? images : []) await uploadFrameFile(b.id, file, fmt === "ad_9x16", "new");
@@ -291,6 +298,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
             onCount={setCount}
             maxCount={BATCH_MAX[format]}
             maxImages={MAX_SCENES}
+            allowRecreate={count === 1}
             onSubmit={start}
           />
           {error && (

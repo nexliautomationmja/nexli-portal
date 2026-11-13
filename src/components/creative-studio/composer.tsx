@@ -13,6 +13,8 @@ export interface ComposerSubmit {
   format: CreativeFormat;
   /** Batch size (1 = a single video). */
   count: number;
+  /** The one attached image is a photo for Manus to recreate (text = what to change), not the frame. */
+  recreate: boolean;
 }
 
 interface Attachment {
@@ -26,6 +28,9 @@ interface Attachment {
  * (Shift+Enter = new line; on phones Return adds a line and ↑ sends), paste / drop / 📎 for images (and a video for the
  * final cut), optional Ad · VSL pill and batch size. Modeled on the composer in
  * src/components/messages/message-thread.tsx.
+ *
+ * With `allowRecreate`, one attached photo can be either the frame as is or a
+ * photo for Manus to recreate: then the text is what to change about it.
  *
  * Image pastes anywhere on the page land here too — unless the pointer or
  * focus is inside an element marked data-paste-zone (the Daniela references
@@ -48,6 +53,7 @@ export function Composer({
   onCount,
   maxCount = 1,
   maxImages,
+  allowRecreate = false,
   onSubmit,
 }: {
   placeholder: string;
@@ -70,11 +76,15 @@ export function Composer({
   maxCount?: number;
   /** How many images one message can carry (a story's scenes); defaults to one per video in the batch. */
   maxImages?: number;
+  /** Offer "Recreate with Manus" when one photo is attached (single video, before the script is locked). */
+  allowRecreate?: boolean;
   onSubmit: (s: ComposerSubmit) => Promise<boolean | void> | boolean | void;
 }) {
   const [text, setText] = useState(defaultText ?? "");
   const [files, setFiles] = useState<Attachment[]>([]);
   const [dragging, setDragging] = useState(false);
+  // One attached photo: use it as the frame, or have Manus recreate it with a change.
+  const [recreateOn, setRecreateOn] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const filesRef = useRef(files);
@@ -140,11 +150,12 @@ export function Composer({
     if (!t && files.length === 0) return;
     const images = files.filter((a) => a.file.type.startsWith("image/")).map((a) => a.file);
     const video = files.find((a) => a.file.type.startsWith("video/"))?.file ?? null;
-    const ok = await onSubmit({ text: t, images, video, format, count });
+    const ok = await onSubmit({ text: t, images, video, format, count, recreate: recreatable && recreateOn });
     if (ok !== false) {
       setText("");
       files.forEach((a) => a.preview && URL.revokeObjectURL(a.preview));
       setFiles([]);
+      setRecreateOn(false);
       requestAnimationFrame(grow);
     }
   }
@@ -154,6 +165,8 @@ export function Composer({
   const imageIds = files.filter((a) => a.preview).map((a) => a.id);
   const imageCount = imageIds.length;
   const imageIndex = new Map(imageIds.map((id, i) => [id, i]));
+  const recreatable = allowRecreate && count === 1 && imageCount === 1 && files.length === 1;
+  const recreating = recreatable && recreateOn;
 
   return (
     <div
@@ -192,7 +205,7 @@ export function Composer({
                 </div>
               )}
               <span className="absolute bottom-1 left-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                {!a.preview ? videoLabel : imageCount > 1 && count === 1 ? `Scene ${imageIndex.get(a.id)! + 1}` : "Frame"}
+                {!a.preview ? videoLabel : recreating ? "To recreate" : imageCount > 1 && count === 1 ? `Scene ${imageIndex.get(a.id)! + 1}` : "Frame"}
               </span>
               <button
                 type="button"
@@ -204,6 +217,42 @@ export function Composer({
               </button>
             </div>
           ))}
+          {recreatable && (
+            <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+              <div className="flex w-fit rounded-full border border-white/10 bg-white/5 p-0.5" role="group" aria-label="What to do with this photo">
+                {(
+                  [
+                    [false, "Use as the frame"],
+                    [true, "Recreate with Manus"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => {
+                      setRecreateOn(value);
+                      area.current?.focus();
+                    }}
+                    aria-pressed={recreateOn === value}
+                    className={`min-h-8 rounded-full px-3 py-1 text-xs font-bold transition-colors ${
+                      recreateOn === value
+                        ? value
+                          ? "bg-violet-600 text-white shadow shadow-violet-600/30"
+                          : "bg-blue-600 text-white shadow shadow-blue-600/30"
+                        : "text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[11px] leading-snug text-neutral-500">
+                {recreateOn
+                  ? "Type what to change below: a new suit colour, outfit, background, anything. Manus makes 2 options to pick from."
+                  : "This photo becomes the video's frame as is."}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -213,7 +262,11 @@ export function Composer({
         value={text}
         autoFocus={autoFocus}
         disabled={disabled}
-        placeholder={placeholder}
+        placeholder={
+          recreating
+            ? "What should Manus change? e.g. “same shot, navy suit instead of grey” or “put her in a modern office”. Leave empty to copy it as is."
+            : placeholder
+        }
         onChange={(e) => {
           setText(e.target.value);
           grow();
@@ -326,7 +379,9 @@ export function Composer({
           </div>
         )}
 
-        {hint && <span className="hidden min-w-0 flex-1 truncate text-[11px] text-neutral-500 sm:block">{hint}</span>}
+        {(recreating || hint) && (
+          <span className="hidden min-w-0 flex-1 truncate text-[11px] text-neutral-500 sm:block">{recreating ? "Enter → Manus recreates your photo" : hint}</span>
+        )}
 
         <button
           type="button"

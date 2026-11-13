@@ -14,7 +14,8 @@ const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "
 
 /**
  * POST { action: "sign", mime } → one-time upload target in the private
- * bucket (the browser uploads the cropped frame straight to storage).
+ * bucket (the browser uploads the cropped frame straight to storage). With
+ * purpose "recreate" it's a photo for Manus to recreate (not a frame).
  * POST { action: "register", path, mime, width, height, scene? } → frame asset
  * row; with `scene` it goes straight into the scene list ("new" adds a scene,
  * a scene id replaces that scene's frame).
@@ -34,7 +35,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
 
   if (body?.action === "sign") {
-    const target = await createUploadTarget(`${project.id}/frames/${randomUUID()}.${EXT[mime]}`);
+    const folder = body.purpose === "recreate" ? "recreate" : "frames";
+    const target = await createUploadTarget(`${project.id}/${folder}/${randomUUID()}.${EXT[mime]}`);
     return NextResponse.json(target);
   }
 
