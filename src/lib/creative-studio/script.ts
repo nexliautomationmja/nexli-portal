@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { KLING_FRAMEWORK, STORY_RULES } from "@/lib/creative-studio/rules.generated";
+import { KLING_FRAMEWORK, STORY_RULES, REFERENCE_RULES } from "@/lib/creative-studio/rules.generated";
 import { withoutNexliSections } from "@/lib/creative-studio/framework-sections";
 import { FORMAT_LABEL, RIG_LABEL, hasSetVoice } from "@/lib/creative-studio/prompts";
 import {
@@ -423,6 +423,32 @@ export interface ScriptInput {
   story?: { scenes: { frameId: string; label: string; url: string }[] };
   /** Who presents (story videos). */
   presenter?: PresenterInfo;
+  /** A video to recreate: Claude copies its structure, hook and pacing (never its words). */
+  reference?: ReferenceVideo;
+}
+
+/** A reference video as Claude reads it: length, timed phrases, stills. */
+export interface ReferenceVideo {
+  durationS: number;
+  lines: string[];
+  stills: { t: number; url: string }[];
+}
+
+/** The reference video before everything else: its stills and every word, with times. */
+function referenceBlocks(input: ScriptInput): Anthropic.ContentBlockParam[] {
+  const r = input.reference;
+  if (!r) return [];
+  return [
+    { type: "text", text: `THE REFERENCE VIDEO TO RECREATE (${r.durationS.toFixed(1)} s). Stills through it:` },
+    ...r.stills.flatMap((st) => [
+      { type: "text" as const, text: `Reference still at ${st.t.toFixed(1)} s:` },
+      { type: "image" as const, source: { type: "url" as const, url: st.url } },
+    ]),
+    {
+      type: "text",
+      text: `What the reference says, with times in seconds:\n${r.lines.join("\n") || "(no words: go by the stills)"}\n\nEND OF THE REFERENCE. Copy its shape for this video; never its words, claims or brand.`,
+    },
+  ];
 }
 
 function briefText(input: ScriptInput): string {
@@ -453,8 +479,8 @@ function frameBlocks(urls: string[]): Anthropic.ImageBlockParam[] {
   return urls.slice(0, 4).map((url) => ({ type: "image", source: { type: "url", url } }));
 }
 
-async function callClaude(content: Anthropic.ContentBlockParam[], schema: object, maxTokens: number, firm = "", story = false): Promise<unknown> {
-  const base = story ? STORY_SYSTEM : SYSTEM;
+async function callClaude(content: Anthropic.ContentBlockParam[], schema: object, maxTokens: number, firm = "", story = false, reference = false): Promise<unknown> {
+  const base = `${story ? STORY_SYSTEM : SYSTEM}${reference ? `\n${REFERENCE_RULES}` : ""}`;
   return askClaude({
     // A client studio: Nexli's own walkthrough and offer facts are cut out, the firm's brief added.
     system: firm ? `${withoutNexliSections(base)}${firm}` : base,
@@ -552,7 +578,7 @@ export async function reviseScript(args: {
   if (input.story) {
     const raw = (await callClaude(
       [
-        ...storyFrameBlocks(input),
+        ...referenceBlocks(input), ...storyFrameBlocks(input),
         {
           type: "text",
           text: [
@@ -569,13 +595,14 @@ export async function reviseScript(args: {
       STORY_SCHEMA,
       48_000,
       input.firm,
-      true
+      true,
+      Boolean(input.reference)
     )) as RawStory;
     return toStoryResult(raw, input);
   }
   const raw = (await callClaude(
     [
-      ...frameBlocks(input.frameUrls.slice(0, 1)),
+      ...referenceBlocks(input), ...frameBlocks(input.frameUrls.slice(0, 1)),
       {
         type: "text",
         text: [
@@ -591,7 +618,9 @@ export async function reviseScript(args: {
     ],
     SCRIPT_SCHEMA,
     48_000,
-    input.firm
+    input.firm,
+    false,
+    Boolean(input.reference)
   )) as RawScript;
   return toResult(raw, input.format);
 }
@@ -599,17 +628,18 @@ export async function reviseScript(args: {
 export async function generateScript(input: ScriptInput): Promise<ScriptResult> {
   if (input.story) {
     const raw = (await callClaude(
-      [...storyFrameBlocks(input), { type: "text", text: `${storyBriefText(input)}\n\nWrite the full clip-by-clip script for this story.` }],
+      [...referenceBlocks(input), ...storyFrameBlocks(input), { type: "text", text: `${storyBriefText(input)}\n\nWrite the full clip-by-clip script for this story.` }],
       STORY_SCHEMA,
       48_000,
       input.firm,
-      true
+      true,
+      Boolean(input.reference)
     )) as RawStory;
     return toStoryResult(raw, input);
   }
   const raw = (await callClaude(
     [
-      ...frameBlocks(input.frameUrls),
+      ...referenceBlocks(input), ...frameBlocks(input.frameUrls),
       {
         type: "text",
         text: `${briefText(input)}\n\nWrite the full clip-by-clip script for this video.`,
@@ -617,7 +647,9 @@ export async function generateScript(input: ScriptInput): Promise<ScriptResult> 
     ],
     SCRIPT_SCHEMA,
     48_000,
-    input.firm
+    input.firm,
+    false,
+    Boolean(input.reference)
   )) as RawScript;
   return toResult(raw, input.format);
 }
@@ -637,7 +669,7 @@ export async function rewriteClip(args: {
       .join("\n");
     const raw = (await callClaude(
       [
-        ...storyFrameBlocks(input),
+        ...referenceBlocks(input), ...storyFrameBlocks(input),
         {
           type: "text",
           text: [
@@ -656,7 +688,8 @@ export async function rewriteClip(args: {
       STORY_REWRITE_SCHEMA,
       8_000,
       input.firm,
-      true
+      true,
+      Boolean(input.reference)
     )) as { clip: RawStoryClip; notes: string };
     const specs = frame?.scenes ?? [];
     const slots = input.story.scenes;
@@ -671,7 +704,7 @@ export async function rewriteClip(args: {
     .join("\n");
   const raw = (await callClaude(
     [
-      ...frameBlocks(input.frameUrls.slice(0, 1)),
+      ...referenceBlocks(input), ...frameBlocks(input.frameUrls.slice(0, 1)),
       {
         type: "text",
         text: [
@@ -689,7 +722,9 @@ export async function rewriteClip(args: {
     ],
     REWRITE_SCHEMA,
     8_000,
-    input.firm
+    input.firm,
+    false,
+    Boolean(input.reference)
   )) as { clip: RawClip; notes: string };
   return { clip: toClipFields(raw.clip), notes: raw.notes?.trim() ?? "" };
 }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
 import { SYNE } from "@/components/launch-pad";
-import { recreateWithManus, uploadFrameFile, uploadSource } from "@/components/creative-studio/upload";
+import { recreateWithManus, uploadFrameFile, uploadMedia, uploadSource } from "@/components/creative-studio/upload";
 import { Chip, ErrorStrip, GradientText, SP, STATUS_PILL, StudioCanvas, StudioTabs, SvgIcon, ThinkingCard } from "@/components/creative-studio/canvas";
 import { Composer, type ComposerSubmit } from "@/components/creative-studio/composer";
 import { PresenterPicker } from "@/components/creative-studio/presenter-picker";
@@ -31,6 +31,8 @@ interface ProjectRow {
   previewUrl: string | null;
   /** A reaction video (the presenter reacts to a video shown in the corner). */
   reaction?: boolean;
+  /** Clips shown on screen, or a recreated video. */
+  media?: "onscreen" | "recreate" | null;
 }
 
 interface BatchRow {
@@ -186,9 +188,9 @@ export function StudioHome({ studio }: { studio: StudioView }) {
     }
   }
 
-  async function start({ text, images, video, format: fmt, count: n, recreate }: ComposerSubmit): Promise<boolean> {
+  async function start({ text, images, video, videos, videoMode, format: fmt, count: n, recreate }: ComposerSubmit): Promise<boolean> {
     if (video && n > 1) {
-      setError("Reaction videos are made one at a time. Set it to 1 video, or take the video off to plan a batch.");
+      setError("Videos with an uploaded video are made one at a time. Set it to 1 video, or take the video off to plan a batch.");
       return false;
     }
     if (n > 1) {
@@ -213,7 +215,9 @@ export function StudioHome({ studio }: { studio: StudioView }) {
       const b = await r.json().catch(() => null);
       if (!r.ok || !b?.id) throw new Error(b?.error || "Couldn't start the video");
       // A video makes it a reaction video: the presenter watches it on a phone and reacts (written once it's ready).
-      if (video) await uploadSource(b.id, video);
+      // Shown on screen or recreated: Claude watches them, then writes (no reaction).
+      if (videos.length > 0 && videoMode !== "react") await uploadMedia(b.id, videos, videoMode);
+      else if (video) await uploadSource(b.id, video);
       // A photo for Manus to recreate (with the change you typed): its options wait in the frame card.
       if (recreate && images[0]) {
         await recreateWithManus(b.id, images[0], text);
@@ -299,6 +303,7 @@ export function StudioHome({ studio }: { studio: StudioView }) {
             maxCount={BATCH_MAX[format]}
             maxImages={MAX_SCENES}
             allowRecreate={count === 1}
+            videoModes={count === 1}
             onSubmit={start}
           />
           {error && (
@@ -560,6 +565,8 @@ function ProjectCard({ p, delay }: { p: ProjectRow; delay: number }) {
         <div className="absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-1">
           {p.batchId && <Chip>Batch</Chip>}
           {p.reaction && <Chip tone="blue">Reaction</Chip>}
+          {p.media === "onscreen" && <Chip tone="blue">On screen</Chip>}
+          {p.media === "recreate" && <Chip tone="blue">Recreate</Chip>}
           <span className="ml-auto">
             <Chip tone={pill.tone}>{pill.label}</Chip>
           </span>

@@ -4,6 +4,7 @@ import { creativeProjects } from "@/lib/creative-studio/tables";
 import { clipsOf, rebuildPrompts } from "@/lib/creative-studio/service";
 import { scriptPresenterMismatch } from "@/lib/creative-studio/prompts";
 import { sourceMeta, sourceOf } from "@/lib/creative-studio/source";
+import { mediaApproveProblem } from "@/lib/creative-studio/media";
 
 type Project = typeof creativeProjects.$inferSelect;
 
@@ -38,6 +39,9 @@ export async function approveScript(project: Project): Promise<{ project: Projec
       return { error: "The script was written for another video. Rewrite it for this one first.", status: 409 };
     }
   }
+  // Clips on screen / a video to recreate: ready, and the script written for these ones.
+  const mediaProblem = await mediaApproveProblem(project);
+  if (mediaProblem) return { error: mediaProblem, status: 409 };
   // Kling gets prompts built by today's rules (e.g. a script written before only Daniela had a set voice).
   await rebuildPrompts(project);
   const [updated] = await db

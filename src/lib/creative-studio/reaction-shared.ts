@@ -1,4 +1,5 @@
 import { WATCH_MAX_S, WATCH_MIN_S } from "@/lib/creative-studio/prompts";
+import type { TranscriptWord } from "@/lib/creative-studio/tables";
 
 /**
  * Reaction videos (Nov 2026), the parts the browser and the server share:
@@ -74,4 +75,27 @@ export function reactionShot(name: string, pronoun: "she" | "he", vertical: bool
   return vertical
     ? `${name} sitting slightly left of centre, holding ${poss} phone in one hand at chest height with the screen turned toward ${pronoun === "he" ? "him" : "her"}, looking into the camera. The upper right of the frame is calm, uncluttered background.`
     : `${name} on the left third of the frame, holding ${poss} phone in one hand at chest height with the screen turned toward ${pronoun === "he" ? "him" : "her"}, looking into the camera. The right half of the frame is calm, uncluttered background.`;
+}
+
+/**
+ * The words as Claude reads them: phrases with their times in seconds on the
+ * video (the unit Claude answers in), broken at sentence ends, pauses over
+ * half a second, or 14 words.
+ */
+export function sourceTranscriptLines(words: TranscriptWord[]): string[] {
+  const lines: string[] = [];
+  let run: TranscriptWord[] = [];
+  const flush = () => {
+    if (run.length === 0) return;
+    lines.push(`[${run[0].start.toFixed(1)}–${run[run.length - 1].end.toFixed(1)} s] ${run.map((w) => w.text).join(" ")}`);
+    run = [];
+  };
+  words.forEach((w, i) => {
+    run.push(w);
+    const next = words[i + 1];
+    const pause = next ? next.start - w.end : 0;
+    if (!next || /[.!?…]["”')\]]*$/.test(w.text) || pause > 0.5 || run.length >= 14) flush();
+  });
+  flush();
+  return lines;
 }

@@ -139,6 +139,34 @@ export interface PipTrack {
   words?: CaptionWord[];
 }
 
+/** How an uploaded clip shows while the presenter talks. */
+export type MediaLayout = "full" | "split" | "corner";
+
+/** One clip on screen, placed on the cut: it plays from `from` and holds its last frame if the line runs past `to`. */
+export interface MediaCue {
+  /** Index into MediaTrack.clips. */
+  clip: number;
+  /** When it shows, on the cut's timeline. */
+  start: number;
+  end: number;
+  /** The part shown (seconds on the clip's own timeline). */
+  from: number;
+  to: number;
+  layout: MediaLayout;
+}
+
+/**
+ * Clips shown on screen while the presenter talks (full screen, split, or
+ * the presenter in a corner bubble). Muted: the presenter is heard
+ * throughout. Absence = no clips (every other edit).
+ */
+export interface MediaTrack {
+  /** Light copies of the clips (signed when previewed or rendered), with width ÷ height. */
+  clips: { src: string; aspect: number }[];
+  /** In order, never overlapping. */
+  cues: MediaCue[];
+}
+
 // A type alias (not an interface) so it satisfies Remotion's Record<string, unknown> props constraint.
 export type EditProps = {
   style: EditStyle;
@@ -149,6 +177,8 @@ export type EditProps = {
   overlays: EditOverlays;
   /** A reaction video's corner video. Absence = every rig renders exactly as before. */
   pip?: PipTrack;
+  /** Clips on screen. Absence = every rig renders exactly as before. */
+  media?: MediaTrack;
 };
 
 export const FPS = 60;

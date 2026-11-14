@@ -6,7 +6,7 @@ import { creativeAssets, creativeClips, creativeProjects } from "@/lib/creative-
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { projectDetail } from "@/lib/creative-studio/service";
 import { createUploadTarget, removePaths } from "@/lib/creative-studio/storage";
-import { assetFiles, sourceOf } from "@/lib/creative-studio/source";
+import { assetFiles, mediaItems, sourceOf } from "@/lib/creative-studio/source";
 import { SOURCE_MAX_BYTES, SOURCE_MAX_SECONDS, SOURCE_TYPES, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
 
 type Ctx = { params: Promise<{ projectId: string }> };
@@ -52,6 +52,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     if (durationS && durationS > SOURCE_MAX_SECONDS + 0.5) return NextResponse.json({ error: tooLongMessage(durationS) }, { status: 400 });
 
     const old = await sourceOf(project);
+    // One use per video: clips shown on screen or a video to recreate go.
+    const media = await mediaItems(project);
     const [asset] = await db
       .insert(creativeAssets)
       .values({
@@ -69,12 +71,16 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       .returning();
     const [updated] = await db
       .update(creativeProjects)
-      .set({ reaction: { sourceId: asset.id, scriptFor: project.reaction?.scriptFor ?? null }, updatedAt: new Date() })
+      .set({ reaction: { sourceId: asset.id, scriptFor: project.reaction?.scriptFor ?? null }, media: null, updatedAt: new Date() })
       .where(eq(creativeProjects.id, project.id))
       .returning();
     if (old) {
       await db.delete(creativeAssets).where(eq(creativeAssets.id, old.id));
       await removePaths(assetFiles(old));
+    }
+    for (const m of media) {
+      await db.delete(creativeAssets).where(eq(creativeAssets.id, m.id));
+      await removePaths(assetFiles(m));
     }
     return NextResponse.json(await projectDetail(updated));
   }

@@ -9,6 +9,7 @@ import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
 import { WatchPart } from "@/components/creative-studio/source-card";
+import { ShowPart } from "@/components/creative-studio/show-part";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -45,7 +46,9 @@ export function ScriptCard({
   const [moving, setMoving] = useState<string | null>(null);
   // A reaction video is written as a one-scene story, but reads as hook → watch → react (no scenes to pick).
   const reaction = detail.reaction;
-  const story = detail.story && !reaction;
+  // Clips on screen: also one scene (the presenter talking), with a clip shown on some lines.
+  const onscreen = detail.media?.mode === "onscreen" ? detail.media : null;
+  const story = detail.story && !reaction && !onscreen;
   const sceneOf = useMemo(() => new Map(detail.scenes.filter((sc) => sc.frameId).map((sc) => [sc.frameId as string, sc])), [detail.scenes]);
   const specOf = useMemo(() => new Map((p.frameSpec?.scenes ?? []).map((sc) => [sc.frameId, sc])), [p.frameSpec]);
 
@@ -283,6 +286,18 @@ export function ScriptCard({
                           clipId={clip.id}
                           watch={clip.watch}
                           source={reaction.source}
+                          locked={locked}
+                          onChange={onChange}
+                          onError={onError}
+                        />
+                      )}
+                      {onscreen && kind !== "silent" && (
+                        <ShowPart
+                          key={`${clip.id}:${JSON.stringify(clip.show ?? null)}`}
+                          projectId={p.id}
+                          clipId={clip.id}
+                          show={clip.show ?? null}
+                          media={onscreen}
                           locked={locked}
                           onChange={onChange}
                           onError={onError}

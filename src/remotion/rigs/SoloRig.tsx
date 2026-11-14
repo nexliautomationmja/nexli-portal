@@ -2,16 +2,19 @@ import React from "react";
 import { AbsoluteFill } from "remotion";
 import type { EditProps } from "../types";
 import { Plate } from "./Plate";
+import { MediaLayer } from "../components/MediaLayer";
 import { Captions } from "../components/Captions";
 import { TitleBanner } from "../components/Overlays";
 import { SourceCaptions, SourcePip, pipSpans, plateVolume } from "../components/SourcePip";
 
 /** Solo: captions plus one persistent title banner — no ladder, no cards (rulebook). */
-export const SoloRig: React.FC<EditProps> = ({ videoUrl, words, overlays, format, pip, durationS }) => {
+export const SoloRig: React.FC<EditProps> = ({ videoUrl, words, overlays, format, pip, durationS, media }) => {
   const vertical = format !== "vsl_16x9";
   return (
     <AbsoluteFill>
       <Plate src={videoUrl} volume={pip ? plateVolume(pip.windows) : undefined} />
+      {/* Clips on screen (the presenter keeps talking over them). */}
+      {media && <MediaLayer media={media} plateSrc={videoUrl} vertical={vertical} />}
       {pip && <SourcePip pip={pip} vertical={vertical} titled={Boolean(overlays.title)} at={overlays.layout?.pip} />}
       <Captions words={words} size={vertical ? 54 : 48} vertical={vertical} at={overlays.layout?.captions} look={overlays.captionStyle} hide={pip ? pipSpans(pip) : undefined} />
       {pip && <SourceCaptions pip={pip} durationS={durationS} size={vertical ? 54 : 48} vertical={vertical} at={overlays.layout?.captions} look={overlays.captionStyle} />}

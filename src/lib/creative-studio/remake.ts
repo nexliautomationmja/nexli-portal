@@ -97,7 +97,8 @@ export async function remakeClips(
         ? await rewriteReactionClip({ input: await reactionInputFor(current, ready.source), frame: current.frameSpec, clips: all.map(clipFieldsOf), index, instruction })
         : await rewriteClip({ input: await scriptInputFor(current, "change"), frame: current.frameSpec, clips: all.map(clipFieldsOf), index, instruction });
       // The prompt is built for the scene the clip is in now (Claude can't move it).
-      fields = { ...rewritten.clip, frameId: clip.frameAssetId ?? null };
+      // A clip on screen stays on its line (the edit shows it over the fixed take).
+      fields = { ...rewritten.clip, frameId: clip.frameAssetId ?? null, ...(clip.show ? { show: clip.show } : {}) };
     }
     const [updated] = await db.update(creativeClips).set(resetColumns(current, clip, fields)).where(eq(creativeClips.id, clip.id)).returning();
     reset.push(updated);

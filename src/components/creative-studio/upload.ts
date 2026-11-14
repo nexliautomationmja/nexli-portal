@@ -201,6 +201,41 @@ export async function uploadSource(projectId: string, file: File): Promise<Proje
   return detail as ProjectDetail;
 }
 
+/**
+ * Upload videos to show on screen (up to 10, in order: clip 1, 2, …) or one
+ * video to recreate. Each is checked like a reaction's video, then sign →
+ * direct upload → register. `replace` starts the set over (else they're
+ * added). Returns the fresh project detail.
+ */
+export async function uploadMedia(projectId: string, files: File[], mode: "onscreen" | "recreate", replace = true): Promise<ProjectDetail> {
+  const base = `/api/dashboard/creative-studio/projects/${projectId}/media`;
+  let detail: ProjectDetail | null = null;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const mime = file.type === "video/mp4" || file.type === "video/quicktime" ? file.type : /\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : "";
+    if (!mime) throw new Error(`${file.name}: upload an MP4 or MOV video.`);
+    if (file.size > SOURCE_MAX_BYTES) {
+      throw new Error(`${file.name} is ${Math.round(file.size / 1024 / 1024)} MB. Upload one under ${SOURCE_MAX_BYTES / 1024 / 1024} MB (export it at 1080p).`);
+    }
+    const meta = await readVideo(file);
+    if (meta && meta.durationS > SOURCE_MAX_SECONDS + 0.5) throw new Error(`${file.name}: ${tooLongMessage(meta.durationS)}`);
+    const sign = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sign", mime, size: file.size }) });
+    const target = await sign.json().catch(() => null);
+    if (!sign.ok || !target?.token) throw new Error(target?.error || "Couldn't start the upload");
+    await uploadToTarget(target, file, mime);
+    const reg = await fetch(base, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "register", mode, path: target.path, mime, filename: file.name, replace: replace && i === 0, ...(meta ?? {}) }),
+    });
+    const out = await reg.json().catch(() => null);
+    if (!reg.ok || !out?.project) throw new Error(out?.error || "Couldn't save the video");
+    detail = out as ProjectDetail;
+  }
+  if (!detail) throw new Error("No video to upload");
+  return detail;
+}
+
 /** Kling accepts PNG/JPG only — convert a WebP frame to PNG in the browser. */
 async function toPng(blob: Blob): Promise<{ blob: Blob; mime: string }> {
   const bitmap = await createImageBitmap(blob);

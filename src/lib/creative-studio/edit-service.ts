@@ -4,15 +4,16 @@ import {
   creativeAssets,
   creativeEdits,
   creativeProjects,
+  type StoredMedia,
   type StoredPip,
   type TranscriptWord,
 } from "@/lib/creative-studio/tables";
-import type { CaptionWord, EditProps, EditStyle, PipTrack, PipWindow } from "@/remotion/types";
+import type { CaptionWord, EditProps, EditStyle, MediaCue, MediaTrack, PipTrack, PipWindow } from "@/remotion/types";
 import type { EditContext } from "@/lib/creative-studio/edit";
 import { clipsOf } from "@/lib/creative-studio/service";
 import { loadCut } from "@/lib/creative-studio/autocut-service";
 import { cutTimelineWords, placeSourceWords, wholeCutWords } from "@/lib/creative-studio/words";
-import { sourceMeta, sourceOf } from "@/lib/creative-studio/source";
+import { mediaItems, sourceMeta, sourceOf } from "@/lib/creative-studio/source";
 import { transcribeUrl } from "@/lib/creative-studio/transcribe";
 import { readStorage } from "@/lib/creative-studio/frames";
 import { signPaths } from "@/lib/creative-studio/storage";
@@ -122,7 +123,9 @@ export function editContext(
   words: CaptionWord[],
   lines: EditContext["lines"],
   /** A reaction video's corner video (Claude keeps graphics clear of it). */
-  pip?: StoredPip
+  pip?: StoredPip,
+  /** Clips on screen (Claude keeps graphics clear of them). */
+  media?: StoredMedia
 ): EditContext {
   return {
     style,
@@ -134,6 +137,50 @@ export function editContext(
     lines,
     words,
     ...(pip ? { reaction: { windows: pip.windows.map((w) => ({ start: w.start, end: w.end })), summary: pip.summary ?? "" } } : {}),
+    ...(media?.cues.length ? { onscreen: media.cues.map((c) => ({ start: c.start, end: c.end, layout: c.layout, clip: c.clip + 1 })) } : {}),
+  };
+}
+
+/**
+ * Clips on screen for a new edit: each line whose clip has one shows it over
+ * that line's window on the auto-cut. With none, `note` says why (added to
+ * Claude's notes).
+ */
+export async function mediaTrack(project: Project, lines: EditContext["lines"]): Promise<{ media?: StoredMedia; note: string }> {
+  if (project.media?.mode !== "onscreen") return { note: "" };
+  if (lines.some((l) => l.start === null || l.end === null)) {
+    return { note: " The clips on screen follow the auto-cut's timing, so they aren't added to a final cut you uploaded yourself." };
+  }
+  const items = await mediaItems(project);
+  const missing = items.find((a) => !sourceMeta(a).proxyPath);
+  if (missing) throw new Error(sourceMeta(missing).proxyError ?? "A clip on screen is still being prepared. Try again in a minute.");
+  const index = new Map(items.map((a, i) => [a.id, i]));
+  const clips = await clipsOf(project.id);
+  const byNumber = new Map(clips.map((c) => [c.idx + 1, c]));
+  const cues: MediaCue[] = [];
+  for (const l of lines) {
+    const c = byNumber.get(l.number);
+    const i = c?.show ? index.get(c.show.mediaId) : undefined;
+    if (!c?.show || i === undefined || l.start === null || l.end === null || l.end <= l.start) continue;
+    cues.push({ clip: i, start: r3(l.start), end: r3(l.end), from: c.show.from, to: c.show.to, layout: c.show.layout });
+  }
+  cues.sort((a, b) => a.start - b.start);
+  return {
+    media: { clips: items.map((a) => ({ mediaId: a.id, aspect: a.width && a.height ? Math.round((a.width / a.height) * 10_000) / 10_000 : 9 / 16 })), cues },
+    note: cues.length ? "" : " No line shows a clip, so the clips on screen aren't in this edit.",
+  };
+}
+
+/** Clips on screen as Remotion takes them: each clip's light copy, freshly signed. */
+async function signedMedia(stored: StoredMedia, seconds: number): Promise<MediaTrack> {
+  const assets = await Promise.all(
+    stored.clips.map(async (c) => (await db.select().from(creativeAssets).where(eq(creativeAssets.id, c.mediaId)).limit(1))[0] ?? null)
+  );
+  const paths = assets.map((a) => (a ? sourceMeta(a).proxyPath ?? null : null));
+  const signed = await signPaths(paths, seconds);
+  return {
+    clips: stored.clips.map((c, i) => ({ src: (paths[i] && signed.get(paths[i]!)) || "", aspect: c.aspect })),
+    cues: stored.cues,
   };
 }
 
@@ -197,7 +244,8 @@ export async function renderProps(edit: Edit, seconds: number): Promise<EditProp
   if (!cut?.storagePath) throw new Error("The final cut for this edit is missing");
   const videoUrl = (await signPaths([cut.storagePath], seconds)).get(cut.storagePath);
   if (!videoUrl) throw new Error("Couldn't sign the final cut for the render");
-  const { pip: stored, ...props } = edit.props;
+  const { pip: stored, media: storedMedia, ...props } = edit.props;
   const pip = stored ? await signedPip(stored, seconds) : undefined;
-  return { style: edit.style, videoUrl, ...props, ...(pip ? { pip } : {}) };
+  const media = storedMedia ? await signedMedia(storedMedia, seconds) : undefined;
+  return { style: edit.style, videoUrl, ...props, ...(pip ? { pip } : {}), ...(media ? { media } : {}) };
 }

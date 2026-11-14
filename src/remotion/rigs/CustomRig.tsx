@@ -2,6 +2,7 @@ import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import type { EditProps, Zoom } from "../types";
 import { Plate } from "./Plate";
+import { MediaLayer } from "../components/MediaLayer";
 import { Captions } from "../components/Captions";
 import { CtaCard, LadderRungs, PovSticker, QualifierBand, TitleBanner, VslCardView } from "../components/Overlays";
 import { SourceCaptions, SourcePip, pipSpans, plateVolume } from "../components/SourcePip";
@@ -12,13 +13,15 @@ import { SourceCaptions, SourcePip, pipSpans, plateVolume } from "../components/
  * them), so approved Solo / POV / VSL / Ladder cuts are untouched. Any slot
  * may be used; captions can be switched off; zooms punch in on the plate.
  */
-export const CustomRig: React.FC<EditProps> = ({ videoUrl, words, overlays, format, pip, durationS }) => {
+export const CustomRig: React.FC<EditProps> = ({ videoUrl, words, overlays, format, pip, durationS, media }) => {
   const { width } = useVideoConfig();
   const vertical = format !== "vsl_16x9";
   const at = overlays.layout ?? {};
   return (
     <AbsoluteFill>
       <ZoomPlate src={videoUrl} zooms={overlays.zooms ?? []} volume={pip ? plateVolume(pip.windows) : undefined} />
+      {/* Clips on screen (the presenter keeps talking over them). */}
+      {media && <MediaLayer media={media} plateSrc={videoUrl} vertical={vertical} />}
       {/* The corner video doesn't zoom with the plate. */}
       {pip && <SourcePip pip={pip} vertical={vertical} titled={Boolean(overlays.title)} at={at.pip} />}
       {overlays.captions !== false && (

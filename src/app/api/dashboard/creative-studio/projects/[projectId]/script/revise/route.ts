@@ -4,6 +4,8 @@ import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio
 import { clipFieldsOf, clipsOf, projectDetail, replaceScript, scriptInputFor } from "@/lib/creative-studio/service";
 import { reviseScript } from "@/lib/creative-studio/script";
 import { markReactionWritten, reactionInputFor, readySource, reviseReactionScript } from "@/lib/creative-studio/reaction";
+import { markMediaWritten, readyMedia } from "@/lib/creative-studio/media";
+import { onscreenInputFor, reviseOnscreenScript } from "@/lib/creative-studio/onscreen";
 
 export const maxDuration = 300;
 
@@ -24,6 +26,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   const ready = project.reaction ? await readySource(project) : null;
   if (ready && "error" in ready) return NextResponse.json({ error: ready.error }, { status: ready.status });
+  const media = project.media ? await readyMedia(project) : null;
+  if (media && "error" in media) return NextResponse.json({ error: media.error }, { status: media.status });
 
   try {
     if (ready) {
@@ -39,6 +43,19 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         `Before: "${note.slice(0, 80)}"`
       );
       await markReactionWritten(project, ready.source, result.source);
+    } else if (media && project.media?.mode === "onscreen") {
+      const result = await reviseOnscreenScript({
+        input: await onscreenInputFor(project, media.items),
+        frame: project.frameSpec,
+        clips: clips.map(clipFieldsOf),
+        note,
+      });
+      await replaceScript(
+        project,
+        { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig },
+        `Before: "${note.slice(0, 80)}"`
+      );
+      await markMediaWritten(project);
     } else {
       const result = await reviseScript({
         input: await scriptInputFor(project, "change"),
@@ -51,6 +68,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig },
         `Before: "${note.slice(0, 80)}"`
       );
+      // A revision reads the video to recreate as it is now.
+      if (media) await markMediaWritten(project);
     }
   } catch (err) {
     console.error("[creative-studio] revise failed:", err);

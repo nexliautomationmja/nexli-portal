@@ -224,6 +224,8 @@ export interface ClipFields {
   frameId?: string | null;
   /** A reaction video's watch clip: the part of the video she watches. Absent on every other clip. */
   watch?: WatchWindow | null;
+  /** An on-screen video's cue: the clip shown while this line plays. Absent on every other clip. */
+  show?: ShowCue | null;
 }
 
 /**
@@ -236,6 +238,33 @@ export interface ReactionInfo {
   sourceId: string;
   /** The source the current script was written for (a different one = the script needs rewriting). */
   scriptFor?: string | null;
+}
+
+/**
+ * Videos uploaded for another use than a reaction (Nov 2026), creative_assets
+ * of kind media_video, in upload order:
+ * • onscreen — up to 10 clips shown on screen while the presenter talks;
+ * • recreate — one reference video whose structure, hook and pacing the
+ *   script copies (and whose look Manus recreates for the frame).
+ * Null on every other video (and never together with `reaction`).
+ */
+export type MediaMode = "onscreen" | "recreate";
+export interface MediaInfo {
+  mode: MediaMode;
+  ids: string[];
+  /** The clips the current script was written for, joined (other clips = rewrite the script). */
+  scriptFor?: string | null;
+}
+export const MEDIA_MAX: Record<MediaMode, number> = { onscreen: 10, recreate: 1 };
+
+/** How an on-screen clip shows while the presenter talks. */
+export type ShowLayout = "full" | "split" | "corner";
+/** An on-screen cue on a script line: which clip, which part of it (seconds on the clip), and how it shows. */
+export interface ShowCue {
+  mediaId: string;
+  from: number;
+  to: number;
+  layout: ShowLayout;
 }
 
 /** Seconds on the source video's own timeline. */
@@ -271,6 +300,8 @@ export interface SourceMeta {
   summary?: string;
   /** The video already shows its own captions (so the edit doesn't add a second set). */
   captioned?: boolean;
+  /** A media_video only: a recreate reference needs no light copy (it's never shown). */
+  role?: MediaMode;
 }
 
 export interface ScriptSnapshot {
@@ -401,6 +432,8 @@ export const creativeProjects = pgTable("creative_projects", {
   presenter: jsonb("presenter").$type<PresenterInfo | null>(),
   /** A reaction video's source; null = every other video. */
   reaction: jsonb("reaction").$type<ReactionInfo | null>(),
+  /** Videos shown on screen, or a video to recreate; null = every other video. */
+  media: jsonb("media").$type<MediaInfo | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -479,6 +512,8 @@ export const creativeClips = pgTable("creative_clips", {
   kind: text("kind").$type<ClipKind>().notNull().default("to_camera"),
   /** A reaction video's watch clip: the part of the source she watches (null otherwise). */
   watch: jsonb("watch").$type<WatchWindow | null>(),
+  /** An on-screen video's cue: the clip shown during this line (null otherwise). */
+  show: jsonb("show").$type<ShowCue | null>(),
   durationS: integer("duration_s").notNull(),
   /** The complete Kling prompt, assembled in code from the §7 templates. */
   prompt: text("prompt").notNull(),
@@ -613,6 +648,14 @@ export interface EditPropsStored {
   instruction?: string;
   /** A reaction video's corner video (absent on every other edit). */
   pip?: StoredPip;
+  /** Clips on screen (absent on every other edit). */
+  media?: StoredMedia;
+}
+
+/** Clips on screen in an edit: the clips (by asset) and their cues, as MediaTrack minus the signed URLs. */
+export interface StoredMedia {
+  clips: { mediaId: string; aspect: number }[];
+  cues: import("@/remotion/types").MediaCue[];
 }
 
 /** Specs read off the delivered mp4 (rulebook § 7 gate 5). */
@@ -980,6 +1023,9 @@ export function ensureCreativeStudioTables(): Promise<void> {
       // Nov 2026: reaction videos (the presenter reacts to a video shown in the corner).
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "reaction" jsonb`);
       await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "watch" jsonb`);
+      // Nov 2026: uploaded videos shown on screen, or recreated.
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "media" jsonb`);
+      await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "show" jsonb`);
       // Nov 2026: which frame a take was made from (re-make clips after a frame change).
       await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "take_frame_id" uuid`);
       await db.execute(sql`

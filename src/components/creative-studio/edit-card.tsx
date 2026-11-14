@@ -163,17 +163,29 @@ export function EditCard({
 
   // A reaction video: the corner video plays the light copy of the video she reacts to.
   const sourceUrl = detail.reaction?.source?.proxyUrl ?? null;
+  // Clips on screen: each plays its light copy.
+  const mediaItems = detail.media?.items;
   const props: EditProps | null = useMemo(() => {
     if (!latest?.props) return null;
     const cut = finalCuts.find((f) => f.id === latest.finalCutId);
     const videoUrl = cut ? stable(`cut:${cut.id}`, cut.url) : null;
     if (!videoUrl) return null;
-    const { pip: stored, ...rest } = latest.props;
-    if (!stored) return { style: latest.style, videoUrl, ...rest };
+    const { pip: stored, media: storedMedia, ...rest } = latest.props;
+    const media = storedMedia
+      ? {
+          cues: storedMedia.cues,
+          clips: storedMedia.clips.map((c) => {
+            const it = mediaItems?.find((x) => x.id === c.mediaId);
+            return { aspect: c.aspect, src: stable(`media:${c.mediaId}`, it?.proxyUrl ?? null) ?? "" };
+          }),
+        }
+      : undefined;
+    const base = { style: latest.style, videoUrl, ...rest, ...(media ? { media } : {}) };
+    if (!stored) return base;
     const { sourceId, summary: _summary, ...track } = stored;
     void _summary;
-    return { style: latest.style, videoUrl, ...rest, pip: { ...track, src: stable(`pip:${sourceId}`, sourceUrl) ?? "" } };
-  }, [latest, finalCuts, sourceUrl]);
+    return { ...base, pip: { ...track, src: stable(`pip:${sourceId}`, sourceUrl) ?? "" } };
+  }, [latest, finalCuts, sourceUrl, mediaItems]);
 
   const elements = useMemo(() => {
     const o = latest?.props?.overlays;
@@ -322,6 +334,15 @@ export function EditCard({
       return { ...m, layout };
     });
   }
+  /** How one clip on screen shows (a new version; the spots placed by hand stay). */
+  async function setCueLayout(index: number, layout: "full" | "split" | "corner") {
+    setBusy({ label: "Changing how the clip shows…" });
+    const r = await send(api(`${p.id}/edit/layout`), "POST", { layout: latest?.props?.overlays.layout ?? {}, media: [{ index, layout }] });
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
+
   async function saveLayout() {
     if (!moving) return;
     setBusy({ label: "Saving where everything sits…" });
@@ -913,6 +934,35 @@ export function EditCard({
                 )}
               </div>
             </div>
+
+            {(latest.props?.media?.cues.length ?? 0) > 0 && (
+              <div className="mt-4 space-y-1.5">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">
+                  Clips on screen <span className="normal-case tracking-normal text-neutral-600">· tap to watch it · pick how it shows</span>
+                </p>
+                {latest.props!.media!.cues.map((c, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
+                    <button type="button" onClick={() => jump(c.start + 0.3)} className="min-h-8 flex-1 text-left text-xs text-neutral-200 hover:text-white">
+                      <span className="mr-2 rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] font-bold text-cyan-200">Clip {c.clip + 1}</span>
+                      <span className="text-neutral-400" style={NUM_FONT}>
+                        {c.start.toFixed(1)}–{c.end.toFixed(1)}s
+                      </span>
+                    </button>
+                    <select
+                      value={c.layout}
+                      disabled={Boolean(busy) || latest.status === "rendering"}
+                      onChange={(e) => void setCueLayout(i, e.target.value as "full" | "split" | "corner")}
+                      className="rounded-lg border border-white/10 bg-[#0b1220] px-2 py-1 text-xs text-white outline-none focus:border-cyan-400/60 disabled:opacity-50"
+                      aria-label={`How clip ${c.clip + 1} shows`}
+                    >
+                      <option value="full">Full screen</option>
+                      <option value="split">Split screen</option>
+                      <option value="corner">You in the corner</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {elements.length > 0 && (
               <div className="mt-4 space-y-1.5">

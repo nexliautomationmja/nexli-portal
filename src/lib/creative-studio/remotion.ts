@@ -126,7 +126,8 @@ export async function startRender(props: EditProps, renderers: number, safe = fa
     concurrency: Math.max(1, Math.min(renderers, Math.ceil(frames / 20))),
     downloadBehavior: { type: "download", fileName: "nexli-edit.mp4" },
     maxRetries: 2,
-    offthreadVideoCacheSizeInBytes: safe ? SAFE_FRAME_CACHE_BYTES : FRAME_CACHE_BYTES,
+    // Clips on screen add more videos to decode (a clip, plus the presenter's copy in split / corner): the smaller cache from the start.
+    offthreadVideoCacheSizeInBytes: safe || props.media?.cues.length ? SAFE_FRAME_CACHE_BYTES : FRAME_CACHE_BYTES,
     ...(safe ? { offthreadVideoThreads: 1, disableSharedMemoryCapture: true } : {}),
     // Remotion's planned Lambda default: ~170 MB less than "medium" per copy, and less CPU.
     x264Preset: "veryfast",

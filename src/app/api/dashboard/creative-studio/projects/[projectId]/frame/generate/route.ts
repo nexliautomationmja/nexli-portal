@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, asc, inArray } from "drizzle-orm";
 import { studioById } from "@/lib/creative-studio/studios";
 import { db } from "@/db";
-import { creativeAssets } from "@/lib/creative-studio/tables";
+import { creativeAssets, type SourceMeta } from "@/lib/creative-studio/tables";
+import { mediaOf } from "@/lib/creative-studio/source";
 import { loadPresenter, referencesWhere } from "@/lib/creative-studio/presenters";
 import { rankAvatarPhotos } from "@/lib/creative-studio/avatar-shared";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
@@ -25,6 +26,8 @@ type Ctx = { params: Promise<{ projectId: string }> };
  * • { recreate, shot? } — recreate a photo you uploaded (frames "sign" with
  *   purpose "recreate"); `shot` is what to change (a new suit colour, outfit,
  *   background…). Works without reference photos too (the photo's own person).
+ * • { referenceStill: n, shot? } — the same, from still n of the video being
+ *   recreated (its look, with this video's presenter).
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireStudioAdmin();
@@ -38,11 +41,19 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     scene?: string;
     storyboard?: boolean;
     recreate?: string;
+    referenceStill?: number;
   } | null;
   const storyboard = body?.storyboard === true;
   const shot = typeof body?.shot === "string" ? body.shot.trim().slice(0, 1500) : "";
   // Only a photo uploaded to this video's own recreate folder.
-  const recreatePath = !storyboard && typeof body?.recreate === "string" && body.recreate.startsWith(`${project.id}/recreate/`) && !body.recreate.includes("..") ? body.recreate : null;
+  let recreatePath = !storyboard && typeof body?.recreate === "string" && body.recreate.startsWith(`${project.id}/recreate/`) && !body.recreate.includes("..") ? body.recreate : null;
+  // A still of the video being recreated (its opening look by default).
+  if (!storyboard && !recreatePath && typeof body?.referenceStill === "number" && project.media?.mode === "recreate") {
+    const ref = await mediaOf(project, project.media.ids[0] ?? "");
+    const stills = ((ref?.metadata ?? {}) as SourceMeta).stills ?? [];
+    recreatePath = stills[Math.max(0, Math.min(stills.length - 1, Math.round(body.referenceStill)))]?.path ?? null;
+    if (!recreatePath) return NextResponse.json({ error: "The video to recreate isn't read yet. Try again in a moment." }, { status: 409 });
+  }
   const scenes = scenesOf(project, await framesOf(project.id));
   const waiting = scenes.filter((sc) => !sc.frameId && sc.shot.trim());
   if (storyboard && waiting.length === 0) return NextResponse.json({ error: "Every scene already has a frame." }, { status: 400 });
@@ -119,7 +130,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         source: "manus",
         providerTaskId: task.taskId,
         status: "running",
-        metadata: { shot: recreatePath ? `Recreate your photo${shot ? `: ${shot}` : ""}` : shot, ...(recreatePath ? { recreate: recreatePath } : {}), taskUrl: task.taskUrl, references: refs.map((r) => r.id), ...(sceneId ? { sceneId } : {}) },
+        metadata: { shot: recreatePath ? `${typeof body?.referenceStill === "number" ? "Recreate the video's look" : "Recreate your photo"}${shot ? `: ${shot}` : ""}` : shot, ...(recreatePath ? { recreate: recreatePath } : {}), taskUrl: task.taskUrl, references: refs.map((r) => r.id), ...(sceneId ? { sceneId } : {}) },
       });
     }
   } catch (err) {

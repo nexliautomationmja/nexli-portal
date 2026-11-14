@@ -15,11 +15,11 @@ import {
 } from "@/lib/creative-studio/tables";
 import { buildKlingPrompt, clipDuration, isStory, klingModelForClip, presenterOf, watchClipDuration } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
-import { claimLive } from "@/lib/creative-studio/reaction-shared";
+import { claimLive, sourceTranscriptLines } from "@/lib/creative-studio/reaction-shared";
 import { framesToRedescribe, takeOutdated } from "@/lib/creative-studio/remake-shared";
 import { normalizeCopy } from "@/lib/creative-studio/ad-copy";
 import { firmBrief, studioById, studioRef } from "@/lib/creative-studio/studios";
-import type { ScriptInput } from "@/lib/creative-studio/script";
+import type { ReferenceVideo, ScriptInput } from "@/lib/creative-studio/script";
 
 type Project = typeof creativeProjects.$inferSelect;
 type Clip = typeof creativeClips.$inferSelect;
@@ -39,6 +39,8 @@ export function clipFieldsOf(c: Clip): ClipFields {
     frameId: c.frameAssetId ?? null,
     // Only a reaction video's watch clips have one (every other clip reads exactly as before).
     ...(c.watch ? { watch: c.watch } : {}),
+    // Only an on-screen video's lines with a clip on screen.
+    ...(c.show ? { show: c.show } : {}),
   };
 }
 
@@ -55,6 +57,7 @@ export function clipColumns(f: ClipFields) {
     listenerReactions: f.listenerReactions,
     kind: f.kind ?? "to_camera",
     watch: f.kind === "silent" ? f.watch ?? null : null,
+    show: f.kind !== "silent" ? f.show ?? null : null,
   };
 }
 
@@ -104,7 +107,15 @@ export async function scriptInputFor(
   const scenes = scenesOf(project, frames).filter((s) => s.frameId);
   const story = storyVideo(project, scenes, mode);
   const studio = await studioById(project.ownerId, project.studioId);
-  const base = { title: project.title, format: project.format, rig: project.rig, brief: project.brief, firm: firmBrief(studio) };
+  const reference = await referenceVideoOf(project);
+  const base = {
+    title: project.title,
+    format: project.format,
+    rig: project.rig,
+    brief: project.brief,
+    firm: firmBrief(studio),
+    ...(reference ? { reference } : {}),
+  };
   if (!story) {
     const pick = classicFrames === "all" ? frames : frames.slice(0, 1);
     const signed = await signPaths(pick.map((f) => f.storagePath));
@@ -120,6 +131,29 @@ export async function scriptInputFor(
     .map(({ sc, path }) => ({ frameId: sc.frameId as string, label: sc.label, url: signed.get(path) ?? "" }))
     .filter((x) => x.url);
   return { ...base, frameUrls: list.map((x) => x.url), story: { scenes: list }, presenter: presenterOf(project) };
+}
+
+/** A video to recreate, as the script writer reads it (null when there's none or it isn't read yet). */
+async function referenceVideoOf(project: Project): Promise<ReferenceVideo | null> {
+  const id = project.media?.mode === "recreate" ? project.media.ids[0] : null;
+  if (!id) return null;
+  const [a] = await db
+    .select()
+    .from(creativeAssets)
+    .where(and(eq(creativeAssets.id, id), eq(creativeAssets.projectId, project.id), eq(creativeAssets.kind, "media_video")))
+    .limit(1);
+  const m = (a?.metadata ?? {}) as SourceMeta;
+  if (!a || !m.analyzedAt) return null;
+  // Up to 12 stills spread through it (enough to read the beats and the look).
+  const all = m.stills ?? [];
+  const step = Math.max(1, Math.ceil(all.length / 12));
+  const stills = all.filter((_, i) => i % step === 0).slice(0, 12);
+  const signed = await signPaths(stills.map((st) => st.path), 2 * 3600);
+  return {
+    durationS: a.durationMs ? a.durationMs / 1000 : stills[stills.length - 1]?.t ?? 0,
+    lines: sourceTranscriptLines(m.words ?? []),
+    stills: stills.map((st) => ({ t: st.t, url: signed.get(st.path) ?? "" })).filter((st) => st.url),
+  };
 }
 
 export async function framesOf(projectId: string) {
@@ -146,7 +180,7 @@ export async function projectDetail(project: Project) {
     db
       .select()
       .from(creativeAssets)
-      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut", "render", "ad_copy", "source_video"])))
+      .where(and(eq(creativeAssets.projectId, project.id), inArray(creativeAssets.kind, ["frame_option", "manus_task", "final_cut", "render", "ad_copy", "source_video", "media_video"])))
       .orderBy(asc(creativeAssets.createdAt)),
     db.select().from(creativeCuts).where(eq(creativeCuts.projectId, project.id)).orderBy(asc(creativeCuts.version)),
     db.select().from(creativeEdits).where(eq(creativeEdits.projectId, project.id)).orderBy(asc(creativeEdits.version)),
@@ -167,8 +201,16 @@ export async function projectDetail(project: Project) {
   // A reaction video's source: the upload, its light copy and its stills.
   const source = project.reaction ? extras.find((a) => a.kind === "source_video" && a.id === project.reaction?.sourceId) ?? null : null;
   const sourceMeta = (source?.metadata ?? {}) as SourceMeta;
+  // Videos shown on screen / to recreate, in upload order (clip 1, 2, …).
+  const mediaById = new Map(extras.filter((a) => a.kind === "media_video").map((a) => [a.id, a]));
+  const media = (project.media?.ids ?? []).map((id) => mediaById.get(id)).filter((a): a is Asset => Boolean(a));
+  const mediaFiles = media.flatMap((a) => {
+    const m = (a.metadata ?? {}) as SourceMeta;
+    return [a.storagePath, m.proxyPath, ...(m.stills ?? []).map((st) => st.path)];
+  });
   const signed = await signPaths(
     [
+      ...mediaFiles,
       ...[...frames, ...videos, ...options, ...finalCuts, ...cutAssets, ...extras.filter((a) => a.kind === "render")].map((a) => a.storagePath),
       ...(source ? [source.storagePath, sourceMeta.proxyPath, ...(sourceMeta.stills ?? []).map((st) => st.path)] : []),
     ],
@@ -320,6 +362,15 @@ export async function projectDetail(project: Project) {
           source: source ? sourceDetail(source, sourceMeta, url) : null,
         }
       : null,
+    /** Videos shown on screen (clip 1…10) or one video to recreate; null on every other video. */
+    media: project.media
+      ? {
+          mode: project.media.mode,
+          /** The clips the script was written for, joined (other clips = rewrite the script). */
+          scriptFor: project.media.scriptFor ?? null,
+          items: media.map((a) => sourceDetail(a, (a.metadata ?? {}) as SourceMeta, url)),
+        }
+      : null,
     adCopies: extras
       .filter((a) => a.kind === "ad_copy")
       .map((a) => ({ id: a.id, ...normalizeCopy(a.metadata), createdAt: a.createdAt.toISOString() })),
@@ -368,6 +419,8 @@ function sourceDetail(a: Asset, m: SourceMeta, url: (path: string | null) => str
     hasAudio: m.hasAudio ?? null,
     summary: m.summary ?? null,
     captioned: m.captioned ?? null,
+    /** Ready for the script: read, and light-copied unless it's only a video to recreate. */
+    ready: Boolean(m.analyzedAt) && (m.role === "recreate" || Boolean(m.proxyPath)),
     uploadedAt: a.createdAt.toISOString(),
   };
 }

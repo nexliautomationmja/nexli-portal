@@ -151,6 +151,8 @@ export interface EditContext {
   firm?: string;
   /** A reaction video: when the video in the corner plays, and what it is. Absent on every other edit. */
   reaction?: { windows: { start: number; end: number }[]; summary: string };
+  /** Clips on screen: when each shows and how. Absent on every other edit. */
+  onscreen?: { start: number; end: number; layout: "full" | "split" | "corner"; clip: number }[];
 }
 
 const t2 = (n: number) => n.toFixed(2);
@@ -176,9 +178,20 @@ function contextText(c: EditContext): string {
     `Caption words (start time, ALL CAPS):\n${words}`,
     c.instruction ? `How the user wants it edited, in their words:\n${c.instruction}` : "",
     c.reaction ? reactionText(c.reaction) : "",
+    c.onscreen ? onscreenText(c.onscreen) : "",
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/** Only with clips on screen: when they cover the frame, so graphics stay clear and don't restate them. */
+function onscreenText(cues: NonNullable<EditContext["onscreen"]>): string {
+  const how = { full: "full screen", split: "split screen (clip on one half, the presenter on the other)", corner: "full screen with the presenter in a corner bubble (top right)" };
+  return [
+    "Uploaded clips show on screen at these times while the presenter keeps talking (the captions stay on):",
+    cues.map((c) => `${t2(c.start)}–${t2(c.end)}s: clip ${c.clip}, ${how[c.layout]}`).join("\n"),
+    "Don't put title banners, cards or stickers over those windows; the clip is the visual there. Keep graphics clear of the top right during corner cues.",
+  ].join("\n");
 }
 
 /** Only for a reaction video: where the corner video sits and when it plays, so graphics stay clear of it. */

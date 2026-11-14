@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
         batchId: p.batchId ?? null,
         /** A reaction video (the presenter reacts to a video shown in the corner). */
         reaction: Boolean(p.reaction),
+      media: p.media?.mode ?? null,
       };
     }),
   });

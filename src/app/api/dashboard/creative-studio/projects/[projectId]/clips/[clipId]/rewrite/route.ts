@@ -7,6 +7,8 @@ import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio
 import { clipColumns, clipFieldsOf, clipsOf, derivedClip, projectDetail, scriptInputFor, snapshotOf } from "@/lib/creative-studio/service";
 import { rewriteClip } from "@/lib/creative-studio/script";
 import { reactionInputFor, readySource, rewriteReactionClip } from "@/lib/creative-studio/reaction";
+import { readyMedia } from "@/lib/creative-studio/media";
+import { onscreenInputFor, rewriteOnscreenClip } from "@/lib/creative-studio/onscreen";
 
 export const maxDuration = 120;
 
@@ -27,6 +29,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   const ready = project.reaction ? await readySource(project) : null;
   if (ready && "error" in ready) return NextResponse.json({ error: ready.error }, { status: ready.status });
+  const media = project.media?.mode === "onscreen" ? await readyMedia(project) : null;
+  if (media && "error" in media) return NextResponse.json({ error: media.error }, { status: media.status });
 
   let result;
   try {
@@ -38,7 +42,15 @@ export async function POST(req: NextRequest, { params }: Ctx) {
           index,
           instruction,
         })
-      : await rewriteClip({
+      : media
+        ? await rewriteOnscreenClip({
+            input: await onscreenInputFor(project, media.items),
+            frame: project.frameSpec,
+            clips: clips.map(clipFieldsOf),
+            index,
+            instruction,
+          })
+        : await rewriteClip({
           input: await scriptInputFor(project, "change"),
           frame: project.frameSpec,
           clips: clips.map(clipFieldsOf),

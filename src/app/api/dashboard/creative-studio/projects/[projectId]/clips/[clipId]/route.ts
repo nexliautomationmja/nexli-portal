@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { CLIP_KINDS, creativeClips, type ClipFields, type ClipKind } from "@/lib/creative-studio/tables";
+import { CLIP_KINDS, creativeClips, type ClipFields, type ClipKind, type ShowCue } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
 import { clipColumns, clipFieldsOf, derivedClip, framesOf, projectDetail, scenesOf, touchProject } from "@/lib/creative-studio/service";
-import { sourceOf } from "@/lib/creative-studio/source";
+import { mediaOf, sourceOf } from "@/lib/creative-studio/source";
 import { readWatch, watchProblem } from "@/lib/creative-studio/reaction-shared";
 
 type Ctx = { params: Promise<{ projectId: string; clipId: string }> };
@@ -53,6 +53,26 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     if (problem) return NextResponse.json({ error: problem }, { status: 400 });
     watch = asked;
   }
+  // An on-screen video's line: the clip shown on it (kept unless a new one, or null, is sent).
+  let show: ShowCue | null = kind !== "silent" ? current.show ?? null : null;
+  if (body && "show" in body && kind !== "silent" && project.media?.mode === "onscreen") {
+    const asked = body.show as Partial<ShowCue> | null;
+    if (asked === null) show = null;
+    else {
+      const media = typeof asked?.mediaId === "string" ? await mediaOf(project, asked.mediaId) : null;
+      const from = Number(asked?.from);
+      const to = Number(asked?.to);
+      const layout = asked?.layout === "split" || asked?.layout === "corner" ? asked.layout : asked?.layout === "full" ? "full" : null;
+      if (!media || !layout || !Number.isFinite(from) || !Number.isFinite(to)) {
+        return NextResponse.json({ error: "Pick a clip, how it shows, and the part to show." }, { status: 400 });
+      }
+      const length = media.durationMs ? media.durationMs / 1000 : Number.POSITIVE_INFINITY;
+      if (from < 0 || to <= from + 0.4 || to > length + 0.25) {
+        return NextResponse.json({ error: `Give a part inside the clip (0–${Number.isFinite(length) ? length.toFixed(1) : "?"} s), with the end after the start.` }, { status: 400 });
+      }
+      show = { mediaId: media.id, from: Math.round(from * 10) / 10, to: Math.round(Math.min(to, length) * 10) / 10, layout };
+    }
+  }
   const next: ClipFields = {
     section: s(body?.section, current.section).trim() || current.section,
     speaker:
@@ -73,6 +93,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     kind,
     frameId,
     ...(watch ? { watch } : {}),
+    ...(show ? { show } : {}),
   };
 
   await db

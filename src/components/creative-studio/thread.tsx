@@ -9,7 +9,8 @@ import { MAX_SCENES, scriptPresenterMismatch } from "@/lib/creative-studio/promp
 import { defaultPresenterName } from "@/components/creative-studio/presenter-picker";
 import { SYNE } from "@/components/launch-pad";
 import { studioHref, api, send } from "@/components/creative-studio/client";
-import { recreateWithManus, uploadFrameFile, uploadSource } from "@/components/creative-studio/upload";
+import { recreateWithManus, uploadFrameFile, uploadMedia, uploadSource } from "@/components/creative-studio/upload";
+import { MediaCard } from "@/components/creative-studio/media-card";
 import { SourceCard, presenterName } from "@/components/creative-studio/source-card";
 import {
   AssistantCard,
@@ -47,11 +48,13 @@ function stageOf(d: ProjectDetail): Stage {
   const locked = ["approved", "rendering"].includes(d.project.status);
   if (locked) return "locked";
   if (d.clips.length > 0) return "review";
-  // A reaction video can go without a direction (Claude decides the take from the video).
-  if (!d.reaction && !d.project.direction.trim()) return "direction";
+  // A reaction video or a video to recreate can go without a direction (Claude decides the take from the video).
+  if (!d.reaction && d.media?.mode !== "recreate" && !d.project.direction.trim()) return "direction";
   if (d.frames.length === 0 || d.scenes.some((sc) => !sc.frameId)) return "frame";
   // A reaction video is written once Claude can watch the video (stills and words ready).
   if (d.reaction && !d.reaction.source?.analyzed) return "source";
+  // Clips on screen / a video to recreate: written once Claude can watch every one (and the clips have their light copies).
+  if (d.media && !(d.media.items.length > 0 && d.media.items.every((it) => it.ready))) return "source";
   return "write";
 }
 
@@ -63,6 +66,20 @@ const isStoryDetail = (d: ProjectDetail) => d.scenes.filter((sc) => sc.frameId).
 
 /** What the thinking card says while Claude writes this video's script. */
 function writingNote(d: ProjectDetail): { label: string; detail: string; accent: "violet" } {
+  if (d.media?.mode === "recreate") {
+    return {
+      label: "Claude is studying the video and writing your version…",
+      detail: "Its hook, beats and pacing, rewritten for your offer with your Kling framework. About a minute or two.",
+      accent: "violet",
+    };
+  }
+  if (d.media) {
+    return {
+      label: `Claude is watching your ${d.media.items.length > 1 ? `${d.media.items.length} clips` : "clip"} and writing around them…`,
+      detail: "Lines that set each clip up, and where each one shows on screen, following your prompt and your Kling framework. About a minute or two.",
+      accent: "violet",
+    };
+  }
   if (d.reaction) {
     const p = d.project;
     return {
@@ -112,6 +129,18 @@ const COMPOSER: Record<Stage, { placeholder: string; hint: string }> = {
   edit: {
     placeholder: "Change the edit, e.g. “shorter title” · “zoom in on $15,000” · “caption should say CALENDAR”",
     hint: "Enter → Claude revises the edit · pick another style on the card · trim clips with ✂ on the auto-cut",
+  },
+};
+
+/** Clips on screen / a video to recreate: the chat box while they're prepared and before writing. */
+const MEDIA_COMPOSER: Partial<Record<Stage, { placeholder: string; hint: string }>> = {
+  source: {
+    placeholder: "What the video is about and how the clips should appear (optional), e.g. “clip 2 full screen when I show the result”",
+    hint: "Enter saves it · Claude writes the script as soon as the videos are ready",
+  },
+  write: {
+    placeholder: "Change the direction before Claude writes it…",
+    hint: "Enter → Claude writes it with this direction",
   },
 };
 
@@ -261,11 +290,34 @@ export function StudioThread({ projectId }: { projectId: string }) {
     if (r.ok) apply(r.data);
   }
 
-  async function onSubmit({ text, images, video, format: fmt, recreate }: ComposerSubmit): Promise<boolean> {
+  async function onSubmit({ text, images, video, videos, videoMode, format: fmt, recreate }: ComposerSubmit): Promise<boolean> {
     if (!detail) return false;
     setError(null);
     let d = detail;
     try {
+      // Before the script is approved, videos can be shown on screen or recreated instead of reacted to.
+      if (videos.length > 0 && videoMode !== "react" && !locked && sourceChangeable(d)) {
+        const hadScript = d.clips.length > 0;
+        const adding = videoMode === "onscreen" && d.media?.mode === "onscreen";
+        const ask =
+          videoMode === "recreate"
+            ? `Recreate this video?${d.reaction || d.media ? " It replaces the video this one uses now." : ""}${hadScript ? " You'll rewrite the script for it afterwards." : ""}`
+            : adding
+              ? `Add ${videos.length === 1 ? "this clip" : `these ${videos.length} clips`} to the ones on screen?${hadScript ? " You'll rewrite the script for them afterwards." : ""}`
+              : `Show ${videos.length === 1 ? "this clip" : `these ${videos.length} clips`} on screen?${d.reaction || d.media ? " It replaces the video this one uses now." : ""}${hadScript ? " You'll rewrite the script for them afterwards." : ""}`;
+        if ((hadScript || d.reaction || d.media) && !confirm(ask)) return false;
+        setWorking({ label: videos.length > 1 ? `Uploading ${videos.length} clips…` : "Uploading the video…", accent: videoMode === "recreate" ? "violet" : "cyan" });
+        d = await uploadMedia(p.id, videos, videoMode, !adding);
+        apply(d);
+        setWorking(null);
+        if (text) {
+          const r = await send(api(p.id), "PATCH", { brief: { ...d.project.brief, direction: text } });
+          if (!r.ok) throw new Error(r.error);
+          apply(r.data);
+        }
+        if (!hadScript) setAutoWrite(true);
+        return true;
+      }
       // Before the script is approved, a video is the one the presenter reacts to (it makes this a reaction video).
       if (video && !locked && sourceChangeable(d)) {
         const hadScript = d.clips.length > 0;
@@ -495,7 +547,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
         ? { placeholder: "Tell me the story: the angle, who it's for, where it should send people…", hint: "Enter saves it and writes the script" }
         : stage === "frame" && detail.scenes.length > 1
           ? { placeholder: "Change the plan, e.g. “add a scene at the gym” · “make scene 2 his kitchen”", hint: "Enter → Claude re-plans the scenes that aren't made yet" }
-          : (detail.reaction ? REACTION_COMPOSER[stage] : undefined) ?? COMPOSER[stage];
+          : (detail.reaction ? REACTION_COMPOSER[stage] : detail.media ? MEDIA_COMPOSER[stage] : undefined) ?? COMPOSER[stage];
   // The chat box talks about whoever presents (a client firm's studio has no Daniela).
   const who = p.presenter?.name ? `${p.presenter.name}'s frame` : p.studio.kind === "client" ? "the frame" : "Daniela's frame";
   const placeholder = base.placeholder.replace("Daniela's frame", who).replace("Daniela's take", `${presenterName(p)}'s take`);
@@ -554,6 +606,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
           ) : null}
 
           {detail.reaction && <SourceCard detail={detail} onChange={apply} onError={fail} />}
+          {detail.media && <MediaCard detail={detail} onChange={apply} onError={fail} />}
 
           <FrameCard key={detail.frames[0]?.id ?? "none"} detail={detail} onChange={apply} onError={fail} onFrameChosen={() => (detail.clips.length === 0 ? setAutoWrite(true) : locked ? showClips() : setFrameChanged(true))} />
 
@@ -773,6 +826,7 @@ export function StudioThread({ projectId }: { projectId: string }) {
             onFormat={showFormat ? changeFormat : undefined}
             maxImages={locked ? 1 : MAX_SCENES}
             allowRecreate
+            videoModes={!locked && sourceChangeable(detail)}
             onSubmit={onSubmit}
           />
         </div>

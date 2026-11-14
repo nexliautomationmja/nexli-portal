@@ -15,7 +15,15 @@ export interface ComposerSubmit {
   count: number;
   /** The one attached image is a photo for Manus to recreate (text = what to change), not the frame. */
   recreate: boolean;
+  /** Every attached video, in order (more than one only when they're shown on screen). */
+  videos: File[];
+  /** What the attached video is for (with `videoModes`): react to it, show it on screen, or recreate it. */
+  videoMode: VideoMode;
 }
+
+export type VideoMode = "react" | "onscreen" | "recreate";
+/** Most videos one message can carry (clips shown on screen). */
+const ONSCREEN_MAX = 10;
 
 interface Attachment {
   id: string;
@@ -54,6 +62,7 @@ export function Composer({
   maxCount = 1,
   maxImages,
   allowRecreate = false,
+  videoModes = false,
   onSubmit,
 }: {
   placeholder: string;
@@ -78,6 +87,8 @@ export function Composer({
   maxImages?: number;
   /** Offer "Recreate with Manus" when one photo is attached (single video, before the script is locked). */
   allowRecreate?: boolean;
+  /** Ask what an attached video is for: React to it · Show on screen (up to 10) · Recreate it. */
+  videoModes?: boolean;
   onSubmit: (s: ComposerSubmit) => Promise<boolean | void> | boolean | void;
 }) {
   const [text, setText] = useState(defaultText ?? "");
@@ -85,6 +96,8 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   // One attached photo: use it as the frame, or have Manus recreate it with a change.
   const [recreateOn, setRecreateOn] = useState(false);
+  // An attached video: react to it (the default, as before), show it on screen, or recreate it.
+  const [videoModeOn, setVideoModeOn] = useState<VideoMode>("react");
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const filesRef = useRef(files);
@@ -105,12 +118,15 @@ export function Composer({
       const newImages = accepted.filter((f) => f.type.startsWith("image/"));
       const prevImages = prev.filter((a) => a.file.type.startsWith("image/"));
       const keepImages = newImages.length ? prevImages.slice(Math.max(0, prevImages.length + newImages.length - limit)) : prevImages;
-      const keep = prev.filter((a) =>
-        a.file.type.startsWith("image/") ? keepImages.includes(a) : !accepted.some((f) => f.type.startsWith("video/"))
-      );
+      // Several videos only when they're shown on screen (up to 10); otherwise a new video replaces the old one.
+      const videoLimit = videoModes ? ONSCREEN_MAX : 1;
+      const newVideos = accepted.filter((f) => f.type.startsWith("video/"));
+      const prevVideos = prev.filter((a) => a.file.type.startsWith("video/"));
+      const keepVideos = newVideos.length ? prevVideos.slice(Math.max(0, prevVideos.length + newVideos.length - videoLimit)) : prevVideos;
+      const keep = prev.filter((a) => (a.file.type.startsWith("image/") ? keepImages.includes(a) : keepVideos.includes(a)));
       prev.filter((a) => !keep.includes(a)).forEach((a) => a.preview && URL.revokeObjectURL(a.preview));
       const image = newImages.slice(-limit);
-      const video = accepted.filter((f) => f.type.startsWith("video/")).slice(-1);
+      const video = newVideos.slice(-videoLimit);
       return [
         ...keep,
         ...[...image, ...video].map((file) => ({
@@ -149,13 +165,14 @@ export function Composer({
     const t = text.trim();
     if (!t && files.length === 0) return;
     const images = files.filter((a) => a.file.type.startsWith("image/")).map((a) => a.file);
-    const video = files.find((a) => a.file.type.startsWith("video/"))?.file ?? null;
-    const ok = await onSubmit({ text: t, images, video, format, count, recreate: recreatable && recreateOn });
+    const videos = files.filter((a) => a.file.type.startsWith("video/")).map((a) => a.file);
+    const ok = await onSubmit({ text: t, images, video: videos[0] ?? null, videos, videoMode: videoModes ? videoMode : "react", format, count, recreate: recreatable && recreateOn });
     if (ok !== false) {
       setText("");
       files.forEach((a) => a.preview && URL.revokeObjectURL(a.preview));
       setFiles([]);
       setRecreateOn(false);
+      setVideoModeOn("react");
       requestAnimationFrame(grow);
     }
   }
@@ -167,6 +184,11 @@ export function Composer({
   const imageIndex = new Map(imageIds.map((id, i) => [id, i]));
   const recreatable = allowRecreate && count === 1 && imageCount === 1 && files.length === 1;
   const recreating = recreatable && recreateOn;
+  const videoIds = files.filter((a) => a.file.type.startsWith("video/")).map((a) => a.id);
+  const videoIndex = new Map(videoIds.map((id, i) => [id, i]));
+  // Several videos can only be shown on screen.
+  const videoMode: VideoMode = videoIds.length > 1 ? "onscreen" : videoModeOn;
+  const askVideo = videoModes && videoIds.length > 0;
 
   return (
     <div
@@ -205,7 +227,15 @@ export function Composer({
                 </div>
               )}
               <span className="absolute bottom-1 left-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                {!a.preview ? videoLabel : recreating ? "To recreate" : imageCount > 1 && count === 1 ? `Scene ${imageIndex.get(a.id)! + 1}` : "Frame"}
+                {!a.preview
+                  ? askVideo
+                    ? videoMode === "onscreen"
+                      ? `Clip ${videoIndex.get(a.id)! + 1}`
+                      : videoMode === "recreate"
+                        ? "To recreate"
+                        : videoLabel
+                    : videoLabel
+                  : recreating ? "To recreate" : imageCount > 1 && count === 1 ? `Scene ${imageIndex.get(a.id)! + 1}` : "Frame"}
               </span>
               <button
                 type="button"
@@ -217,6 +247,52 @@ export function Composer({
               </button>
             </div>
           ))}
+          {askVideo && (
+            <div className="flex min-w-0 basis-full flex-col justify-center gap-1.5 pt-1">
+              <div className="flex w-fit max-w-full flex-wrap rounded-2xl border border-white/10 bg-white/5 p-0.5 sm:rounded-full" role="group" aria-label="What is this video for?">
+                {(
+                  [
+                    ["react", "React to it"],
+                    ["onscreen", "Show on screen"],
+                    ["recreate", "Recreate it"],
+                  ] as const
+                ).map(([value, label]) => {
+                  const blocked = videoIds.length > 1 && value !== "onscreen";
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      disabled={blocked}
+                      onClick={() => {
+                        setVideoModeOn(value);
+                        area.current?.focus();
+                      }}
+                      aria-pressed={videoMode === value}
+                      title={blocked ? "Several videos can only be shown on screen" : undefined}
+                      className={`min-h-8 rounded-full px-3 py-1 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                        videoMode === value
+                          ? value === "react"
+                            ? "bg-blue-600 text-white shadow shadow-blue-600/30"
+                            : value === "onscreen"
+                              ? "bg-cyan-600 text-white shadow shadow-cyan-600/30"
+                              : "bg-violet-600 text-white shadow shadow-violet-600/30"
+                          : "text-neutral-400 hover:text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-[11px] leading-snug text-neutral-500">
+                {videoMode === "onscreen"
+                  ? `Shown on screen while the presenter talks. Add up to ${ONSCREEN_MAX} clips and say how each should appear (full screen, split, or you in the corner).`
+                  : videoMode === "recreate"
+                    ? "Claude copies its structure, hook and pacing for your offer, and Manus recreates its look with your presenter."
+                    : "The presenter watches it on a phone and reacts, with it in the corner."}
+              </span>
+            </div>
+          )}
           {recreatable && (
             <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
               <div className="flex w-fit rounded-full border border-white/10 bg-white/5 p-0.5" role="group" aria-label="What to do with this photo">
@@ -263,7 +339,11 @@ export function Composer({
         autoFocus={autoFocus}
         disabled={disabled}
         placeholder={
-          recreating
+          askVideo && videoMode === "onscreen"
+            ? "Describe the video and how the clips should appear, e.g. “clip 1 full screen while I explain the problem, clip 2 split screen, clip 3 with me in the corner”"
+            : askVideo && videoMode === "recreate"
+              ? "What's your version about? Claude copies its structure, hook and pacing for your offer (optional)"
+              : recreating
             ? "What should Manus change? e.g. “same shot, navy suit instead of grey” or “put her in a modern office”. Leave empty to copy it as is."
             : placeholder
         }
@@ -316,7 +396,7 @@ export function Composer({
           ref={picker}
           type="file"
           hidden
-          multiple={count > 1 || (maxImages ?? 1) > 1}
+          multiple={count > 1 || (maxImages ?? 1) > 1 || videoModes}
           accept={allowVideo ? "image/png,image/jpeg,image/webp,video/mp4,video/quicktime" : "image/png,image/jpeg,image/webp"}
           onChange={(e) => {
             add(Array.from(e.target.files ?? []));
@@ -380,7 +460,9 @@ export function Composer({
         )}
 
         {(recreating || hint) && (
-          <span className="hidden min-w-0 flex-1 truncate text-[11px] text-neutral-500 sm:block">{recreating ? "Enter → Manus recreates your photo" : hint}</span>
+          <span className="hidden min-w-0 flex-1 truncate text-[11px] text-neutral-500 sm:block">
+            {recreating ? "Enter → Manus recreates your photo" : askVideo && videoMode !== "react" ? "Enter to start · Shift+Enter for a new line" : hint}
+          </span>
         )}
 
         <button

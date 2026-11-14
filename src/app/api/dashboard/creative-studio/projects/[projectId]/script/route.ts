@@ -8,6 +8,8 @@ import { claudeError, generateScript } from "@/lib/creative-studio/script";
 import { cleanFormatRig } from "@/lib/creative-studio/validate";
 import { presenterForStudio } from "@/lib/creative-studio/presenters";
 import { generateReactionScript, markReactionWritten, reactionInputFor, readySource } from "@/lib/creative-studio/reaction";
+import { markMediaWritten, readyMedia } from "@/lib/creative-studio/media";
+import { generateOnscreenScript, onscreenInputFor } from "@/lib/creative-studio/onscreen";
 
 // A full VSL script (30–50 clips) can take a couple of minutes.
 export const maxDuration = 300;
@@ -36,8 +38,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       .returning();
     project = updated;
   }
-  // A reaction video can go without: Claude decides the take from the video.
-  if (!project.reaction && !project.brief?.direction?.trim() && !project.brief?.oldBelief?.trim()) {
+  // A reaction video or a video to recreate can go without: Claude decides the take from the video.
+  if (!project.reaction && project.media?.mode !== "recreate" && !project.brief?.direction?.trim() && !project.brief?.oldBelief?.trim()) {
     return NextResponse.json({ error: "Tell it what the video is about first." }, { status: 400 });
   }
 
@@ -62,6 +64,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   // A reaction video: Claude watches the video first (its stills and words must be ready).
   const ready = project.reaction ? await readySource(project) : null;
   if (ready && "error" in ready) return NextResponse.json({ error: ready.error }, { status: ready.status });
+  // Clips on screen / a video to recreate: Claude reads every one first.
+  const media = project.media ? await readyMedia(project) : null;
+  if (media && "error" in media) return NextResponse.json({ error: media.error }, { status: media.status });
 
   try {
     if (ready) {
@@ -72,6 +77,15 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         "Replaced by a new script"
       );
       await markReactionWritten(project, ready.source, result.source);
+    } else if (media && project.media?.mode === "onscreen") {
+      // Clips on screen: written around them, each line saying which clip shows and how.
+      const result = await generateOnscreenScript(await onscreenInputFor(project, media.items));
+      await replaceScript(
+        project,
+        { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig, title: result.title },
+        "Replaced by a new script"
+      );
+      await markMediaWritten(project);
     } else {
       const result = await generateScript(await scriptInputFor(project, "write"));
       await replaceScript(
@@ -79,6 +93,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         { frameSpec: result.frame, notes: result.notes, clips: result.clips, rig: result.rig, title: result.title },
         "Replaced by a new script"
       );
+      if (media) await markMediaWritten(project);
     }
   } catch (err) {
     console.error("[creative-studio] script generation failed:", err);
