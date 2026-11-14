@@ -12,11 +12,12 @@ The user uploaded clips to show on screen while the presenter talks: screen reco
 - **The user's take**, in their words: what the video is about and, often, how each clip should appear and when. **Follow their placement instructions literally**: which clip, in what order, on which point, and how it shows.
 
 ## How a clip shows (`show.layout`)
+- `window` (**the default**): the presenter stays the main picture, full screen, and the clip plays in a 9:16 frame on top of it. The user sizes and places the frame in the edit.
 - `full`: the clip fills the screen; the presenter keeps talking over it, heard but not seen.
 - `split`: the clip on one half, the presenter on the other (top and bottom for a vertical ad, side by side for a VSL).
 - `corner`: the clip fills the screen and the presenter stays in a small bubble in the corner.
 
-When the user doesn't say, choose: `full` for something the viewer must read or study (a dashboard, a document, a result); `split` when their reaction to it matters as much as the clip; `corner` for a longer stretch where the clip carries the point but the presenter should stay present.
+When the user doesn't say, use `window`. Use another layout only when the user asks for it ("full screen", "split screen", "me in the corner"), or when a clip is something the viewer must read in detail (a dense dashboard or document) and would be unreadable small: then `full`.
 
 ## Writing around the clips
 - The presenter keeps talking **to camera** through every clip (`kind` is `to_camera`). The clip is laid over that line in the edit.
@@ -27,4 +28,4 @@ When the user doesn't say, choose: `full` for something the viewer must read or 
 - The clips' own sound is off; never rely on what a clip says being heard. If its words matter, the presenter says the point.
 
 ## Notes
-In `notes`, list each clip and where it shows (for example "Clip 1 · line 3 · full; Clip 2 · line 5 · split"), then anything the user should check.
+In `notes`, list each clip and where it shows (for example "Clip 1 · line 3 · window; Clip 2 · line 5 · full"), then anything the user should check.

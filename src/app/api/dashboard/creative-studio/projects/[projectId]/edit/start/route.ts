@@ -49,14 +49,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const durationS = await durationOf(finalCut, body.durationS, words);
     // A reaction video: the video she reacts to, in the corner (its size and captions carry over on the same cut).
     const reaction = await reactionTrack(project, built.lines, keep ? prev.props.pip : undefined);
-    // Clips on screen: shown over their lines (a layout changed by hand on the same cut carries over).
+    // Clips on screen: shown over their lines (how a cue shows, and a window's spot and size, carry over on the same cut).
     const onscreen = await mediaTrack(project, built.lines);
     if (onscreen.media && keep && prev.props.media) {
       const before = prev.props.media;
       onscreen.media.cues = onscreen.media.cues.map((c) => {
         const id = onscreen.media!.clips[c.clip]?.mediaId;
         const old = before.cues.find((o) => Math.abs(o.start - c.start) < 0.05 && before.clips[o.clip]?.mediaId === id);
-        return old ? { ...c, layout: old.layout } : c;
+        return old ? { ...c, layout: old.layout, ...(old.box ? { box: old.box } : {}), ...(old.fit ? { fit: old.fit } : {}) } : c;
       });
     }
     const result = await proposeLayout({

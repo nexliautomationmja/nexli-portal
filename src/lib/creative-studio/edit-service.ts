@@ -137,7 +137,7 @@ export function editContext(
     lines,
     words,
     ...(pip ? { reaction: { windows: pip.windows.map((w) => ({ start: w.start, end: w.end })), summary: pip.summary ?? "" } } : {}),
-    ...(media?.cues.length ? { onscreen: media.cues.map((c) => ({ start: c.start, end: c.end, layout: c.layout, clip: c.clip + 1 })) } : {}),
+    ...(media?.cues.length ? { onscreen: media.cues.map((c) => ({ start: c.start, end: c.end, layout: c.layout, clip: c.clip + 1, ...(c.layout === "window" ? { x: c.box?.x ?? 0.7 } : {}) })) } : {}),
   };
 }
 

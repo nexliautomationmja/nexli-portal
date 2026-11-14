@@ -24,7 +24,7 @@ import { sourceMeta, sourceTranscriptLines } from "@/lib/creative-studio/source"
 /**
  * Clips on screen (Nov 2026): Claude watches every uploaded clip (stills and
  * words, with times) and writes the presenter's script around them, putting
- * a clip on the lines that show one (which part, and full / split / corner,
+ * a clip on the lines that show one (which part, and window / full / split / corner,
  * as the user's prompt says). Written as a one-scene story so the Kling
  * prompts come from the story builder unchanged; the edit lays the clips
  * over those lines. Its own system prompt and schema: no other video's
@@ -35,7 +35,7 @@ type Project = typeof creativeProjects.$inferSelect;
 type Asset = typeof creativeAssets.$inferSelect;
 
 const ONSCREEN_SYSTEM = `${KLING_FRAMEWORK}\n${STORY_RULES}\n${ONSCREEN_RULES}`;
-export const SHOW_LAYOUTS: ShowLayout[] = ["full", "split", "corner"];
+export const SHOW_LAYOUTS: ShowLayout[] = ["window", "full", "split", "corner"];
 /** Shortest and longest part of a clip one line shows (seconds). */
 const SHOW_MIN_S = 1.5;
 const SHOW_MAX_S = 12;
@@ -205,7 +205,7 @@ export function fitShow(raw: Pick<RawOnscreenClip, "showClip" | "showFrom" | "sh
   const n = Math.round(Number(raw.showClip));
   const clip = n >= 1 ? clips[n - 1] : undefined;
   if (!clip || raw.showLayout === "none") return { show: null, moved: Boolean(n >= 1 && !clip) };
-  const layout: ShowLayout = SHOW_LAYOUTS.includes(raw.showLayout as ShowLayout) ? (raw.showLayout as ShowLayout) : "full";
+  const layout: ShowLayout = SHOW_LAYOUTS.includes(raw.showLayout as ShowLayout) ? (raw.showLayout as ShowLayout) : "window";
   const end = clip.durationS > 0 ? clip.durationS : Number.POSITIVE_INFINITY;
   let from = Number(raw.showFrom);
   let to = Number(raw.showTo);

@@ -8,7 +8,7 @@ import { api, send } from "@/components/creative-studio/client";
 
 type Media = NonNullable<ProjectDetail["media"]>;
 
-export const LAYOUT_LABEL: Record<ShowLayout, string> = { full: "Full screen", split: "Split screen", corner: "You in the corner" };
+export const LAYOUT_LABEL: Record<ShowLayout, string> = { window: "9:16 window", full: "Full screen", split: "Split screen", corner: "You in the corner" };
 
 /**
  * A line's clip on screen, on the script: which clip, how it shows and the
@@ -74,7 +74,7 @@ export function ShowPart({
         onClick={() => {
           const first = media.items[0];
           if (!first) return;
-          setDraft({ mediaId: first.id, from: 0, to: Math.min(5, first.durationS ?? 5), layout: "full" });
+          setDraft({ mediaId: first.id, from: 0, to: Math.min(5, first.durationS ?? 5), layout: "window" });
           setOpen(true);
         }}
         className="mt-1.5 text-[11px] font-semibold text-neutral-500 hover:text-cyan-300"
@@ -104,7 +104,7 @@ export function ShowPart({
             </option>
           ))}
         </select>
-        <select value={draft?.layout ?? "full"} onChange={(e) => draft && setDraft({ ...draft, layout: e.target.value as ShowLayout })} className={field} aria-label="How it shows">
+        <select value={draft?.layout ?? "window"} onChange={(e) => draft && setDraft({ ...draft, layout: e.target.value as ShowLayout })} className={field} aria-label="How it shows">
           {(Object.keys(LAYOUT_LABEL) as ShowLayout[]).map((l) => (
             <option key={l} value={l}>
               {LAYOUT_LABEL[l]}

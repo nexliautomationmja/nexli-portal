@@ -139,8 +139,15 @@ export interface PipTrack {
   words?: CaptionWord[];
 }
 
-/** How an uploaded clip shows while the presenter talks. */
-export type MediaLayout = "full" | "split" | "corner";
+/** How an uploaded clip shows while the presenter talks ("window" = a 9:16 frame over the presenter). */
+export type MediaLayout = "window" | "full" | "split" | "corner";
+
+/** Where a "window" cue's 9:16 frame sits: its centre (fractions of the frame) and its height (fraction of the frame's height). */
+export interface MediaBox {
+  x: number;
+  y: number;
+  h: number;
+}
 
 /** One clip on screen, placed on the cut: it plays from `from` and holds its last frame if the line runs past `to`. */
 export interface MediaCue {
@@ -153,6 +160,10 @@ export interface MediaCue {
   from: number;
   to: number;
   layout: MediaLayout;
+  /** "window" only: where the frame sits and how big (absence = the default spot). */
+  box?: MediaBox;
+  /** "window" only: "fill" crops the clip to fill the 9:16 frame (default); "fit" shows the whole clip inside it. */
+  fit?: "fill" | "fit";
 }
 
 /**

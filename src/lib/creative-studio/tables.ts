@@ -258,7 +258,7 @@ export interface MediaInfo {
 export const MEDIA_MAX: Record<MediaMode, number> = { onscreen: 10, recreate: 1 };
 
 /** How an on-screen clip shows while the presenter talks. */
-export type ShowLayout = "full" | "split" | "corner";
+export type ShowLayout = "window" | "full" | "split" | "corner";
 /** An on-screen cue on a script line: which clip, which part of it (seconds on the clip), and how it shows. */
 export interface ShowCue {
   mediaId: string;

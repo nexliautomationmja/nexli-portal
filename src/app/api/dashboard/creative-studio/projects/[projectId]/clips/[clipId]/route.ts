@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       const media = typeof asked?.mediaId === "string" ? await mediaOf(project, asked.mediaId) : null;
       const from = Number(asked?.from);
       const to = Number(asked?.to);
-      const layout = asked?.layout === "split" || asked?.layout === "corner" ? asked.layout : asked?.layout === "full" ? "full" : null;
+      const layout = asked?.layout && (["window", "full", "split", "corner"] as const).includes(asked.layout) ? asked.layout : null;
       if (!media || !layout || !Number.isFinite(from) || !Number.isFinite(to)) {
         return NextResponse.json({ error: "Pick a clip, how it shows, and the part to show." }, { status: 400 });
       }

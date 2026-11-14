@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import { SIZE_MAX, SIZE_MIN, type CaptionStyle, type EditLayout, type EditOverlays, type EditProps, type EditStyle, type MovableSlot, type PipSize, type SizeSlot } from "@/remotion/types";
+import { SIZE_MAX, SIZE_MIN, type CaptionStyle, type EditLayout, type EditOverlays, type EditProps, type EditStyle, type MediaBox, type MediaLayout, type MovableSlot, type PipSize, type SizeSlot } from "@/remotion/types";
+import { cleanBox, windowRect, WINDOW_MAX_H, WINDOW_MIN_H } from "@/remotion/media-box";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
 import { sameTarget, setText, setWindow, slotClashes, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
@@ -137,6 +138,9 @@ export function EditCard({
   // Move mode: tap or drag on the preview to place the picked element (a reaction video's corner video also has a size and captions).
   const [moving, setMoving] = useState<{ slot: MovableSlot; layout: EditLayout; pip?: { size: PipSize; captions: boolean } } | null>(null);
   const dragging = useRef(false);
+  // Sizing a clip's 9:16 window: drag it on the preview, resize from its corner or the slider.
+  const [cueDraft, setCueDraft] = useState<{ index: number; box: MediaBox; fit: "fill" | "fit" } | null>(null);
+  const cueDrag = useRef<{ mode: "move" | "size"; dx: number; dy: number } | null>(null);
   const [showWords, setShowWords] = useState(false);
   const [view, setView] = useState<"auto" | "preview" | "render">("auto");
   const [cutChoice, setCutChoice] = useState<string | null>(null);
@@ -302,6 +306,7 @@ export function EditCard({
 
   function startMoving() {
     setEditing(null);
+    setCueDraft(null);
     const first = movable[0];
     if (!first || !latest?.props) return;
     setView("preview");
@@ -334,13 +339,60 @@ export function EditCard({
       return { ...m, layout };
     });
   }
-  /** How one clip on screen shows (a new version; the spots placed by hand stay). */
-  async function setCueLayout(index: number, layout: "full" | "split" | "corner") {
-    setBusy({ label: "Changing how the clip shows…" });
-    const r = await send(api(`${p.id}/edit/layout`), "POST", { layout: latest?.props?.overlays.layout ?? {}, media: [{ index, layout }] });
+  /** How one clip on screen shows, and a window's spot, size and fit (a new version; the spots placed by hand stay). */
+  async function saveCue(index: number, change: { layout?: MediaLayout; box?: MediaBox; fit?: "fill" | "fit" }) {
+    setBusy({ label: change.box ? "Saving the clip's window…" : "Changing how the clip shows…" });
+    const r = await send(api(`${p.id}/edit/layout`), "POST", { layout: latest?.props?.overlays.layout ?? {}, media: [{ index, ...change }] });
     setBusy(null);
-    if (r.ok) onChange(r.data);
-    else onError(r.error);
+    if (r.ok) {
+      setCueDraft(null);
+      onChange(r.data);
+    } else onError(r.error);
+    return r.ok;
+  }
+  function adjustCue(index: number) {
+    const c = latest?.props?.media?.cues[index];
+    if (!c) return;
+    setMoving(null);
+    setEditing(null);
+    setView("preview");
+    setCueDraft({ index, box: cleanBox(c.box, vertical), fit: c.fit ?? "fill" });
+    still(c.start + Math.min(0.6, (c.end - c.start) / 2));
+  }
+  // The frame in render pixels, so the window drawn here matches the render exactly.
+  const FW = vertical ? 1080 : 1920;
+  const FH = vertical ? 1920 : 1080;
+  /** Drag on the preview: move the window (grabbed anywhere) or resize it from its corner handle. */
+  function dragCue(e: React.PointerEvent<HTMLDivElement>, start: boolean) {
+    if (!cueDraft) return;
+    const el = e.currentTarget.getBoundingClientRect();
+    const px = Math.min(1, Math.max(0, (e.clientX - el.left) / el.width));
+    const py = Math.min(1, Math.max(0, (e.clientY - el.top) / el.height));
+    const r = windowRect(cueDraft.box, vertical, FW, FH);
+    if (start) {
+      const handle = Math.abs(px * FW - (r.left + r.width)) < FW * 0.08 && Math.abs(py * FH - (r.top + r.height)) < FH * 0.06;
+      const inside = px * FW >= r.left && px * FW <= r.left + r.width && py * FH >= r.top && py * FH <= r.top + r.height;
+      cueDrag.current = handle
+        ? { mode: "size", dx: 0, dy: 0 }
+        : { mode: "move", dx: inside ? cueDraft.box.x - px : 0, dy: inside ? cueDraft.box.y - py : 0 };
+    }
+    const d = cueDrag.current;
+    if (!d) return;
+    let box: MediaBox;
+    if (d.mode === "size") {
+      // The top-left corner stays put; the window grows toward the pointer.
+      const h = Math.min(WINDOW_MAX_H, Math.max(WINDOW_MIN_H, Math.max(py * FH - r.top, ((px * FW - r.left) * 16) / 9) / FH));
+      const w = Math.min(FW, (h * FH * 9) / 16);
+      box = { x: (r.left + w / 2) / FW, y: (r.top + (h * FH) / 2) / FH, h };
+    } else box = { ...cueDraft.box, x: px + d.dx, y: py + d.dy };
+    // Keep the centre where the window actually lands (fully inside the frame).
+    const fitted = windowRect(box, vertical, FW, FH);
+    setCueDraft({ ...cueDraft, box: cleanBox({ x: (fitted.left + fitted.width / 2) / FW, y: (fitted.top + fitted.height / 2) / FH, h: box.h }, vertical) });
+  }
+  function resizeCue(h: number) {
+    if (!cueDraft) return;
+    const fitted = windowRect({ ...cueDraft.box, h }, vertical, FW, FH);
+    setCueDraft({ ...cueDraft, box: cleanBox({ x: (fitted.left + fitted.width / 2) / FW, y: (fitted.top + fitted.height / 2) / FH, h }, vertical) });
   }
 
   async function saveLayout() {
@@ -466,7 +518,18 @@ export function EditCard({
       ? { ...baseOverlays, sizes: { ...baseOverlays.sizes, [draftSlot]: editing.size } }
       : baseOverlays;
   const lookOverlays = sizedOverlays && captionDraft ? withLook(sizedOverlays, captionDraft) : sizedOverlays;
-  const previewProps = withLayout && lookOverlays ? { ...withLayout, overlays: lookOverlays } : withLayout;
+  const lookProps = withLayout && lookOverlays ? { ...withLayout, overlays: lookOverlays } : withLayout;
+  // The window being sized, live on the preview.
+  const previewProps =
+    lookProps?.media && cueDraft
+      ? {
+          ...lookProps,
+          media: {
+            ...lookProps.media,
+            cues: lookProps.media.cues.map((c, i) => (i === cueDraft.index ? { ...c, layout: "window" as const, box: cueDraft.box, fit: cueDraft.fit } : c)),
+          },
+        }
+      : lookProps;
   const lookChanged = captionDraft !== null && JSON.stringify(plainLook(captionDraft)) !== JSON.stringify(plainLook(savedLook ?? {}));
 
   function openLook() {
@@ -649,9 +712,40 @@ export function EditCard({
                   {showRender && latestOutput && !moving ? (
                     <video key={latestOutput} src={latestOutput} controls playsInline preload="metadata" className="h-full w-full object-contain" />
                   ) : previewProps ? (
-                    <EditPreview props={previewProps} seek={seek} interactive={!moving} onPlayer={onPlayer} />
+                    <EditPreview props={previewProps} seek={seek} interactive={!moving && !cueDraft} onPlayer={onPlayer} />
                   ) : (
                     <div className="flex h-full items-center justify-center p-4 text-center text-xs text-neutral-500">The preview appears once the layout is ready.</div>
+                  )}
+                  {cueDraft && (
+                    <div
+                      className="absolute inset-0 z-10 cursor-move touch-none select-none"
+                      onPointerDown={(e) => {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        dragCue(e, true);
+                      }}
+                      onPointerMove={(e) => {
+                        if (cueDrag.current) dragCue(e, false);
+                      }}
+                      onPointerUp={() => {
+                        cueDrag.current = null;
+                      }}
+                      onPointerCancel={() => {
+                        cueDrag.current = null;
+                      }}
+                    >
+                      {(() => {
+                        const r = windowRect(cueDraft.box, vertical, FW, FH);
+                        return (
+                          <div
+                            className="pointer-events-none absolute rounded-md border-2 border-dashed border-cyan-300"
+                            style={{ left: `${(r.left / FW) * 100}%`, top: `${(r.top / FH) * 100}%`, width: `${(r.width / FW) * 100}%`, height: `${(r.height / FH) * 100}%` }}
+                          >
+                            <span className="absolute left-1 top-1 rounded bg-cyan-500 px-1 text-[9px] font-bold text-white">Drag to move</span>
+                            <span className="absolute -bottom-2 -right-2 h-5 w-5 cursor-nwse-resize rounded-full border-2 border-white bg-cyan-400 shadow-[0_0_0_4px_rgba(34,211,238,0.35)]" />
+                          </div>
+                        );
+                      })()}
+                    </div>
                   )}
                   {moving && (
                     <div
@@ -941,7 +1035,8 @@ export function EditCard({
                   Clips on screen <span className="normal-case tracking-normal text-neutral-600">· tap to watch it · pick how it shows</span>
                 </p>
                 {latest.props!.media!.cues.map((c, i) => (
-                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
+                  <div key={i} className={`rounded-lg border px-2.5 py-1.5 ${cueDraft?.index === i ? "border-cyan-400/40 bg-cyan-500/[0.04]" : "border-white/5 bg-white/[0.02]"}`}>
+                  <div className="flex flex-wrap items-center gap-2">
                     <button type="button" onClick={() => jump(c.start + 0.3)} className="min-h-8 flex-1 text-left text-xs text-neutral-200 hover:text-white">
                       <span className="mr-2 rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] font-bold text-cyan-200">Clip {c.clip + 1}</span>
                       <span className="text-neutral-400" style={NUM_FONT}>
@@ -951,14 +1046,123 @@ export function EditCard({
                     <select
                       value={c.layout}
                       disabled={Boolean(busy) || latest.status === "rendering"}
-                      onChange={(e) => void setCueLayout(i, e.target.value as "full" | "split" | "corner")}
+                      onChange={(e) => {
+                        const layout = e.target.value as MediaLayout;
+                        void saveCue(i, { layout }).then((ok) => {
+                          if (ok && layout === "window") adjustCue(i);
+                        });
+                      }}
                       className="rounded-lg border border-white/10 bg-[#0b1220] px-2 py-1 text-xs text-white outline-none focus:border-cyan-400/60 disabled:opacity-50"
                       aria-label={`How clip ${c.clip + 1} shows`}
                     >
+                      <option value="window">9:16 window</option>
                       <option value="full">Full screen</option>
                       <option value="split">Split screen</option>
                       <option value="corner">You in the corner</option>
                     </select>
+                    {c.layout === "window" && cueDraft?.index !== i && (
+                      <button
+                        type="button"
+                        onClick={() => adjustCue(i)}
+                        disabled={Boolean(busy) || latest.status === "rendering"}
+                        className="min-h-8 rounded-full border border-white/10 px-2.5 text-xs font-semibold text-neutral-200 hover:border-cyan-400/50 hover:text-white disabled:opacity-50"
+                      >
+                        ⤢ Size &amp; place
+                      </button>
+                    )}
+                  </div>
+                  {cueDraft?.index === i && (
+                    <div className="mt-2 space-y-2 border-t border-white/5 pt-2">
+                      <p className="text-[11px] text-neutral-400">Drag the window on the preview to move it; drag its corner dot, or use the slider, to make it bigger or smaller.</p>
+                      <label className="flex items-center gap-2 text-[11px] text-neutral-300">
+                        <span className="w-9 shrink-0">Size</span>
+                        <input
+                          type="range"
+                          min={WINDOW_MIN_H}
+                          max={WINDOW_MAX_H}
+                          step={0.01}
+                          value={cueDraft.box.h}
+                          onChange={(e) => resizeCue(Number(e.target.value))}
+                          className="flex-1 accent-cyan-400"
+                          aria-label="Window size"
+                        />
+                        <span className="w-10 text-right text-neutral-400" style={NUM_FONT}>
+                          {Math.round(cueDraft.box.h * 100)}%
+                        </span>
+                      </label>
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <span className="w-9 shrink-0 text-neutral-300">Spot</span>
+                        {(
+                          [
+                            ["Left", 0],
+                            ["Centre", 0.5],
+                            ["Right", 1],
+                          ] as const
+                        ).map(([label, x]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => {
+                              const fitted = windowRect({ ...cueDraft.box, x }, vertical, FW, FH);
+                              setCueDraft({ ...cueDraft, box: cleanBox({ ...cueDraft.box, x: (fitted.left + fitted.width / 2) / FW }, vertical) });
+                            }}
+                            className="min-h-8 rounded-full border border-white/10 px-2.5 font-semibold text-neutral-300 hover:text-white"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                        <span className="ml-2 text-neutral-300">Clip</span>
+                        {(
+                          [
+                            ["fill", "Fill the window"],
+                            ["fit", "Whole clip"],
+                          ] as const
+                        ).map(([fit, label]) => (
+                          <button
+                            key={fit}
+                            type="button"
+                            aria-pressed={cueDraft.fit === fit}
+                            onClick={() => setCueDraft({ ...cueDraft, fit })}
+                            className={`min-h-8 rounded-full border px-2.5 font-semibold ${cueDraft.fit === fit ? "border-cyan-400 bg-cyan-500/20 text-white" : "border-white/10 text-neutral-300 hover:text-white"}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void saveCue(i, { layout: "window", box: cueDraft.box, fit: cueDraft.fit })}
+                          disabled={Boolean(busy)}
+                          className="min-h-8 rounded-full bg-cyan-600 px-3 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        {(latest.props!.media!.cues.length > 1) && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setBusy({ label: "Saving every clip's window…" });
+                              const all = latest.props!.media!.cues.map((x, j) => (x.layout === "window" || j === i ? { index: j, layout: "window" as const, box: cueDraft.box, fit: cueDraft.fit } : null)).filter(Boolean);
+                              const r = await send(api(`${p.id}/edit/layout`), "POST", { layout: latest.props?.overlays.layout ?? {}, media: all });
+                              setBusy(null);
+                              if (r.ok) {
+                                setCueDraft(null);
+                                onChange(r.data);
+                              } else onError(r.error);
+                            }}
+                            disabled={Boolean(busy)}
+                            className="min-h-8 rounded-full border border-white/10 px-3 text-xs font-semibold text-neutral-200 hover:text-white disabled:opacity-50"
+                          >
+                            Save for every window
+                          </button>
+                        )}
+                        <button type="button" onClick={() => setCueDraft(null)} className="min-h-8 px-2 text-xs font-semibold text-neutral-500 hover:text-white">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   </div>
                 ))}
               </div>

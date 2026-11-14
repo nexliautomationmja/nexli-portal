@@ -5,13 +5,14 @@ import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio
 import { projectDetail } from "@/lib/creative-studio/service";
 import { latestEdit } from "@/lib/creative-studio/edit-service";
 import type { EditLayout, MediaLayout, MovableSlot, PipSize } from "@/remotion/types";
+import { cleanBox } from "@/remotion/media-box";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
 const SLOTS: MovableSlot[] = ["title", "qualifier", "cta", "captions", "stickers", "cards", "pip"];
 const PIP_SIZES: PipSize[] = ["s", "m", "l"];
-const MEDIA_LAYOUTS: MediaLayout[] = ["full", "split", "corner"];
-const LAYOUT_NAME: Record<MediaLayout, string> = { full: "full screen", split: "split screen", corner: "you in the corner" };
+const MEDIA_LAYOUTS: MediaLayout[] = ["window", "full", "split", "corner"];
+const LAYOUT_NAME: Record<MediaLayout, string> = { window: "in a 9:16 window", full: "full screen", split: "split screen", corner: "you in the corner" };
 const r4 = (n: number) => Math.round(n * 10_000) / 10_000;
 
 /**
@@ -19,7 +20,8 @@ const r4 = (n: number) => Math.round(n * 10_000) / 10_000;
  * POST { layout: { title: { x, y }, captions: … } } — fractions of the frame,
  * a missing slot = the style's default spot. A reaction video's corner
  * video also takes { pip: { size, captions } }; clips on screen take
- * { media: [{ index, layout }] } (how that cue shows). Saved as a new version (no
+ * { media: [{ index, layout, box?, fit? }] } (how that cue shows; a 9:16
+ * window also takes where it sits and how big, and fill or fit). Saved as a new version (no
  * Claude call), so "Undo last change" puts the old spots back.
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const body = (await req.json().catch(() => null)) as {
     layout?: Record<string, unknown>;
     pip?: { size?: unknown; captions?: unknown };
-    media?: { index?: unknown; layout?: unknown }[];
+    media?: { index?: unknown; layout?: unknown; box?: unknown; fit?: unknown }[];
   } | null;
   const edit = await latestEdit(project.id);
   if (!edit) return NextResponse.json({ error: "Pick a style first" }, { status: 400 });
@@ -57,13 +59,22 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   let media = edit.props.media;
   const mediaChanges: string[] = [];
   if (media && Array.isArray(body?.media)) {
+    const vertical = edit.props.format !== "vsl_16x9";
     const cues = [...media.cues];
     for (const m of body.media) {
       const i = typeof m?.index === "number" ? Math.round(m.index) : -1;
-      const layout = MEDIA_LAYOUTS.includes(m?.layout as MediaLayout) ? (m.layout as MediaLayout) : null;
-      if (!cues[i] || !layout || cues[i].layout === layout) continue;
-      cues[i] = { ...cues[i], layout };
-      mediaChanges.push(`clip ${cues[i].clip + 1} at ${cues[i].start.toFixed(1)}s ${LAYOUT_NAME[layout]}`);
+      if (!cues[i]) continue;
+      const layout = MEDIA_LAYOUTS.includes(m?.layout as MediaLayout) ? (m.layout as MediaLayout) : cues[i].layout;
+      const before = JSON.stringify(cues[i]);
+      const next = { ...cues[i], layout };
+      if (layout === "window") {
+        if (m?.box && typeof m.box === "object") next.box = cleanBox(m.box as Record<string, number>, vertical);
+        if (m?.fit === "fill" || m?.fit === "fit") next.fit = m.fit;
+      }
+      if (JSON.stringify(next) === before) continue;
+      cues[i] = next;
+      const resized = layout === "window" && layout === JSON.parse(before).layout;
+      mediaChanges.push(`clip ${next.clip + 1} at ${next.start.toFixed(1)}s ${resized ? "window moved or resized" : LAYOUT_NAME[layout]}`);
     }
     media = { ...media, cues };
   }

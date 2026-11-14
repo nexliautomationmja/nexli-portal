@@ -2,10 +2,13 @@ import React from "react";
 import { AbsoluteFill, Freeze, interpolate, OffthreadVideo, Sequence, useCurrentFrame, useVideoConfig } from "remotion";
 import type { MediaCue, MediaTrack } from "../types";
 import { FB_SAFE_TOP } from "../theme";
+import { windowRect } from "../media-box";
 
 /**
  * Clips on screen: each cue shows one uploaded clip over the plate while the
  * presenter keeps talking (the plate's sound carries on; clips are muted).
+ * • window — the presenter stays full screen; the clip plays in a 9:16 frame
+ *   on top, placed and sized in the editor;
  * • full — the clip fills the frame;
  * • split — the clip on the top half (left for a VSL), the presenter on the
  *   other half;
@@ -51,6 +54,31 @@ const Cue: React.FC<{ cue: MediaCue; src: string; plateSrc: string; vertical: bo
   const ease = Math.max(1, Math.round(EASE * fps));
   const opacity = total > ease * 2 ? interpolate(frame, [0, ease, total - ease, total], [0, 1, 1, 0], clamp) : 1;
   const startFrame = Math.round(cue.start * fps);
+
+  if (cue.layout === "window") {
+    // The presenter stays the main picture; the clip plays in a 9:16 frame on top, popping in slightly.
+    const r = windowRect(cue.box, vertical, width, height);
+    const pop = total > ease * 2 ? interpolate(frame, [0, ease * 2], [0.92, 1], clamp) : 1;
+    const radius = Math.round(r.width * 0.07);
+    return (
+      <AbsoluteFill style={{ opacity }}>
+        <div
+          style={{
+            position: "absolute",
+            ...r,
+            borderRadius: radius,
+            overflow: "hidden",
+            border: `${vertical ? 5 : 4}px solid rgba(255,255,255,0.92)`,
+            boxShadow: "0 28px 70px rgba(0,0,0,0.55)",
+            background: "#000",
+            transform: `scale(${pop})`,
+          }}
+        >
+          <ClipVideo src={src} cue={cue} fps={fps} total={total} style={{ ...COVER, objectFit: cue.fit === "fit" ? "contain" : "cover" }} />
+        </div>
+      </AbsoluteFill>
+    );
+  }
 
   if (cue.layout === "split") {
     // Vertical: clip on top, presenter below (cropped to the face's usual height). VSL: side by side.
