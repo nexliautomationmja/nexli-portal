@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildDrsTemplate, fillClientPlaceholder } from "@/lib/engagement-defaults";
-import { type BillingPlan } from "@/lib/drs-pricing";
+import { DRS_PRICING_LABEL, DRS_SETUP_FEES, type BillingPlan, type DrsPricing } from "@/lib/drs-pricing";
 import {
   ACCENT,
   SYNE,
@@ -24,7 +24,7 @@ import { nexliPaymentDisclosure } from "@/lib/nexli-legal";
 import {
   DrsAtAGlance,
   EngagementLetterView,
-  DRS_FIGURES,
+  drsFigures,
   LETTER_ICONS as X,
   findSectionNum,
   parseLetter,
@@ -52,9 +52,12 @@ export function EngagePreviewClient() {
   }, []);
 
   const [plan, setPlan] = useState<BillingPlan>("monthly");
+  const [pricing, setPricing] = useState<DrsPricing>("current");
+  const setupCents = DRS_SETUP_FEES[pricing];
+  const figures = drsFigures(setupCents);
   const letter = useMemo(
-    () => fillClientPlaceholder(buildDrsTemplate(plan), SAMPLE_FIRM),
-    [plan]
+    () => fillClientPlaceholder(buildDrsTemplate(plan, setupCents), SAMPLE_FIRM),
+    [plan, setupCents]
   );
   const { sections } = useMemo(() => parseLetter(letter), [letter]);
   const esignNum = findSectionNum(sections, "ELECTRONIC SIGNATURES");
@@ -107,6 +110,25 @@ export function EngagePreviewClient() {
             </button>
           ))}
         </div>
+        <div
+          role="group"
+          aria-label="Preview setup fee"
+          className="inline-flex self-start rounded-full p-1 bg-white/5 border border-white/10"
+        >
+          {(["current", "original"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setPricing(v)}
+              aria-pressed={pricing === v}
+              className={`min-h-11 sm:min-h-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                pricing === v ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              {DRS_PRICING_LABEL[v]} · {drsFigures(DRS_SETUP_FEES[v]).setup}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ─── Hero ─── */}
@@ -136,7 +158,7 @@ export function EngagePreviewClient() {
         </div>
       </section>
 
-      <DrsAtAGlance plan={plan} />
+      <DrsAtAGlance plan={plan} setupCents={setupCents} bonus />
 
       {/* ─── The agreement ─── */}
       <EngagementLetterView content={letter} kind="drs" plan={plan} onReadProgress={setReadPct} />
@@ -164,7 +186,7 @@ export function EngagePreviewClient() {
               Signed — welcome aboard
             </h2>
             <p className="text-sm mt-1 text-neutral-300">
-              Next: your {plan === "annual" ? DRS_FIGURES.annualUpfront : DRS_FIGURES.setup} invoice arrives by
+              Next: your {plan === "annual" ? figures.annualUpfront : figures.setup} invoice arrives by
               email. Pay it by bank transfer (ACH or wire) and your Launch Pad opens.
             </p>
             <p className="text-[11px] mt-3 text-amber-300/80">(Preview — nothing was saved)</p>

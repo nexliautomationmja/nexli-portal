@@ -10,7 +10,8 @@
 // ══════════════════════════════════════════════════════════
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ANNUAL_UPFRONT_CENTS, type BillingPlan } from "@/lib/drs-pricing";
+import { annualUpfrontCents, type BillingPlan } from "@/lib/drs-pricing";
+import { drsLetterTerms } from "@/lib/engagement-defaults";
 import type { EnterpriseTier } from "@/lib/enterprise-pricing";
 import {
   ACCENT,
@@ -107,10 +108,13 @@ type Signed = Extract<SignResult, { ok: true }>;
 function SignedNextSteps({
   kind,
   plan,
+  content,
   result,
 }: {
   kind: LetterKind;
   plan: BillingPlan;
+  /** The signed letter (its own Setup Fee decides the annual amount). */
+  content: string;
   result: Signed;
 }) {
   if (!result.allSigned) {
@@ -139,7 +143,7 @@ function SignedNextSteps({
     <>
       <p className="text-sm mt-2 text-neutral-300">
         {plan === "annual"
-          ? `Next: your $${(ANNUAL_UPFRONT_CENTS / 100).toLocaleString("en-US")} invoice is in your inbox. Your Launch Pad opens the moment it's paid.`
+          ? `Next: your $${(annualUpfrontCents(drsLetterTerms(content).setupCents) / 100).toLocaleString("en-US")} invoice is in your inbox. Your Launch Pad opens the moment it's paid.`
           : "Next: your setup invoice is in your inbox. Your Launch Pad opens the moment it's paid."}
       </p>
       {result.onboardingUrl && (
@@ -291,7 +295,7 @@ export function EngageLaunchPadClient({
           <p className="text-sm mt-2 text-neutral-300">
             Thank you, {data.clientName}. Your signature has been recorded securely.
           </p>
-          <SignedNextSteps kind={kind} plan={plan} result={signed} />
+          <SignedNextSteps kind={kind} plan={plan} content={data.content} result={signed} />
           <div className="mt-6">
             <EsignBadges />
           </div>
@@ -325,7 +329,7 @@ export function EngageLaunchPadClient({
         </div>
       </section>
 
-      {summaries && <LetterAtAGlance kind={kind} plan={plan} tier={tier} />}
+      {summaries && <LetterAtAGlance kind={kind} plan={plan} tier={tier} content={data.content} />}
 
       {/* ─── The agreement (verbatim) ─── */}
       <EngagementLetterView

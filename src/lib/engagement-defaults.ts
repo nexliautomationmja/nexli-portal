@@ -29,16 +29,32 @@
  *   - Also: Client Data (10(b)), notices (11(d)), billing-error refunds
  *     (4(b)), third-party delays (5(a)), autopay (2, 4(a)) and the AAA
  *     Commercial Rules with the 2(a) fee exception (12).
+ *
+ * Nov 16 2026 revision (Marcel; nexli.net commit 670faa2):
+ *   - The Setup Fee is a per-letter amount: $40,000 by default, or the
+ *     original $32,000 (DRS_SETUP_FEES). Billing charges whatever the signed
+ *     letter's Section 2(a) line says (setupFeeOfLetter).
+ *   - Section 3(e) First-Month Advertising Bonus: Provider matches the first
+ *     month of ads ($5,000) on the monthly plan, or adds $10,000 in ad
+ *     credits on the annual plan.
+ *   - Section 3(b) says what the website says about the ad budget: held in a
+ *     separate account for advertising funds; leaving never shortens the
+ *     term; anything undeployed when service ends, bonus included, is
+ *     forfeited.
+ *   - Section 3(c) "no ... bonus ... payable to Provider", so it no longer
+ *     reads as contradicting 3(e).
  */
 
 import {
   DRS_PRICING,
+  DRS_SETUP_FEES,
+  FIRST_MONTH_AD_BONUS_CENTS,
   SETUP_SCOPE,
-  ANNUAL_UPFRONT_CENTS,
   TOTAL_MONTHLY_CENTS,
   TERM_MONTHS,
   ADVERTISED_SERVICE,
   LAUNCH_TARGET_DAYS,
+  annualUpfrontCents,
   type BillingPlan,
 } from "./drs-pricing";
 import { NEXLI_LEGAL } from "./nexli-legal";
@@ -111,13 +127,47 @@ export function drsAnnualAutoRenews(content: string | null | undefined): boolean
   return (content ?? "").includes(ANNUAL_AUTO_RENEW_MARKER);
 }
 
+/** Only in letters (Nov 16 2026 on) that promise the first-month ad bonus, Section 3(e). */
+export const FIRST_MONTH_BONUS_MARKER = "First-Month Advertising Bonus";
+
+/** True when this letter promises Nexli's first-month ad bonus. */
+export function drsHasFirstMonthBonus(content: string | null | undefined): boolean {
+  return (content ?? "").includes(FIRST_MONTH_BONUS_MARKER);
+}
+
+/**
+ * The Setup Fee this letter states in Section 2(a), in cents — what billing
+ * charges at signing. Null when the letter has no Setup Fee line.
+ */
+export function setupFeeOfLetter(content: string | null | undefined): number | null {
+  const m = /a\) Setup Fee: \$([\d,]+(?:\.\d{1,2})?) USD \(one-time\)/.exec(content ?? "");
+  if (!m) return null;
+  const cents = Math.round(Number(m[1].replace(/,/g, "")) * 100);
+  return Number.isFinite(cents) && cents > 0 ? cents : null;
+}
+
+/** The money terms a DRS letter states, read from its own text. */
+export interface DrsLetterTerms {
+  /** Section 2(a) Setup Fee in cents (today's price if the line is missing). */
+  setupCents: number;
+  /** True when the letter promises the first-month ad bonus (3(e)). */
+  bonus: boolean;
+}
+
+export function drsLetterTerms(content: string | null | undefined): DrsLetterTerms {
+  return {
+    setupCents: setupFeeOfLetter(content) ?? DRS_PRICING.SETUP_FEE_CENTS,
+    bonus: drsHasFirstMonthBonus(content),
+  };
+}
+
 // ── Digital Rainmaker System Template ───────────────────
 
 export const DRS_TEMPLATE_NAME = "Digital Rainmaker System";
 
 /** The Section 2(a) Setup Fee line — a revision anchor used by the template refresh. */
-export function drsFeeLine(_plan: BillingPlan): string {
-  return `a) Setup Fee: ${fmt(DRS_PRICING.SETUP_FEE_CENTS)} USD (one-time)`;
+export function drsFeeLine(_plan: BillingPlan, setupCents: number = DRS_PRICING.SETUP_FEE_CENTS): string {
+  return `a) Setup Fee: ${fmt(setupCents)} USD (one-time)`;
 }
 
 /** The Section 2(b) recurring line per plan — the second revision anchor. */
@@ -129,10 +179,9 @@ export function drsPlanLine(plan: BillingPlan): string {
 
 const AD_SECTION_HEADING = "3. AD MANAGEMENT";
 
-// Phrases every currently shipped letter contains. ADD ONE whenever a clause
-// is rewritten without changing a heading or the fee line, so the stored
-// seeded templates (templates/route.ts) are refreshed instead of drifting.
-const CURRENT_REVISION_MARKERS = [
+// Phrases the Nov 9 2026 revision contains (letters sent Nov 9–15 2026). The
+// current revision keeps all but the old 3(c) phrase and adds NOV16_MARKERS.
+const NOV9_REVISION_MARKERS = [
   "Managed Advertising Budget", // Oct 5 2026: $5,000/mo ad budget collected by Nexli (Sections 2, 3(b))
   "Initial Term and Renewal", // Oct 5 2026: 6/12-month initial term (Section 4(d))
   "no performance fee, bonus, or revenue share", // Oct 12 2026: guarantees + Success Bonus removed
@@ -147,6 +196,23 @@ const CURRENT_REVISION_MARKERS = [
   "duplicate or erroneous charge", // Nov 9 2026: billing errors refunded (4(b))
 ];
 
+/** 3(c) since Nov 16 2026: the "no bonus" promise is about Provider's pay. */
+const NO_PROVIDER_BONUS = "no performance fee, success bonus, or revenue share of any kind payable to Provider";
+
+const NOV16_MARKERS = [
+  FIRST_MONTH_BONUS_MARKER, // Nov 16 2026: first-month ad bonus (3(e))
+  "separate account for advertising funds", // Nov 16 2026: ad budget held separately, forfeited when service ends (3(b))
+  NO_PROVIDER_BONUS, // Nov 16 2026: 3(c) reworded so it doesn't contradict 3(e)
+];
+
+// Phrases every currently shipped letter contains. ADD ONE whenever a clause
+// is rewritten without changing a heading or the fee line, so the stored
+// seeded templates (templates/route.ts) are refreshed instead of drifting.
+const CURRENT_REVISION_MARKERS = [
+  ...NOV9_REVISION_MARKERS.filter((m) => m !== "no performance fee, bonus, or revenue share"),
+  ...NOV16_MARKERS,
+];
+
 // Same as CURRENT_REVISION_MARKERS, but only for phrases that exist in the
 // annual letter alone (checked only when plan === "annual").
 const ANNUAL_ONLY_MARKERS = [
@@ -154,20 +220,39 @@ const ANNUAL_ONLY_MARKERS = [
   "does not renew automatically", // Nov 9 2026: no automatic $42,000 renewal (Sections 2(b), 4(d))
 ];
 
-/**
- * True when a stored DRS letter matches the currently shipped revision for
- * its plan: same fee line (so any price change is detected), the current
- * Section 3 heading, and every CURRENT_REVISION_MARKERS phrase — plus, for
- * the annual plan, every ANNUAL_ONLY_MARKERS phrase (so clause rewrites are
- * detected).
- */
-export function isCurrentDrsRevision(content: string, plan: BillingPlan): boolean {
+function matchesRevision(content: string, plan: BillingPlan, fees: number[], markers: string[]): boolean {
   return (
-    content.includes(drsFeeLine(plan)) &&
+    fees.some((cents) => content.includes(drsFeeLine(plan, cents))) &&
     content.includes(drsPlanLine(plan)) &&
     content.includes(AD_SECTION_HEADING) &&
-    CURRENT_REVISION_MARKERS.every((m) => content.includes(m)) &&
+    markers.every((m) => content.includes(m)) &&
     (plan !== "annual" || ANNUAL_ONLY_MARKERS.every((m) => content.includes(m)))
+  );
+}
+
+/**
+ * True when a stored DRS letter matches the currently shipped revision for
+ * its plan: the fee line, the current Section 3 heading, and every
+ * CURRENT_REVISION_MARKERS phrase — plus, for the annual plan, every
+ * ANNUAL_ONLY_MARKERS phrase (so clause rewrites are detected). With
+ * `setupCents` the fee line must state exactly that Setup Fee (the template
+ * refresh passes today's price); without it either pricing version counts.
+ */
+export function isCurrentDrsRevision(content: string, plan: BillingPlan, setupCents?: number): boolean {
+  const fees = setupCents ? [setupCents] : Object.values(DRS_SETUP_FEES);
+  return matchesRevision(content, plan, fees, CURRENT_REVISION_MARKERS);
+}
+
+/**
+ * True when the signing page's plain-English summaries describe this letter:
+ * the current revision at either Setup Fee, or the Nov 9 2026 revision
+ * ($32,000, no bonus) that letters sent Nov 9–15 carry. The summaries read
+ * the letter's own Setup Fee and bonus (section-meta.tsx).
+ */
+export function drsSummariesFit(content: string, plan: BillingPlan): boolean {
+  return (
+    isCurrentDrsRevision(content, plan) ||
+    matchesRevision(content, plan, [DRS_SETUP_FEES.original], NOV9_REVISION_MARKERS)
   );
 }
 
@@ -176,15 +261,18 @@ export function isCurrentDrsRevision(content: string, plan: BillingPlan): boolea
  * one-time Setup Fee (Section 2(a)), then the Monthly Investment or the
  * prepaid Annual Investment, plus the Managed Advertising Budget (Section
  * 3(b)). Ad management is included with no revenue share, no performance
- * fee, and no bonus (Section 3(c)); there are no guarantees (Section 8(c)).
- * The Initial Term is in Section 4(d). Section numbering and headings are
+ * fee, and no bonus payable to Provider (Section 3(c)); there are no
+ * guarantees (Section 8(c)). Nexli's first-month ad bonus is Section 3(e).
+ * The Setup Fee defaults to today's $40,000; pass the original $32,000 for
+ * the old pricing. The Initial Term is in Section 4(d). Section numbering and headings are
  * identical for both plans — the signing page maps its summaries by heading.
  */
-export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
+export function buildDrsTemplate(plan: BillingPlan = "monthly", setupCents: number = DRS_PRICING.SETUP_FEE_CENTS): string {
   const monthly = fmt(DRS_PRICING.MONTHLY_CENTS);
   const monthlyAnnualized = fmt(DRS_PRICING.MONTHLY_CENTS * 12);
-  const setupFee = fmt(DRS_PRICING.SETUP_FEE_CENTS);
-  const annualUpfront = fmt(ANNUAL_UPFRONT_CENTS);
+  const setupFee = fmt(setupCents);
+  const annualUpfront = fmt(annualUpfrontCents(setupCents));
+  const bonus = fmt(FIRST_MONTH_AD_BONUS_CENTS[plan]);
   // Section 1 Phase 1: every group/item from SETUP_SCOPE, lettered a) b) c)…
   let letterIndex = 0;
   const scopeText = SETUP_SCOPE.map((group) => {
@@ -206,7 +294,7 @@ export function buildDrsTemplate(plan: BillingPlan = "monthly"): string {
   const upkeepScope =
     "maintenance, updates and support, ad management (including continued creative production), weekly updates and reporting, and AI usage";
 
-  const setupClause = `${drsFeeLine(plan)} — Due upon execution of this Agreement. The Setup Fee covers the complete Phase 1 Implementation itemized in Section 1 — the platform build, automations, content front-load and advertising engineering. The Setup Fee is paid by ACH bank transfer or wire directly to Provider's bank account, using the instructions on the invoice; card payments are not accepted for the Setup Fee. Because the Setup Fee pays for implementation work that begins immediately and cannot be returned, the Setup Fee is non-refundable and non-disputable. Client knowingly and voluntarily waives any right to dispute, reverse or charge back the Setup Fee through Client's bank, card issuer or payment provider. Any such dispute is a material breach of this Agreement; Client agrees that this signed Agreement may be submitted as evidence that the charge was authorized and that this waiver was given, and Client remains liable for the full amount disputed plus any dispute fees and reasonable collection costs, including attorneys' fees.`;
+  const setupClause = `${drsFeeLine(plan, setupCents)} — Due upon execution of this Agreement. The Setup Fee covers the complete Phase 1 Implementation itemized in Section 1 — the platform build, automations, content front-load and advertising engineering. The Setup Fee is paid by ACH bank transfer or wire directly to Provider's bank account, using the instructions on the invoice; card payments are not accepted for the Setup Fee. Because the Setup Fee pays for implementation work that begins immediately and cannot be returned, the Setup Fee is non-refundable and non-disputable. Client knowingly and voluntarily waives any right to dispute, reverse or charge back the Setup Fee through Client's bank, card issuer or payment provider. Any such dispute is a material breach of this Agreement; Client agrees that this signed Agreement may be submitted as evidence that the charge was authorized and that this waiver was given, and Client remains liable for the full amount disputed plus any dispute fees and reasonable collection costs, including attorneys' fees.`;
 
   const feeStructure = annual
     ? `${setupClause}
@@ -257,11 +345,17 @@ ${AD_SECTION_HEADING}
 
 a) Ad Management Included: Provider manages Client's advertising campaigns (the "acquisition system") as part of the Platform Investment in Section 2. There is no separate ad management retainer or fee, and no percentage of Client's revenue charged for this service.
 
-b) Managed Advertising Budget: Client funds a Managed Advertising Budget of ${adSpend} USD per month, billed by Provider as set out in Section 2, which Provider deploys on Client's behalf to the advertising platforms (Meta, Google, etc.) at Provider's discretion to generate ${service} advisory leads for Client. The budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider reports where the budget went in its weekly updates to Client. Any portion of the budget not deployed in a given month carries forward and is deployed in subsequent months. Upon termination or expiration of this Agreement, any undeployed balance is deployed on Client's campaigns through the end of the then-current term or notice period and is not refundable. The budget may be increased only upon Client's written authorization.
+b) Managed Advertising Budget: Client funds a Managed Advertising Budget of ${adSpend} USD per month, billed by Provider as set out in Section 2, which Provider deploys on Client's behalf to the advertising platforms (Meta, Google, etc.) at Provider's discretion to generate ${service} advisory leads for Client. Provider holds the budget in a separate account for advertising funds, where it is allocated to Client and placed only into Client's own campaigns. The budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider reports where the budget went in its weekly updates to Client. Any portion of the budget not deployed in a given month carries forward and is deployed in subsequent months while the services continue. Ending the services does not shorten the Initial Term set out in Section 4(d). When the services end, whether Client terminates once the Initial Term allows it or the term expires, any of Client's budget still undeployed in that account, including any bonus under Section 3(e), is forfeited: it is not refunded, credited against any fee, transferred or paid out. The budget may be increased only upon Client's written authorization.
 
-c) Flat-Rate, No Revenue Share: The Setup Fee and the Platform Investment in Section 2 are Provider's only fees for its services; the Managed Advertising Budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider never takes a percentage of Client's revenue, never charges a fee per client the advertising brings in, and there is no performance fee, bonus, or revenue share of any kind under this Agreement. Every dollar of advisory revenue the acquisition system produces belongs to Client.
+c) Flat-Rate, No Revenue Share: The Setup Fee and the Platform Investment in Section 2 are Provider's only fees for its services; the Managed Advertising Budget is passed through to the advertising platforms at no markup and is not Provider's compensation. Provider never takes a percentage of Client's revenue, never charges a fee per client the advertising brings in, and there is ${NO_PROVIDER_BONUS} under this Agreement. Every dollar of advisory revenue the acquisition system produces belongs to Client.
 
 d) Attribution & Reporting: Leads and advisory clients generated through the acquisition system are attributed using the Nexli tracking system (UTM tracking and conversion attribution). Provider will provide performance reporting, including weekly updates, so both parties can see which leads, clients, and revenue are attributable to the advertising.
+
+e) ${FIRST_MONTH_BONUS_MARKER}: ${
+    annual
+      ? `In Client's first month of advertising (the month beginning at Launch), Provider adds ${bonus} USD in advertising credits, funded by Provider, to Client's campaigns, on top of Client's Managed Advertising Budget.`
+      : `In Client's first month of advertising (the month beginning at Launch), Provider matches Client's Managed Advertising Budget by adding ${bonus} USD of Provider's own funds to Client's campaigns, on top of Client's budget.`
+  } The bonus is Provider's own money, deployed under Section 3(b) in that first month only. It has no cash value, cannot be withdrawn or transferred, is not refundable, is not credited against any fee under Section 2, and does not carry into later months. It is not part of Client's Managed Advertising Budget, and it is not compensation to Provider.
 
 4. PAYMENT TERMS
 
@@ -355,8 +449,9 @@ export const DRS_ANNUAL_TEMPLATE_NAME = "Digital Rainmaker System — Annual";
 export const DRS_ANNUAL_TEMPLATE_CONTENT = buildDrsTemplate("annual");
 
 /**
- * Generates the full DRS engagement letter content for the chosen billing plan.
+ * Generates the full DRS engagement letter content for the chosen billing
+ * plan and Setup Fee (the current $40,000 unless the original $32,000 is chosen).
  */
-export function generateDrsContent(plan: BillingPlan = "monthly"): string {
-  return buildDrsTemplate(plan);
+export function generateDrsContent(plan: BillingPlan = "monthly", setupCents: number = DRS_PRICING.SETUP_FEE_CENTS): string {
+  return buildDrsTemplate(plan, setupCents);
 }

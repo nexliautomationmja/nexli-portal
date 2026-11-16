@@ -67,7 +67,7 @@ export const contactName = (c: ContactResult) => [c.firstName, c.lastName].filte
 export const shortDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
 
-/** "$32,000 setup + 8 × $4,997/mo ≈ $71,976" — what an open lead counts for until it's edited. */
+/** "$40,000 setup + 8 × $4,997/mo ≈ $79,976" — what an open lead counts for until it's edited. */
 export const DEFAULT_VALUE_TEXT = `${money(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${PIPELINE.EXPECTED_LIFETIME_MONTHS} × ${money(
   DRS_PRICING.MONTHLY_CENTS
 )}/mo ≈ ${money(PIPELINE.DEFAULT_DEAL_VALUE_CENTS)}`;

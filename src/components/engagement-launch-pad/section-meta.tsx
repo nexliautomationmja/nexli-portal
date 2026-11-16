@@ -6,10 +6,11 @@
 import { PATHS, type Accent } from "@/components/launch-pad";
 import {
   DRS_PRICING,
+  FIRST_MONTH_AD_BONUS_CENTS,
   TOTAL_MONTHLY_CENTS,
-  ANNUAL_UPFRONT_CENTS,
   TERM_MONTHS,
   LAUNCH_TARGET_DAYS,
+  annualUpfrontCents,
   type BillingPlan,
 } from "@/lib/drs-pricing";
 import {
@@ -26,6 +27,10 @@ export type LetterKind = "drs" | "enterprise" | "foundation";
 export interface SummaryContext {
   plan: BillingPlan;
   tier: EnterpriseTier;
+  /** DRS: the letter's own Setup Fee in cents ($40,000 now, $32,000 original). */
+  setupCents: number;
+  /** DRS: the letter promises the first-month ad bonus (Section 3(e), Nov 16 2026 on). */
+  bonus: boolean;
 }
 
 export interface SectionMeta {
@@ -39,15 +44,26 @@ export interface SectionMeta {
 
 // ─── Digital Rainmaker System ──────────────────────────────
 
-const setup = usd(DRS_PRICING.SETUP_FEE_CENTS);
 const upkeep = usd(DRS_PRICING.MONTHLY_CENTS);
 const adBudget = usd(DRS_PRICING.AD_SPEND_MONTHLY_CENTS);
 const totalMonthly = usd(TOTAL_MONTHLY_CENTS);
 const annualPrepaid = usd(DRS_PRICING.ANNUAL_CENTS);
-const annualUpfront = usd(ANNUAL_UPFRONT_CENTS);
 
-/** Display figures shared with the DRS at-a-glance card. */
-export const DRS_FIGURES = { setup, upkeep, adBudget, totalMonthly, annualPrepaid, annualUpfront };
+/**
+ * Display figures for one letter (its Setup Fee decides the up-front
+ * amounts), shared with the DRS at-a-glance card and the preview.
+ */
+export function drsFigures(setupCents: number = DRS_PRICING.SETUP_FEE_CENTS) {
+  return {
+    setup: usd(setupCents),
+    upkeep,
+    adBudget,
+    totalMonthly,
+    annualPrepaid,
+    annualUpfront: usd(annualUpfrontCents(setupCents)),
+    bonus: { monthly: usd(FIRST_MONTH_AD_BONUS_CENTS.monthly), annual: usd(FIRST_MONTH_AD_BONUS_CENTS.annual) },
+  };
+}
 
 export const DRS_SECTION_META: Record<string, SectionMeta> = {
   "SCOPE OF SERVICES": {
@@ -61,22 +77,32 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
     icon: PATHS.circleDollar,
     accent: "emerald",
     body: "fee",
-    summary: ({ plan }) =>
-      plan === "annual"
+    summary: ({ plan, setupCents }) => {
+      const { setup, annualUpfront } = drsFigures(setupCents);
+      return plan === "annual"
         ? `${annualUpfront} is due at signing on one invoice (${setup} one-time Setup Fee + ${annualPrepaid} for twelve months of platform operation from launch). Separately, the ${adBudget}/month ad budget is billed monthly from launch, when Nexli finishes the build, through the end of those 12 months; ads go live once the first invoice is paid, and later months are charged automatically. Initial term: ${TERM_MONTHS.annual} months from launch. The annual plan does not renew automatically: nothing more is charged after the 12 months unless you agree in writing to continue.`
-        : `A one-time ${setup} Setup Fee is due at signing. Then ${totalMonthly}/month (${upkeep} platform + ${adBudget} ad budget) on one invoice, starting at launch, when Nexli finishes the build; ads and ongoing services start once that first monthly invoice is paid, and each month after is charged automatically. Initial term: ${TERM_MONTHS.monthly} months from launch, then month-to-month.`,
+        : `A one-time ${setup} Setup Fee is due at signing. Then ${totalMonthly}/month (${upkeep} platform + ${adBudget} ad budget) on one invoice, starting at launch, when Nexli finishes the build; ads and ongoing services start once that first monthly invoice is paid, and each month after is charged automatically. Initial term: ${TERM_MONTHS.monthly} months from launch, then month-to-month.`;
+    },
   },
   "AD MANAGEMENT": {
     icon: X.megaphone,
     accent: "violet",
-    summary: () =>
-      `Running your ads is included. Your ${adBudget}/month ad budget goes to Meta, Google, etc. at no markup; any unspent budget rolls forward to later months (it isn't refunded). Nexli takes no revenue share, bonus or performance fee — every dollar of revenue the ads produce is yours.`,
+    summary: ({ plan, bonus }) =>
+      bonus
+        ? `Running your ads is included. Your ${adBudget}/month ad budget is held in a separate ad-funds account and goes into your own campaigns on Meta, Google, etc. at no markup; unspent budget rolls forward while you're a client. In your first month of ads, Nexli ${
+            plan === "annual"
+              ? `adds ${usd(FIRST_MONTH_AD_BONUS_CENTS.annual)} in ad credits`
+              : `matches your budget with ${usd(FIRST_MONTH_AD_BONUS_CENTS.monthly)} of its own`
+          } on top of yours — a bonus with no cash value that can't be withdrawn, refunded or credited against fees, and doesn't carry into later months. When your service ends, any budget still unspent (bonus included) is forfeited, not refunded. Nexli takes no revenue share, bonus or performance fee — every dollar of revenue the ads produce is yours.`
+        : `Running your ads is included. Your ${adBudget}/month ad budget goes to Meta, Google, etc. at no markup; any unspent budget rolls forward to later months (it isn't refunded). Nexli takes no revenue share, bonus or performance fee — every dollar of revenue the ads produce is yours.`,
   },
   "PAYMENT TERMS": {
     icon: X.creditCard,
     accent: "cyan",
-    summary: ({ plan }) =>
-      `The ${plan === "annual" ? `${annualUpfront} up-front invoice` : `${setup} setup invoice`} is paid by bank transfer (ACH or wire) straight to Nexli's bank account, using the details on the invoice; cards aren't accepted for it.${plan === "annual" ? " Any further prepaid year you agree to is paid the same way." : ""} It is non-refundable, and by signing you waive the right to dispute or reverse ${plan === "annual" ? `any of the ${annualUpfront}` : "the Setup Fee"} with your bank. Monthly invoices after launch can be paid by ACH or card at the same price: you pay the first one once and later months are charged automatically. Fees are non-refundable, except that a duplicate or mistaken charge is refunded in full. The agreement takes effect, work starts and your Launch Pad opens once ${plan === "annual" ? `the ${annualUpfront} invoice due at signing is` : `the ${setup} Setup Fee invoice is`} paid. Your ${TERM_MONTHS[plan]}-month initial term runs from launch. You can give 30 days' written notice any time, but it takes effect no earlier than the end of the initial term; ${plan === "annual" ? "the annual plan then ends — it does not renew automatically unless you agree in writing to continue" : "after that the agreement continues month-to-month until either side gives 30 days' notice"}.`,
+    summary: ({ plan, setupCents }) => {
+      const { setup, annualUpfront } = drsFigures(setupCents);
+      return `The ${plan === "annual" ? `${annualUpfront} up-front invoice` : `${setup} setup invoice`} is paid by bank transfer (ACH or wire) straight to Nexli's bank account, using the details on the invoice; cards aren't accepted for it.${plan === "annual" ? " Any further prepaid year you agree to is paid the same way." : ""} It is non-refundable, and by signing you waive the right to dispute or reverse ${plan === "annual" ? `any of the ${annualUpfront}` : "the Setup Fee"} with your bank. Monthly invoices after launch can be paid by ACH or card at the same price: you pay the first one once and later months are charged automatically. Fees are non-refundable, except that a duplicate or mistaken charge is refunded in full. The agreement takes effect, work starts and your Launch Pad opens once ${plan === "annual" ? `the ${annualUpfront} invoice due at signing is` : `the ${setup} Setup Fee invoice is`} paid. Your ${TERM_MONTHS[plan]}-month initial term runs from launch. You can give 30 days' written notice any time, but it takes effect no earlier than the end of the initial term; ${plan === "annual" ? "the annual plan then ends — it does not renew automatically unless you agree in writing to continue" : "after that the agreement continues month-to-month until either side gives 30 days' notice"}.`;
+    },
   },
   "PROJECT TIMELINE & CLIENT COOPERATION": {
     icon: X.calendar,

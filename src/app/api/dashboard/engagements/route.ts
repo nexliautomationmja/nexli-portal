@@ -10,10 +10,10 @@ import {
 } from "@/db/schema";
 import { and, eq, desc, inArray, isNull } from "drizzle-orm";
 import { ensurePipelineTable } from "@/lib/pipeline-table";
-import { type BillingPlan, TERM_MONTHS } from "@/lib/drs-pricing";
+import { type BillingPlan, DRS_SETUP_FEES, TERM_MONTHS, isDrsPricing } from "@/lib/drs-pricing";
 import { ENTERPRISE, isEnterpriseTier, isEnterpriseTemplateName } from "@/lib/enterprise-pricing";
 import { createEngagement } from "@/lib/engagements";
-import { fillClientPlaceholder } from "@/lib/engagement-defaults";
+import { fillClientPlaceholder, setupFeeOfLetter } from "@/lib/engagement-defaults";
 import { getOwnerBranding } from "@/lib/branding";
 
 export async function GET() {
@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
     saveAsTemplate,
     templateName,
     billingPlan,
+    drsPricing,
     enterpriseTier,
     clientCompany: rawClientCompany,
     pipelineLeadId: rawLeadId,
@@ -177,6 +178,15 @@ export async function POST(req: NextRequest) {
       termMonths: TERM_MONTHS[plan],
       clientCompany,
     };
+    // DRS letters: which setup-fee version was chosen ($40,000 new / $32,000
+    // original) and the Setup Fee the letter states. Billing reads the signed
+    // letter's own line first (setupFeeOf in lib/digital-rainmaker.ts).
+    const letterFee = typeof content === "string" ? setupFeeOfLetter(content) : null;
+    if (isDrsLetter || letterFee) {
+      const version = isDrsPricing(drsPricing) ? drsPricing : null;
+      engagementMetadata.setupFeeCents = letterFee ?? DRS_SETUP_FEES[version ?? "current"];
+      if (version) engagementMetadata.drsPricing = version;
+    }
   }
 
   // Picked from the pipeline: link the letter to the lead (it turns Won when

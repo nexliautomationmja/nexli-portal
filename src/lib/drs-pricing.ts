@@ -4,6 +4,11 @@
  * Client-safe: no server-only imports, so these constants can be used from
  * both API routes and client components (compose UI, invoice pay page).
  *
+ * Nov 16 2026: the Setup Fee is $40,000 ($82,000 at signing on annual); the
+ * original $32,000 / $74,000 pricing stays available per letter
+ * (DRS_SETUP_FEES), and every letter from then on carries the first-month ad
+ * bonus (FIRST_MONTH_AD_BONUS_CENTS).
+ *
  * Oct 18 2026: a one-time $32,000 SETUP FEE covers the Phase 1 implementation
  * (itemized in SETUP_SCOPE and Section 1 of the letter — Marcel: "no gray
  * area"), then $9,997/mo = $4,997 platform upkeep + $5,000 Managed
@@ -32,15 +37,56 @@
  */
 
 export const DRS_PRICING = {
-  SETUP_FEE_CENTS: 3_200_000, // $32,000.00 one-time — Phase 1 implementation (SETUP_SCOPE)
+  SETUP_FEE_CENTS: 4_000_000, // $40,000.00 one-time (Nov 16 2026; was $32,000) — Phase 1 implementation (SETUP_SCOPE)
   MONTHLY_CENTS: 499_700, // $4,997.00 / month — platform upkeep of everything in Phase 1
   ANNUAL_CENTS: 4_200_000, // $42,000.00 / year prepaid platform upkeep (~30% off vs $59,964 at the monthly rate)
   AD_SPEND_MONTHLY_CENTS: 500_000, // $5,000.00 / month Managed Advertising Budget (pass-through)
 } as const;
 
-/** What an annual client pays at signing: Setup Fee + Annual Investment ($74,000). */
-export const ANNUAL_UPFRONT_CENTS =
-  DRS_PRICING.SETUP_FEE_CENTS + DRS_PRICING.ANNUAL_CENTS;
+/**
+ * Two setup-fee versions live side by side (Nov 16 2026, Marcel: "this will
+ * be the new pricing and don't retire the old pricing"). "current" is the
+ * $40,000 setup nexli.net now shows; "original" is the $32,000 setup every
+ * letter before Nov 16 2026 carried. Everything else — upkeep, ad budget,
+ * the $42,000 annual year, terms, the first-month bonus — is identical.
+ * A letter's own Setup Fee line is what billing charges (setupFeeOfLetter).
+ */
+export type DrsPricing = "current" | "original";
+
+export const DRS_SETUP_FEES: Record<DrsPricing, number> = {
+  current: DRS_PRICING.SETUP_FEE_CENTS, // $40,000
+  original: 3_200_000, // $32,000
+};
+
+export const DRS_PRICING_LABEL: Record<DrsPricing, string> = {
+  current: "New",
+  original: "Original",
+};
+
+export function isDrsPricing(v: unknown): v is DrsPricing {
+  return v === "current" || v === "original";
+}
+
+/** What an annual client pays at signing for a given Setup Fee ($82,000 now, $74,000 original). */
+export function annualUpfrontCents(setupCents: number = DRS_PRICING.SETUP_FEE_CENTS): number {
+  return setupCents + DRS_PRICING.ANNUAL_CENTS;
+}
+
+/** What an annual client pays at signing at the current price: Setup Fee + Annual Investment ($82,000). */
+export const ANNUAL_UPFRONT_CENTS = annualUpfrontCents(DRS_PRICING.SETUP_FEE_CENTS);
+
+/**
+ * The first-month ad bonus (Nov 16 2026, letters from then on, both pricing
+ * versions): Nexli's own money placed in the client's campaigns in the first
+ * month of ads from Launch, on top of the client's budget. Monthly plan:
+ * Nexli matches that month's $5,000 ad budget. Annual plan: $10,000 in ad
+ * credits. No cash value, not refundable, not credited against any fee, does
+ * not carry into later months (letter Section 3(e)). Not billed anywhere.
+ */
+export const FIRST_MONTH_AD_BONUS_CENTS: Record<"monthly" | "annual", number> = {
+  monthly: DRS_PRICING.AD_SPEND_MONTHLY_CENTS, // $5,000 — the first month matched
+  annual: 1_000_000, // $10,000 in ad credits
+};
 
 /** What a monthly-plan client pays each month: platform upkeep + ad budget. */
 export const TOTAL_MONTHLY_CENTS =
@@ -191,13 +237,13 @@ export const LAUNCH_TARGET_DAYS = 21;
  * average ~18–20% annual churn (top shops 8–10%), typical client lifespan
  * 2–5 years — but ~25% of agencies see tenures under a year, and a new
  * agency should assume the conservative end. Marcel's own estimate is 6–8
- * months; $32,000 setup + 8 × $4,997 = $71,976 of Nexli revenue, so every
- * open lead ≈ $72K expected value (the ad budget is pass-through and
+ * months; $40,000 setup + 8 × $4,997 = $79,976 of Nexli revenue, so every
+ * open lead ≈ $80K expected value (the ad budget is pass-through and
  * excluded). Editable per lead.
  */
 export const PIPELINE = {
   EXPECTED_LIFETIME_MONTHS: 8,
-  DEFAULT_DEAL_VALUE_CENTS: DRS_PRICING.SETUP_FEE_CENTS + 8 * DRS_PRICING.MONTHLY_CENTS, // $71,976
+  DEFAULT_DEAL_VALUE_CENTS: DRS_PRICING.SETUP_FEE_CENTS + 8 * DRS_PRICING.MONTHLY_CENTS, // $79,976
 } as const;
 
 /**

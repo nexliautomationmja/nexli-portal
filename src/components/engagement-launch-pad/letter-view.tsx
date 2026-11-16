@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LpCard } from "@/components/launch-pad";
 import type { BillingPlan } from "@/lib/drs-pricing";
+import { drsLetterTerms } from "@/lib/engagement-defaults";
 import type { EnterpriseTier } from "@/lib/enterprise-pricing";
 import { parseLetter } from "./parse";
 import { Paragraph } from "./bodies";
@@ -35,6 +36,8 @@ export function EngagementLetterView({
   signHref?: string;
 }) {
   const { preamble, sections } = useMemo(() => parseLetter(content), [content]);
+  // DRS: the Setup Fee and bonus come from the letter itself (two pricing versions).
+  const terms = useMemo(() => drsLetterTerms(content), [content]);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const { active, readPct, listRef, registerRef } = useSectionNav(sections, expanded);
 
@@ -69,7 +72,7 @@ export function EngagementLetterView({
 
         {sections.map((s, i) => {
           const base = metaMap[s.heading] ?? FALLBACK_META;
-          const summary = showSummaries ? (base.summary?.({ plan, tier }) ?? "") : "";
+          const summary = showSummaries ? (base.summary?.({ plan, tier, ...terms }) ?? "") : "";
           // A clause is only tucked away behind its summary — never on its own.
           const meta = summary ? base : { ...base, collapsed: false };
           return (

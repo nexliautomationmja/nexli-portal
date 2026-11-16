@@ -5,11 +5,12 @@
  * template happens in three steps:
  *
  *   1. SIGNING (triggerDrsPostSign) — only the up-front invoice is sent:
- *        - Monthly plan → a one-time $32,000 Setup Fee invoice
- *                         (drsRole "setup_fee", Phase 1 — see SETUP_SCOPE)
- *        - Annual plan  → ONE one-time $74,000 invoice (drsRole
- *                         "setup_annual"): $32,000 Setup Fee + $42,000 prepaid
- *                         platform year, two line items
+ *        - Monthly plan → a one-time Setup Fee invoice at the letter's
+ *                         own Setup Fee ($40,000, or the original $32,000 —
+ *                         setupFeeOf) (drsRole "setup_fee", see SETUP_SCOPE)
+ *        - Annual plan  → ONE one-time invoice (drsRole "setup_annual"):
+ *                         Setup Fee + $42,000 prepaid platform year, two
+ *                         line items ($82,000, or $74,000 original)
  *      Nothing else happens at signing — no onboarding, no welcome email.
  *
  *   2. UP-FRONT INVOICE PAID (onDrsInvoicePaid) — the onboarding Launch Pad
@@ -92,13 +93,15 @@ import {
 // existing server-side imports keep working.
 import {
   DRS_PRICING,
+  DRS_SETUP_FEES,
+  FIRST_MONTH_AD_BONUS_CENTS,
   SETUP_SCOPE,
   TOTAL_MONTHLY_CENTS,
-  ANNUAL_UPFRONT_CENTS,
   TERM_MONTHS,
+  annualUpfrontCents,
   type BillingPlan,
 } from "./drs-pricing";
-import { drsAnnualAutoRenews, drsTermRunsFromLaunch } from "./engagement-defaults";
+import { drsAnnualAutoRenews, drsHasFirstMonthBonus, drsTermRunsFromLaunch, setupFeeOfLetter } from "./engagement-defaults";
 import { NEXLI_LEGAL } from "./nexli-legal";
 
 export { DRS_PRICING } from "./drs-pricing";
@@ -134,6 +137,10 @@ interface DrsMetadata {
 interface EngagementMeta {
   billingPlan?: BillingPlan;
   termMonths?: number;
+  /** The Setup Fee the letter states, snapshotted at send (Nov 16 2026 on). */
+  setupFeeCents?: number;
+  /** Which setup-fee version the letter was composed with ("current" $40,000 / "original" $32,000). */
+  drsPricing?: string;
   /** ISO timestamp the first recurring invoice was sent (build complete). */
   billingStartedAt?: string;
   /** ISO timestamp the first recurring invoice was paid (idempotency marker). */
@@ -158,6 +165,20 @@ export function planOf(engagement: { metadata: unknown; content?: string | null 
   const meta = (engagement.metadata ?? {}) as EngagementMeta;
   if (meta.billingPlan === "annual" || meta.billingPlan === "monthly") return meta.billingPlan;
   return engagement.content?.includes("Annual Investment (Paid in Full)") ? "annual" : "monthly";
+}
+
+/**
+ * The Setup Fee this engagement bills at signing, in cents. The signed
+ * letter's own Section 2(a) line wins (billing charges what the client
+ * signed), then the amount snapshotted at send, then the original $32,000
+ * every letter carried before Nov 16 2026.
+ */
+export function setupFeeOf(engagement: { metadata: unknown; content?: string | null }): number {
+  const fromLetter = setupFeeOfLetter(engagement.content);
+  if (fromLetter) return fromLetter;
+  const meta = (engagement.metadata ?? {}) as EngagementMeta;
+  if (typeof meta.setupFeeCents === "number" && meta.setupFeeCents > 0) return meta.setupFeeCents;
+  return DRS_SETUP_FEES.original;
 }
 
 const PORTAL_URL = () =>
@@ -282,17 +303,21 @@ interface DrsInvoiceSpec {
   notificationTitle?: string;
 }
 
-const SETUP_LINE = {
-  description: "Digital Rainmaker System — Setup Fee (Phase 1 Implementation)",
-  amountCents: DRS_PRICING.SETUP_FEE_CENTS,
-  billingType: "one_time" as const,
-};
+function setupLine(setupCents: number) {
+  return {
+    description: "Digital Rainmaker System — Setup Fee (Phase 1 Implementation)",
+    amountCents: setupCents,
+    billingType: "one_time" as const,
+  };
+}
 
 /**
- * The up-front invoice sent at signing (due immediately). Monthly plan: the
- * $32,000 Setup Fee. Annual plan: ONE $74,000 invoice (setup + prepaid year).
+ * The up-front invoice sent at signing (due immediately), at the letter's
+ * Setup Fee (setupFeeOf). Monthly plan: the Setup Fee ($40,000, or the
+ * original $32,000). Annual plan: ONE invoice for setup + the prepaid year
+ * ($82,000, or $74,000).
  */
-export function drsSigningInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
+export function drsSigningInvoiceSpecs(plan: BillingPlan, setupCents: number = DRS_PRICING.SETUP_FEE_CENTS): DrsInvoiceSpec[] {
   const scope = SETUP_SCOPE.map((g) => g.title).join(", ");
   if (plan === "annual") {
     return [
@@ -300,12 +325,12 @@ export function drsSigningInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
         role: "setup_annual",
         recurring: false,
         interval: "yearly",
-        totalCents: ANNUAL_UPFRONT_CENTS,
+        totalCents: annualUpfrontCents(setupCents),
         adSpendCents: 0,
         label: "Setup + annual platform",
         notes: `Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System — ${scope} — as itemized in Section 1 of your engagement letter, plus the annual platform investment for your first 12 months from launch, paid in full. Due at signing; onboarding opens once it is paid. Non-refundable. Paid by bank transfer (ACH or wire); cards are not accepted. The Managed Advertising Budget is billed monthly once your build is complete.`,
         lines: [
-          SETUP_LINE,
+          setupLine(setupCents),
           {
             description: "Digital Rainmaker System — Annual Platform (12 months, paid in full)",
             amountCents: DRS_PRICING.ANNUAL_CENTS,
@@ -320,11 +345,11 @@ export function drsSigningInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
       role: "setup_fee",
       recurring: false,
       interval: "monthly",
-      totalCents: DRS_PRICING.SETUP_FEE_CENTS,
+      totalCents: setupCents,
       adSpendCents: 0,
       label: "Setup Fee",
       notes: `One-time Setup Fee covering the Phase 1 Implementation of the Digital Rainmaker System — ${scope} — as itemized in Section 1 of your engagement letter. Due at signing; onboarding opens once it is paid. Non-refundable. Paid by bank transfer (ACH or wire); cards are not accepted.`,
-      lines: [SETUP_LINE],
+      lines: [setupLine(setupCents)],
     },
   ];
 }
@@ -332,11 +357,16 @@ export function drsSigningInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
 /**
  * The first recurring invoice, sent when the admin marks the build complete
  * (due immediately; the cron bills it monthly from there). Monthly plan:
- * $9,997 (platform + ad budget). Annual plan: the $5,000 ad budget.
+ * $9,997 (platform + ad budget). Annual plan: the $5,000 ad budget. Letters
+ * with the first-month ad bonus (Section 3(e)) say so in the notes; the
+ * bonus is Nexli's money and is never billed.
  */
-export function drsLaunchInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
+export function drsLaunchInvoiceSpecs(plan: BillingPlan, opts: { bonus?: boolean } = {}): DrsInvoiceSpec[] {
   const platform = formatCurrency(DRS_PRICING.MONTHLY_CENTS, "usd");
   const adBudget = formatCurrency(DRS_PRICING.AD_SPEND_MONTHLY_CENTS, "usd");
+  const bonusNote = opts.bonus
+    ? ` Your first month of ads also gets Nexli's ${formatCurrency(FIRST_MONTH_AD_BONUS_CENTS[plan], "usd")} first-month bonus${plan === "annual" ? " in ad credits" : ", matching your budget"} — Nexli's own money, not billed.`
+    : "";
   const adLine = {
     description: "Managed Advertising Budget — Monthly (deployed on your ad accounts, pass-through)",
     amountCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
@@ -351,7 +381,7 @@ export function drsLaunchInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
         totalCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
         adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
         label: "Monthly ad budget",
-        notes: `Managed Advertising Budget (${adBudget}/month) for the Digital Rainmaker System — deployed on your behalf on the advertising platforms at no markup. Your build is complete; ads launch once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).`,
+        notes: `Managed Advertising Budget (${adBudget}/month) for the Digital Rainmaker System — deployed on your behalf on the advertising platforms at no markup. Your build is complete; ads launch once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).${bonusNote}`,
         lines: [adLine],
       },
     ];
@@ -364,7 +394,7 @@ export function drsLaunchInvoiceSpecs(plan: BillingPlan): DrsInvoiceSpec[] {
       totalCents: TOTAL_MONTHLY_CENTS,
       adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
       label: "Monthly",
-      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (maintenance and support, ad management, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).`,
+      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (maintenance and support, ad management, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).${bonusNote}`,
       lines: [
         {
           description: "Digital Rainmaker System — Monthly Platform",
@@ -516,7 +546,7 @@ export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
   const created = await createDrsInvoices({
     engagement,
     signer: primarySigner,
-    specs: drsSigningInvoiceSpecs(planOf(engagement)),
+    specs: drsSigningInvoiceSpecs(planOf(engagement), setupFeeOf(engagement)),
   });
   return created[0] ?? null;
 }
@@ -638,7 +668,7 @@ export async function triggerDrsLaunchBilling(
     created = await createDrsInvoices({
       engagement,
       signer,
-      specs: drsLaunchInvoiceSpecs(planOf(engagement)),
+      specs: drsLaunchInvoiceSpecs(planOf(engagement), { bonus: drsHasFirstMonthBonus(engagement.content) }),
     });
   } catch (err) {
     // Release the claim so the admin can retry.
@@ -1110,10 +1140,7 @@ export async function onDrsInvoicePaid(invoiceId: string): Promise<void> {
       const opened = await initOnboarding(engagementId, "auto_sign", "drs");
       if (!opened) return;
       await sendOnboardingWelcomeEmails(engagementId);
-      const what =
-        role === "setup_annual"
-          ? `${formatCurrency(ANNUAL_UPFRONT_CENTS, "usd")} annual`
-          : `${formatCurrency(DRS_PRICING.SETUP_FEE_CENTS, "usd")} setup`;
+      const what = `${formatCurrency(invoice.total, invoice.currency)} ${role === "setup_annual" ? "annual" : "setup"}`;
       try {
         await createNotification({
           userId: engagement.ownerId,
@@ -1156,12 +1183,18 @@ export async function onDrsInvoicePaid(invoiceId: string): Promise<void> {
         .returning({ id: engagements.id });
       if (marked.length === 0) return;
 
+      // Letters from Nov 16 2026 promise Nexli's first-month ad bonus (3(e)):
+      // remind Marcel to fund it, since nothing bills it.
+      const bonusCents = drsHasFirstMonthBonus(engagement.content) ? FIRST_MONTH_AD_BONUS_CENTS[planOf(engagement)] : 0;
+      const bonus = bonusCents ? formatCurrency(bonusCents, "usd") : "";
       try {
         await createNotification({
           userId: engagement.ownerId,
           type: "monthly_paid",
           title: "First monthly paid — clear to launch ads",
-          message: `${invoice.clientName} paid their first monthly invoice ${invoice.invoiceNumber} (${formatCurrency(invoice.total, invoice.currency)}). Clear to launch ads.`,
+          message: `${invoice.clientName} paid their first monthly invoice ${invoice.invoiceNumber} (${formatCurrency(invoice.total, invoice.currency)}). Clear to launch ads.${
+            bonus ? ` Add Nexli's ${bonus} first-month ad bonus to their campaigns this month (Section 3(e) of their letter).` : ""
+          }`,
           metadata: {
             invoiceId: invoice.id,
             invoiceNumber: invoice.invoiceNumber,
@@ -1176,7 +1209,9 @@ export async function onDrsInvoicePaid(invoiceId: string): Promise<void> {
         await appendActivity(engagementId, {
           actor: "system",
           type: "monthly_paid",
-          message: "First monthly invoice paid — your ads are cleared to launch 🚀",
+          message: bonus
+            ? `First monthly invoice paid — your ads are cleared to launch 🚀 Nexli adds your ${bonus} first-month ad bonus this month.`
+            : "First monthly invoice paid — your ads are cleared to launch 🚀",
         });
       } catch (err) {
         console.error("DRS: monthly_paid activity failed:", err);

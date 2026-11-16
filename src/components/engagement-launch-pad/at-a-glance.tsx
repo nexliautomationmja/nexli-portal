@@ -4,10 +4,12 @@
 
 import { ACCENT, Icon, IconChip, LpCard, PATHS, SYNE, labelCls, type Accent } from "@/components/launch-pad";
 import {
+  DRS_PRICING,
   TERM_MONTHS,
   LAUNCH_TARGET_DAYS,
   type BillingPlan,
 } from "@/lib/drs-pricing";
+import { drsLetterTerms } from "@/lib/engagement-defaults";
 import {
   ENTERPRISE,
   ENTERPRISE_TIERS,
@@ -17,7 +19,7 @@ import {
 import { LETTER_ICONS as X } from "./icons";
 import { StatTile } from "./bodies";
 import { usd } from "./parse";
-import { DRS_FIGURES, type LetterKind } from "./section-meta";
+import { drsFigures, type LetterKind } from "./section-meta";
 
 interface Tile {
   label: string;
@@ -32,7 +34,36 @@ interface Step {
   sub: string;
 }
 
-function GlanceCard({ tiles, steps }: { tiles: Tile[]; steps: Step[] }) {
+interface Bonus {
+  eyebrow: string;
+  value: string;
+  rest: string;
+  note: string;
+}
+
+const STAR = "M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z";
+
+/** The first-month ad bonus (letter Section 3(e)), in gold like the nexli.net slide. */
+function BonusBanner({ bonus }: { bonus: Bonus }) {
+  return (
+    <div className="mt-3 flex items-center gap-3 rounded-2xl border border-amber-300/40 bg-gradient-to-r from-amber-400/[0.14] to-amber-200/[0.03] px-4 py-3 shadow-[0_0_28px_-10px_rgba(251,191,36,0.55)]">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-300/15 text-amber-300">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+          <path d={STAR} />
+        </svg>
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200/90">{bonus.eyebrow}</p>
+        <p className="text-base font-bold leading-tight text-white sm:text-lg" style={SYNE}>
+          <span className="text-amber-300">{bonus.value}</span> {bonus.rest}
+        </p>
+        <p className="mt-0.5 text-[11px] leading-snug text-neutral-400">{bonus.note}</p>
+      </div>
+    </div>
+  );
+}
+
+function GlanceCard({ tiles, steps, bonus }: { tiles: Tile[]; steps: Step[]; bonus?: Bonus }) {
   return (
     <LpCard className="lp-card" style={{ animationDelay: "0.1s" }}>
       <div className="flex items-center gap-3 mb-4">
@@ -52,6 +83,8 @@ function GlanceCard({ tiles, steps }: { tiles: Tile[]; steps: Step[] }) {
           <StatTile key={t.label} label={t.label} value={t.value} sub={t.sub} accent={t.accent} />
         ))}
       </div>
+
+      {bonus && <BonusBanner bonus={bonus} />}
 
       <div className="mt-6">
         <p className={labelCls}>What happens after you sign</p>
@@ -78,8 +111,18 @@ function GlanceCard({ tiles, steps }: { tiles: Tile[]; steps: Step[] }) {
   );
 }
 
-export function DrsAtAGlance({ plan }: { plan: BillingPlan }) {
-  const { setup, upkeep, adBudget, totalMonthly, annualPrepaid, annualUpfront } = DRS_FIGURES;
+export function DrsAtAGlance({
+  plan,
+  setupCents = DRS_PRICING.SETUP_FEE_CENTS,
+  bonus: hasBonus = false,
+}: {
+  plan: BillingPlan;
+  /** The letter's own Setup Fee ($40,000 now, $32,000 original). */
+  setupCents?: number;
+  /** The letter promises the first-month ad bonus (Section 3(e)). */
+  bonus?: boolean;
+}) {
+  const { setup, upkeep, adBudget, totalMonthly, annualPrepaid, annualUpfront, bonus: bonusAmount } = drsFigures(setupCents);
   const steps: Step[] = [
     {
       n: 1,
@@ -121,7 +164,13 @@ export function DrsAtAGlance({ plan }: { plan: BillingPlan }) {
       accent: "cyan",
     },
   ];
-  return <GlanceCard tiles={tiles} steps={steps} />;
+  const note = "Nexli's own money, on top of your ad budget · no cash value, not refundable, doesn't carry over (Section 3(e))";
+  const bonus: Bonus | undefined = hasBonus
+    ? plan === "annual"
+      ? { eyebrow: "Bonus · your first month of ads", value: `+${bonusAmount.annual}`, rest: "in ad credits", note }
+      : { eyebrow: "Bonus · we match your first month of ads", value: `+${bonusAmount.monthly}`, rest: "in ad spend", note }
+    : undefined;
+  return <GlanceCard tiles={tiles} steps={steps} bonus={bonus} />;
 }
 
 export function EnterpriseAtAGlance({ tier }: { tier: EnterpriseTier }) {
@@ -162,12 +211,18 @@ export function LetterAtAGlance({
   kind,
   plan = "monthly",
   tier = "core",
+  content,
 }: {
   kind: LetterKind;
   plan?: BillingPlan;
   tier?: EnterpriseTier;
+  /** DRS: the letter text, which decides its Setup Fee and bonus. */
+  content?: string;
 }) {
-  if (kind === "drs") return <DrsAtAGlance plan={plan} />;
+  if (kind === "drs") {
+    const terms = drsLetterTerms(content);
+    return <DrsAtAGlance plan={plan} setupCents={terms.setupCents} bonus={terms.bonus} />;
+  }
   if (kind === "enterprise") return <EnterpriseAtAGlance tier={tier} />;
   return null;
 }

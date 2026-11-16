@@ -240,7 +240,7 @@ export async function POST(
     }
 
     // Digital Rainmaker letters: signing sends ONLY the up-front invoice
-    // ($32,000 Setup Fee, or one $74,000 setup + annual invoice). Onboarding
+    // (the letter's Setup Fee, or one setup + annual invoice). Onboarding
     // and the welcome email wait until that invoice is paid
     // (onDrsInvoicePaid in lib/digital-rainmaker.ts).
     let isDrs = false;

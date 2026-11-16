@@ -11,7 +11,7 @@ import {
   DRS_ANNUAL_TEMPLATE_CONTENT,
   isCurrentDrsRevision,
 } from "@/lib/engagement-defaults";
-import type { BillingPlan } from "@/lib/drs-pricing";
+import { DRS_PRICING, type BillingPlan } from "@/lib/drs-pricing";
 import {
   ENTERPRISE_TEMPLATE_CONTENT,
   isCurrentEnterpriseRevision,
@@ -65,7 +65,9 @@ function isStaleShippedRevision(content: string, tmpl: DefaultTemplate): boolean
   }
   return (
     content.includes("SERVICE ENGAGEMENT AGREEMENT") &&
-    !isCurrentDrsRevision(content, tmpl.plan)
+    // Today's Setup Fee exactly: stored rows at the original $32,000 refresh
+    // to the current price (the composer still offers the original).
+    !isCurrentDrsRevision(content, tmpl.plan, DRS_PRICING.SETUP_FEE_CENTS)
   );
 }
 

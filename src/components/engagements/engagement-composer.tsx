@@ -11,7 +11,17 @@ import { ErrorStrip, LaunchPadCanvas, SP, SvgIcon } from "@/components/creative-
 import { BIG_NUM, GradientText } from "@/components/rainmaker";
 import { generateDrsContent, fillClientPlaceholder } from "@/lib/engagement-defaults";
 import { generateEnterpriseContent } from "@/lib/enterprise-engagement";
-import { ANNUAL_UPFRONT_CENTS, DRS_PRICING, TERM_MONTHS, TOTAL_MONTHLY_CENTS, type BillingPlan } from "@/lib/drs-pricing";
+import {
+  DRS_PRICING,
+  DRS_PRICING_LABEL,
+  DRS_SETUP_FEES,
+  FIRST_MONTH_AD_BONUS_CENTS,
+  TERM_MONTHS,
+  TOTAL_MONTHLY_CENTS,
+  annualUpfrontCents,
+  type BillingPlan,
+  type DrsPricing,
+} from "@/lib/drs-pricing";
 import { ENTERPRISE_TIER_ORDER, ENTERPRISE_TIERS, isEnterpriseTemplateName, renewalCents, type EnterpriseTier } from "@/lib/enterprise-pricing";
 import { autoSubject, leadMatches, letterStatus, type ComposerLead, type ComposerLetter } from "@/components/engagements/composer-logic";
 
@@ -56,6 +66,9 @@ export function EngagementComposer() {
 
   const [offer, setOffer] = useState<Offer | null>(null);
   const [tier, setTier] = useState<EnterpriseTier>("core");
+  // Digital Rainmaker setup fee: the new $40,000 by default, or the original $32,000.
+  const [pricing, setPricing] = useState<DrsPricing>("current");
+  const setupCents = DRS_SETUP_FEES[pricing];
   const [content, setContent] = useState("");
   const [contentTouched, setContentTouched] = useState(false);
   const [subjectText, setSubjectText] = useState("");
@@ -113,22 +126,43 @@ export function EngagementComposer() {
   const subject = subjectTouched ? subjectText : autoSubject(offer, tier, firm, saved.find((t) => `tpl:${t.id}` === offer)?.name);
 
   const offerSummary = useMemo(() => {
-    if (offer === "drs_monthly") return { title: "Digital Rainmaker · Monthly", price: `${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo` };
-    if (offer === "drs_annual") return { title: "Digital Rainmaker · Annual", price: `${fmtWhole(ANNUAL_UPFRONT_CENTS)} at signing + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget` };
+    const version = pricing === "original" ? " (original pricing)" : "";
+    if (offer === "drs_monthly")
+      return {
+        title: `Digital Rainmaker · Monthly${version}`,
+        price: `${fmtWhole(setupCents)} setup + ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo · +${fmtWhole(FIRST_MONTH_AD_BONUS_CENTS.monthly)} first-month ad bonus`,
+      };
+    if (offer === "drs_annual")
+      return {
+        title: `Digital Rainmaker · Annual${version}`,
+        price: `${fmtWhole(annualUpfrontCents(setupCents))} at signing + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget · +${fmtWhole(FIRST_MONTH_AD_BONUS_CENTS.annual)} ad credits`,
+      };
     if (offer === "enterprise") return { title: `Nexli Enterprise · ${ENTERPRISE_TIERS[tier].label}`, price: fmtWhole(ENTERPRISE_TIERS[tier].priceCents) };
     const t = saved.find((x) => `tpl:${x.id}` === offer);
     return t ? { title: t.name, price: "Your template" } : null;
-  }, [offer, tier, saved]);
+  }, [offer, tier, saved, pricing, setupCents]);
 
   function chooseOffer(next: Offer, nextTier: EnterpriseTier = tier) {
     if (contentTouched && (next !== offer || nextTier !== tier) && !confirm("Switching replaces the letter text you edited. Continue?")) return;
     setOffer(next);
     setTier(nextTier);
     setContentTouched(false);
-    if (next === "drs_monthly") setContent(generateDrsContent("monthly"));
-    else if (next === "drs_annual") setContent(generateDrsContent("annual"));
+    if (next === "drs_monthly") setContent(generateDrsContent("monthly", setupCents));
+    else if (next === "drs_annual") setContent(generateDrsContent("annual", setupCents));
     else if (next === "enterprise") setContent(generateEnterpriseContent(nextTier));
     else setContent(saved.find((t) => `tpl:${t.id}` === next)?.content ?? "");
+  }
+
+  // New ($40,000) vs original ($32,000) setup: regenerates a DRS letter that's already chosen.
+  function choosePricing(next: DrsPricing) {
+    if (next === pricing) return;
+    const isDrsOffer = offer === "drs_monthly" || offer === "drs_annual";
+    if (isDrsOffer && contentTouched && !confirm("Switching replaces the letter text you edited. Continue?")) return;
+    setPricing(next);
+    if (isDrsOffer) {
+      setContentTouched(false);
+      setContent(generateDrsContent(offer === "drs_annual" ? "annual" : "monthly", DRS_SETUP_FEES[next]));
+    }
   }
 
   // ── Who ──
@@ -166,6 +200,7 @@ export function EngagementComposer() {
           saveAsTemplate,
           templateName: saveAsTemplate ? templateName.trim() : undefined,
           billingPlan,
+          drsPricing: offer === "drs_monthly" || offer === "drs_annual" ? pricing : undefined,
           enterpriseTier: offer === "enterprise" ? tier : undefined,
           pipelineLeadId: leadId ?? undefined,
         }),
@@ -500,6 +535,28 @@ export function EngagementComposer() {
             </div>
           ) : step === 2 ? (
             <div className="mx-auto max-w-4xl space-y-5">
+              {(drsMonthly || drsAnnual) && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Digital Rainmaker setup fee</p>
+                  <div role="radiogroup" aria-label="Digital Rainmaker pricing" className="grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1 sm:inline-grid">
+                    {(["current", "original"] as const).map((v) => {
+                      const on = pricing === v;
+                      return (
+                        <button
+                          key={v}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => choosePricing(v)}
+                          className={`min-h-10 rounded-xl px-3 text-xs font-bold transition sm:px-4 ${on ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                        >
+                          {fmtWhole(DRS_SETUP_FEES[v])} · {DRS_PRICING_LABEL[v]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 {drsMonthly && (
                   <OfferCard
@@ -508,8 +565,9 @@ export function EngagementComposer() {
                     emoji="🌧️"
                     accent="from-blue-500/25 to-cyan-500/10"
                     title="Digital Rainmaker · Monthly"
-                    price={`${fmtWhole(DRS_PRICING.SETUP_FEE_CENTS)} setup`}
+                    price={`${fmtWhole(setupCents)} setup`}
                     sub={`+ ${fmtWhole(TOTAL_MONTHLY_CENTS)}/mo from build complete (${fmtWhole(DRS_PRICING.MONTHLY_CENTS)} upkeep + ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget) · ${TERM_MONTHS.monthly}-month term from launch`}
+                    bonus={`+${fmtWhole(FIRST_MONTH_AD_BONUS_CENTS.monthly)} first-month ad bonus · we match their first month of ads`}
                   />
                 )}
                 {drsAnnual && (
@@ -519,8 +577,9 @@ export function EngagementComposer() {
                     emoji="📆"
                     accent="from-cyan-500/25 to-emerald-500/10"
                     title="Digital Rainmaker · Annual"
-                    price={`${fmtWhole(ANNUAL_UPFRONT_CENTS)} at signing`}
-                    sub={`Setup + a year of the platform paid in full · ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget from launch · ${TERM_MONTHS.annual}-month term from launch, no auto-renewal`}
+                    price={`${fmtWhole(annualUpfrontCents(setupCents))} at signing`}
+                    sub={`${fmtWhole(setupCents)} setup + a year of the platform paid in full · ${fmtWhole(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)}/mo ad budget from launch · ${TERM_MONTHS.annual}-month term from launch, no auto-renewal`}
+                    bonus={`+${fmtWhole(FIRST_MONTH_AD_BONUS_CENTS.annual)} in ad credits · their first month of ads`}
                   />
                 )}
                 {enterprise && (
@@ -748,7 +807,26 @@ export function EngagementComposer() {
   );
 }
 
-function OfferCard({ on, onClick, emoji, accent, title, price, sub }: { on: boolean; onClick: () => void; emoji: string; accent: string; title: string; price: string; sub: string }) {
+function OfferCard({
+  on,
+  onClick,
+  emoji,
+  accent,
+  title,
+  price,
+  sub,
+  bonus,
+}: {
+  on: boolean;
+  onClick: () => void;
+  emoji: string;
+  accent: string;
+  title: string;
+  price: string;
+  sub: string;
+  /** Gold line: the first-month ad bonus (letter Section 3(e)). */
+  bonus?: string;
+}) {
   return (
     <button
       type="button"
@@ -763,6 +841,12 @@ function OfferCard({ on, onClick, emoji, accent, title, price, sub }: { on: bool
         {price}
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{sub}</p>
+      {bonus && (
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-300/40 bg-amber-400/10 px-2.5 py-1 text-[11px] font-bold text-amber-200">
+          <span aria-hidden="true" className="text-amber-300">★</span>
+          {bonus}
+        </p>
+      )}
       {on && <span className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-cyan-400 text-xs font-black text-[#020617]">✓</span>}
     </button>
   );

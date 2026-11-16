@@ -4,7 +4,7 @@ import { engagements, engagementSigners, engagementTemplates } from "@/db/schema
 import { eq } from "drizzle-orm";
 import { getOwnerBranding, NEXLI_BRANDING } from "@/lib/branding";
 import { getNexliAdminId } from "@/lib/foundation-project";
-import { isCurrentDrsRevision } from "@/lib/engagement-defaults";
+import { drsSummariesFit } from "@/lib/engagement-defaults";
 import { isCurrentEnterpriseRevision } from "@/lib/enterprise-engagement";
 import {
   isEnterpriseTemplateName,
@@ -57,7 +57,9 @@ function classifyLetter(row: LetterRow, nexliAdminId: string | null): LetterView
         : row.content.includes("Annual Investment (Paid in Full)")
           ? "annual"
           : "monthly";
-    return { kind: "drs", plan, showSummaries: isCurrentDrsRevision(row.content, plan) };
+    // Either pricing version, and the Nov 9 letters (pre-bonus) too: the
+    // summaries read the letter's own Setup Fee and bonus.
+    return { kind: "drs", plan, showSummaries: drsSummariesFit(row.content, plan) };
   }
 
   if (content.startsWith("FIRM FOUNDATION") || meta.foundation === true) {

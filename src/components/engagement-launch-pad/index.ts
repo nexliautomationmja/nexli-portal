@@ -32,7 +32,7 @@ export {
   FOUNDATION_SECTION_META,
   SECTION_META_BY_KIND,
   FALLBACK_META,
-  DRS_FIGURES,
+  drsFigures,
 } from "./section-meta";
 export type { LetterKind, SectionMeta, SummaryContext } from "./section-meta";
 export { LETTER_ICONS } from "./icons";
