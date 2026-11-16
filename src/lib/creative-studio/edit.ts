@@ -4,6 +4,7 @@ import { RIG_LABEL } from "@/lib/creative-studio/prompts";
 import type { CreativeFormat, CreativeRig, FramePosition } from "@/lib/creative-studio/tables";
 import type { CaptionWord, EditOverlays, EditStyle, LadderRung, TimedText, VslCard, Zoom } from "@/remotion/types";
 import { normalizeWord } from "@/lib/creative-studio/words";
+import { withoutDecor } from "@/lib/creative-studio/edit-text";
 
 /**
  * Claude lays out the on-screen graphics for one finished cut, following
@@ -420,7 +421,9 @@ export function proposeLayout(ctx: EditContext): Promise<LayoutResult> {
 }
 
 export function reviseLayout(ctx: EditContext, current: EditOverlays, note: string): Promise<LayoutResult> {
-  const effective = { ...current, captions: current.captions ?? ctx.style !== "pov", zooms: current.zooms ?? [] };
+  // Hand-picked colours and icons stay out of what Claude sees (it can't return them; the revise route carries them over).
+  const plain = withoutDecor(current);
+  const effective = { ...plain, captions: plain.captions ?? ctx.style !== "pov", zooms: plain.zooms ?? [] };
   return layout(
     ctx,
     [

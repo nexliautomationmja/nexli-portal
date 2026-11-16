@@ -1,4 +1,4 @@
-import type { EditOverlays } from "@/remotion/types";
+import { ICON_KINDS, ICON_MOTIONS, type BoxColors, type EditOverlays, type IconFx, type TimedText } from "@/remotion/types";
 
 /**
  * Hand-editing one piece of on-screen text (client-safe, shared by the edit
@@ -160,4 +160,218 @@ export function slotClashes(o: EditOverlays, t: TextTarget, start: number, end: 
   if (sameSpot && t.slot === "qualifier" && o.cta && overlaps(o.cta)) out.push({ label: "The CTA", ...o.cta });
   if (sameSpot && t.slot === "cta" && o.qualifier && overlaps(o.qualifier)) out.push({ label: "The qualifier", ...o.qualifier });
   return out;
+}
+
+// ---------- Hand-picked colours (✎ → Colors) ----------
+
+/** "#abc", "abc123", " #ABC123 " → "#AABBCC"/"#ABC123"; anything else → null. */
+export function cleanHex(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const m = v.trim().replace(/^#/, "").match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+  return `#${h.toUpperCase()}`;
+}
+
+/** Only real #RRGGBB values; an empty result = the rulebook's colours. */
+export function cleanColors(v: unknown): BoxColors {
+  const x = (v ?? {}) as { bg?: unknown; text?: unknown };
+  const bg = cleanHex(x.bg);
+  const text = cleanHex(x.text);
+  return { ...(bg ? { bg } : {}), ...(text ? { text } : {}) };
+}
+
+const hasColors = (c: BoxColors | undefined): c is BoxColors => Boolean(c && (c.bg || c.text));
+
+/** The element's hand-picked colours ({} = the rulebook's). A card's second line shares its card's colours. */
+export function getColors(o: EditOverlays, t: TextTarget): BoxColors {
+  switch (t.slot) {
+    case "title":
+    case "qualifier":
+    case "cta":
+      return o[t.slot]?.colors ?? {};
+    case "sticker":
+      return o.stickers[t.index]?.colors ?? {};
+    case "card":
+      return o.cards[t.index]?.colors ?? {};
+    case "rung": {
+      const r = o.rungs[t.index];
+      return (t.field === "pill" ? r?.pillColors : r?.tagColors) ?? {};
+    }
+  }
+}
+
+/** Set (or with {} clear) a field's colours on one element, leaving no empty `colors` behind. */
+function paint<T extends object, K extends string>(x: T, key: K, c: BoxColors): T {
+  const { [key]: _old, ...rest } = x as T & Record<K, unknown>;
+  void _old;
+  return (hasColors(c) ? { ...rest, [key]: c } : rest) as T;
+}
+
+/** A copy of the overlays with that element's colours replaced (null if it doesn't exist). */
+export function setColors(o: EditOverlays, t: TextTarget, colors: BoxColors): EditOverlays | null {
+  const c = cleanColors(colors);
+  switch (t.slot) {
+    case "title":
+    case "qualifier":
+    case "cta": {
+      const x = o[t.slot];
+      return x ? { ...o, [t.slot]: paint(x, "colors", c) } : null;
+    }
+    case "sticker":
+      if (!o.stickers[t.index]) return null;
+      return { ...o, stickers: o.stickers.map((s, i) => (i === t.index ? paint(s, "colors", c) : s)) };
+    case "card":
+      if (!o.cards[t.index]) return null;
+      return { ...o, cards: o.cards.map((x, i) => (i === t.index ? paint(x, "colors", c) : x)) };
+    case "rung":
+      if (!o.rungs[t.index]) return null;
+      return { ...o, rungs: o.rungs.map((r, i) => (i === t.index ? paint(r, t.field === "pill" ? "pillColors" : "tagColors", c) : r)) };
+  }
+}
+
+/**
+ * The rulebook's colours for an element (what the pickers show before a
+ * colour is picked). Mirrors src/remotion/components/Overlays.tsx; the red
+ * qualifier gradient is shown as its first stop.
+ */
+export function defaultColors(o: EditOverlays, t: TextTarget): Required<BoxColors> {
+  const NAVY = "#0A0E1E";
+  const WHITE = "#FFFFFF";
+  const RED = "#DC2626";
+  const GREEN = "#22C55E";
+  switch (t.slot) {
+    case "title":
+      return { bg: WHITE, text: NAVY };
+    case "qualifier":
+      return { bg: RED, text: WHITE };
+    case "cta":
+      return { bg: NAVY, text: WHITE };
+    case "sticker":
+      return { bg: WHITE, text: "#000000" };
+    case "card": {
+      const kind = o.cards[t.index]?.kind;
+      return { bg: kind === "qualifier" ? RED : NAVY, text: kind === "stat" ? GREEN : WHITE };
+    }
+    case "rung":
+      return t.field === "pill" ? { bg: NAVY, text: GREEN } : { bg: WHITE, text: NAVY };
+  }
+}
+
+/** Hand-picked colours and icons off the overlays (what Claude sees stays exactly as before they existed). */
+export function withoutDecor(o: EditOverlays): EditOverlays {
+  const strip = <T extends object>(x: T): T => {
+    const { colors: _c, pillColors: _p, tagColors: _t, fx: _f, ...rest } = x as T & { colors?: unknown; pillColors?: unknown; tagColors?: unknown; fx?: unknown };
+    void _c;
+    void _p;
+    void _t;
+    void _f;
+    return rest as T;
+  };
+  return {
+    ...o,
+    title: o.title && strip(o.title),
+    qualifier: o.qualifier && strip(o.qualifier),
+    cta: o.cta && strip(o.cta),
+    stickers: o.stickers.map(strip),
+    cards: o.cards.map(strip),
+    rungs: o.rungs.map(strip),
+  };
+}
+
+/** The hand-picked look of a text box: its colours and its icons. */
+type Decor = Pick<TimedText, "colors" | "fx">;
+const decorOf = (x: Decor | null | undefined): Decor | null =>
+  x && (hasColors(x.colors) || x.fx) ? { ...(hasColors(x.colors) ? { colors: x.colors } : {}), ...(x.fx ? { fx: x.fx } : {}) } : null;
+
+/**
+ * Keep hand-picked colours and icons through a new layout from Claude (which
+ * never returns them). The title, qualifier and CTA keep theirs while they
+ * exist; a sticker or card keeps its look when its words come back
+ * unchanged, or — on a written change (`byIndex`) — when the list kept its
+ * length (its words were reworded in place); ladder rungs follow their person.
+ */
+export function carryDecor(prev: EditOverlays, next: EditOverlays, byIndex: boolean): EditOverlays {
+  let out = next;
+  for (const slot of ["title", "qualifier", "cta"] as const) {
+    const was = decorOf(prev[slot]);
+    const now = out[slot];
+    if (was && now) out = { ...out, [slot]: { ...now, ...was } };
+  }
+  const key = (x: TimedText) => x.text.trim().toLowerCase();
+  const list = <T extends TimedText>(before: T[], after: T[]): T[] =>
+    after.map((x, i) => {
+      const same = before.find((b) => decorOf(b) && key(b) === key(x));
+      // In place: the one that was here, only if its own words are gone (reworded, not moved).
+      const here = byIndex && before.length === after.length && before[i] && !after.some((a) => key(a) === key(before[i])) ? before[i] : null;
+      const was = decorOf(same) ?? decorOf(here);
+      return was ? { ...x, ...was } : x;
+    });
+  out = { ...out, stickers: list(prev.stickers, out.stickers), cards: list(prev.cards, out.cards) };
+  out = {
+    ...out,
+    rungs: out.rungs.map((r) => {
+      const was = prev.rungs.find((b) => b.position === r.position);
+      return {
+        ...r,
+        ...(hasColors(was?.pillColors) ? { pillColors: was.pillColors } : {}),
+        ...(hasColors(was?.tagColors) ? { tagColors: was.tagColors } : {}),
+      };
+    }),
+  };
+  return out;
+}
+
+// ---------- Animated icons (✎ → Animated icons) ----------
+
+/** A known icon and motion, or null (= no icons). */
+export function cleanFx(v: unknown): IconFx | null {
+  const x = v as { icon?: unknown; motion?: unknown } | null;
+  if (!x) return null;
+  const icon = ICON_KINDS.find((k) => k === x.icon);
+  const motion = ICON_MOTIONS.find((m) => m === x.motion) ?? "around";
+  return icon ? { icon, motion } : null;
+}
+
+/** Ladder pills and tags carry no icons; a card's second line shares its card's. */
+export const canHaveFx = (t: TextTarget) => t.slot !== "rung";
+
+export function getFx(o: EditOverlays, t: TextTarget): IconFx | null {
+  switch (t.slot) {
+    case "title":
+    case "qualifier":
+    case "cta":
+      return o[t.slot]?.fx ?? null;
+    case "sticker":
+      return o.stickers[t.index]?.fx ?? null;
+    case "card":
+      return o.cards[t.index]?.fx ?? null;
+    case "rung":
+      return null;
+  }
+}
+
+/** A copy of the overlays with that element's icons replaced (null = none; null back if it doesn't exist). */
+export function setFx(o: EditOverlays, t: TextTarget, fx: IconFx | null): EditOverlays | null {
+  const put = <T extends TimedText>(x: T): T => {
+    const { fx: _old, ...rest } = x;
+    void _old;
+    return (fx ? { ...rest, fx } : rest) as T;
+  };
+  switch (t.slot) {
+    case "title":
+    case "qualifier":
+    case "cta": {
+      const x = o[t.slot];
+      return x ? { ...o, [t.slot]: put(x) } : null;
+    }
+    case "sticker":
+      if (!o.stickers[t.index]) return null;
+      return { ...o, stickers: o.stickers.map((s, i) => (i === t.index ? put(s) : s)) };
+    case "card":
+      if (!o.cards[t.index]) return null;
+      return { ...o, cards: o.cards.map((x, i) => (i === t.index ? put(x) : x)) };
+    case "rung":
+      return null;
+  }
 }

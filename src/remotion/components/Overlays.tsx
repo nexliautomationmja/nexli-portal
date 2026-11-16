@@ -3,6 +3,7 @@ import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import type { Anchor, LadderRung, TimedText, VslCard } from "../types";
 import { BRAND, FB_SAFE_TOP, JAKARTA, OUTFIT, isMoney } from "../theme";
 import { Pop } from "./Pop";
+import { IconRain, IconsAround } from "./IconFx";
 
 /**
  * A hand-placed element: a `box`-wide row centred on the anchor, the element
@@ -30,19 +31,38 @@ function sized(scale: number | undefined, at: Anchor | undefined, defaultOrigin 
   return scale && scale !== 1 ? { transform: `scale(${scale})`, transformOrigin: at ? "50% 50%" : defaultOrigin } : {};
 }
 
-/** Money tokens inside a line render green (rulebook: money / positive). */
-const Rich: React.FC<{ text: string }> = ({ text }) => (
-  <>
-    {text.split(/(\s+)/).map((part, i) =>
-      /\s+/.test(part) ? part : <span key={i} style={isMoney(part.replace(/[^\w$%,.]/g, "")) ? { color: BRAND.money } : undefined}>{part}</span>
-    )}
-  </>
-);
+/**
+ * A hand-picked colour (edit card ✎ → Colors), only when it's a plain
+ * #RRGGBB; anything else falls back to the rulebook's colour.
+ */
+const pick = (c: string | undefined) => (c && /^#[0-9a-fA-F]{6}$/.test(c) ? c : undefined);
+
+/** The box carries animated icons around it: they're placed against its edges. */
+const ringed = (x: TimedText): React.CSSProperties => (x.fx?.motion === "around" ? { position: "relative" } : {});
+
+/** The brand gradient as text colour (the CTA arrows). */
+const GRADIENT_TEXT: React.CSSProperties = { backgroundImage: BRAND.gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" };
+
+/** Money tokens inside a line render green (rulebook: money / positive) — unless the words have a hand-picked colour. */
+const Rich: React.FC<{ text: string; plain?: boolean }> = ({ text, plain }) =>
+  plain ? (
+    <>{text}</>
+  ) : (
+    <>
+      {text.split(/(\s+)/).map((part, i) =>
+        /\s+/.test(part) ? part : <span key={i} style={isMoney(part.replace(/[^\w$%,.]/g, "")) ? { color: BRAND.money } : undefined}>{part}</span>
+      )}
+    </>
+  );
 
 /** Solo / ladder: the one title banner, at the top of the safe band. */
 export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean; at?: Anchor; scale?: number }> = ({ title, vertical, at, scale }) => {
   const { width, height } = useVideoConfig();
+  const bg = pick(title.colors?.bg);
+  const ink = pick(title.colors?.text);
   return (
+  <>
+  {title.fx?.motion === "rain" && <IconRain fx={title.fx} start={title.start} end={title.end} vertical={vertical} />}
   <Pop
     start={title.start}
     end={title.end}
@@ -65,8 +85,8 @@ export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean; at?: A
         maxWidth: vertical ? 940 : 1100,
         padding: vertical ? "18px 30px" : "14px 26px",
         borderRadius: 22,
-        background: "#ffffff",
-        color: "#0a0e1e",
+        background: bg ?? "#ffffff",
+        color: ink ?? "#0a0e1e",
         fontFamily: OUTFIT,
         fontWeight: 800,
         fontSize: vertical ? 50 : 44,
@@ -76,39 +96,49 @@ export const TitleBanner: React.FC<{ title: TimedText; vertical: boolean; at?: A
         letterSpacing: "-0.01em",
         boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
         ...sized(scale, at),
+        ...ringed(title),
       }}
     >
       {title.text}
+      {title.fx?.motion === "around" && <IconsAround fx={title.fx} start={title.start} size={vertical ? 74 : 62} />}
     </div>
   </Pop>
+  </>
   );
 };
 
 /** Red qualifier band — bottom chrome slot (above the captions). */
 export const QualifierBand: React.FC<{ q: TimedText; vertical: boolean; at?: Anchor; scale?: number }> = ({ q, vertical, at, scale }) => {
   const { width, height } = useVideoConfig();
+  const bg = pick(q.colors?.bg);
+  const ink = pick(q.colors?.text);
   return (
+  <>
+  {q.fx?.motion === "rain" && <IconRain fx={q.fx} start={q.start} end={q.end} vertical={vertical} />}
   <Pop start={q.start} end={q.end} style={at ? placed(at, width, width, height) : { position: "absolute", left: 0, right: 0, top: vertical ? 960 : undefined, bottom: vertical ? undefined : 230, display: "flex", justifyContent: "center" }}>
     <div
       style={{
         maxWidth: vertical ? 900 : 1000,
         padding: "16px 30px",
         borderRadius: 16,
-        background: BRAND.qualifier,
-        color: "#ffffff",
+        background: bg ?? BRAND.qualifier,
+        color: ink ?? "#ffffff",
         fontFamily: OUTFIT,
         fontWeight: 800,
         fontSize: vertical ? 40 : 36,
         lineHeight: 1.12,
         textTransform: "uppercase",
         textAlign: "center",
-        boxShadow: "0 14px 40px rgba(153,27,27,0.45)",
+        boxShadow: bg ? "0 14px 40px rgba(0,0,0,0.45)" : "0 14px 40px rgba(153,27,27,0.45)",
         ...sized(scale, at, vertical ? "50% 0%" : "50% 100%"),
+        ...ringed(q),
       }}
     >
       {q.text}
+      {q.fx?.motion === "around" && <IconsAround fx={q.fx} start={q.start} size={vertical ? 66 : 58} />}
     </div>
   </Pop>
+  </>
   );
 };
 
@@ -117,13 +147,19 @@ export const CtaCard: React.FC<{ cta: TimedText; vertical: boolean; at?: Anchor;
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const bob = Math.sin((frame / fps) * Math.PI * 2 * 1.2) * 8;
+  const bg = pick(cta.colors?.bg);
+  const ink = pick(cta.colors?.text);
   return (
+    <>
+    {cta.fx?.motion === "rain" && <IconRain fx={cta.fx} start={cta.start} end={cta.end} vertical={vertical} />}
     <Pop start={cta.start} end={cta.end} style={at ? placed(at, width, width, height) : { position: "absolute", left: 0, right: 0, top: vertical ? 960 : undefined, bottom: vertical ? undefined : 230, display: "flex", justifyContent: "center" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "16px 28px", borderRadius: 18, background: BRAND.panel, border: "2px solid rgba(6,182,212,0.6)", color: "#fff", fontFamily: OUTFIT, fontWeight: 800, fontSize: vertical ? 42 : 36, textTransform: "uppercase", ...sized(scale, at, vertical ? "50% 0%" : "50% 100%") }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "16px 28px", borderRadius: 18, background: bg ?? BRAND.panel, border: bg ? "2px solid transparent" : "2px solid rgba(6,182,212,0.6)", color: ink ?? "#fff", fontFamily: OUTFIT, fontWeight: 800, fontSize: vertical ? 42 : 36, textTransform: "uppercase", ...sized(scale, at, vertical ? "50% 0%" : "50% 100%"), ...ringed(cta) }}>
         <span>{cta.text}</span>
-        <span style={{ display: "inline-block", transform: `translateY(${bob}px)`, backgroundImage: BRAND.gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", fontSize: vertical ? 52 : 44 }}>↓</span>
+        <span style={{ display: "inline-block", transform: `translateY(${bob}px)`, ...(ink ? { color: ink } : GRADIENT_TEXT), fontSize: vertical ? 52 : 44 }}>↓</span>
+        {cta.fx?.motion === "around" && <IconsAround fx={cta.fx} start={cta.start} size={vertical ? 66 : 58} />}
       </div>
     </Pop>
+    </>
   );
 };
 
@@ -139,15 +175,17 @@ export const LadderRungs: React.FC<{ rungs: LadderRung[]; width: number }> = ({ 
     <>
       {rungs.map((r, i) => {
         const x = width * (RUNG_X[count][r.position] ?? 0.5) + (r.nudgeX ?? 0);
+        const pillBg = pick(r.pillColors?.bg);
+        const tagBg = pick(r.tagColors?.bg);
         return (
           <React.Fragment key={`${r.position}-${i}`}>
             <Pop start={r.start + i * 0.12} end={r.end} style={{ position: "absolute", top: FB_SAFE_TOP + 150, left: x, transform: "translateX(-50%)" }}>
-              <div style={{ padding: "10px 22px", borderRadius: 999, background: BRAND.panel, border: "2px solid rgba(34,197,94,0.55)", color: BRAND.money, fontFamily: OUTFIT, fontWeight: 800, fontSize: 44, whiteSpace: "nowrap", boxShadow: "0 10px 30px rgba(0,0,0,.4)" }}>
+              <div style={{ padding: "10px 22px", borderRadius: 999, background: pillBg ?? BRAND.panel, border: pillBg ? "2px solid transparent" : "2px solid rgba(34,197,94,0.55)", color: pick(r.pillColors?.text) ?? BRAND.money, fontFamily: OUTFIT, fontWeight: 800, fontSize: 44, whiteSpace: "nowrap", boxShadow: "0 10px 30px rgba(0,0,0,.4)" }}>
                 {r.pill}
               </div>
             </Pop>
             <Pop start={r.start + 0.3 + i * 0.12} end={r.end} style={{ position: "absolute", top: 820, left: x, transform: "translateX(-50%)" }}>
-              <div style={{ padding: "8px 16px", borderRadius: 10, background: "#ffffff", color: "#0a0e1e", fontFamily: OUTFIT, fontWeight: 800, fontSize: 26, textTransform: "uppercase", textAlign: "center", lineHeight: 1.05, maxWidth: 300 }}>
+              <div style={{ padding: "8px 16px", borderRadius: 10, background: tagBg ?? "#ffffff", color: pick(r.tagColors?.text) ?? "#0a0e1e", fontFamily: OUTFIT, fontWeight: 800, fontSize: 26, textTransform: "uppercase", textAlign: "center", lineHeight: 1.05, maxWidth: 300 }}>
                 {r.tag}
               </div>
             </Pop>
@@ -161,12 +199,18 @@ export const LadderRungs: React.FC<{ rungs: LadderRung[]; width: number }> = ({ 
 /** POV: Instagram's own white text-sticker idiom — no brand palette, no dark glass. */
 export const PovSticker: React.FC<{ s: TimedText; at?: Anchor; scale?: number }> = ({ s, at, scale }) => {
   const { width, height } = useVideoConfig();
+  const bg = pick(s.colors?.bg);
+  const ink = pick(s.colors?.text);
   return (
+  <>
+  {s.fx?.motion === "rain" && <IconRain fx={s.fx} start={s.start} end={s.end} vertical={height > width} />}
   <Pop start={s.start} end={s.end} style={at ? placed(at, width, width, height) : { position: "absolute", top: FB_SAFE_TOP + 90, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
-    <div style={{ maxWidth: 860, padding: "16px 26px", borderRadius: 18, background: "#ffffff", color: "#000000", fontFamily: JAKARTA, fontWeight: 800, fontSize: 46, lineHeight: 1.15, textAlign: "center", boxShadow: "0 6px 18px rgba(0,0,0,0.18)", ...sized(scale, at) }}>
+    <div style={{ maxWidth: 860, padding: "16px 26px", borderRadius: 18, background: bg ?? "#ffffff", color: ink ?? "#000000", fontFamily: JAKARTA, fontWeight: 800, fontSize: 46, lineHeight: 1.15, textAlign: "center", boxShadow: "0 6px 18px rgba(0,0,0,0.18)", ...sized(scale, at), ...ringed(s) }}>
       {s.text}
+      {s.fx?.motion === "around" && <IconsAround fx={s.fx} start={s.start} size={66} />}
     </div>
   </Pop>
+  </>
   );
 };
 
@@ -186,21 +230,30 @@ export const VslCardView: React.FC<{ card: VslCard; at?: Anchor; scale?: number 
     fontWeight: 800,
     boxShadow: "0 18px 48px rgba(0,0,0,0.45)",
   };
+  const bg = pick(card.colors?.bg);
+  const ink = pick(card.colors?.text);
+  // A hand-picked card colour drops the brand border (kept transparent, so the card's size doesn't change).
   const style: React.CSSProperties =
     card.kind === "qualifier"
-      ? { ...base, background: BRAND.qualifier }
+      ? { ...base, background: bg ?? BRAND.qualifier }
       : card.kind === "cta"
-        ? { ...base, background: BRAND.panel, border: `2px solid rgba(6,182,212,${glow})` }
-        : { ...base, background: BRAND.panel, border: "1px solid rgba(255,255,255,0.12)" };
+        ? { ...base, background: bg ?? BRAND.panel, border: bg ? "2px solid transparent" : `2px solid rgba(6,182,212,${glow})` }
+        : { ...base, background: bg ?? BRAND.panel, border: bg ? "1px solid transparent" : "1px solid rgba(255,255,255,0.12)" };
   return (
+    <>
+    {card.fx?.motion === "rain" && <IconRain fx={card.fx} start={card.start} end={card.end} vertical={height > width} />}
     <Pop start={card.start} end={card.end} from="up" style={at ? placed(at, 560, width, height) : { position: "absolute", left: 48, top: "51%", transform: "translateY(-50%)" }}>
-      <div style={{ ...style, ...sized(scale, at, "0% 50%") }}>
-        <div style={{ fontSize: card.kind === "stat" ? 64 : 38, lineHeight: 1.05, textTransform: "uppercase", color: card.kind === "stat" ? BRAND.money : "#fff" }}>
-          <Rich text={card.text} />
-          {card.kind === "cta" && <span style={{ marginLeft: 12, backgroundImage: BRAND.gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>↓</span>}
+      <div style={{ ...style, ...sized(scale, at, "0% 50%"), ...ringed(card) }}>
+        <div style={{ fontSize: card.kind === "stat" ? 64 : 38, lineHeight: 1.05, textTransform: "uppercase", color: ink ?? (card.kind === "stat" ? BRAND.money : "#fff") }}>
+          <Rich text={card.text} plain={Boolean(ink)} />
+          {card.kind === "cta" && <span style={{ marginLeft: 12, ...(ink ? { color: ink } : GRADIENT_TEXT) }}>↓</span>}
         </div>
-        {card.sub && <div style={{ marginTop: 8, fontFamily: JAKARTA, fontWeight: 600, fontSize: 24, color: "rgba(255,255,255,0.75)", textTransform: "none" }}>{card.sub}</div>}
+        {card.sub && (
+          <div style={{ marginTop: 8, fontFamily: JAKARTA, fontWeight: 600, fontSize: 24, textTransform: "none", ...(ink ? { color: ink, opacity: 0.75 } : { color: "rgba(255,255,255,0.75)" }) }}>{card.sub}</div>
+        )}
+        {card.fx?.motion === "around" && <IconsAround fx={card.fx} start={card.start} size={68} />}
       </div>
     </Pop>
+    </>
   );
 };

@@ -16,10 +16,40 @@ export interface CaptionWord {
   end: number;
 }
 
+/**
+ * Hand-picked colours for one text box, as #RRGGBB: the box (card) and its
+ * words. Absence of a field = the rulebook's colour, so untouched edits
+ * render exactly as before.
+ */
+export interface BoxColors {
+  bg?: string;
+  text?: string;
+}
+
+/** Animated icons a text box can carry (drawn as SVG, so preview and render match). */
+export const ICON_KINDS = ["stars", "sparkles", "dollars", "coins", "hearts", "lightning", "checks", "fire"] as const;
+export type IconKind = (typeof ICON_KINDS)[number];
+
+/**
+ * around = they pop out of the card and twinkle around its edges;
+ * rain = they fall over the whole video. Either way only while the card shows.
+ */
+export const ICON_MOTIONS = ["around", "rain"] as const;
+export type IconMotion = (typeof ICON_MOTIONS)[number];
+
+export interface IconFx {
+  icon: IconKind;
+  motion: IconMotion;
+}
+
 export interface TimedText {
   text: string;
   start: number;
   end: number;
+  /** Hand-picked colours (title, qualifier, CTA, stickers, cards). Absence = the rulebook's. */
+  colors?: BoxColors;
+  /** Animated icons with this text box. Absence = none (every edit before them). */
+  fx?: IconFx;
 }
 
 export interface LadderRung {
@@ -32,6 +62,9 @@ export interface LadderRung {
   end: number;
   /** Optional horizontal nudge in px (absence = the default slot). */
   nudgeX?: number;
+  /** Hand-picked colours for the pill and the tag. Absence = the rulebook's. */
+  pillColors?: BoxColors;
+  tagColors?: BoxColors;
 }
 
 export interface VslCard extends TimedText {

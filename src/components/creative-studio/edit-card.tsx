@@ -3,10 +3,26 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import { SIZE_MAX, SIZE_MIN, type CaptionStyle, type EditLayout, type EditOverlays, type EditProps, type EditStyle, type MediaBox, type MediaLayout, type MovableSlot, type PipSize, type SizeSlot } from "@/remotion/types";
+import { ICON_KINDS, SIZE_MAX, SIZE_MIN, type BoxColors, type IconFx, type CaptionStyle, type EditLayout, type EditOverlays, type EditProps, type EditStyle, type MediaBox, type MediaLayout, type MovableSlot, type PipSize, type SizeSlot } from "@/remotion/types";
 import { cleanBox, windowRect, WINDOW_MAX_H, WINDOW_MIN_H } from "@/remotion/media-box";
 import { EDIT_STYLES, STYLE_LABEL, suggestedStyle } from "@/lib/creative-studio/edit-styles";
-import { sameTarget, setText, setWindow, slotClashes, textLimit, windowOf, type TextTarget } from "@/lib/creative-studio/edit-text";
+import {
+  canHaveFx,
+  defaultColors,
+  getColors,
+  getFx,
+  sameTarget,
+  setColors,
+  setFx,
+  setText,
+  setWindow,
+  slotClashes,
+  textLimit,
+  windowOf,
+  type TextTarget,
+} from "@/lib/creative-studio/edit-text";
+import { BoxColorPicker } from "@/components/creative-studio/box-colors";
+import { FxIcon, ICON_INFO } from "@/remotion/components/fx-icons";
 import { CTA_CLASSES, ProgressRing } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send, videoFileName } from "@/components/creative-studio/client";
@@ -417,6 +433,10 @@ export function EditCard({
     timing: { mode: "whole" | "custom"; start: string; end: string };
     /** Its size (1 = the rulebook size), dragged live on the preview. */
     size: number;
+    /** Its card and text colours ({} = Nexli's), live on the preview. */
+    colors: BoxColors;
+    /** Its animated icons (null = none), live on the preview. */
+    fx: IconFx | null;
   } | null>(null);
   const playhead = useRef<() => number>(() => 0);
   const onPlayer = useCallback((now: () => number) => {
@@ -437,6 +457,8 @@ export function EditCard({
       loading: false,
       timing: { mode: whole ? "whole" : "custom", start: clock(start), end: clock(end) },
       size: (sizeSlotOf(target) && latest?.props?.overlays.sizes?.[sizeSlotOf(target)!]) || 1,
+      colors: latest?.props ? getColors(latest.props.overlays, target) : {},
+      fx: latest?.props ? getFx(latest.props.overlays, target) : null,
     });
     still(Math.min(start + 0.6, D));
   }
@@ -448,6 +470,29 @@ export function EditCard({
     setBusy(null);
     if (r.ok) onChange(r.data);
     else onError(r.error);
+  }
+  async function saveColors() {
+    if (!editing) return;
+    setBusy({ label: "Saving the colors…" });
+    const r = await send(api(`${p.id}/edit/colors`), "POST", { target: editing.target, colors: editing.colors });
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
+  async function saveFx() {
+    if (!editing) return;
+    setBusy({ label: editing.fx ? "Adding the icons…" : "Taking the icons off…" });
+    const r = await send(api(`${p.id}/edit/icons`), "POST", { target: editing.target, fx: editing.fx });
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
+  /** Pick icons, then replay the element's entrance so the animation shows. */
+  function pickFx(fx: IconFx | null) {
+    if (!editing) return;
+    setEditing((e) => (e ? { ...e, fx } : e));
+    const w = latest?.props ? windowOf(latest.props.overlays, editing.target) : null;
+    if (fx && w) jump(Math.max(0, w.start - 0.3));
   }
   async function saveTiming() {
     if (!editing || !draftWindow) return;
@@ -517,7 +562,16 @@ export function EditCard({
     baseOverlays && editing && draftSlot && editing.size !== (baseOverlays.sizes?.[draftSlot] ?? 1)
       ? { ...baseOverlays, sizes: { ...baseOverlays.sizes, [draftSlot]: editing.size } }
       : baseOverlays;
-  const lookOverlays = sizedOverlays && captionDraft ? withLook(sizedOverlays, captionDraft) : sizedOverlays;
+  // The colours and icons being picked, live on the preview.
+  const coloredOverlays =
+    sizedOverlays && editing && JSON.stringify(getColors(sizedOverlays, editing.target)) !== JSON.stringify(editing.colors)
+      ? (setColors(sizedOverlays, editing.target, editing.colors) ?? sizedOverlays)
+      : sizedOverlays;
+  const fxOverlays =
+    coloredOverlays && editing && canHaveFx(editing.target) && JSON.stringify(getFx(coloredOverlays, editing.target)) !== JSON.stringify(editing.fx)
+      ? (setFx(coloredOverlays, editing.target, editing.fx) ?? coloredOverlays)
+      : coloredOverlays;
+  const lookOverlays = fxOverlays && captionDraft ? withLook(fxOverlays, captionDraft) : fxOverlays;
   const lookProps = withLayout && lookOverlays ? { ...withLayout, overlays: lookOverlays } : withLayout;
   // The window being sized, live on the preview.
   const previewProps =
@@ -1171,7 +1225,7 @@ export function EditCard({
             {elements.length > 0 && (
               <div className="mt-4 space-y-1.5">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">
-                  On screen <span className="normal-case tracking-normal text-neutral-600">· ✎ to change the words or when it shows</span>
+                  On screen <span className="normal-case tracking-normal text-neutral-600">· ✎ to change the words, colors, icons or when it shows</span>
                 </p>
                 {elements.map((el, i) => {
                   const open = Boolean(editing && el.target && sameTarget(editing.target, el.target));
@@ -1196,7 +1250,7 @@ export function EditCard({
                             onClick={() => (open ? setEditing(null) : openEditor(el.target!, el.text, el.start, el.end))}
                             className={`mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm sm:mr-1.5 sm:h-7 sm:w-7 sm:rounded-md ${open ? "bg-cyan-500/20 text-white" : "text-neutral-500 hover:bg-white/10 hover:text-white"}`}
                             aria-label={`Change the ${el.label.toLowerCase()} text`}
-                            title="Change the words or when it shows"
+                            title="Change the words, colors, icons or when it shows"
                           >
                             ✎
                           </button>
@@ -1290,6 +1344,120 @@ export function EditCard({
                               <p className="text-[10px] text-neutral-400">Tap a version to see it on the video, then Use the one you want.</p>
                             </div>
                           )}
+
+                          {/* Colors: the card and its words (just this one) */}
+                          {latest.props && (() => {
+                            const saved = getColors(latest.props.overlays, editing.target);
+                            const changed = (saved.bg ?? null) !== (editing.colors.bg ?? null) || (saved.text ?? null) !== (editing.colors.text ?? null);
+                            const t = editing.target;
+                            const which =
+                              t.slot === "card" ? "this card" : t.slot === "sticker" ? "this sticker" : t.slot === "rung" ? `this ${t.field}` : `the ${t.slot === "cta" ? "CTA" : t.slot}`;
+                            return (
+                              <div className="space-y-2.5 border-t border-white/5 pt-2.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500">Colors · just {which}</span>
+                                  {(editing.colors.bg || editing.colors.text) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditing((e) => (e ? { ...e, colors: {} } : e))}
+                                      className="min-h-8 px-1 text-[11px] font-semibold text-neutral-500 hover:text-white"
+                                    >
+                                      Back to Nexli colors
+                                    </button>
+                                  )}
+                                </div>
+                                <BoxColorPicker
+                                  value={editing.colors}
+                                  defaults={defaultColors(latest.props.overlays, editing.target)}
+                                  onChange={(colors) => setEditing((e) => (e ? { ...e, colors } : e))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void saveColors()}
+                                  disabled={!changed || Boolean(busy)}
+                                  className="min-h-9 rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                                >
+                                  Save colors
+                                </button>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Animated icons with this box */}
+                          {latest.props && canHaveFx(editing.target) && (() => {
+                            const saved = getFx(latest.props.overlays, editing.target);
+                            const changed = JSON.stringify(saved) !== JSON.stringify(editing.fx);
+                            const motion = editing.fx?.motion ?? "around";
+                            return (
+                              <div className="space-y-2.5 border-t border-white/5 pt-2.5">
+                                <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500">Animated icons</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => pickFx(null)}
+                                    aria-pressed={!editing.fx}
+                                    className={`flex min-h-9 items-center rounded-full border px-3 text-[11px] font-bold ${
+                                      !editing.fx ? "border-cyan-400 bg-cyan-500/15 text-white" : "border-white/10 text-neutral-400 hover:text-white"
+                                    }`}
+                                  >
+                                    None
+                                  </button>
+                                  {ICON_KINDS.map((k) => {
+                                    const on = editing.fx?.icon === k;
+                                    return (
+                                      <button
+                                        key={k}
+                                        type="button"
+                                        onClick={() => pickFx({ icon: k, motion })}
+                                        aria-pressed={on}
+                                        className={`flex min-h-9 items-center gap-1.5 rounded-full border py-1 pl-1.5 pr-3 text-[11px] font-bold ${
+                                          on ? "border-cyan-400 bg-cyan-500/15 text-white" : "border-white/10 text-neutral-300 hover:bg-white/5 hover:text-white"
+                                        }`}
+                                      >
+                                        <FxIcon kind={k} size={20} />
+                                        {ICON_INFO[k].label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {editing.fx && (
+                                  <div className="flex w-fit rounded-full border border-white/10 bg-white/5 p-0.5 text-[11px] font-semibold">
+                                    {(
+                                      [
+                                        ["around", "Around the card"],
+                                        ["rain", "Shower over the video"],
+                                      ] as const
+                                    ).map(([m, label]) => (
+                                      <button
+                                        key={m}
+                                        type="button"
+                                        onClick={() => pickFx({ icon: editing.fx!.icon, motion: m })}
+                                        className={`min-h-8 rounded-full px-3 py-1 ${motion === m ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                                      >
+                                        {label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                {editing.fx && (
+                                  <p className="text-[10px] text-neutral-500">
+                                    {motion === "rain"
+                                      ? "They fall over the whole video for a few seconds as it pops in."
+                                      : "They burst out of it as it pops in, then twinkle at its edges while it shows."}{" "}
+                                    The preview replays it from the start.
+                                  </p>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => void saveFx()}
+                                  disabled={!changed || Boolean(busy)}
+                                  className="min-h-9 rounded-full bg-cyan-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                                >
+                                  {editing.fx || !saved ? "Save icons" : "Take the icons off"}
+                                </button>
+                              </div>
+                            );
+                          })()}
 
                           {/* Size, like Instagram's text size: the whole box scales */}
                           {sizeSlotOf(editing.target) && (() => {

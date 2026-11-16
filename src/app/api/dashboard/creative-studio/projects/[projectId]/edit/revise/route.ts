@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { carryDecor } from "@/lib/creative-studio/edit-text";
 import { db } from "@/db";
 import { creativeEdits } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
@@ -54,12 +55,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       version: edit.version + 1,
       style: result.style,
       finalCutAssetId: edit.finalCutAssetId,
-      // Hand-placed spots stay put through a written change.
+      // Hand-placed spots, sizes, colours and icons stay put through a written change.
       props: {
         ...edit.props,
         words,
         overlays: {
-          ...result.overlays,
+          // Hand-picked colours and icons stay on their elements (Claude never returns them).
+          ...carryDecor(edit.props.overlays, result.overlays, true),
           ...(edit.props.overlays.layout ? { layout: edit.props.overlays.layout } : {}),
           ...(edit.props.overlays.captionStyle ? { captionStyle: edit.props.overlays.captionStyle } : {}),
           ...(edit.props.overlays.sizes ? { sizes: edit.props.overlays.sizes } : {}),

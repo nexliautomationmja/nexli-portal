@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { carryDecor } from "@/lib/creative-studio/edit-text";
 import { db } from "@/db";
 import { creativeEdits } from "@/lib/creative-studio/tables";
 import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio/access";
@@ -76,7 +77,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         format: project.format,
         durationS,
         words,
-        overlays: { ...result.overlays, ...(layout ? { layout } : {}), ...(captionStyle ? { captionStyle } : {}), ...(sizes ? { sizes } : {}) },
+        overlays: {
+          // Hand-picked colours and icons carry over like the spots: the title, qualifier and CTA, and cards or stickers that say the same thing.
+          ...(keep ? carryDecor(prev.props.overlays, result.overlays, false) : result.overlays),
+          ...(layout ? { layout } : {}),
+          ...(captionStyle ? { captionStyle } : {}),
+          ...(sizes ? { sizes } : {}),
+        },
         ...(instruction ? { instruction } : {}),
         ...(reaction.pip ? { pip: reaction.pip } : {}),
         ...(onscreen.media ? { media: onscreen.media } : {}),
