@@ -1,3 +1,4 @@
+import { recurringCopyOf } from "@/lib/recurring-copy";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { invoices, invoiceReminders, invoiceLineItems, users } from "@/db/schema";
@@ -146,6 +147,14 @@ export async function GET(req: NextRequest) {
 
     for (const template of recurringTemplates) {
       try {
+        // A one-time charge on the parent (the AI avatar on a first monthly
+        // DRS invoice) is never billed again: lib/recurring-copy.ts.
+        const parentLineItems = await db
+          .select()
+          .from(invoiceLineItems)
+          .where(eq(invoiceLineItems.invoiceId, template.id));
+        const copy = recurringCopyOf(template, parentLineItems);
+
         const newInvoiceNumber = await generateInvoiceNumber();
         const newToken = generateInvoiceToken();
 
@@ -182,34 +191,29 @@ export async function GET(req: NextRequest) {
             token: newToken,
             status: "draft",
             currency: template.currency,
-            subtotal: template.subtotal,
+            subtotal: copy.subtotal,
             taxRate: template.taxRate,
             taxAmount: template.taxAmount,
-            total: template.total,
+            total: copy.total,
             issueDate: now,
             dueDate,
             notes: template.notes,
             terms: template.terms,
             reminderConfig: template.reminderConfig,
             amountPaid: 0,
-            balanceDue: template.total,
+            balanceDue: copy.total,
             recurringParentId: template.id,
             // Carry the DRS tags ({ engagementId, drsRole, adSpendCents, … })
             // so the Client Tracker can split the ad-budget pass-through out
             // of revenue on every rolled-forward invoice, not just the parent.
-            metadata: template.metadata,
+            metadata: copy.metadata,
           })
           .returning({ id: invoices.id });
 
-        // Copy line items from the parent invoice
-        const parentLineItems = await db
-          .select()
-          .from(invoiceLineItems)
-          .where(eq(invoiceLineItems.invoiceId, template.id));
-
-        if (parentLineItems.length > 0) {
+        // Copy line items from the parent invoice (minus one-time charges)
+        if (copy.lines.length > 0) {
           await db.insert(invoiceLineItems).values(
-            parentLineItems.map((item) => ({
+            copy.lines.map((item) => ({
               invoiceId: newInvoice.id,
               description: item.description,
               quantity: item.quantity,

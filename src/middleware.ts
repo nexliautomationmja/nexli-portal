@@ -27,8 +27,9 @@ const CSP_DIRECTIVES = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   // Firm logos and documents live in Supabase storage; Mux thumbnails; GHL
-  // contact avatars (leadconnector / msgsndr CDNs); Stripe assets.
-  "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://image.mux.com https://*.mux.com https://*.stripe.com https://*.leadconnectorhq.com https://*.msgsndr.com https://storage.googleapis.com https://*.fbcdn.net https://scontent.cdninstagram.com https://*.cdninstagram.com",
+  // contact avatars (leadconnector / msgsndr CDNs); Stripe assets; the AI
+  // avatar portraits on nexli.net (Launch Pad avatar step).
+  "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://image.mux.com https://*.mux.com https://*.stripe.com https://*.leadconnectorhq.com https://*.msgsndr.com https://storage.googleapis.com https://*.fbcdn.net https://scontent.cdninstagram.com https://*.cdninstagram.com https://www.nexli.net",
   "media-src 'self' blob: https://*.supabase.co https://*.supabase.in https://stream.mux.com https://*.mux.com https://*.fbcdn.net",
   // API calls the browser makes: Supabase, Stripe, Mux (incl. litix data
   // beacons), Vercel analytics, GHL (leadconnector) and Cal.com embeds.

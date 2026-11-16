@@ -76,6 +76,14 @@ export function annualUpfrontCents(setupCents: number = DRS_PRICING.SETUP_FEE_CE
 export const ANNUAL_UPFRONT_CENTS = annualUpfrontCents(DRS_PRICING.SETUP_FEE_CENTS);
 
 /**
+ * A specific AI avatar from the library, chosen by the client on their Launch
+ * Pad (Nov 16 2026, Marcel): $2,500 one-time, exclusive to their firm, added
+ * as a one-time line to their first monthly invoice (the ad-budget invoice on
+ * annual). Otherwise Nexli picks one for them at no charge.
+ */
+export const AI_AVATAR_PICK_CENTS = 250_000;
+
+/**
  * The first-month ad bonus (Nov 16 2026, letters from then on, both pricing
  * versions): Nexli's own money placed in the client's campaigns in the first
  * month of ads from Launch, on top of the client's budget. Monthly plan:

@@ -19,6 +19,8 @@ export type TaskId =
   | "dns_access"
   | "fb_ads_invite"
   | "drivers_license"
+  /** Nov 16 2026: Nexli picks the firm's AI avatar, or the client picks one ($2,500). Optional. */
+  | "ai_avatar"
   /** Legacy (before Nov 2026): the Stripe login. payment_setup took its place. */
   | "stripe_setup";
 export type PhaseStatus = "pending" | "in_progress" | "done";
@@ -53,6 +55,7 @@ export interface OnboardingTaskState {
   //               { legacyStripe: true } while it stands in for a Stripe login
   // fb_ads_invite → FbAdsAnswer (lib/fb-ads-setup.ts), or the older
   //               { confirmed: true } | { notApplicable: true }
+  // ai_avatar   → AvatarChoice (lib/ai-avatar-choice.ts)
   submission: unknown;
 }
 
@@ -89,6 +92,12 @@ export interface OnboardingState {
   dueRemindersSent?: string[];
   /** ISO timestamp of the admin "overdue" notification, once sent. */
   overdueNotifiedAt?: string | null;
+  /**
+   * The AI avatar Nexli picked for the firm at no charge (admin Launch Pad),
+   * used when the client didn't pick one themselves (tasks.ai_avatar).
+   * Reserved for this firm: no other Launch Pad can take her.
+   */
+  avatarAssigned?: { slug: string; at: string } | null;
   /** A tier may seed a subset — see defaultOnboardingState. */
   phases: Partial<Record<PhaseId, OnboardingPhaseState>>;
   tasks: Partial<Record<TaskId, OnboardingTaskState>>;
@@ -135,7 +144,9 @@ const TIER_TASKS: Record<OnboardingTier, TaskId[]> = {
   // Legacy records that still carry a dream_clients key are simply ignored
   // (taskIdsFor only yields ids present in TASK_ORDER).
   // Nov 2026: "How you get paid" (payment_setup) replaced the Stripe login.
-  drs: ["payment_setup", "dns_access", "fb_ads_invite", "drivers_license"],
+  // Nov 16 2026: the AI avatar step (optional — Nexli picks one if the
+  // client doesn't). Existing DRS records get it through tasksOf.
+  drs: ["payment_setup", "dns_access", "fb_ads_invite", "drivers_license", "ai_avatar"],
 };
 
 /**
@@ -146,7 +157,13 @@ const TIER_TASKS: Record<OnboardingTier, TaskId[]> = {
  * login on file"), so nobody gets a new outstanding item or overdue reminders.
  */
 export function tasksOf(state: OnboardingState): Partial<Record<TaskId, OnboardingTaskState>> {
-  const tasks = state.tasks || {};
+  let tasks = state.tasks || {};
+  // DRS Launch Pads started before the AI avatar step (Nov 16 2026) get it
+  // too — optional and untouched, so it never becomes an outstanding item.
+  // DRS records are the ones with the Facebook or driver's license step.
+  if (!tasks.ai_avatar && (tasks.fb_ads_invite || tasks.drivers_license)) {
+    tasks = { ...tasks, ai_avatar: defaultTaskState("ai_avatar") };
+  }
   if (tasks.payment_setup || !tasks.stripe_setup) return tasks;
   const stripe = tasks.stripe_setup;
   const done = stripe.status === "submitted" || stripe.status === "approved";
@@ -236,6 +253,7 @@ export const TASK_ORDER: TaskId[] = [
   "dns_access",
   "fb_ads_invite",
   "drivers_license",
+  "ai_avatar",
 ];
 
 export const TASK_INFO: Record<
@@ -293,6 +311,15 @@ export const TASK_INFO: Record<
     optional: false,
     description:
       "Required for A2P texting compliance: it registers your business phone number to YOUR business — your number, fully verified, never ours.",
+  },
+  ai_avatar: {
+    title: "Your AI Avatar",
+    emoji: "✨",
+    type: "form",
+    // Nothing to do unless the client wants a specific avatar ($2,500).
+    optional: true,
+    description:
+      "The AI presenter in your ads, so nobody at your firm has to get on camera. Exclusive to your firm.",
   },
 };
 

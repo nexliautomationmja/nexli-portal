@@ -21,6 +21,7 @@ import {
   generateInvoiceToken,
 } from "@/lib/invoice-utils";
 import { invoiceLineItems } from "@/db/schema";
+import { recurringCopyOf } from "@/lib/recurring-copy";
 import { getStripe } from "@/lib/stripe";
 import { getOwnerBranding } from "@/lib/branding";
 import { NEXLI_LEGAL } from "@/lib/nexli-legal";
@@ -735,13 +736,19 @@ async function recordAutopayCharge(parent: InvoiceRow, inv: Stripe.Invoice, meth
     .limit(1);
   if (existing) return;
 
-  const parentLines = await db
-    .select()
-    .from(invoiceLineItems)
-    .where(eq(invoiceLineItems.invoiceId, parent.id));
-  const baseCents = parent.total; // listed (ACH) price; card price never inflates amountPaid
+  // Later months never include a one-time charge from the first invoice
+  // (the AI avatar): lib/recurring-copy.ts.
+  const copy = recurringCopyOf(
+    parent,
+    await db
+      .select()
+      .from(invoiceLineItems)
+      .where(eq(invoiceLineItems.invoiceId, parent.id))
+  );
+  const parentLines = copy.lines;
+  const baseCents = copy.total; // listed (ACH) price; card price never inflates amountPaid
   const now = new Date();
-  const parentMeta = (parent.metadata ?? {}) as Record<string, unknown>;
+  const parentMeta = (copy.metadata ?? {}) as Record<string, unknown>;
   const label = method === "card" ? "Card" : "Bank transfer";
 
   const [row] = await db
@@ -756,10 +763,10 @@ async function recordAutopayCharge(parent: InvoiceRow, inv: Stripe.Invoice, meth
       token: generateInvoiceToken(),
       status: "paid",
       currency: parent.currency,
-      subtotal: parent.subtotal,
+      subtotal: copy.subtotal,
       taxRate: parent.taxRate,
       taxAmount: parent.taxAmount,
-      total: parent.total,
+      total: copy.total,
       issueDate: now,
       dueDate: now,
       notes: `Charged automatically via autopay (${label}).`,

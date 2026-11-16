@@ -35,12 +35,15 @@ import {
   wireLine,
 } from "@/lib/payment-setup";
 import { asFbAnswer, pageHref } from "@/lib/fb-ads-setup";
+import { asAvatarChoice } from "@/lib/ai-avatar-choice";
+import { AI_AVATAR_ROSTER, avatarName, avatarPageUrl, portraitUrl } from "@/lib/ai-avatar-roster";
 import {
   TASK_STATUS,
   dueView,
   formatDate,
   formatShortDate,
   formatUsd,
+  type AdminAvatar,
   type AdminBilling,
   type AdminDetail,
   type AdminPhase,
@@ -203,7 +206,19 @@ function InvoiceRow({ label, inv, sentAt }: { label: string; inv: BillingInvoice
   );
 }
 
-function Billing({ billing, busy, error, onStart }: { billing: AdminBilling; busy: boolean; error: string | null; onStart: () => void }) {
+function Billing({
+  billing,
+  avatarPick,
+  busy,
+  error,
+  onStart,
+}: {
+  billing: AdminBilling;
+  avatarPick: AdminAvatar["pick"] | null;
+  busy: boolean;
+  error: string | null;
+  onStart: () => void;
+}) {
   const { setup, firstMonthly, plan } = billing;
   const setupPaid = setup?.status === "paid";
   const monthly = plan === "annual" ? `${formatUsd(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget` : formatUsd(TOTAL_MONTHLY_CENTS);
@@ -225,6 +240,12 @@ function Billing({ billing, busy, error, onStart }: { billing: AdminBilling; bus
             {busy ? "Sending…" : `Build complete: send the first monthly invoice (${monthly})`}
           </Button>
           {!setupPaid && <p className="text-[11px] text-neutral-400">Unlocks once the setup invoice is paid.</p>}
+          {avatarPick && (
+            <p className="text-[11px] font-semibold text-amber-200">
+              + {formatUsd(avatarPick.feeCents)} one-time for {avatarPick.name}, the AI avatar they chose, goes on this invoice
+              (later months don&apos;t include it).
+            </p>
+          )}
         </div>
       )}
       {error && <Notice tone="error">{error}</Notice>}
@@ -590,8 +611,106 @@ function ReviewActions({ task, onPatch }: { task: AdminTask; onPatch: LaunchPadS
   );
 }
 
-function TaskCard({ task, onPatch, onCopied }: { task: AdminTask; onPatch: LaunchPadSheetProps["onPatch"]; onCopied: (w: string) => void }) {
-  const st = TASK_STATUS[task.status];
+// ─── AI avatar ─────────────────────────────────────────────
+
+function AvatarThumb({ slug, className = "" }: { slug: string; className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={portraitUrl(slug)} alt={`${avatarName(slug)}, an AI-generated avatar`} className={`object-cover object-top ${className}`} />
+  );
+}
+
+/**
+ * The firm's AI avatar: their paid pick (billed on the first monthly
+ * invoice), or Nexli's free pick, assigned here. One avatar, one firm.
+ */
+function AvatarPanel({ task, avatar, onPatch }: { task: AdminTask; avatar: AdminAvatar; onPatch: LaunchPadSheetProps["onPatch"] }) {
+  const [slug, setSlug] = useState("");
+  const [busy, setBusy] = useState(false);
+  const choice = asAvatarChoice(task.submission);
+  const taken = new Set(avatar.taken);
+  const assign = async (value: string | null) => {
+    setBusy(true);
+    const ok = await onPatch({ action: "assign_avatar", slug: value });
+    setBusy(false);
+    if (ok) setSlug("");
+  };
+  return (
+    <div className="space-y-3">
+      {avatar.current ? (
+        <div className="flex items-center gap-3">
+          <AvatarThumb slug={avatar.current.slug} className="h-20 w-[45px] shrink-0 rounded-lg" />
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-sm font-bold text-white">{avatar.current.name}</p>
+            <p className="text-xs text-neutral-300">
+              {avatar.current.source === "client"
+                ? `They chose her · ${formatUsd(avatar.pick?.feeCents ?? 0)} one-time on the first monthly invoice${choice?.acceptedAt ? ` · agreed ${formatDate(choice.acceptedAt)}${choice.acceptedBy ? ` by ${choice.acceptedBy}` : ""}` : ""}`
+                : "Your pick for them · no charge"}
+            </p>
+            <a href={avatarPageUrl(avatar.current.slug)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-300 hover:text-white">
+              Her page on nexli.net <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            </a>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-neutral-300">
+          {choice?.choice === "nexli" ? "They'd like you to choose." : "They haven't chosen one, so you pick (no charge)."} The client sees
+          &ldquo;We&apos;re selecting your AI avatar&rdquo; until you do.
+        </p>
+      )}
+
+      {avatar.locked ? (
+        <p className="text-[11px] text-neutral-400">Locked: the first monthly invoice has gone out.</p>
+      ) : avatar.pick ? (
+        <p className="text-[11px] text-neutral-400">
+          Assign {avatar.pick.name} to their studio in Creative Studio → Avatars. To change it, send their choice back with a note.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <select
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            className={`${FIELD} sm:max-w-[16rem]`}
+            aria-label="Assign an AI avatar"
+          >
+            <option value="">{avatar.assigned ? "Change to…" : "Assign an avatar…"}</option>
+            {AI_AVATAR_ROSTER.map((r) => (
+              <option key={r.slug} value={r.slug} disabled={taken.has(r.slug) || r.slug === avatar.assigned}>
+                {r.name}
+                {taken.has(r.slug) ? " (another firm's)" : ""}
+              </option>
+            ))}
+          </select>
+          <Button size="sm" busy={busy} disabled={!slug} onClick={() => assign(slug)}>
+            {busy ? "Saving…" : "Assign"}
+          </Button>
+          {avatar.assigned && (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => assign(null)}>
+              Clear
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskCard({
+  task,
+  avatar,
+  onPatch,
+  onCopied,
+}: {
+  task: AdminTask;
+  avatar: AdminAvatar | null;
+  onPatch: LaunchPadSheetProps["onPatch"];
+  onCopied: (w: string) => void;
+}) {
+  // The AI avatar step waits on nobody: Nexli picks unless the client did.
+  const st: { tone: Tone; label: string } =
+    task.id === "ai_avatar" && task.status === "todo"
+      ? { tone: avatar?.current ? "green" : "neutral", label: avatar?.current ? "Assigned" : "Yours to pick" }
+      : TASK_STATUS[task.status];
   const creds = task.type === "credentials" ? (task.submission as Creds) : null;
   return (
     <Surface className="space-y-3 p-4">
@@ -611,7 +730,11 @@ function TaskCard({ task, onPatch, onCopied }: { task: AdminTask; onPatch: Launc
         </p>
       )}
 
-      {task.status !== "todo" && (
+      {task.id === "ai_avatar" && avatar ? (
+        <Inset className="p-3">
+          <AvatarPanel task={task} avatar={avatar} onPatch={onPatch} />
+        </Inset>
+      ) : task.status !== "todo" && (
         <Inset className="p-3">
           {task.id === "payment_setup" ? (
             <PaymentAnswers task={task} onCopied={onCopied} />
@@ -751,7 +874,7 @@ export function LaunchPadSheet(p: LaunchPadSheetProps) {
 
           {d.billing?.isDrs && (
             <Block eyebrow="Billing" title="Setup and first monthly invoice">
-              <Billing billing={d.billing} busy={p.billingBusy} error={p.billingError} onStart={p.onStartMonthly} />
+              <Billing billing={d.billing} avatarPick={d.avatar?.pick ?? null} busy={p.billingBusy} error={p.billingError} onStart={p.onStartMonthly} />
             </Block>
           )}
 
@@ -766,7 +889,7 @@ export function LaunchPadSheet(p: LaunchPadSheetProps) {
           <Block eyebrow="From the client" title="Client items">
             <div className="space-y-3">
               {d.onboarding.tasks.map((t) => (
-                <TaskCard key={t.id} task={t} onPatch={p.onPatch} onCopied={p.onCopied} />
+                <TaskCard key={t.id} task={t} avatar={d.avatar ?? null} onPatch={p.onPatch} onCopied={p.onCopied} />
               ))}
             </div>
           </Block>

@@ -23,3 +23,5 @@ export type { Accent, PillTone } from "./primitives";
 export { LaunchPadShell } from "./shell";
 export { useForceDark } from "./use-force-dark";
 export { NexliLegalFooter } from "./legal-footer";
+export { AiAvatarStep } from "./ai-avatar-step";
+export type { AvatarInfo } from "./ai-avatar-step";

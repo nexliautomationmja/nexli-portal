@@ -25,6 +25,7 @@ import { getStripe, resolveStripeAccountForOwner } from "@/lib/stripe";
 import { cardPriceCents, TERM_MONTHS } from "@/lib/drs-pricing";
 import { addMonthsClampedUtc, planOf } from "@/lib/digital-rainmaker";
 import { drsAnnualAutoRenews } from "@/lib/engagement-defaults";
+import { isOneTimeLine } from "@/lib/recurring-copy";
 
 export const AUTOPAY_ROLES = ["platform_monthly", "ad_spend_monthly"] as const;
 export type AutopayRole = (typeof AUTOPAY_ROLES)[number];
@@ -113,16 +114,18 @@ export async function isAutopayEligible(invoice: InvoiceRow): Promise<boolean> {
  */
 export function getAutopayInfo(
   invoice: InvoiceRow,
-  lineItems: { amount: number }[]
+  lineItems: { amount: number; billingType?: string | null }[]
 ): AutopayInfo {
   const a = autopayMetaOf(invoice);
+  // The monthly price leaves out one-time charges on the first invoice (the AI avatar).
+  const monthly = lineItems.filter((l) => !isOneTimeLine(invoice.metadata, l));
   const monthlyAchCents =
-    lineItems.length > 0
-      ? lineItems.reduce((s, l) => s + l.amount, 0)
+    monthly.length > 0
+      ? monthly.reduce((s, l) => s + l.amount, 0)
       : invoice.total;
   const monthlyCardCents =
-    lineItems.length > 0
-      ? lineItems.reduce((s, l) => s + cardPriceCents(l.amount), 0)
+    monthly.length > 0
+      ? monthly.reduce((s, l) => s + cardPriceCents(l.amount), 0)
       : cardPriceCents(invoice.total);
   const active = hasLiveAutopay(invoice);
   return {
@@ -137,12 +140,35 @@ export function getAutopayInfo(
 }
 
 /**
+ * Stripe Checkout line items: one monthly price per invoice line at the
+ * chosen method's price. A one-time charge on the first invoice (the AI
+ * avatar) goes in as a one-time price, so Stripe bills it on the first
+ * subscription invoice only.
+ */
+export function autopayLineItems(
+  invoice: Pick<InvoiceRow, "currency" | "metadata">,
+  lines: { description: string; amount: number; billingType?: string | null }[],
+  method: AutopayMethod
+): Stripe.Checkout.SessionCreateParams.LineItem[] {
+  return lines.map((line) => ({
+    price_data: {
+      currency: invoice.currency,
+      unit_amount: method === "card" ? cardPriceCents(line.amount) : line.amount,
+      ...(isOneTimeLine(invoice.metadata, line) ? {} : { recurring: { interval: "month" as const } }),
+      product_data: { name: line.description },
+    },
+    quantity: 1,
+  }));
+}
+
+/**
  * Stripe Checkout in subscription mode: one monthly price per invoice line at
- * the chosen method's price, payment method type locked to that method.
+ * the chosen method's price (one-time charges once), payment method type
+ * locked to that method.
  */
 export async function createAutopayCheckout(params: {
   invoice: InvoiceRow;
-  lineItems: { description: string; amount: number }[];
+  lineItems: { description: string; amount: number; billingType?: string | null }[];
   method: AutopayMethod;
   successUrl: string;
   cancelUrl: string;
@@ -170,15 +196,7 @@ export async function createAutopayCheckout(params: {
     mode: "subscription",
     payment_method_types: [method === "card" ? "card" : "us_bank_account"],
     customer_email: invoice.clientEmail,
-    line_items: lines.map((line) => ({
-      price_data: {
-        currency: invoice.currency,
-        unit_amount: method === "card" ? cardPriceCents(line.amount) : line.amount,
-        recurring: { interval: "month" },
-        product_data: { name: line.description },
-      },
-      quantity: 1,
-    })),
+    line_items: autopayLineItems(invoice, lines, method),
     metadata,
     subscription_data: {
       metadata,

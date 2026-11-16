@@ -74,6 +74,20 @@ export interface ActivityEntry {
   message: string;
 }
 
+/** The AI avatar step on Nexli's DRS Launch Pads (admin GET `avatar`). */
+export interface AdminAvatar {
+  /** Library slugs other firms hold. */
+  taken: string[];
+  /** Nexli's free pick, if any. */
+  assigned: string | null;
+  /** The client's paid pick ($2,500 on the first monthly invoice). */
+  pick: { slug: string; name: string; feeCents: number } | null;
+  /** Who it is today: their pick, else Nexli's. */
+  current: { slug: string; name: string; source: "client" | "nexli" } | null;
+  /** The first monthly invoice has gone out. */
+  locked: boolean;
+}
+
 export interface AdminDetail {
   engagementId: string;
   subject: string;
@@ -92,6 +106,7 @@ export interface AdminDetail {
   };
   clientSigners: { id: string; name: string; email: string; token: string; order: number }[];
   billing?: AdminBilling | null;
+  avatar?: AdminAvatar | null;
 }
 
 // ─── Formatting ────────────────────────────────────────────
@@ -119,10 +134,12 @@ export function formatUsd(cents: number): string {
 // ─── The list's numbers (same rules as src/lib/onboarding.ts) ──
 
 /** The items a Launch Pad shows today, in order. */
-const TASK_IDS = ["payment_setup", "dns_access", "fb_ads_invite", "drivers_license"] as const;
+const TASK_IDS = ["payment_setup", "dns_access", "fb_ads_invite", "drivers_license", "ai_avatar"] as const;
 /** Mirrors taskOptional() in src/lib/onboarding.ts (server-only module): the
- * Facebook question is optional only on Launch Pads started before version 2. */
-const isOptional = (state: RawOnboardingState, id: string) => id === "fb_ads_invite" && (state.version ?? 1) < 2;
+ * Facebook question is optional only on Launch Pads started before version 2;
+ * the AI avatar is always optional (Nexli picks one otherwise). */
+const isOptional = (state: RawOnboardingState, id: string) =>
+  id === "ai_avatar" || (id === "fb_ads_invite" && (state.version ?? 1) < 2);
 
 /**
  * The client's items with the server's rules: an old Stripe login stands in

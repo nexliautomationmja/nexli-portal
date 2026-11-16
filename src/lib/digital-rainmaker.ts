@@ -103,6 +103,8 @@ import {
 } from "./drs-pricing";
 import { drsAnnualAutoRenews, drsHasFirstMonthBonus, drsTermRunsFromLaunch, setupFeeOfLetter } from "./engagement-defaults";
 import { NEXLI_LEGAL } from "./nexli-legal";
+import { avatarPickOf, type AvatarStateLike } from "./ai-avatar-choice";
+import { getNexliAdminId } from "./foundation-project";
 
 export { DRS_PRICING } from "./drs-pricing";
 export type { BillingPlan } from "./drs-pricing";
@@ -132,6 +134,14 @@ interface DrsMetadata {
   /** platform_annual_renewal only: ISO start (the anniversary) / exclusive end of the renewed year. */
   periodStart?: string;
   periodEnd?: string;
+  /**
+   * One-time charges on a RECURRING invoice (the client's chosen AI avatar on
+   * the first monthly invoice): never copied to later months, never part of
+   * autopay's monthly price or MRR (lib/recurring-copy.ts).
+   */
+  oneTimeCents?: number;
+  /** The library avatar the client chose (slug), when oneTimeCents is its fee. */
+  aiAvatar?: string;
 }
 
 interface EngagementMeta {
@@ -301,6 +311,10 @@ interface DrsInvoiceSpec {
   renewal?: { renewalYear: number; periodStart: string; periodEnd: string };
   /** Owner notification title (default "Invoice sent"). */
   notificationTitle?: string;
+  /** One-time lines inside a recurring invoice (the AI avatar fee), in cents. */
+  oneTimeCents?: number;
+  /** The chosen AI avatar's slug, tagged on the invoice. */
+  aiAvatar?: string;
 }
 
 function setupLine(setupCents: number) {
@@ -361,12 +375,30 @@ export function drsSigningInvoiceSpecs(plan: BillingPlan, setupCents: number = D
  * with the first-month ad bonus (Section 3(e)) say so in the notes; the
  * bonus is Nexli's money and is never billed.
  */
-export function drsLaunchInvoiceSpecs(plan: BillingPlan, opts: { bonus?: boolean } = {}): DrsInvoiceSpec[] {
+export function drsLaunchInvoiceSpecs(
+  plan: BillingPlan,
+  opts: { bonus?: boolean; avatar?: { slug: string; name: string; feeCents: number } | null } = {}
+): DrsInvoiceSpec[] {
   const platform = formatCurrency(DRS_PRICING.MONTHLY_CENTS, "usd");
   const adBudget = formatCurrency(DRS_PRICING.AD_SPEND_MONTHLY_CENTS, "usd");
   const bonusNote = opts.bonus
     ? ` Your first month of ads also gets Nexli's ${formatCurrency(FIRST_MONTH_AD_BONUS_CENTS[plan], "usd")} first-month bonus${plan === "annual" ? " in ad credits" : ", matching your budget"} — Nexli's own money, not billed.`
     : "";
+  // The AI avatar the client chose on their Launch Pad: a one-time line on
+  // this first invoice only (never in later months or autopay's monthly price).
+  const avatar = opts.avatar && opts.avatar.feeCents > 0 ? opts.avatar : null;
+  const avatarLine = avatar
+    ? {
+        description: `AI Avatar — ${avatar.name}, exclusive to your firm (one-time)`,
+        amountCents: avatar.feeCents,
+        billingType: "one_time" as const,
+      }
+    : null;
+  const avatarNote = avatar
+    ? ` This first invoice also includes the one-time ${formatCurrency(avatar.feeCents, "usd")} for ${avatar.name}, the AI avatar you chose — exclusive to your firm. Later months don't include it.`
+    : "";
+  const avatarTags = avatar ? { oneTimeCents: avatar.feeCents, aiAvatar: avatar.slug } : {};
+  const extra = avatar ? avatar.feeCents : 0;
   const adLine = {
     description: "Managed Advertising Budget — Monthly (deployed on your ad accounts, pass-through)",
     amountCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
@@ -378,11 +410,12 @@ export function drsLaunchInvoiceSpecs(plan: BillingPlan, opts: { bonus?: boolean
         role: "ad_spend_monthly",
         recurring: true,
         interval: "monthly",
-        totalCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
+        totalCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS + extra,
         adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
+        ...avatarTags,
         label: "Monthly ad budget",
-        notes: `Managed Advertising Budget (${adBudget}/month) for the Digital Rainmaker System — deployed on your behalf on the advertising platforms at no markup. Your build is complete; ads launch once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).${bonusNote}`,
-        lines: [adLine],
+        notes: `Managed Advertising Budget (${adBudget}/month) for the Digital Rainmaker System — deployed on your behalf on the advertising platforms at no markup. Your build is complete; ads launch once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).${bonusNote}${avatarNote}`,
+        lines: avatarLine ? [adLine, avatarLine] : [adLine],
       },
     ];
   }
@@ -391,10 +424,11 @@ export function drsLaunchInvoiceSpecs(plan: BillingPlan, opts: { bonus?: boolean
       role: "platform_monthly",
       recurring: true,
       interval: "monthly",
-      totalCents: TOTAL_MONTHLY_CENTS,
+      totalCents: TOTAL_MONTHLY_CENTS + extra,
       adSpendCents: DRS_PRICING.AD_SPEND_MONTHLY_CENTS,
+      ...avatarTags,
       label: "Monthly",
-      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (maintenance and support, ad management, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).${bonusNote}`,
+      notes: `Monthly investment for the Digital Rainmaker System: ${platform} platform upkeep (maintenance and support, ad management, reporting, AI usage) + ${adBudget} Managed Advertising Budget deployed on your behalf at no markup. Your build is complete; services and ads start once this invoice is paid. Pay once to start your monthly service — your payment method is then charged automatically each month (autopay).${bonusNote}${avatarNote}`,
       lines: [
         {
           description: "Digital Rainmaker System — Monthly Platform",
@@ -402,6 +436,7 @@ export function drsLaunchInvoiceSpecs(plan: BillingPlan, opts: { bonus?: boolean
           billingType: "monthly",
         },
         adLine,
+        ...(avatarLine ? [avatarLine] : []),
       ],
     },
   ];
@@ -451,6 +486,8 @@ export async function createDrsInvoices(args: {
       adSpendCents: spec.adSpendCents,
       ...(termMonths ? { termMonths } : {}),
       ...(spec.renewal ?? {}),
+      ...(spec.oneTimeCents ? { oneTimeCents: spec.oneTimeCents } : {}),
+      ...(spec.aiAvatar ? { aiAvatar: spec.aiAvatar } : {}),
     };
 
     const [invoice] = await db
@@ -568,8 +605,16 @@ export async function sendOnboardingWelcomeEmails(engagementId: string): Promise
     // Read the deadline back from the freshly initialised state so the email
     // matches the Launch Pad exactly (null on legacy records).
     let clientDueAt: string | null = null;
+    // Nexli's own DRS Launch Pads carry the AI avatar step (optional).
+    let avatarStep = false;
     try {
-      clientDueAt = (await getOnboardingState(engagementId))?.clientDueAt ?? null;
+      const state = await getOnboardingState(engagementId);
+      clientDueAt = state?.clientDueAt ?? null;
+      if (state?.tasks?.ai_avatar) {
+        const [eng] = await db.select({ ownerId: engagements.ownerId }).from(engagements).where(eq(engagements.id, engagementId)).limit(1);
+        const nexliAdminId = await getNexliAdminId();
+        avatarStep = Boolean(eng && nexliAdminId && eng.ownerId === nexliAdminId);
+      }
     } catch (err) {
       console.error("Onboarding state read failed:", err);
     }
@@ -583,6 +628,7 @@ export async function sendOnboardingWelcomeEmails(engagementId: string): Promise
           senderName: "The Nexli team",
           onboardingUrl: `${PORTAL_URL()}/onboarding/${s.token}`,
           clientDueAt,
+          avatarStep,
         });
         await sendEmailWithLog({
           to: s.email,
@@ -668,7 +714,11 @@ export async function triggerDrsLaunchBilling(
     created = await createDrsInvoices({
       engagement,
       signer,
-      specs: drsLaunchInvoiceSpecs(planOf(engagement), { bonus: drsHasFirstMonthBonus(engagement.content) }),
+      specs: drsLaunchInvoiceSpecs(planOf(engagement), {
+        bonus: drsHasFirstMonthBonus(engagement.content),
+        // The AI avatar the client chose on their Launch Pad ($2,500 one-time).
+        avatar: avatarPickOf((engagement.metadata as { onboarding?: AvatarStateLike } | null)?.onboarding),
+      }),
     });
   } catch (err) {
     // Release the claim so the admin can retry.

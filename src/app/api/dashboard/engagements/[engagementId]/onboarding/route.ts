@@ -19,6 +19,10 @@ import {
   type LicenseFileMeta,
 } from "@/lib/onboarding";
 import { getSupabase } from "@/lib/supabase";
+import { getNexliAdminId } from "@/lib/foundation-project";
+import { avatarPickOf, effectiveAvatar } from "@/lib/ai-avatar-choice";
+import { avatarName, rosterAvatar } from "@/lib/ai-avatar-roster";
+import { takenAvatarSlugs } from "@/lib/ai-avatar-claims";
 import {
   getDrsBillingStatus,
   triggerDrsLaunchBilling,
@@ -91,6 +95,35 @@ async function buildAdminResponse(
 
   const serialized = serializeAdminOnboarding(state);
 
+  // The AI avatar step is on Nexli's own DRS Launch Pads only (a firm's
+  // Launch Pads for its own clients never offer Nexli's avatars).
+  const nexliAdminId = await getNexliAdminId();
+  const isNexli = Boolean(nexliAdminId) && engagement.ownerId === nexliAdminId;
+  let avatar: {
+    taken: string[];
+    assigned: string | null;
+    pick: { slug: string; name: string; feeCents: number } | null;
+    current: { slug: string; name: string; source: "client" | "nexli" } | null;
+    locked: boolean;
+  } | null = null;
+  if (isNexli && serialized.tasks.some((t) => t.id === "ai_avatar")) {
+    let taken: string[] = [];
+    try {
+      taken = await takenAvatarSlugs(engagement.ownerId, engagementId);
+    } catch (err) {
+      console.error("Onboarding: avatar claims lookup failed:", err);
+    }
+    const tasks = { ai_avatar: serialized.tasks.find((t) => t.id === "ai_avatar") ?? null };
+    avatar = {
+      taken,
+      assigned: state.avatarAssigned?.slug ?? null,
+      pick: avatarPickOf({ tasks }),
+      current: effectiveAvatar({ tasks, avatarAssigned: state.avatarAssigned ?? null }),
+      locked: Boolean((engagement.metadata as { billingStartedAt?: unknown } | null)?.billingStartedAt),
+    };
+  }
+  if (!avatar) serialized.tasks = serialized.tasks.filter((t) => t.id !== "ai_avatar");
+
   // Enrich license files with short-lived signed URLs for admin review
   const licenseTask = serialized.tasks.find((t) => t.id === "drivers_license");
   const files = (licenseTask?.submission as {
@@ -145,6 +178,7 @@ async function buildAdminResponse(
     },
     clientSigners: signers.filter((s) => s.order > 0),
     billing: await loadBilling(engagementId),
+    avatar,
   });
 }
 
@@ -372,6 +406,41 @@ export async function PATCH(
           message: `${TASK_INFO[taskId].title} — reviewed and approved ✅`,
         });
       }
+      break;
+    }
+
+    case "assign_avatar": {
+      // Nexli's free pick of the firm's AI avatar (null clears it). The
+      // client's own paid pick wins, and one avatar belongs to one firm.
+      const nexliAdminId = await getNexliAdminId();
+      if (!nexliAdminId || engagement.ownerId !== nexliAdminId) {
+        return NextResponse.json({ error: "AI avatars are only on Nexli's own Launch Pads." }, { status: 400 });
+      }
+      const pick = avatarPickOf({ tasks: { ai_avatar: state.tasks.ai_avatar ?? null } });
+      if (pick) {
+        return NextResponse.json(
+          { error: `The client chose ${pick.name} themselves. Send their choice back first if it needs to change.` },
+          { status: 409 }
+        );
+      }
+      if (body.slug === null) {
+        await setOnboardingValues(engagementId, [{ segments: ["avatarAssigned"], value: null }]);
+        break;
+      }
+      const chosen = rosterAvatar(body.slug);
+      if (!chosen) {
+        return NextResponse.json({ error: "Pick an avatar from the library." }, { status: 400 });
+      }
+      const taken = await takenAvatarSlugs(engagement.ownerId, engagementId);
+      if (taken.includes(chosen.slug)) {
+        return NextResponse.json({ error: `${chosen.name} already belongs to another firm.` }, { status: 409 });
+      }
+      await setOnboardingValues(engagementId, [{ segments: ["avatarAssigned"], value: { slug: chosen.slug, at: now } }]);
+      await appendActivity(engagementId, {
+        actor: "agency",
+        type: "note",
+        message: `Your AI avatar is ${avatarName(chosen.slug)} ✨ She's yours alone: no other Nexli client's ads use her.`,
+      });
       break;
     }
 

@@ -798,8 +798,13 @@ export function buildOnboardingWelcomeEmail(params: {
   onboardingUrl: string;
   /** YYYY-MM-DD deadline for the client's items; omitted on legacy records. */
   clientDueAt?: string | null;
+  /** Nexli's DRS Launch Pads: mention the AI avatar step (optional, $2,500 to choose). */
+  avatarStep?: boolean;
 }): { subject: string; html: string } {
-  const { clientName, senderName, onboardingUrl, clientDueAt } = params;
+  const { clientName, senderName, onboardingUrl, clientDueAt, avatarStep } = params;
+  const avatarLine = avatarStep
+    ? `<p style="margin:12px 0 0;color:${C.body};font-size:13px;">${emailEmoji("&#x2728;")} Your AI avatar — we're selecting one for your firm. Want to choose her yourself from our library? Let us know on your Launch Pad.</p>`
+    : "";
   const dueLine = clientDueAt
     ? `<p class="gb-mono" style="margin:12px 0 0;color:#F59E0B;font-size:13px;font-weight:700;">Please have everything in by ${formatDueDateLong(clientDueAt)} so we can start building right away.</p>`
     : "";
@@ -824,6 +829,7 @@ export function buildOnboardingWelcomeEmail(params: {
       <p style="margin:4px 0;color:${C.body};font-size:13px;">${emailEmoji("&#x1F4E3;")} Your Facebook ad account ID — or tell us you don't have one and we'll set it up</p>
       <p style="margin:4px 0;color:${C.body};font-size:13px;">${emailEmoji("&#x1FAAA;")} Driver's license front &amp; back (phone number verification)</p>
       ${dueLine}
+      ${avatarLine}
     </div>
     <div style="text-align:center;">
       <p style="margin:0;color:${C.fine};font-size:11px;">

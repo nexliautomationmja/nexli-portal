@@ -103,6 +103,7 @@ export async function POST(
         .select({
           description: invoiceLineItems.description,
           amount: invoiceLineItems.amount,
+          billingType: invoiceLineItems.billingType,
         })
         .from(invoiceLineItems)
         .where(eq(invoiceLineItems.invoiceId, invoice.id))

@@ -12,6 +12,9 @@ import {
 import { encryptSubmission } from "@/lib/onboarding-crypto";
 import { cleanPaymentSetup, processorName } from "@/lib/payment-setup";
 import { cleanFbAds } from "@/lib/fb-ads-setup";
+import { cleanAvatarChoice, effectiveAvatar, feeText } from "@/lib/ai-avatar-choice";
+import { avatarName } from "@/lib/ai-avatar-roster";
+import { takenAvatarSlugs } from "@/lib/ai-avatar-claims";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { getNexliAdminId } from "@/lib/foundation-project";
@@ -22,6 +25,10 @@ import { getNexliAdminId } from "@/lib/foundation-project";
 
 const str = (v: unknown, max: number) =>
   typeof v === "string" ? v.trim().slice(0, max) : "";
+
+/** The first monthly invoice has gone out: the AI avatar choice is locked. */
+const billingStarted = (metadata: unknown) =>
+  Boolean((metadata as { billingStartedAt?: unknown } | null)?.billingStartedAt);
 
 // GET — load onboarding state for this signer's engagement
 export async function GET(
@@ -41,6 +48,28 @@ export async function GET(
   // Nexli's own engagements show Nexli's legal identity + nexli.net policies
   // in the footer; a firm's own onboarding never does.
   const nexliAdminId = await getNexliAdminId();
+  const nexli = Boolean(nexliAdminId) && ctx.engagement.ownerId === nexliAdminId;
+
+  // The AI avatar step (Nexli's own DRS Launch Pads only): which library
+  // avatars other firms hold, the one Nexli assigned, and whether it's locked.
+  let avatar: { taken: string[]; assigned: string | null; locked: boolean } | null = null;
+  if (nexli && tasksOf(ctx.onboarding).ai_avatar) {
+    let taken: string[] = [];
+    try {
+      taken = await takenAvatarSlugs(ctx.engagement.ownerId, ctx.engagement.id);
+    } catch (err) {
+      console.error("Onboarding: avatar claims lookup failed:", err);
+    }
+    avatar = {
+      taken,
+      assigned: ctx.onboarding.avatarAssigned?.slug ?? null,
+      locked: billingStarted(ctx.engagement.metadata),
+    };
+  }
+
+  const onboarding = serializePublicOnboarding(ctx.onboarding);
+  // A firm's own Launch Pads for its clients never offer Nexli's avatars.
+  if (!avatar) onboarding.tasks = onboarding.tasks.filter((t) => t.id !== "ai_avatar");
 
   return NextResponse.json({
     clientName: ctx.signer.name,
@@ -50,8 +79,9 @@ export async function GET(
       name: ctx.owner?.name || "",
       company: ctx.owner?.companyName || "",
     },
-    nexli: Boolean(nexliAdminId) && ctx.engagement.ownerId === nexliAdminId,
-    onboarding: serializePublicOnboarding(ctx.onboarding),
+    nexli,
+    onboarding,
+    avatar,
   });
 }
 
@@ -91,7 +121,8 @@ export async function POST(
   if (
     taskId !== "dns_access" &&
     taskId !== "fb_ads_invite" &&
-    taskId !== "payment_setup"
+    taskId !== "payment_setup" &&
+    taskId !== "ai_avatar"
   ) {
     return NextResponse.json({ error: "Invalid task" }, { status: 400 });
   }
@@ -107,8 +138,49 @@ export async function POST(
   const now = new Date().toISOString();
   let activityMessage: string;
   let submissionValue: unknown;
+  let notifyMessage = `${ctx.signer.name} completed "${TASK_INFO[taskId].title}"`;
 
-  if (taskId === "dns_access") {
+  if (taskId === "ai_avatar") {
+    // Nexli's own DRS Launch Pads only, and only until the first monthly
+    // invoice (which carries the $2,500) has gone out.
+    const nexliAdminId = await getNexliAdminId();
+    if (!nexliAdminId || ctx.engagement.ownerId !== nexliAdminId || !current) {
+      return NextResponse.json({ error: "Invalid task" }, { status: 400 });
+    }
+    if (billingStarted(ctx.engagement.metadata)) {
+      return NextResponse.json(
+        { error: "Your build is complete and your first monthly invoice has gone out, so your avatar is locked in. Message us if you'd like to change it." },
+        { status: 409 }
+      );
+    }
+    const cleaned = cleanAvatarChoice(body.submission, { acceptedBy: ctx.signer.name });
+    if (!cleaned.ok) {
+      return NextResponse.json({ error: cleaned.error }, { status: 400 });
+    }
+    const v = cleaned.value;
+    if (v.choice === "pick" && v.slug) {
+      // One avatar, one firm: re-check at the moment of choosing.
+      const taken = await takenAvatarSlugs(ctx.engagement.ownerId, ctx.engagement.id);
+      if (taken.includes(v.slug)) {
+        return NextResponse.json(
+          { error: `${avatarName(v.slug)} was just taken by another firm. Please pick another.` },
+          { status: 409 }
+        );
+      }
+    }
+    submissionValue = v;
+    const firm = ctx.signer.name;
+    if (v.choice === "pick" && v.slug) {
+      activityMessage = `${firm} chose ${avatarName(v.slug)} as their AI avatar ✨ (${feeText(v.feeCents)} one-time, on the first monthly invoice)`;
+      notifyMessage = `${firm} chose ${avatarName(v.slug)} as their AI avatar: ${feeText(v.feeCents)} one-time, added to their first monthly invoice. Assign her to their studio in Creative Studio → Avatars.`;
+    } else {
+      const assigned = effectiveAvatar({ avatarAssigned: ctx.onboarding.avatarAssigned ?? null });
+      activityMessage = `${firm} would like Nexli to choose their AI avatar ✨`;
+      notifyMessage = assigned
+        ? `${firm} switched back to letting Nexli choose their AI avatar (you assigned ${assigned.name}). No charge.`
+        : `${firm} would like you to choose their AI avatar. Assign one on their Launch Pad. No charge.`;
+    }
+  } else if (taskId === "dns_access") {
     const raw = (body.submission || {}) as Record<string, unknown>;
     const submission = {
       registrar: str(raw.registrar, 200),
@@ -189,7 +261,7 @@ export async function POST(
       userId: ctx.engagement.ownerId,
       type: "onboarding_task_submitted",
       title: "Onboarding Item Submitted",
-      message: `${ctx.signer.name} completed "${TASK_INFO[taskId].title}"`,
+      message: notifyMessage,
       metadata: { engagementId: ctx.engagement.id, taskId },
     });
   } catch (err) {

@@ -21,6 +21,8 @@ import {
   ShimmerCard,
   LaunchPadShell,
   NexliLegalFooter,
+  AiAvatarStep,
+  type AvatarInfo,
 } from "@/components/launch-pad";
 import {
   PROCESSORS,
@@ -41,6 +43,7 @@ import {
   type WireMode,
 } from "@/lib/payment-setup";
 import { asFbAnswer, cleanFbAds, type FbAdsAnswer } from "@/lib/fb-ads-setup";
+import type { AvatarChoice } from "@/lib/ai-avatar-choice";
 
 // ══════════════════════════════════════════════════════════
 // Launch Pad — client-facing onboarding page, styled to match
@@ -85,7 +88,8 @@ interface TaskData {
     notApplicable?: boolean;
     legacyStripe?: boolean;
   } & Partial<PaymentSetup> &
-    Partial<FbAdsAnswer>) | null;
+    Partial<FbAdsAnswer> &
+    Partial<AvatarChoice>) | null;
 }
 
 interface ActivityEntry {
@@ -102,6 +106,8 @@ interface LaunchPadData {
   from: { name: string; company: string };
   /** True when Nexli itself issued this engagement (shows Nexli's legal footer). */
   nexli?: boolean;
+  /** The AI avatar step's data (Nexli's DRS Launch Pads only). */
+  avatar?: AvatarInfo | null;
   onboarding: {
     startedAt: string;
     targetLaunchDate: string | null;
@@ -204,6 +210,7 @@ const TASK_ACCENT: Record<string, Accent> = {
   dns_access: "blue",
   fb_ads_invite: "emerald",
   drivers_license: "amber",
+  ai_avatar: "violet",
 };
 
 const PHASE_ICON: Record<string, React.ReactNode> = {
@@ -216,6 +223,7 @@ const TASK_ICON: Record<string, React.ReactNode> = {
   payment_setup: PATHS.creditCard,
   dns_access: PATHS.globe,
   drivers_license: PATHS.idCard,
+  ai_avatar: PATHS.star,
 };
 
 // ─── Status pills ──────────────────────────────────────────
@@ -249,6 +257,24 @@ function PhasePill({ status, accent }: { status: PhaseData["status"]; accent: Ac
 
 function TaskPill({ task, accent }: { task: TaskData; accent: Accent }) {
   const a = ACCENT[accent];
+  if (task.id === "ai_avatar") {
+    // Nothing to do unless they want a specific one: never "Action needed".
+    const chose = task.status !== "todo" && task.status !== "needs_attention" && task.submission?.choice === "pick";
+    if (task.status === "needs_attention") {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+          Needs attention
+        </span>
+      );
+    }
+    return chose ? (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${a.badgeDone}`}>Chosen ✓</span>
+    ) : (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-white/70 border border-white/10">
+        Optional
+      </span>
+    );
+  }
   if (task.status === "approved") {
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${a.badgeDone}`}>
@@ -376,7 +402,9 @@ export function OnboardingClient({ token }: { token: string }) {
 
   const ob = data.onboarding;
   const firstName = (data.clientName || "there").split(" ")[0];
-  const tasksDone = ob.tasks.filter(
+  // The AI avatar is optional (Nexli picks one otherwise): not in the count.
+  const countedTasks = ob.tasks.filter((t) => t.id !== "ai_avatar");
+  const tasksDone = countedTasks.filter(
     (t) => t.status === "submitted" || t.status === "approved"
   ).length;
   const allDone = ob.progressPercent === 100;
@@ -571,17 +599,20 @@ export function OnboardingClient({ token }: { token: string }) {
           </h2>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-              {tasksDone} of {ob.tasks.length} done
+              {tasksDone} of {countedTasks.length} done
             </span>
             <DuePill ob={ob} />
           </div>
         </div>
         <div className="space-y-4">
-          {ob.tasks.map((task) => (
+          {ob.tasks
+            .filter((task) => task.id !== "ai_avatar" || data.avatar)
+            .map((task) => (
             <TaskCard
               key={task.id}
               task={task}
               token={token}
+              avatar={data.avatar ?? null}
               onSubmitted={() => {
                 celebrate();
                 load(false);
@@ -812,10 +843,12 @@ function CenterpiecePhaseCard({ phase }: { phase: PhaseData }) {
 function TaskCard({
   task,
   token,
+  avatar,
   onSubmitted,
 }: {
   task: TaskData;
   token: string;
+  avatar: AvatarInfo | null;
   onSubmitted: () => void;
 }) {
   const accent = TASK_ACCENT[task.id] || "blue";
@@ -859,6 +892,9 @@ function TaskCard({
         )}
         {task.type === "upload" && (
           <LicenseUpload task={task} token={token} onSubmitted={onSubmitted} accent={accent} />
+        )}
+        {task.id === "ai_avatar" && avatar && (
+          <AiAvatarStep task={task} token={token} avatar={avatar} onSubmitted={onSubmitted} accent={accent} />
         )}
       </div>
     </LpCard>

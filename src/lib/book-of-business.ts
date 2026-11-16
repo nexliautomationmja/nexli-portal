@@ -1,3 +1,4 @@
+import { oneTimeCentsOf } from "@/lib/recurring-copy";
 import { db } from "@/db";
 import { invoices, engagements, engagementSigners } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -229,7 +230,8 @@ export async function getBookOfBusiness(
       r.status !== "draft" &&
       !(r.recurringEndDate && new Date(r.recurringEndDate).getTime() < now)
     ) {
-      roll.mrr += monthlyEquivalent(total - adSpend, r.recurringInterval);
+      // Leave out one-time charges on the parent (the AI avatar fee).
+      roll.mrr += monthlyEquivalent(Math.max(0, total - adSpend - oneTimeCentsOf(r.metadata)), r.recurringInterval);
     }
 
     // Annual DRS: the prepaid platform year (inside the one-time
