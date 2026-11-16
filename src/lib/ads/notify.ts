@@ -2,7 +2,9 @@ import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
 import { emailButton, emailWrapper, escapeHtml, sendEmailWithLog, EMAIL_COLORS as C } from "@/lib/email";
-import { adAnalyses, adSteps } from "@/lib/ads/tables";
+import { adAnalyses, adDailyPlans, adSteps } from "@/lib/ads/tables";
+import type { AdPlan } from "@/lib/ads/decide";
+import type { PlanMake, PlanTracking } from "@/lib/ads/daily-plan";
 import { getSettings } from "@/lib/ads/settings";
 import type { ParsedAnalysis } from "@/lib/ads/parse";
 
@@ -181,6 +183,52 @@ export async function notifyResearchReady(row: Analysis): Promise<void> {
      ${list ? `<p style="margin:0 0 8px;color:${C.ink};font-size:13px;font-weight:700;">Creatives to make next</p><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${list}</ol>` : ""}
      ${button("/dashboard/ads#research", "Open the research")}`,
     "ads_research_ready",
+    claimed.id
+  );
+}
+
+/**
+ * The morning plan email — only when something needs Marcel (an open cut,
+ * creatives due today, or tracking that looks wrong). Once per plan.
+ */
+export async function notifyDailyPlan(row: typeof adDailyPlans.$inferSelect): Promise<void> {
+  if (!row.actionable) return;
+  const [claimed] = await db
+    .update(adDailyPlans)
+    .set({ emailedAt: new Date() })
+    .where(and(eq(adDailyPlans.id, row.id), isNull(adDailyPlans.emailedAt)))
+    .returning();
+  if (!claimed) return;
+  const plan = claimed.plan as AdPlan | null;
+  const make = claimed.make as PlanMake | null;
+  const tracking = claimed.tracking as PlanTracking | null;
+  if (!plan) return;
+  const cuts = plan.calls.filter((c) => c.call === "cut" && !c.done);
+  const add = plan.need.when === "today" || plan.need.when === "this_week" ? plan.need.add : 0;
+  const trackingBad = tracking && (tracking.severity === "warning" || tracking.severity === "critical");
+  const bits = [cuts.length ? `cut ${cuts.length}` : null, add ? `add ${add} creative${add === 1 ? "" : "s"}` : null, trackingBad ? "check tracking" : null].filter(Boolean);
+  const title = `Ads today: ${bits.join(", ") || "keep everything running"}`;
+  await bell(claimed.ownerId, "ads_daily_plan", title, [cuts.map((c) => c.name).join(" · "), trackingBad ? tracking?.title : null].filter(Boolean).join(" — ").slice(0, 300) || title, { planId: claimed.id, href: "/dashboard/ads#plan" });
+  const settings = await getSettings(claimed.ownerId, claimed.accountId);
+  if (!settings.notifyEmail) return;
+
+  const li = (name: string, text: string, color: string) =>
+    `<li style="margin:0 0 10px;"><strong style="color:${color};">${escapeHtml(name)}</strong><br/><span style="color:${C.body};">${escapeHtml(text.slice(0, 260))}</span></li>`;
+  const cutList = cuts.map((c) => li(c.name, c.reason, C.ink)).join("");
+  const winners = plan.calls.filter((c) => c.tag === "winner" || c.tag === "tiring").slice(0, 4);
+  const keepList = winners.map((c) => li(c.name, c.reason, C.ink)).join("");
+  const cards = (make?.cards ?? []).map((m) => `<li style="margin:0 0 10px;"><strong style="color:${C.ink};">${m.count} × ${escapeHtml(m.label)}</strong> <span style="color:${C.body};">(${m.format === "video" ? "videos" : "photo ads"})</span><br/><span style="color:${C.body};">${escapeHtml(m.why.slice(0, 260))}</span></li>`).join("");
+  const h = (t: string) => `<p style="margin:16px 0 8px;color:${C.ink};font-size:13px;font-weight:700;">${escapeHtml(t)}</p>`;
+  await email(
+    title,
+    `<h1 style="margin:0 0 8px;color:${C.ink};font-size:20px;font-weight:700;">${escapeHtml(title)}</h1>
+     <p style="margin:0 0 4px;color:${C.body};font-size:13px;line-height:1.6;">Based on results through ${escapeHtml(plan.throughDate)} · ${plan.counts.keep} creative${plan.counts.keep === 1 ? "" : "s"} to keep, ${plan.counts.cut} to cut.</p>
+     ${trackingBad && tracking ? `${h("Tracking")}<p style="margin:0;color:${C.body};font-size:13px;line-height:1.6;"><strong style="color:${C.ink};">${escapeHtml(tracking.title)}</strong><br/>${escapeHtml(tracking.detail)}</p>` : ""}
+     ${cutList ? `${h("Turn these off in Ads Manager")}<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${cutList}</ul>` : ""}
+     ${add ? `${h(`Add ${add} new creative${add === 1 ? "" : "s"} ${plan.need.when === "today" ? "today" : "this week"}`)}<p style="margin:0 0 8px;color:${C.body};font-size:13px;line-height:1.6;">${escapeHtml(plan.need.why)}</p>${cards ? `<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${cards}</ul>` : ""}` : ""}
+     ${keepList ? `${h("Your best creatives right now")}<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${keepList}</ul>` : ""}
+     ${button("/dashboard/ads#plan", "Open today's plan")}`,
+    "ads_daily_plan",
     claimed.id
   );
 }

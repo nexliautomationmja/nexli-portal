@@ -36,6 +36,8 @@ export const adSettings = pgTable(
     competitors: text("competitors").notNull().default(""),
     lastCronAt: timestamp("last_cron_at"),
     lastCronError: text("last_cron_error"),
+    /** 1 = the daily-plan rules' one-time defaults ($300 per booked call) were applied. */
+    rulesVersion: integer("rules_version"),
     updatedBy: uuid("updated_by"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -137,6 +139,49 @@ export const adSteps = pgTable("ad_steps", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * The daily plan (one per ad account per day, made each morning): the Cut /
+ * Keep calls then, what to make, the tracking verdict, and whether it needs
+ * Marcel (email + badge only then).
+ */
+export const adDailyPlans = pgTable("ad_daily_plans", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  /** The account-local day it's for (YYYY-MM-DD). */
+  planDate: text("plan_date").notNull(),
+  status: text("status").$type<"making" | "done" | "failed">().notNull().default("making"),
+  throughDate: text("through_date"),
+  plan: jsonb("plan"),
+  make: jsonb("make"),
+  tracking: jsonb("tracking"),
+  actionable: boolean("actionable").notNull().default(false),
+  error: text("error"),
+  emailedAt: timestamp("emailed_at"),
+  seenAt: timestamp("seen_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** What each creative is (format, angle, hook), read once by Claude and kept until the creative changes. */
+export const adCreativeTags = pgTable(
+  "ad_creative_tags",
+  {
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull(),
+    adId: text("ad_id").notNull(),
+    /** Hash of what the tags were read from (name, copy, media type). */
+    key: text("key").notNull(),
+    tags: jsonb("tags").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ownerId, t.accountId, t.adId] })]
+);
 
 let ensured: Promise<void> | null = null;
 
@@ -265,6 +310,42 @@ export function ensureAdsTables(): Promise<void> {
       await db.execute(sql`ALTER TABLE "ad_settings" ADD COLUMN IF NOT EXISTS "competitors" text NOT NULL DEFAULT ''`);
       await db.execute(sql`ALTER TABLE "ad_settings" ADD COLUMN IF NOT EXISTS "library_connector" jsonb`);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_steps_analysis_idx" ON "ad_steps" ("analysis_id", "idx")`);
+      // Nov 15 2026: the daily plan + creative tags, and the plan rules' one-time default
+      // target ($300 per booked call, Marcel's pick) — applied once per account, then Goals owns it.
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "ad_daily_plans" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "account_id" text NOT NULL,
+          "plan_date" text NOT NULL,
+          "status" text NOT NULL DEFAULT 'making',
+          "through_date" text,
+          "plan" jsonb,
+          "make" jsonb,
+          "tracking" jsonb,
+          "actionable" boolean NOT NULL DEFAULT false,
+          "error" text,
+          "emailed_at" timestamp,
+          "seen_at" timestamp,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "ad_daily_plans_day_uq" ON "ad_daily_plans" ("owner_id", "account_id", "plan_date")`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "ad_creative_tags" (
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "account_id" text NOT NULL,
+          "ad_id" text NOT NULL,
+          "key" text NOT NULL,
+          "tags" jsonb NOT NULL,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          PRIMARY KEY ("owner_id", "account_id", "ad_id")
+        )
+      `);
+      await db.execute(sql`ALTER TABLE "ad_settings" ADD COLUMN IF NOT EXISTS "rules_version" integer`);
+      await db.execute(sql`UPDATE "ad_settings" SET "target_cpb_cents" = 30000, "rules_version" = 1 WHERE "rules_version" IS NULL`);
+      await db.execute(sql`ALTER TABLE "ad_settings" ALTER COLUMN "rules_version" SET DEFAULT 1`);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_steps_owner_status_idx" ON "ad_steps" ("owner_id", "account_id", "status")`);
       await db.execute(
         sql`CREATE INDEX IF NOT EXISTS "ad_steps_check_back_idx" ON "ad_steps" ("check_back_at") WHERE "checked_at" IS NULL AND "status" IN ('open','done')`

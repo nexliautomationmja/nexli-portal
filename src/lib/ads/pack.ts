@@ -1,5 +1,6 @@
 import { DRS_PRICING, PIPELINE, TOTAL_MONTHLY_CENTS } from "@/lib/drs-pricing";
 import { buildAdsSnapshot } from "@/lib/ads/snapshot";
+import { decideAds } from "@/lib/ads/decide";
 import { THRESHOLDS } from "@/lib/ads/thresholds";
 import { decimal, money, pct } from "@/lib/ads/format";
 import type { AdRow, AdsSnapshot, Business, Compare, Metrics } from "@/lib/ads/types";
@@ -295,6 +296,15 @@ export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnap
     audience_30d: s30.demographics.slice(0, 20).map((p) => ({ segment: p.label, spend_usd: usd(p.spendCents), share: r4(p.share), ctr: r4(p.ctr), meta_leads: p.metaLeads })),
     tracking: s30.tracking.map((t) => ({ check: t.key, severity: t.severity, finding: t.label, detail: t.value, fix: t.fix })),
     signals: s30.signals.map((x) => ({ kind: x.kind, severity: x.severity, title: x.title, detail: x.detail, ref: x.ref })),
+    // The portal's own daily Cut / Keep calls (the same rules the page and the morning email use), so the weekly read agrees with them or says why not.
+    daily_calls: (() => {
+      const p = decideAds(s30);
+      return {
+        rules: `CUT when an ad spent 2x the target cost per booked call with no booked call, 3x the target cost per lead with no lead, booked calls cost 2x target after 3x target spent, CTR under 0.4% on 3,000+ views in 7 days, or it's worn out and not a winner. Otherwise KEEP (winner / working / testing / tiring). Target per booked call ${money(p.targets.cpbCents)}, per lead ${money(p.targets.cplCents)}.`,
+        calls: p.calls.map((c) => ({ ad_id: c.adId, ad_name: c.name, call: c.call, kind: c.tag ?? c.cutKind, reason: c.reason })),
+        creatives_to_add: { count: p.need.add, when: p.need.when, why: p.need.why },
+      };
+    })(),
     history,
     /** The latest Ad Library research (patterns, long-running competitor ads, briefs) — null when there's none from the last 60 days. */
     market_research: src.research ?? null,
@@ -424,14 +434,14 @@ export const entityIn = (sum: SnapshotSummary | null | undefined, level: string,
 
 /** The 30-day snapshot with the account's goals (null when Meta isn't connected). */
 export async function snapshot30(ownerId: string, accountId: string, settings: AdSettingsRow): Promise<AdsSnapshot | null> {
-  const targets = { cpbCents: settings.targetCpbCents, monthlyBudgetCents: settings.monthlyBudgetCents };
+  const targets = { cpbCents: settings.targetCpbCents, cplCents: settings.targetCplCents, monthlyBudgetCents: settings.monthlyBudgetCents };
   const r30 = await buildAdsSnapshot({ ownerId, accountId, range: "30", targets, budgetMs: 80_000 });
   return r30.configured ? r30.snapshot : null;
 }
 
 /** The three snapshots the pack is built from (30 first: it warms the shared caches). */
 export async function gatherSnapshots(ownerId: string, accountId: string, settings: AdSettingsRow) {
-  const targets = { cpbCents: settings.targetCpbCents, monthlyBudgetCents: settings.monthlyBudgetCents };
+  const targets = { cpbCents: settings.targetCpbCents, cplCents: settings.targetCplCents, monthlyBudgetCents: settings.monthlyBudgetCents };
   const s30 = await snapshot30(ownerId, accountId, settings);
   if (!s30) return null;
   const r30 = { configured: true as const, snapshot: s30 };

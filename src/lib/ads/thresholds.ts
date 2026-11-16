@@ -46,6 +46,22 @@ export const THRESHOLDS = {
   lowVolume: { booked: 3, leads: 5, impressions: 5000 },
   /** When there's no target and no history to learn one from. */
   defaultTargetCpbCents: 50000,
+  // The daily Cut / Keep calls (decide.ts). T = target cost per booked call, L = target cost per lead.
+  /** Cut: spent 2T with no booked call (once it's 5+ days old). */
+  cutNoBookedSpendX: 2,
+  cutNoBookedMinDays: 5,
+  /** Cut: spent 3L with no lead (once it's 3+ days old). */
+  cutNoLeadsSpendX: 3,
+  cutNoLeadsMinDays: 3,
+  /** Cut: booked calls cost 2T or more, once it has spent 3T. */
+  cutExpensiveCpbX: 2,
+  cutExpensiveSpendX: 3,
+  /** Cut a worn-out (fatigued) non-winner whose leads cost this many L. */
+  cutWornCplX: 1.5,
+  /** Live creatives to aim for per ad set (retargeting: the floor), the floor, and the most to ask for at once. */
+  idealLiveCreatives: 5,
+  minLiveCreatives: 3,
+  maxAddPerAdset: 8,
 } as const;
 
 export type Thresholds = typeof THRESHOLDS;

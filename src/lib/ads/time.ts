@@ -25,6 +25,9 @@ function partsIn(d: Date, tz: string): Record<string, number> {
   return out;
 }
 
+/** The hour (0–23) of `d` in `tz`. */
+export const localHour = (d: Date, tz: string) => partsIn(d, tz).hour;
+
 /** A valid IANA zone, else the default. */
 export function safeTz(tz: string | null | undefined): string {
   if (!tz) return DEFAULT_TZ;

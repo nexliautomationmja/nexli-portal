@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SHIMMER_CONIC, ShimmerPill, SYNE } from "@/components/launch-pad";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
@@ -17,7 +17,13 @@ import type { ParsedEvidence } from "@/lib/ads/parse";
 import { Ico, SectionHead, Skeleton } from "@/components/ads/parts";
 import { KpiRow } from "@/components/ads/kpi-row";
 import { TrendCharts } from "@/components/ads/trend-charts";
-import { FatigueBoard, type CreativeVerdict } from "@/components/ads/fatigue-board";
+import { FatigueBoard } from "@/components/ads/fatigue-board";
+import { TodayPlan } from "@/components/ads/today-plan";
+import { TrackingCheck } from "@/components/ads/tracking-check";
+import { decideAds, type CreativeCall } from "@/lib/ads/decide";
+import { trackingVerdict, type TrackingData } from "@/lib/ads/tracking-check";
+import type { DailyPlanView } from "@/lib/ads/daily-plan";
+import type { CreativeTags } from "@/lib/ads/creative-types";
 import { AnalysisPanel, type AnalysisState } from "@/components/ads/analysis-panel";
 import { ResearchPanel } from "@/components/ads/research-panel";
 import { NextSteps, type StepPatch } from "@/components/ads/next-steps";
@@ -26,17 +32,19 @@ import { History, ReportModal } from "@/components/ads/history";
 import { photosHref } from "@/components/ads/handoff";
 import { StructureTable } from "@/components/ads/structure-table";
 import { AudiencePlacements } from "@/components/ads/audience-placements";
-import { Funnel, SignalsCard, TrackingHealth } from "@/components/ads/funnel-tracking";
+import { Funnel, SignalsCard } from "@/components/ads/funnel-tracking";
 
 type SnapshotResponse = { configured: false } | { configured: true; snapshot: AdsSnapshot; cachedAt: string; stale: boolean } | { error: string };
 
 const RANGE_KEY = "nexli.ads.range";
 
 export const SECTIONS = [
-  { id: "read", label: "The read" },
+  { id: "plan", label: "Today's plan" },
   { id: "creatives", label: "Creatives" },
+  { id: "tracking", label: "Tracking" },
   { id: "research", label: "Ad Library" },
-  { id: "next-steps", label: "Next steps" },
+  { id: "read", label: "Manus weekly" },
+  { id: "next-steps", label: "Manus's steps" },
   { id: "kpis", label: "Scorecard" },
   { id: "trends", label: "Trends" },
   { id: "structure", label: "Campaigns" },
@@ -148,7 +156,7 @@ export function Hero({
         Ads that <GradientText>book calls.</GradientText>
       </h1>
       <p className="mx-auto mt-3 max-w-2xl text-sm text-neutral-400 sm:text-base">
-        Every number from Meta and GoHighLevel in one place, and Manus&apos;s read on what to do next. Read-only: Manus advises, you make the changes in Ads Manager.
+        Every number from Meta and GoHighLevel in one place, and a plan every morning: what to cut, what to keep, and what to make next. Read-only: you make the changes in Ads Manager.
       </p>
       {s && (
         <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-neutral-500" style={NUM_FONT}>
@@ -276,6 +284,78 @@ export function AdsCommandCenter() {
     void loadAnalysis();
   }, [loadAnalysis]);
 
+  // ── Today's plan (the morning's version: what to make, creative types) ──
+  const [planState, setPlanState] = useState<{ today: string; plan: DailyPlanView | null; tags: Record<string, CreativeTags> } | null>(null);
+  const [making, setMaking] = useState(false);
+  const [makeError, setMakeError] = useState<string | null>(null);
+  const triedMake = useRef(false);
+  const loadPlan = useCallback(async () => {
+    try {
+      const r = await fetch("/api/dashboard/ads/plan", { cache: "no-store" });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.configured) setPlanState({ today: d.today, plan: d.plan, tags: d.tags ?? {} });
+    } catch {
+      /* the live calls work without it */
+    }
+  }, []);
+  useEffect(() => {
+    void loadPlan();
+  }, [loadPlan]);
+  const makePlan = useCallback(async () => {
+    setMaking(true);
+    setMakeError(null);
+    try {
+      const r = await fetch("/api/dashboard/ads/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "make" }) });
+      const d = await r.json().catch(() => null);
+      if (d?.plan) setPlanState((cur) => ({ today: cur?.today ?? d.plan.planDate, plan: d.plan, tags: d.tags ?? cur?.tags ?? {} }));
+      if (!r.ok) setMakeError(d?.error || "Couldn't make today's plan.");
+      else if (d?.busy) setTimeout(() => void loadPlan(), 30_000);
+    } catch {
+      setMakeError("Couldn't reach the server — check your connection.");
+    } finally {
+      setMaking(false);
+    }
+  }, [loadPlan]);
+  // No plan for today yet (the 7:00 run hasn't happened or failed): make it once, without being asked.
+  useEffect(() => {
+    if (!planState || triedMake.current) return;
+    const p = planState.plan;
+    if (p && p.planDate === planState.today && p.status !== "failed") return;
+    if (p && p.planDate === planState.today && p.status === "failed") {
+      setMakeError(p.error ?? "It stopped before it finished.");
+      return;
+    }
+    triedMake.current = true;
+    void makePlan();
+  }, [planState, makePlan]);
+
+  // ── Tracking: Meta vs the CRM, today's part refreshed every minute while the page is open ──
+  const [tracking, setTracking] = useState<TrackingData | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const loadTracking = useCallback(async (refresh = false) => {
+    setTrackingLoading(true);
+    try {
+      const r = await fetch(`/api/dashboard/ads/tracking${refresh ? "?refresh=1" : ""}`, { cache: "no-store" });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.configured) {
+        setTracking(d.data as TrackingData);
+        setTrackingError((d.data as TrackingData).errors[0] ?? null);
+      } else if (!r.ok) setTrackingError(d?.error ?? "Couldn't check tracking right now.");
+    } catch {
+      setTrackingError("Couldn't reach the server for the live numbers.");
+    } finally {
+      setTrackingLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void loadTracking();
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") void loadTracking();
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [loadTracking]);
+
   // Follow runs while they're in flight (the analysis and the Ad Library research run side by side).
   const finished = async () => {
     await loadAnalysis();
@@ -369,8 +449,37 @@ export function AdsCommandCenter() {
     [router, setError]
   );
 
-  const verdicts: Record<string, CreativeVerdict> = {};
-  for (const c of an?.latest?.result?.creatives ?? []) verdicts[c.adId] = { verdict: c.verdict, why: c.why, iterateIdea: c.iterateIdea };
+  // Today's calls, live from the current numbers (this morning's cuts that are now off show as done).
+  const stored = planState?.plan ?? null;
+  const earlierCuts = useMemo(() => {
+    const out: Record<string, string> = {};
+    if (stored?.plan && stored.planDate === planState?.today) for (const c of stored.plan.calls) if (c.call === "cut") out[c.adId] = c.reason;
+    return out;
+  }, [stored, planState?.today]);
+  const livePlan = useMemo(() => (s ? decideAds(s, { earlierCuts }) : null), [s, earlierCuts]);
+  const calls = useMemo(() => Object.fromEntries((livePlan?.calls ?? []).map((c) => [c.adId, c])) as Record<string, CreativeCall>, [livePlan]);
+  const verdict = useMemo(() => trackingVerdict({ data: tracking, snapshot: s }), [tracking, s]);
+  const planRef = useRef<HTMLDivElement>(null);
+  const planSeenId = stored && stored.actionable && !stored.seen && stored.status === "done" ? stored.id : null;
+  useEffect(() => {
+    if (!planSeenId || !planRef.current) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        io.disconnect();
+        void fetch("/api/dashboard/ads/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "seen", id: planSeenId }) }).then(() => router.refresh());
+      }
+    });
+    io.observe(planRef.current);
+    return () => io.disconnect();
+  }, [planSeenId, router, Boolean(s)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const jumpAd = (id: string) => {
+    const el = document.getElementById(`ad-${id}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    else {
+      const url = s?.ads.find((a) => a.id === id)?.adsManagerUrl;
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
   const studioKey = an?.settings.studioKey ?? "nexli";
   const tz = an?.timezone ?? s?.account.timezone ?? "America/Chicago";
   const jumpEvidence = (e: ParsedEvidence) => {
@@ -426,26 +535,26 @@ export function AdsCommandCenter() {
             )}
 
             <section className="lp-card mb-10">
-              <SectionHead id="read" eyebrow="The read" title="Manus's verdict" sub="A full analysis of the whole account — every Monday, or whenever you ask." />
-              <div ref={verdictRef}>
-                {an ? (
-                  <AnalysisPanel
-                    state={an}
-                    busy={busy}
-                    onAnalyze={() => void analyzeNow()}
-                    onAct={(id, action, text) => void act(id, action, text)}
-                    onRetry={(id) => void act(id, "retry")}
-                    onOpenReport={setReport}
-                    onJump={jumpEvidence}
+              <SectionHead id="plan" eyebrow="Today's plan" title="Cut, keep, add" sub="Every live creative gets one call, made from booked calls and leads in your CRM. Do these in Ads Manager — the page ticks cuts off once they're paused." />
+              <div ref={planRef}>
+                {livePlan ? (
+                  <TodayPlan
+                    s={s}
+                    plan={livePlan}
+                    stored={stored}
+                    today={planState?.today ?? null}
+                    tags={planState?.tags ?? {}}
+                    making={making}
+                    makeError={makeError}
+                    tracking={verdict}
+                    studioKey={studioKey}
+                    onMake={() => void makePlan()}
+                    onJumpAd={jumpAd}
                   />
                 ) : (
-                  <Skeleton className="h-48" />
+                  <Skeleton className="h-64" />
                 )}
               </div>
-              <h3 className="mb-2 mt-6 text-sm font-bold text-white" style={SYNE}>
-                What the numbers flag right now
-              </h3>
-              <SignalsCard s={s} onJump={(sig) => jumpTo(sig, s)} />
             </section>
 
             <section className="lp-card mb-10">
@@ -453,10 +562,18 @@ export function AdsCommandCenter() {
                 id="creatives"
                 eyebrow="Creatives"
                 title="Your creatives"
-                sub={`Uncropped at their real size — videos play muted while on screen; tap for sound. Last 7 days (${shortDay(s.fatigueWindow.l7[0])} – ${shortDay(s.fatigueWindow.l7[1])}) against the 14 before, plus 30-day results.`}
+                sub={`Each one carries today's call. Uncropped at their real size — videos play muted while on screen; tap for sound. Last 7 days (${shortDay(s.fatigueWindow.l7[0])} – ${shortDay(s.fatigueWindow.l7[1])}) against the 14 before, plus 30-day results.`}
               />
-              <FatigueBoard s={s} verdicts={verdicts} onVariations={variations} />
-              <div id="research" className="mt-10 scroll-mt-28 md:scroll-mt-20">
+              <FatigueBoard s={s} calls={calls} tags={planState?.tags ?? {}} onVariations={variations} />
+            </section>
+
+            <section className="lp-card mb-10">
+              <SectionHead id="tracking" eyebrow="Tracking check" title="Can you trust Meta's numbers?" sub="Meta's lead count lined up against the leads your CRM actually got — today live, the last 14 days, and per ad." />
+              <TrackingCheck v={verdict} data={tracking} s={s} loading={trackingLoading} error={trackingError} onRefresh={() => void loadTracking(true)} />
+            </section>
+
+            <section className="lp-card mb-10">
+              <div id="research" className="scroll-mt-28 md:scroll-mt-20">
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-violet-300">Ad Library research</p>
                 <h3 className="mb-1 mt-1 text-lg font-bold text-white sm:text-xl" style={SYNE}>
                   What&apos;s working for others — and what to make next
@@ -487,7 +604,30 @@ export function AdsCommandCenter() {
             </section>
 
             <section className="lp-card mb-10">
-              <SectionHead id="next-steps" eyebrow="Manus's plan" title="Next steps" sub="Make each change in Ads Manager, then tick it off. Manus checks what you did — and whether it worked — in the next analysis." />
+              <SectionHead id="read" eyebrow="Manus · weekly" title="Manus's weekly deep dive" sub="An optional, longer read of the whole account every Monday. Today's plan above is what to act on day to day." />
+              <div ref={verdictRef}>
+                {an ? (
+                  <AnalysisPanel
+                    state={an}
+                    busy={busy}
+                    onAnalyze={() => void analyzeNow()}
+                    onAct={(id, action, text) => void act(id, action, text)}
+                    onRetry={(id) => void act(id, "retry")}
+                    onOpenReport={setReport}
+                    onJump={jumpEvidence}
+                  />
+                ) : (
+                  <Skeleton className="h-48" />
+                )}
+              </div>
+              <h3 className="mb-2 mt-6 text-sm font-bold text-white" style={SYNE}>
+                Other things the numbers flag
+              </h3>
+              <SignalsCard s={s} onJump={(sig) => jumpTo(sig, s)} />
+            </section>
+
+            <section className="lp-card mb-10">
+              <SectionHead id="next-steps" eyebrow="Manus's plan" title="Manus's next steps" sub="From the weekly deep dive. Make each change in Ads Manager, then tick it off — Manus checks what you did in the next one." />
               {an ? (
                 <NextSteps steps={an.steps} tests={an.latest?.result?.tests ?? []} tz={tz} studioKey={studioKey} busy={busy} onPatch={patchStep} onJump={jumpEvidence} />
               ) : (
@@ -512,14 +652,11 @@ export function AdsCommandCenter() {
               <AudiencePlacements s={s} />
             </section>
             <section className="lp-card mb-10">
-              <SectionHead id="funnel" eyebrow="Funnel" title="Funnel & tracking" sub="Where people drop off, and whether the tracking can be trusted." />
-              <div className="grid gap-3 lg:grid-cols-2">
-                <Funnel s={s} />
-                <TrackingHealth s={s} />
-              </div>
+              <SectionHead id="funnel" eyebrow="Funnel" title="From impression to client" sub="Where people drop off. Tracking checks are in the Tracking section above." />
+              <Funnel s={s} />
             </section>
             <section className="lp-card mb-10">
-              <SectionHead id="goals" eyebrow="Goals" title="Goals & settings" sub="What good looks like, what Manus should know, and how often it checks in." />
+              <SectionHead id="goals" eyebrow="Goals" title="Goals & settings" sub="The targets today's plan judges every creative by, what Manus should know, and how often it checks in." />
               {an ? (
                 <GoalsCard
                   settings={an.settings}

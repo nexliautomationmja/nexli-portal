@@ -102,9 +102,13 @@ export function GoalsCard({
           label="Target cost per booked call"
           value={cpb}
           onChange={setCpb}
-          hint={!cpb && assumedTargetCents ? `Empty: Manus judges from ${assumedSource === "history" ? "your recent average" : "a starting assumption"} (${money(assumedTargetCents)})` : undefined}
+          hint={
+            !cpb && assumedTargetCents
+              ? `Empty: judged from ${assumedSource === "history" ? "your recent average" : "a starting assumption"} (${money(assumedTargetCents)})`
+              : "Today's plan cuts an ad that spends 2× this with no booked call"
+          }
         />
-        <MoneyField label="Target cost per lead" value={cpl} onChange={setCpl} />
+        <MoneyField label="Target cost per lead" value={cpl} onChange={setCpl} hint={cpl ? "Cut at 3× this with no lead" : "Empty: your 60-day average"} />
         <MoneyField label="Monthly ad budget" value={budget} onChange={setBudget} hint="For pacing" />
         <MoneyField label="Max cost per client" value={cac} onChange={setCac} />
       </div>

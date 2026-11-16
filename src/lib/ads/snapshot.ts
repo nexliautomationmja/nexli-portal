@@ -100,6 +100,7 @@ interface RangeLayer {
 
 export interface SnapshotTargets {
   cpbCents?: number | null;
+  cplCents?: number | null;
   monthlyBudgetCents?: number | null;
 }
 
@@ -585,15 +586,24 @@ export async function buildAdsSnapshot(opts: {
     })
     .sort((a, b) => a.since.localeCompare(b.since));
 
-  // ── Target cost per booked call ──
+  // ── Targets: cost per booked call and per lead (Goals, else the account's own history) ──
+  const scanOutcomes = outcomesOf(leads, bounds({ since: w.scanSince, until: w.until }, tz));
+  let scanSpend = 0;
+  for (const [d, r] of dailyRow) if (d >= w.scanSince && d <= w.until) scanSpend += rawOf(r).spendCents;
   let targetCpb: AdsSnapshot["targetCpb"];
   if (opts.targets?.cpbCents && opts.targets.cpbCents > 0) targetCpb = { cents: opts.targets.cpbCents, source: "settings" };
   else {
-    const scanB = bounds({ since: w.scanSince, until: w.until }, tz);
-    const booked = outcomesOf(leads, scanB).booked;
-    let spend = 0;
-    for (const [d, r] of dailyRow) if (d >= w.scanSince && d <= w.until) spend += rawOf(r).spendCents;
-    targetCpb = ghlOk && booked >= THRESHOLDS.lowVolume.booked && spend > 0 ? { cents: Math.round(spend / booked), source: "history" } : { cents: THRESHOLDS.defaultTargetCpbCents, source: "default" };
+    const booked = scanOutcomes.booked;
+    targetCpb = ghlOk && booked >= THRESHOLDS.lowVolume.booked && scanSpend > 0 ? { cents: Math.round(scanSpend / booked), source: "history" } : { cents: THRESHOLDS.defaultTargetCpbCents, source: "default" };
+  }
+  // Cost per lead from a fixed 60 days (not the picked range), so the daily calls don't change with the range.
+  let targetCpl: AdsSnapshot["targetCpl"];
+  if (opts.targets?.cplCents && opts.targets.cplCents > 0) targetCpl = { cents: opts.targets.cplCents, source: "settings" };
+  else {
+    const n = outcomesOf(leads, bounds({ since: w.p30[0], until: w.until }, tz)).ghlLeads;
+    let spend60 = 0;
+    for (const [d, r] of dailyRow) if (d >= w.p30[0] && d <= w.until) spend60 += rawOf(r).spendCents;
+    targetCpl = ghlOk && n >= THRESHOLDS.lowVolume.leads && spend60 > 0 ? { cents: Math.round(spend60 / n), source: "history" } : { cents: Math.round(targetCpb.cents / 3), source: "default" };
   }
 
   // ── Ad sets ──
@@ -934,6 +944,7 @@ export async function buildAdsSnapshot(opts: {
     },
     thresholds: THRESHOLDS,
     targetCpb,
+    targetCpl,
   };
   return { configured: true, snapshot, cachedAt: snapshot.fetchedAt, stale: base.stale || range.stale };
 }

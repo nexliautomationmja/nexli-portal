@@ -8,12 +8,9 @@ import type { AdRow, AdsSnapshot, FatigueState } from "@/lib/ads/types";
 import { AdsManagerLink, Ico, Meter, Sparkline, StateBadge } from "@/components/ads/parts";
 import { FATIGUE, VIZ } from "@/components/ads/viz";
 import { MediaFrame, MediaLightbox } from "@/components/ads/media-frame";
-
-export interface CreativeVerdict {
-  verdict: string;
-  why: string;
-  iterateIdea: string | null;
-}
+import { CallBadge } from "@/components/ads/call-badge";
+import { typeLabel, type CreativeTags } from "@/lib/ads/creative-types";
+import type { CreativeCall } from "@/lib/ads/decide";
 
 interface Media {
   mediaType: string;
@@ -27,27 +24,29 @@ interface Media {
   linkDomain: string | null;
 }
 
-type Filter = "all" | "fatigued" | "watch" | "winners" | "too_early" | "off";
+type Filter = "all" | "cut" | "keep" | "winners" | "testing" | "off";
 
-const FILTERS: { id: Filter; label: string; test: (a: AdRow) => boolean }[] = [
+const FILTERS: { id: Filter; label: string; test: (a: AdRow, c: CreativeCall | undefined) => boolean }[] = [
   { id: "all", label: "All", test: (a) => a.effectiveStatus === "ACTIVE" || a.metrics.cur.spendCents > 0 },
-  { id: "fatigued", label: "Fatigued", test: (a) => a.fatigue.state === "fatigued" || a.fatigue.state === "dead" },
-  { id: "watch", label: "Watch", test: (a) => a.fatigue.state === "watch" },
-  { id: "winners", label: "Winners", test: (a) => a.winner },
-  { id: "too_early", label: "Too early", test: (a) => a.fatigue.state === "too_early" || a.fatigue.state === "fresh" },
+  { id: "cut", label: "Cut", test: (_a, c) => c?.call === "cut" && !c.done },
+  { id: "keep", label: "Keep", test: (_a, c) => c?.call === "keep" },
+  { id: "winners", label: "Winners", test: (a, c) => c?.call === "keep" && (c.tag === "winner" || a.winner) },
+  { id: "testing", label: "Testing", test: (_a, c) => c?.tag === "testing" },
   { id: "off", label: "Not running", test: (a) => a.effectiveStatus !== "ACTIVE" },
 ];
 
 const PAGE = 12;
-const VERDICT_LABEL: Record<string, string> = { keep: "Keep", scale: "Scale", iterate: "Make variations", watch: "Watch", refresh: "Refresh", pause: "Pause", too_early: "Too early" };
 
 export function FatigueBoard({
   s,
-  verdicts,
+  calls,
+  tags,
   onVariations,
 }: {
   s: AdsSnapshot;
-  verdicts?: Record<string, CreativeVerdict>;
+  /** Today's Cut / Keep call per ad (the same rules as the plan). */
+  calls: Record<string, CreativeCall>;
+  tags: Record<string, CreativeTags>;
   /** "Make variations" → Creative Studio with a brief from this ad. */
   onVariations?: (ad: AdRow, idea: string | null) => void;
 }) {
@@ -58,9 +57,9 @@ export function FatigueBoard({
 
   const list = useMemo(() => {
     const f = FILTERS.find((x) => x.id === filter) ?? FILTERS[0];
-    return s.ads.filter(f.test);
-  }, [s.ads, filter]);
-  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.id, s.ads.filter(f.test).length])) as Record<Filter, number>, [s.ads]);
+    return s.ads.filter((a) => f.test(a, calls[a.id]));
+  }, [s.ads, filter, calls]);
+  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.id, s.ads.filter((a) => f.test(a, calls[a.id])).length])) as Record<Filter, number>, [s.ads, calls]);
   const visible = list.slice(0, shown);
   const wantIds = visible.map((a) => a.id).filter((id) => !media[id]);
   const wantKey = wantIds.join(",");
@@ -111,7 +110,8 @@ export function FatigueBoard({
               ad={a}
               s={s}
               media={media[a.id]}
-              verdict={verdicts?.[a.id]}
+              call={calls[a.id]}
+              tags={tags[a.id]}
               onOpen={() => setOpen(a)}
               onVariations={onVariations}
             />
@@ -125,7 +125,7 @@ export function FatigueBoard({
           </button>
         </div>
       )}
-      {open && <Lightbox ad={open} media={media[open.id]} onClose={() => setOpen(null)} />}
+      {open && <Lightbox ad={open} call={calls[open.id]} media={media[open.id]} onClose={() => setOpen(null)} />}
     </div>
   );
 }
@@ -146,14 +146,16 @@ function CreativeCard({
   ad,
   s,
   media,
-  verdict,
+  call,
+  tags,
   onOpen,
   onVariations,
 }: {
   ad: AdRow;
   s: AdsSnapshot;
   media?: Media;
-  verdict?: CreativeVerdict;
+  call?: CreativeCall;
+  tags?: CreativeTags;
   onOpen: () => void;
   onVariations?: (ad: AdRow, idea: string | null) => void;
 }) {
@@ -182,10 +184,8 @@ function CreativeCard({
           onOpen={onOpen}
           label={`Open ${ad.name}`}
         >
-          <span className="absolute left-2 top-2">
-            <StateBadge state={ad.fatigue.state} />
-          </span>
-          {ad.winner && (
+          <span className="absolute left-2 top-2">{call ? <CallBadge call={call} onImage /> : <StateBadge state={ad.fatigue.state} />}</span>
+          {ad.winner && !call && (
             <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/30 px-2 py-0.5 text-[11px] font-bold text-emerald-100 backdrop-blur-sm">
               <Ico d={<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6m12 5h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22m7-7.34V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z" />} size={11} />
               Winner
@@ -199,14 +199,34 @@ function CreativeCard({
         <div className="min-w-0">
           <h3 className="line-clamp-2 text-sm font-bold text-white">{ad.name}</h3>
           <p className="truncate text-[11px] text-neutral-400">{[campaign, adset].filter(Boolean).join(" › ") || "—"}</p>
+          {tags && <p className="mt-0.5 truncate text-[11px] font-semibold text-neutral-300" title={tags.summary}>{typeLabel(tags)}</p>}
         </div>
+
+        {call && (
+          <div
+            className={`rounded-xl border px-3 py-2 ${call.call === "cut" && !call.done ? "border-rose-400/30 bg-rose-500/[0.08]" : call.call === "cut" ? "border-white/10 bg-white/[0.03]" : call.tag === "tiring" ? "border-amber-400/25 bg-amber-500/[0.07]" : "border-emerald-400/25 bg-emerald-500/[0.07]"}`}
+          >
+            <p className="text-[12px] leading-snug text-white">{call.reason}</p>
+            <p className={`mt-1 text-[11px] font-semibold ${call.call === "cut" && !call.done ? "text-rose-200" : "text-neutral-300"}`}>{call.action}</p>
+            {call.decideAt && (
+              <div className="mt-1.5 flex items-center gap-2">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full rounded-full" style={{ width: `${Math.max(4, call.decideAt.progress * 100)}%`, background: VIZ.current }} />
+                </div>
+                <span className="shrink-0 text-[10px] text-neutral-400" style={NUM_FONT}>
+                  decide at {money(call.decideAt.spendCents)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-            <span>Fatigue</span>
+            <span>Wear</span>
             <span style={NUM_FONT}>{ad.fatigue.score !== null ? `${ad.fatigue.score}/100` : f.blurb}</span>
           </div>
-          <Meter value={ad.fatigue.score !== null ? ad.fatigue.score / 100 : 0} color={ad.fatigue.score !== null ? scoreColor : VIZ.previous} label={`Fatigue ${ad.fatigue.score ?? 0} of 100`} />
+          <Meter value={ad.fatigue.score !== null ? ad.fatigue.score / 100 : 0} color={ad.fatigue.score !== null ? scoreColor : VIZ.previous} label={`Wear ${ad.fatigue.score ?? 0} of 100`} />
           <ul className="mt-2 space-y-1">
             {(more ? ad.fatigue.reasons : ad.fatigue.reasons.slice(0, 2)).map((r, i) => (
               <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-neutral-300">
@@ -221,13 +241,6 @@ function CreativeCard({
             </button>
           )}
         </div>
-
-        {verdict && (
-          <div className="rounded-xl border border-violet-400/25 bg-violet-500/[0.08] px-3 py-2">
-            <p className="text-[11px] font-bold text-violet-200">Manus: {VERDICT_LABEL[verdict.verdict] ?? verdict.verdict}</p>
-            <p className="mt-0.5 text-[11px] leading-snug text-violet-100/80">{verdict.why}</p>
-          </div>
-        )}
 
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Spend" value={money(ad.metrics.cur.spendCents)} sub={`30d ${money(l30?.spendCents ?? null)}`} />
@@ -251,8 +264,8 @@ function CreativeCard({
 
         <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-2">
           <AdsManagerLink href={ad.adsManagerUrl} />
-          {onVariations && (ad.winner || ad.fatigue.state === "fatigued" || ad.fatigue.state === "watch" || verdict?.verdict === "iterate") && (
-            <button type="button" onClick={() => onVariations(ad, verdict?.iterateIdea ?? null)} className="min-h-9 rounded-full bg-white/10 px-3 text-[11px] font-bold text-white hover:bg-white/15">
+          {onVariations && (ad.winner || call?.tag === "winner" || call?.tag === "tiring" || call?.tag === "working") && (
+            <button type="button" onClick={() => onVariations(ad, tags ? `${typeLabel(tags)} — ${tags.summary} Hook: ${tags.hook}` : null)} className="min-h-9 rounded-full bg-white/10 px-3 text-[11px] font-bold text-white hover:bg-white/15">
               Make variations
             </button>
           )}
@@ -263,7 +276,7 @@ function CreativeCard({
   );
 }
 
-function Lightbox({ ad, media, onClose }: { ad: AdRow; media?: Media; onClose: () => void }) {
+function Lightbox({ ad, call, media, onClose }: { ad: AdRow; call?: CreativeCall; media?: Media; onClose: () => void }) {
   const poster = media?.posterUrl || media?.thumbnailUrl || ad.creative.thumbnailUrl;
   const text = media?.primaryText ?? ad.creative.primaryText;
   const headline = media?.headline ?? ad.creative.headline;
@@ -271,7 +284,7 @@ function Lightbox({ ad, media, onClose }: { ad: AdRow; media?: Media; onClose: (
   return (
     <MediaLightbox
       title={ad.name}
-      badge={<StateBadge state={ad.fatigue.state as FatigueState} />}
+      badge={call ? <CallBadge call={call} /> : <StateBadge state={ad.fatigue.state as FatigueState} />}
       kind={isVideo ? "video" : "image"}
       src={poster}
       videoUrl={media?.videoUrl ?? null}
@@ -281,6 +294,12 @@ function Lightbox({ ad, media, onClose }: { ad: AdRow; media?: Media; onClose: (
           {text && <p className="whitespace-pre-wrap text-neutral-200">{text}</p>}
           {headline && <p className="font-bold">{headline}</p>}
           {(media?.ctaLabel || media?.linkDomain) && <p className="text-xs text-neutral-400">{[media?.linkDomain, media?.ctaLabel].filter(Boolean).join(" · ")}</p>}
+          {call && (
+            <div className="border-t border-white/10 pt-3 text-xs">
+              <p className="text-white">{call.reason}</p>
+              <p className="mt-1 font-semibold text-neutral-300">{call.action}</p>
+            </div>
+          )}
           <ul className="space-y-1 border-t border-white/10 pt-3">
             {ad.fatigue.reasons.map((r, i) => (
               <li key={i} className="text-xs text-neutral-300">

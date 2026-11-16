@@ -317,6 +317,8 @@ export async function insights(
     fields?: "basic" | "video" | "full" | "lean";
     adIds?: string[];
     maxPages?: number;
+    /** "conversion" dates each lead by when it happened (what a CRM does); Meta's default is the ad view/click date. */
+    actionReportTime?: "conversion" | "impression";
     label: string;
   }
 ): Promise<ListResult<InsightRow>> {
@@ -339,6 +341,7 @@ export async function insights(
   else if (opts.datePreset) base.date_preset = opts.datePreset;
   if (opts.timeIncrement) base.time_increment = String(opts.timeIncrement);
   if (opts.breakdowns) base.breakdowns = opts.breakdowns;
+  if (opts.actionReportTime) base.action_report_time = opts.actionReportTime;
 
   const filters: Record<string, unknown>[] = [];
   if (opts.adIds?.length) filters.push({ field: "ad.id", operator: "IN", value: opts.adIds });

@@ -9,7 +9,8 @@ import { activeAnalysis, advanceAnalysis, analysesToAdvance, enqueueAnalysis, pr
 import { notifyCheckBacks, notifyNeedsInput, notifyReady } from "@/lib/ads/notify";
 import { cachedTimezone } from "@/lib/ads/snapshot";
 import { pruneAdsCache } from "@/lib/ads/cache";
-import { weekKey, weeklyDue } from "@/lib/ads/time";
+import { localHour, weekKey, weeklyDue } from "@/lib/ads/time";
+import { latestPlan, makeDailyPlan, planDateFor } from "@/lib/ads/daily-plan";
 import { manusConfigured } from "@/lib/creative-studio/manus";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
   const accountId = metaAdAccountId();
   if (!ownerId || !accountId) return NextResponse.json({ skipped: "No Nexli admin or ad account" });
 
-  const out = { weekly: "not_due" as string, advanced: 0, notified: 0, reminders: 0, errors: [] as string[] };
+  const out = { weekly: "not_due" as string, daily: "not_due" as string, advanced: 0, notified: 0, reminders: 0, errors: [] as string[] };
   const note = (label: string, err: unknown) => {
     const m = `${label}: ${err instanceof Error ? err.message : String(err)}`.slice(0, 300);
     out.errors.push(m);
@@ -65,7 +66,26 @@ export async function GET(req: NextRequest) {
     note("alerts", err);
   }
 
-  // 3. Keep running analyses moving.
+  // 3. The morning plan: Cut / Keep calls, what to make, the tracking check (07:00 in the ad account's timezone).
+  try {
+    const tz = await cachedTimezone(ownerId, accountId);
+    if (localHour(new Date(), tz) < 7) out.daily = "too_early";
+    else if (Date.now() > deadline - 150_000) out.daily = "no_time";
+    else {
+      const today = await planDateFor(ownerId, accountId);
+      const last = await latestPlan(ownerId, accountId);
+      if (last && last.planDate === today && last.status !== "failed") out.daily = last.status;
+      else if (last && last.planDate === today && last.status === "failed" && Date.now() - last.updatedAt.getTime() < 60 * 60 * 1000) out.daily = "failed_recently";
+      else {
+        const made = await makeDailyPlan(ownerId, accountId, { deadline });
+        out.daily = made ? made.status : "claimed_elsewhere";
+      }
+    }
+  } catch (err) {
+    note("daily", err);
+  }
+
+  // 4. Keep running analyses moving.
   try {
     for (const row of await analysesToAdvance()) {
       if (Date.now() > deadline - 30_000) break;
@@ -76,7 +96,7 @@ export async function GET(req: NextRequest) {
     note("advance", err);
   }
 
-  // 4. The Monday analysis.
+  // 5. The Monday analysis.
   try {
     const settings = await getSettings(ownerId, accountId);
     const tz = await cachedTimezone(ownerId, accountId);
@@ -120,7 +140,7 @@ export async function GET(req: NextRequest) {
     note("weekly", err);
   }
 
-  // 5. Tidy up once a day.
+  // 6. Tidy up once a day.
   const at = new Date();
   if (at.getUTCHours() === 9 && at.getUTCMinutes() < 10) {
     try {

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { scanAdLeads } from "@/lib/ad-leads";
+import { scanAdLeads, type ClassifiedContact } from "@/lib/ad-leads";
 import { adsCache } from "@/lib/ads/cache";
 import { addDays, daysBetween, zonedMidnight } from "@/lib/ads/time";
 import type { Outcomes } from "@/lib/ads/types";
@@ -76,13 +76,7 @@ export async function loadLeads(opts: { ownerId: string; scanSince: string; unti
           until: new Date(zonedMidnight(addDays(opts.until, 1), opts.tz).getTime() - 1),
           maxPages: 30,
         });
-        const leads: CompactLead[] = [];
-        for (const c of scan.contacts) {
-          if (!c.platform) continue; // not a Meta lead
-          const d = new Date(c.contact.dateAdded).getTime();
-          if (!Number.isFinite(d)) continue;
-          leads.push({ d, p: P[c.platform] ?? "u", c: norm(c.utm?.campaign), a: norm(c.utm?.content), b: c.booked ? 1 : 0, w: c.won ? 1 : 0 });
-        }
+        const leads = compactLeads(scan.contacts);
         return {
           ok: true,
           value: { connected: true, leads, scanned: scan.scanned, truncated: scan.truncated, error: null, scanSince: opts.scanSince, until: opts.until },
@@ -94,6 +88,24 @@ export async function loadLeads(opts: { ownerId: string; scanSince: string; unti
     },
   });
   return r.value;
+}
+
+/** Meta leads from a GoHighLevel scan, compact and PII-free. */
+export function compactLeads(contacts: ClassifiedContact[]): CompactLead[] {
+  const leads: CompactLead[] = [];
+  for (const c of contacts) {
+    if (!c.platform) continue; // not a Meta lead
+    const d = new Date(c.contact.dateAdded).getTime();
+    if (!Number.isFinite(d)) continue;
+    leads.push({ d, p: P[c.platform] ?? "u", c: norm(c.utm?.campaign), a: norm(c.utm?.content), b: c.booked ? 1 : 0, w: c.won ? 1 : 0 });
+  }
+  return leads;
+}
+
+/** GoHighLevel location of the workspace (null = not connected). */
+export async function ghlLocationOf(ownerId: string): Promise<string | null> {
+  const [owner] = await db.select({ loc: users.ghlLocationId }).from(users).where(eq(users.id, ownerId)).limit(1);
+  return owner?.loc ?? null;
 }
 
 /** [start, end) instants of an account-day window. */

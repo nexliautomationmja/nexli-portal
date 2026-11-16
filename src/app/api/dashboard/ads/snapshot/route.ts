@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       accountId: access.accountId,
       range,
       refresh,
-      targets: { cpbCents: settings?.targetCpbCents ?? null, monthlyBudgetCents: settings?.monthlyBudgetCents ?? null },
+      targets: { cpbCents: settings?.targetCpbCents ?? null, cplCents: settings?.targetCplCents ?? null, monthlyBudgetCents: settings?.monthlyBudgetCents ?? null },
       budgetMs: 90_000,
     });
     return NextResponse.json(result);

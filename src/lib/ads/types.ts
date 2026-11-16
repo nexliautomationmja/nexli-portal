@@ -288,4 +288,6 @@ export interface AdsSnapshot {
   };
   thresholds: Thresholds;
   targetCpb: { cents: number; source: "settings" | "history" | "default" };
+  /** Target cost per lead: Goals, else the account's own average, else a third of the booked-call target. */
+  targetCpl: { cents: number; source: "settings" | "history" | "default" };
 }
