@@ -183,6 +183,31 @@ export const adCreativeTags = pgTable(
   (t) => [primaryKey({ columns: [t.ownerId, t.accountId, t.adId] })]
 );
 
+/**
+ * "Create new creatives": each set of video ideas Claude came up with (backed
+ * by Marcel's results and the Ad Library research), the Creative Studio
+ * videos made from them, and which of those went live — the "on deck" list.
+ */
+export const adCreativeIdeas = pgTable("ad_creative_ideas", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  count: integer("count").notNull(),
+  note: text("note").notNull().default(""),
+  ideas: jsonb("ideas").notNull(),
+  /** What the ideas were backed by (summary lines for the page). */
+  backing: jsonb("backing"),
+  batchId: uuid("batch_id"),
+  /** Creative Studio project per idea (index-aligned; null = not made). */
+  projectIds: jsonb("project_ids").$type<(string | null)[]>().notNull().default([]),
+  /** projectId → when Marcel marked it live in Meta. */
+  live: jsonb("live").$type<Record<string, string>>().notNull().default({}),
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 let ensured: Promise<void> | null = null;
 
 export function ensureAdsTables(): Promise<void> {
@@ -343,6 +368,23 @@ export function ensureAdsTables(): Promise<void> {
           PRIMARY KEY ("owner_id", "account_id", "ad_id")
         )
       `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "ad_creative_ideas" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "account_id" text NOT NULL,
+          "count" integer NOT NULL,
+          "note" text NOT NULL DEFAULT '',
+          "ideas" jsonb NOT NULL,
+          "backing" jsonb,
+          "batch_id" uuid,
+          "project_ids" jsonb NOT NULL DEFAULT '[]'::jsonb,
+          "live" jsonb NOT NULL DEFAULT '{}'::jsonb,
+          "created_by" uuid,
+          "created_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_creative_ideas_owner_idx" ON "ad_creative_ideas" ("owner_id", "account_id", "created_at" DESC)`);
       await db.execute(sql`ALTER TABLE "ad_settings" ADD COLUMN IF NOT EXISTS "rules_version" integer`);
       await db.execute(sql`UPDATE "ad_settings" SET "target_cpb_cents" = 30000, "rules_version" = 1 WHERE "rules_version" IS NULL`);
       await db.execute(sql`ALTER TABLE "ad_settings" ALTER COLUMN "rules_version" SET DEFAULT 1`);

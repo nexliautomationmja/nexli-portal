@@ -14,6 +14,8 @@ import { Glass, Ico } from "@/components/ads/parts";
 import { CallBadge } from "@/components/ads/call-badge";
 import { photosHref, videosHref } from "@/components/ads/handoff";
 import { VIZ } from "@/components/ads/viz";
+import { CreateCreativesButton, OnDeck, type DeckState } from "@/components/ads/new-creatives";
+import type { DeckItem } from "@/lib/ads/ideas-shared";
 
 /**
  * Today's plan — the top of the Ads page: which creatives to cut (by name,
@@ -36,8 +38,11 @@ export function TodayPlan({
   makeError,
   tracking,
   studioKey,
+  deck,
   onMake,
   onJumpAd,
+  onCreate,
+  onLive,
 }: {
   s: AdsSnapshot;
   plan: AdPlan;
@@ -48,9 +53,14 @@ export function TodayPlan({
   makeError: string | null;
   tracking: TrackingVerdict | null;
   studioKey: string;
+  deck: DeckState | null;
   onMake: () => void;
   onJumpAd: (id: string) => void;
+  onCreate: () => void;
+  onLive: (item: DeckItem, live: boolean) => void;
 }) {
+  const ready = (deck?.deck ?? []).filter((d) => d.stage === "ready");
+  const openCuts = plan.counts.cut;
   const adById = new Map(s.ads.map((a) => [a.id, a]));
   const cuts = plan.calls.filter((c) => c.call === "cut");
   const keeps = plan.calls.filter((c) => c.call === "keep");
@@ -109,6 +119,29 @@ export function TodayPlan({
               ))}
             </ul>
           )}
+          {cuts.some((c) => !c.done) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-violet-400/20 bg-violet-500/[0.06] px-3 py-2.5 text-xs text-violet-50">
+              {ready.length ? (
+                <>
+                  <span className="min-w-0 flex-1">
+                    <span className="font-bold">{ready.length} ready on deck</span>
+                    {ready.length >= openCuts
+                      ? ` — upload one in place of each cut: ${ready.slice(0, 3).map((r) => `“${r.title}”`).join(", ")}.`
+                      : ` for ${openCuts} cuts — upload ${ready.length === 1 ? "it" : "them"} (${ready.map((r) => `“${r.title}”`).join(", ")}) and make ${openCuts - ready.length} more.`}
+                  </span>
+                  {ready.length < openCuts && <CreateCreativesButton onClick={onCreate} tone="quiet" />}
+                  <a href="#plan-deck" className="font-semibold text-cyan-300 hover:underline">
+                    On deck ↓
+                  </a>
+                </>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1">Nothing on deck to replace {cuts.filter((c) => !c.done).length === 1 ? "it" : "them"} yet.</span>
+                  <CreateCreativesButton onClick={onCreate} tone="quiet" />
+                </>
+              )}
+            </div>
+          )}
         </Glass>
         <Glass id="plan-keep" className="scroll-mt-28 p-4 md:scroll-mt-20">
           <ListHead title="Keep these running" count={keeps.length} color={VIZ.status.good} />
@@ -128,9 +161,12 @@ export function TodayPlan({
             </h3>
             <p className="mt-0.5 text-xs leading-relaxed text-neutral-300">{plan.need.why}</p>
           </div>
-          {plan.need.when !== "none" && (
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${plan.need.when === "today" ? "bg-blue-500/20 text-blue-100" : "bg-white/10 text-neutral-200"}`}>{plan.need.when === "today" ? "Today" : "This week"}</span>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {plan.need.when !== "none" && (
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${plan.need.when === "today" ? "bg-blue-500/20 text-blue-100" : "bg-white/10 text-neutral-200"}`}>{plan.need.when === "today" ? "Today" : "This week"}</span>
+            )}
+            <CreateCreativesButton onClick={onCreate} />
+          </div>
         </div>
         {plan.need.adsets.length > 1 && plan.need.add > 0 && (
           <ul className="mt-3 flex flex-wrap gap-1.5">
@@ -167,6 +203,10 @@ export function TodayPlan({
         )}
         {types.length > 0 && <TypesTable types={types} target={plan.targets.cpbCents} />}
       </Glass>
+
+      <div id="plan-deck" className="scroll-mt-28 md:scroll-mt-20">
+        <OnDeck deck={deck} onCreate={onCreate} onLive={onLive} />
+      </div>
     </div>
   );
 }

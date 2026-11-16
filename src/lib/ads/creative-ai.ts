@@ -38,7 +38,7 @@ function client(timeout: number) {
 }
 
 /** Text of a structured-output reply (throws on refusal / empty). */
-async function structured(params: Record<string, unknown>, timeout: number): Promise<unknown> {
+export async function structured(params: Record<string, unknown>, timeout: number): Promise<unknown> {
   const c = client(timeout);
   const message = await c.beta.messages
     .stream({ model: MODEL, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", ...params } as unknown as Parameters<typeof c.beta.messages.stream>[0])

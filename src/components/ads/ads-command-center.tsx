@@ -19,6 +19,8 @@ import { KpiRow } from "@/components/ads/kpi-row";
 import { TrendCharts } from "@/components/ads/trend-charts";
 import { FatigueBoard } from "@/components/ads/fatigue-board";
 import { TodayPlan } from "@/components/ads/today-plan";
+import { CreateCreativesButton, NewCreativesSheet, useDeck } from "@/components/ads/new-creatives";
+import type { DeckItem } from "@/lib/ads/ideas-shared";
 import { TrackingCheck } from "@/components/ads/tracking-check";
 import { decideAds, type CreativeCall } from "@/lib/ads/decide";
 import { trackingVerdict, type TrackingData } from "@/lib/ads/tracking-check";
@@ -329,6 +331,17 @@ export function AdsCommandCenter() {
     void makePlan();
   }, [planState, makePlan]);
 
+  // ── Creatives on deck + "Create new creatives" ──
+  const { deck, reloadDeck } = useDeck();
+  const [creating, setCreating] = useState(false);
+  const markLive = useCallback(
+    async (item: DeckItem, live: boolean) => {
+      await fetch(`/api/dashboard/ads/ideas/${item.setId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: live ? "live" : "not_live", projectId: item.projectId }) }).catch(() => {});
+      void reloadDeck();
+    },
+    [reloadDeck]
+  );
+
   // ── Tracking: Meta vs the CRM, today's part refreshed every minute while the page is open ──
   const [tracking, setTracking] = useState<TrackingData | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
@@ -535,7 +548,13 @@ export function AdsCommandCenter() {
             )}
 
             <section className="lp-card mb-10">
-              <SectionHead id="plan" eyebrow="Today's plan" title="Cut, keep, add" sub="Every live creative gets one call, made from booked calls and leads in your CRM. Do these in Ads Manager — the page ticks cuts off once they're paused." />
+              <SectionHead
+                id="plan"
+                eyebrow="Today's plan"
+                title="Cut, keep, add"
+                sub="Every live creative gets one call, made from booked calls and leads in your CRM. Do these in Ads Manager — the page ticks cuts off once they're paused."
+                right={<CreateCreativesButton onClick={() => setCreating(true)} />}
+              />
               <div ref={planRef}>
                 {livePlan ? (
                   <TodayPlan
@@ -548,8 +567,11 @@ export function AdsCommandCenter() {
                     makeError={makeError}
                     tracking={verdict}
                     studioKey={studioKey}
+                    deck={deck}
                     onMake={() => void makePlan()}
                     onJumpAd={jumpAd}
+                    onCreate={() => setCreating(true)}
+                    onLive={(item, live) => void markLive(item, live)}
                   />
                 ) : (
                   <Skeleton className="h-64" />
@@ -680,6 +702,15 @@ export function AdsCommandCenter() {
         )}
       </div>
       {report && <ReportModal id={report} tz={tz} onClose={() => setReport(null)} />}
+      {creating && (
+        <NewCreativesSheet
+          onClose={() => setCreating(false)}
+          defaultCount={livePlan && livePlan.need.add > 0 ? livePlan.need.add : 1}
+          studioKey={studioKey}
+          deck={deck}
+          onMade={() => void reloadDeck()}
+        />
+      )}
     </LaunchPadCanvas>
   );
 }
