@@ -55,16 +55,21 @@ type FinalCutMeta = { fromCutId?: string; words?: TranscriptWord[]; durationS?: 
 /**
  * Caption words on the final cut's timeline plus the script lines for
  * Claude. An approved auto-cut maps each clip's word timings through its
- * kept segments (no new transcription); an uploaded cut is transcribed once
+ * kept segments (no new transcription) — if that gives no words, the cut
+ * itself is heard like an uploaded one; an uploaded cut is transcribed once
  * by Scribe and the words are kept on the asset.
  */
 export async function captionWords(
   project: Project,
-  finalCut: Asset
+  finalCut: Asset,
+  /** true = fail when no words can be heard (the "Make captions" button); else an auto-cut with none still gets its line windows. */
+  mustHear = false
 ): Promise<{ words: CaptionWord[]; lines: EditContext["lines"]; unaligned: number[] }> {
   const meta = (finalCut.metadata ?? {}) as FinalCutMeta;
   const clips = await clipsOf(project.id);
 
+  // The auto-cut's line windows, kept when its clips' own timings give no words.
+  let timedLines: EditContext["lines"] | null = null;
   if (meta.fromCutId) {
     const cut = await loadCut(project.id, meta.fromCutId);
     const rows = cut ? clips.map((c) => ({ c, e: cut.plan.find((p) => p.clipId === c.id) })) : [];
@@ -81,24 +86,38 @@ export async function captionWords(
         t += e!.keptS / speed;
         return { number: c.idx + 1, section: c.section, speaker: c.speaker, line: c.line, start, end: t };
       });
-      return { words, lines, unaligned };
+      if (words.length > 0) return { words, lines, unaligned };
+      // No words came through the clips' timings (Scribe heard nothing in the takes):
+      // listen to the finished cut itself rather than build an edit with no captions.
+      console.warn(`[creative-studio] no caption words from the auto-cut's clips (project ${project.id}); transcribing the final cut`);
+      timedLines = lines;
     }
   }
 
-  let heard = meta.words;
+  let heard = meta.words?.length ? meta.words : undefined;
   if (!heard) {
-    const path = finalCut.storagePath;
-    if (!path) throw new Error("The final cut's video is missing");
-    const url = (await signPaths([path], 3600)).get(path);
-    if (!url) throw new Error("Couldn't read the final cut from storage");
-    heard = (await transcribeUrl(url, () => readStorage(path))).words;
-    await db
-      .update(creativeAssets)
-      .set({ metadata: { ...(finalCut.metadata ?? {}), words: heard } })
-      .where(eq(creativeAssets.id, finalCut.id));
+    try {
+      const path = finalCut.storagePath;
+      if (!path) throw new Error("The final cut's video is missing");
+      const url = (await signPaths([path], 3600)).get(path);
+      if (!url) throw new Error("Couldn't read the final cut from storage");
+      heard = (await transcribeUrl(url, () => readStorage(path))).words;
+      await db
+        .update(creativeAssets)
+        .set({ metadata: { ...(finalCut.metadata ?? {}), words: heard } })
+        .where(eq(creativeAssets.id, finalCut.id));
+    } catch (err) {
+      // An auto-cut still has its line windows: the edit is built, and the card offers "Make captions".
+      if (!timedLines || mustHear) throw err;
+      console.error("[creative-studio] transcribing the final cut for captions failed:", err instanceof Error ? err.message : err);
+      heard = [];
+    }
   }
-  if (heard.length === 0) throw new Error("No speech was found in the final cut, so there's nothing to caption.");
-  const lines = clips.map((c) => ({ number: c.idx + 1, section: c.section, speaker: c.speaker, line: c.line, start: null, end: null }));
+  if (heard.length === 0) {
+    if (timedLines && !mustHear) return { words: [], lines: timedLines, unaligned: [] };
+    throw new Error("No speech was found in the final cut, so there's nothing to caption.");
+  }
+  const lines = timedLines ?? clips.map((c) => ({ number: c.idx + 1, section: c.section, speaker: c.speaker, line: c.line, start: null, end: null }));
   return { words: wholeCutWords(heard), lines, unaligned: [] };
 }
 

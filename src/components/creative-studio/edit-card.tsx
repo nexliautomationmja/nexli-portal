@@ -261,6 +261,8 @@ export function EditCard({
     }
     return out;
   }, [latest, perLine]);
+  // POV never runs captions; any other style does unless they were switched off.
+  const captionsOn = Boolean(latest && latest.style !== "pov" && latest.props?.overlays.captions !== false);
 
   async function start(style: EditStyle, instruction?: string) {
     if (!chosenCut) return;
@@ -614,6 +616,28 @@ export function EditCard({
     if (r.ok) {
       setLineEdit(null);
       onChange(r.data);
+    } else onError(r.error);
+  }
+  /** Captions on or off, no Claude. On with no caption words makes them from the cut first. */
+  async function switchCaptions(on: boolean) {
+    setCaptionDraft(null);
+    setShowWords(false);
+    setLineEdit(null);
+    const making = on && !latest?.props?.words.length;
+    setBusy(
+      making
+        ? { label: "Making the captions…", detail: "Listening to the cut for every word and its timing. Up to a minute." }
+        : { label: on ? "Turning the captions on…" : "Turning the captions off…" }
+    );
+    const r = await send(api(`${p.id}/edit/captions`), "POST", { on });
+    setBusy(null);
+    if (r.ok) {
+      onChange(r.data);
+      const first = (r.data.edits[r.data.edits.length - 1]?.props?.words ?? [])[0];
+      if (on && first) {
+        setView("preview");
+        still(first.start + 0.2);
+      }
     } else onError(r.error);
   }
   const savedWindow = editing && latest?.props ? windowOf(latest.props.overlays, editing.target) : null;
@@ -1583,37 +1607,68 @@ export function EditCard({
               </div>
             )}
 
-            {chunks.length > 0 && latest.style !== "pov" && latest.props?.overlays.captions !== false && (
+            {latest.props && (
               <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">
                     Captions{" "}
                     <span className="normal-case tracking-normal text-neutral-600">
-                      · {chunks.length} lines{savedLook ? " · your look" : " · Nexli look"}
+                      {!captionsOn ? "· off" : chunks.length ? `· ${chunks.length} lines${savedLook ? " · your look" : " · Nexli look"}` : "· no words yet"}
                     </span>
                   </p>
                   {!rendering && (
                     <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => (captionDraft ? setCaptionDraft(null) : openLook())}
-                        className={`rounded-full border px-3 py-1 text-[11px] font-bold ${captionDraft ? "border-cyan-400 bg-cyan-500/20 text-white" : "border-white/10 bg-white/5 text-neutral-300 hover:text-white"}`}
-                      >
-                        🎨 Change the look
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowWords((v) => !v);
-                          setLineEdit(null);
-                        }}
-                        className={`rounded-full border px-3 py-1 text-[11px] font-bold ${showWords ? "border-cyan-400 bg-cyan-500/20 text-white" : "border-white/10 bg-white/5 text-neutral-300 hover:text-white"}`}
-                      >
-                        ✎ Edit the words
-                      </button>
+                      {captionsOn && chunks.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => (captionDraft ? setCaptionDraft(null) : openLook())}
+                            className={`rounded-full border px-3 py-1 text-[11px] font-bold ${captionDraft ? "border-cyan-400 bg-cyan-500/20 text-white" : "border-white/10 bg-white/5 text-neutral-300 hover:text-white"}`}
+                          >
+                            🎨 Change the look
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowWords((v) => !v);
+                              setLineEdit(null);
+                            }}
+                            className={`rounded-full border px-3 py-1 text-[11px] font-bold ${showWords ? "border-cyan-400 bg-cyan-500/20 text-white" : "border-white/10 bg-white/5 text-neutral-300 hover:text-white"}`}
+                          >
+                            ✎ Edit the words
+                          </button>
+                        </>
+                      )}
+                      {captionsOn && chunks.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => void switchCaptions(false)}
+                          disabled={Boolean(busy)}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-neutral-400 hover:text-white disabled:opacity-40"
+                        >
+                          Turn off
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void switchCaptions(true)}
+                          disabled={Boolean(busy)}
+                          className="rounded-full bg-cyan-600 px-3.5 py-1 text-[11px] font-bold text-white hover:bg-cyan-500 disabled:opacity-40"
+                        >
+                          {captionsOn ? "Make captions" : "Turn captions on"}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
+                {captionsOn && chunks.length === 0 && (
+                  <p className="mt-2 text-[11px] leading-relaxed text-amber-200">
+                    This edit has no caption words, so nothing shows on the video. Make captions listens to the cut and puts them on.
+                  </p>
+                )}
+                {!captionsOn && latest.style === "pov" && (
+                  <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">Organic / POV runs without captions. Turning them on switches this edit to “Your way” and keeps the stickers.</p>
+                )}
 
                 {captionDraft && (
                   <div className="mt-3 space-y-3">

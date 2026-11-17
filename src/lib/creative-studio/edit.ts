@@ -373,6 +373,30 @@ function outsideStyle(style: EditStyle, raw: RawLayout): boolean {
   return extraSlot || (raw.zooms ?? []).length > 0 || raw.captions !== (style !== "pov");
 }
 
+const CAPTION_WORD = String.raw`(?:captions?|captioning|subtitles?)`;
+const CAPTIONS_OFF = new RegExp(
+  [
+    // "no captions", "without the captions", "remove captions", "turn off the subtitles", "don't want captions"
+    String.raw`\b(?:no|without|remove|delete|drop|hide|lose|kill|skip|ditch|turn off|switch off|take out|take off|get rid of|do(?:n'?t| not) (?:want|need|add|use|show|include|put))\s+(?:any\s+|the\s+|of\s+the\s+)?(?:on[- ]screen\s+)?${CAPTION_WORD}\b`,
+    // "captions off", "captions: none", "turn the captions off"
+    String.raw`\b${CAPTION_WORD}\s*(?::\s*)?(?:off|none|removed)\b`,
+  ].join("|"),
+  "i"
+);
+
+/**
+ * What the user's own words say about captions: true when they ask for them
+ * ("title and captions"), false when they ask for none ("no captions",
+ * "captions off"), null when they don't mention them (Claude decides).
+ * Code, not judgment: a typed "captions" always turns them on.
+ */
+export function captionsAsked(text: string | undefined): boolean | null {
+  if (!text || !new RegExp(String.raw`\b${CAPTION_WORD}\b`, "i").test(text)) return null;
+  return !CAPTIONS_OFF.test(text);
+}
+
+const withAsked = (raw: RawLayout, asked: boolean | null): RawLayout => (asked === null ? raw : { ...raw, captions: asked });
+
 export interface LayoutResult {
   /** The style it ended up in (a revision can move a fixed style to custom). */
   style: EditStyle;
@@ -387,16 +411,21 @@ export interface LayoutResult {
  * way") edit the user's ask wins and the conflict is only flagged (rulebook:
  * state it once, then build what was asked).
  */
-async function layout(ctx: EditContext, prompt: string, revision: boolean): Promise<LayoutResult> {
+async function layout(ctx: EditContext, prompt: string, revision: boolean, said?: string): Promise<LayoutResult> {
   const enforce = !revision && ctx.style !== "custom";
-  let raw = await callClaude(prompt, ctx.firm);
+  // Captions on or off as typed, whatever the layout says.
+  const asked = captionsAsked(said);
+  let raw = withAsked(await callClaude(prompt, ctx.firm), asked);
   let style: EditStyle = revision && outsideStyle(ctx.style, raw) ? "custom" : ctx.style;
   let overlays = sanitizeOverlays(style, raw, ctx.durationS, ctx.positions, revision);
   let problems = restatements(overlays, ctx.words, style);
   if (problems.length && enforce) {
-    raw = await callClaude(
-      `${prompt}\n\nYour previous layout broke the no-restating rule:\n- ${problems.join("\n- ")}\nReturn the complete layout again with those fixed.`,
-      ctx.firm
+    raw = withAsked(
+      await callClaude(
+        `${prompt}\n\nYour previous layout broke the no-restating rule:\n- ${problems.join("\n- ")}\nReturn the complete layout again with those fixed.`,
+        ctx.firm
+      ),
+      asked
     );
     style = ctx.style;
     overlays = sanitizeOverlays(style, raw, ctx.durationS, ctx.positions);
@@ -417,7 +446,7 @@ export function proposeLayout(ctx: EditContext): Promise<LayoutResult> {
     ctx.style === "custom"
       ? "Build this edit the way the user described it, using the custom style."
       : `Lay out the graphics for this cut in the ${ctx.style} style.${ctx.instruction ? " Follow the user's instruction within this style." : ""}`;
-  return layout(ctx, `${contextText(ctx)}\n\n${ask}`, false);
+  return layout(ctx, `${contextText(ctx)}\n\n${ask}`, false, ctx.instruction);
 }
 
 export function reviseLayout(ctx: EditContext, current: EditOverlays, note: string): Promise<LayoutResult> {
@@ -433,7 +462,8 @@ export function reviseLayout(ctx: EditContext, current: EditOverlays, note: stri
       `The user's requested change: ${note}`,
       "Return the complete layout with only that change made.",
     ].join("\n\n"),
-    true
+    true,
+    note
   );
 }
 

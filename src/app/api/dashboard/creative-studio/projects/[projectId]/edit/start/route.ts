@@ -40,7 +40,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   try {
     const built = await captionWords(project, finalCut);
     const sameCut = prev && prev.finalCutAssetId === finalCut.id;
-    const words = sameCut ? prev.props.words : built.words;
+    // Caption fixes carry over on the same cut; an edit left with no words gets the fresh ones.
+    const words = sameCut && prev.props.words.length > 0 ? prev.props.words : built.words;
     // Spots placed by hand (title clear of her face…) carry over to a new style on the same cut,
     // and to a new cut when asked ("put this edit on the new cut": same frame, same spots).
     const keep = sameCut || (body?.keepLook === true && prev);
