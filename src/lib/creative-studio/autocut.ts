@@ -191,6 +191,30 @@ export async function extractStills(file: string, outDir: string, count: number,
 }
 
 /**
+ * Stills at chosen seconds (long edge `size` px) — the Ads grader takes the
+ * first 3 seconds closely, where the hook lives. Times past the end are
+ * pulled back inside it; a failed grab is skipped.
+ */
+export async function extractAt(file: string, outDir: string, times: number[], durationS: number, size = 768): Promise<{ path: string; t: number }[]> {
+  const out: { path: string; t: number }[] = [];
+  const seen = new Set<string>();
+  for (const raw of times) {
+    const t = Math.max(0, Math.min(raw, Math.max(0, durationS - 0.15)));
+    const key = t.toFixed(2);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const dest = path.join(outDir, `at-${key.replace(".", "_")}.jpg`);
+    try {
+      await run(["-y", "-hide_banner", "-loglevel", "error", "-ss", key, "-i", file, "-frames:v", "1", "-vf", fitLongEdge(size), "-q:v", "4", dest], 60_000);
+      out.push({ path: dest, t: Math.round(t * 10) / 10 });
+    } catch (err) {
+      console.warn("[creative-studio] still grab failed at", key, err instanceof Error ? err.message : err);
+    }
+  }
+  return out;
+}
+
+/**
  * The light copy of a reaction video's source that the edit plays in the
  * corner: long edge at most 960 px, 30 fps, H.264, and the sound at the cut's
  * loudness (−16 LUFS) so it's as loud as the presenter. Small enough that a

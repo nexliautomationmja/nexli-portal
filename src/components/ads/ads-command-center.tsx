@@ -23,6 +23,7 @@ import { CreateCreativesButton, NewCreativesSheet, useDeck } from "@/components/
 import type { DeckItem } from "@/lib/ads/ideas-shared";
 import { TrackingCheck } from "@/components/ads/tracking-check";
 import { VslScoreboard } from "@/components/ads/vsl-scoreboard";
+import { AdGrader } from "@/components/ads/ad-grader";
 import type { VslBoard } from "@/lib/ads/vsl-shared";
 import { AskPanel } from "@/components/ads/ask-panel";
 import { decideAds, type CreativeCall } from "@/lib/ads/decide";
@@ -46,6 +47,7 @@ const RANGE_KEY = "nexli.ads.range";
 export const SECTIONS = [
   { id: "ask", label: "Ask" },
   { id: "plan", label: "Today's plan" },
+  { id: "grade", label: "Grader" },
   { id: "creatives", label: "Creatives" },
   { id: "vsls", label: "VSLs" },
   { id: "tracking", label: "Tracking" },
@@ -630,6 +632,21 @@ export function AdsCommandCenter() {
                   <Skeleton className="h-64" />
                 )}
               </div>
+            </section>
+
+            <section className="lp-card mb-10">
+              <SectionHead
+                id="grade"
+                eyebrow="Before you spend"
+                title="Is this creative worth the money?"
+                sub="Scored out of 100 against your own videos' real results and the long-running ads in your niche. Blunt on purpose — every point has to cite its evidence."
+              />
+              <AdGrader
+                studioKey={studioKey}
+                deck={deck?.deck ?? []}
+                videoAds={s.ads.filter((a) => a.creative.mediaType === "video").sort((a, b) => (b.createdTime ?? "").localeCompare(a.createdTime ?? "")).map((a) => ({ id: a.id, name: a.name }))}
+                onJumpAd={jumpAd}
+              />
             </section>
 
             <section className="lp-card mb-10">

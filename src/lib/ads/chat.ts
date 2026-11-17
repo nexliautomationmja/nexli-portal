@@ -19,6 +19,7 @@ import { decimal, money, pct } from "@/lib/ads/format";
 import { getContactById } from "@/lib/ghl-client";
 import { parseAdsRange, type AdRow, type AdsSnapshot, type Metrics } from "@/lib/ads/types";
 import { vslBoardFor } from "@/lib/ads/vsl";
+import { gradesForChat } from "@/lib/ads/grader";
 import { vslHeadline, vslPackSummary, type VslBoard } from "@/lib/ads/vsl-shared";
 
 /**
@@ -175,6 +176,12 @@ const TOOLS = [
     name: "vsl_scores",
     description:
       "The VSL scoreboard: Marcel's four VSL funnels on nexli.net (Agency, Better Clients, Systems, Acquisition) — CRM leads, qualified, booked calls, booking rate, won, spend, cost per lead / booked call, and the chance each truly books best. Use for any question about which VSL or landing page works.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "creative_grades",
+    description:
+      "The Ad Grader on this page: the latest creatives Marcel graded before spending (score out of 100, verdict, caps, weakest lines, fixes, the live ad each became) and how the grader did when it graded his past videos blind. Use for questions about a grade, or whether to trust the grader.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
 ];
@@ -406,6 +413,8 @@ function toolLabel(ctx: Ctx, name: string, input: Record<string, unknown>): stri
       return "Writing up a change for you to approve";
     case "vsl_scores":
       return "Reading the VSL scoreboard";
+    case "creative_grades":
+      return "Reading your graded creatives";
     default:
       return null;
   }
@@ -660,6 +669,9 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
       const sum = vslPackSummary(ctx.vsl);
       if (!sum) return fail("The VSL scoreboard isn't available (GoHighLevel isn't connected or didn't answer).");
       return { content: JSON.stringify(sum) };
+    }
+    case "creative_grades": {
+      return { content: JSON.stringify(await gradesForChat(ctx.ownerId, ctx.accountId)) };
     }
   }
   return fail(`Unknown tool ${name}.`);

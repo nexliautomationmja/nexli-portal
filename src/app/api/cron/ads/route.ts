@@ -12,6 +12,7 @@ import { pruneAdsCache } from "@/lib/ads/cache";
 import { localHour, weekKey, weeklyDue } from "@/lib/ads/time";
 import { latestPlan, makeDailyPlan, planDateFor } from "@/lib/ads/daily-plan";
 import { manusConfigured } from "@/lib/creative-studio/manus";
+import { graderCron } from "@/lib/ads/grader";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -138,6 +139,15 @@ export async function GET(req: NextRequest) {
     }
   } catch (err) {
     note("weekly", err);
+  }
+
+  // 7. The ad grader: keep learning past videos, the blind check and half-done grades moving.
+  if (Date.now() < deadline - 120_000) {
+    try {
+      await graderCron(ownerId, accountId, deadline);
+    } catch (err) {
+      note("grader", err);
+    }
   }
 
   // 6. Tidy up once a day.

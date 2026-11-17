@@ -255,6 +255,90 @@ export const adChats = pgTable("ad_chats", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/**
+ * The Ad Grader's memory of Marcel's past videos: each one watched once
+ * (frames + words, then Claude's neutral read of what it is), keyed by the
+ * Meta video it plays (several ads can share one).
+ */
+export const adVideoReads = pgTable(
+  "ad_video_reads",
+  {
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull(),
+    /** v:<video id>, or a:<ad id> when the ad's video id isn't known. */
+    readKey: text("read_key").notNull(),
+    adIds: jsonb("ad_ids").$type<string[]>().notNull().default([]),
+    videoId: text("video_id"),
+    fileHash: text("file_hash"),
+    /** queued | reading | done | partial | unavailable | failed */
+    status: text("status").notNull().default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    claimedAt: timestamp("claimed_at"),
+    retryAfter: timestamp("retry_after"),
+    error: text("error"),
+    media: jsonb("media"),
+    read: jsonb("read"),
+    readVersion: text("read_version"),
+    priority: integer("priority").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ownerId, t.accountId, t.readKey] })]
+);
+
+/** Graded creatives: uploads, Creative Studio renders, and the blind backtest of past videos. */
+export const adGrades = pgTable("ad_grades", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  /** upload | render | backtest */
+  kind: text("kind").$type<"upload" | "render" | "backtest">().notNull().default("upload"),
+  runId: uuid("run_id"),
+  readKey: text("read_key"),
+  title: text("title").notNull().default(""),
+  /** Where the file is: { path, mime } for an upload, { projectId } for a render. */
+  source: jsonb("source"),
+  status: text("status").$type<"queued" | "watching" | "reading" | "grading" | "done" | "failed">().notNull().default("queued"),
+  attempts: integer("attempts").notNull().default(0),
+  claimedAt: timestamp("claimed_at"),
+  error: text("error"),
+  media: jsonb("media"),
+  read: jsonb("read"),
+  grade: jsonb("grade"),
+  /** The evidence refs as they were when it was graded (A1 → that video's numbers then). */
+  evidence: jsonb("evidence"),
+  rubricVersion: text("rubric_version"),
+  linkedAdIds: jsonb("linked_ad_ids").$type<string[]>().notNull().default([]),
+  linkSource: text("link_source"),
+  linkedAt: timestamp("linked_at"),
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** A learn pass or a blind backtest (progress, and the backtest's track record). */
+export const adGraderRuns = pgTable("ad_grader_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  kind: text("kind").$type<"learn" | "backtest">().notNull(),
+  status: text("status").$type<"running" | "done" | "failed">().notNull().default("running"),
+  total: integer("total").notNull().default(0),
+  rubricVersion: text("rubric_version"),
+  summary: jsonb("summary"),
+  error: text("error"),
+  startedBy: uuid("started_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+});
+
 let ensured: Promise<void> | null = null;
 
 export function ensureAdsTables(): Promise<void> {
@@ -477,6 +561,77 @@ export function ensureAdsTables(): Promise<void> {
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_chats_owner_idx" ON "ad_chats" ("owner_id", "account_id", "updated_at" DESC)`);
       // Nov 17 2026: the VSL scoreboard's line in the morning plan.
       await db.execute(sql`ALTER TABLE "ad_daily_plans" ADD COLUMN IF NOT EXISTS "vsl" jsonb`);
+      // Nov 17 2026: the Ad Grader.
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "ad_video_reads" (
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "account_id" text NOT NULL,
+          "read_key" text NOT NULL,
+          "ad_ids" jsonb NOT NULL DEFAULT '[]'::jsonb,
+          "video_id" text,
+          "file_hash" text,
+          "status" text NOT NULL DEFAULT 'queued',
+          "attempts" integer NOT NULL DEFAULT 0,
+          "claimed_at" timestamp,
+          "retry_after" timestamp,
+          "error" text,
+          "media" jsonb,
+          "read" jsonb,
+          "read_version" text,
+          "priority" integer NOT NULL DEFAULT 0,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now(),
+          PRIMARY KEY ("owner_id", "account_id", "read_key")
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_video_reads_status_idx" ON "ad_video_reads" ("owner_id", "account_id", "status")`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "ad_grades" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "account_id" text NOT NULL,
+          "kind" text NOT NULL DEFAULT 'upload',
+          "run_id" uuid,
+          "read_key" text,
+          "title" text NOT NULL DEFAULT '',
+          "source" jsonb,
+          "status" text NOT NULL DEFAULT 'queued',
+          "attempts" integer NOT NULL DEFAULT 0,
+          "claimed_at" timestamp,
+          "error" text,
+          "media" jsonb,
+          "read" jsonb,
+          "grade" jsonb,
+          "evidence" jsonb,
+          "rubric_version" text,
+          "linked_ad_ids" jsonb NOT NULL DEFAULT '[]'::jsonb,
+          "link_source" text,
+          "linked_at" timestamp,
+          "created_by" uuid,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_grades_owner_idx" ON "ad_grades" ("owner_id", "account_id", "kind", "created_at" DESC)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_grades_run_idx" ON "ad_grades" ("run_id")`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "ad_grader_runs" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "account_id" text NOT NULL,
+          "kind" text NOT NULL,
+          "status" text NOT NULL DEFAULT 'running',
+          "total" integer NOT NULL DEFAULT 0,
+          "rubric_version" text,
+          "summary" jsonb,
+          "error" text,
+          "started_by" uuid,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now(),
+          "finished_at" timestamp
+        )
+      `);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "ad_grader_runs_one_running" ON "ad_grader_runs" ("owner_id", "account_id", "kind") WHERE "status" = 'running'`);
     })().catch((err) => {
       ensured = null;
       throw err;
