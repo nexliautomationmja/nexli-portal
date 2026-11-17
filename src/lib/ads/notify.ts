@@ -5,6 +5,7 @@ import { emailButton, emailWrapper, escapeHtml, sendEmailWithLog, EMAIL_COLORS a
 import { adAnalyses, adDailyPlans, adSteps } from "@/lib/ads/tables";
 import type { AdPlan } from "@/lib/ads/decide";
 import type { PlanMake, PlanTracking } from "@/lib/ads/daily-plan";
+import type { VslHeadline } from "@/lib/ads/vsl-shared";
 import { getSettings } from "@/lib/ads/settings";
 import type { ParsedAnalysis } from "@/lib/ads/parse";
 
@@ -202,11 +203,13 @@ export async function notifyDailyPlan(row: typeof adDailyPlans.$inferSelect): Pr
   const plan = claimed.plan as AdPlan | null;
   const make = claimed.make as PlanMake | null;
   const tracking = claimed.tracking as PlanTracking | null;
+  const vsl = claimed.vsl as VslHeadline | null;
   if (!plan) return;
   const cuts = plan.calls.filter((c) => c.call === "cut" && !c.done);
   const add = plan.need.when === "today" || plan.need.when === "this_week" ? plan.need.add : 0;
   const trackingBad = tracking && (tracking.severity === "warning" || tracking.severity === "critical");
-  const bits = [cuts.length ? `cut ${cuts.length}` : null, add ? `add ${add} creative${add === 1 ? "" : "s"}` : null, trackingBad ? "check tracking" : null].filter(Boolean);
+  const earlyN = cuts.filter((c) => c.cutKind === "early_read").length;
+  const bits = [cuts.length ? `cut ${cuts.length}${earlyN ? ` (${earlyN} early read${earlyN === 1 ? "" : "s"})` : ""}` : null, add ? `add ${add} creative${add === 1 ? "" : "s"}` : null, trackingBad ? "check tracking" : null].filter(Boolean);
   const title = `Ads today: ${bits.join(", ") || "keep everything running"}`;
   await bell(claimed.ownerId, "ads_daily_plan", title, [cuts.map((c) => c.name).join(" · "), trackingBad ? tracking?.title : null].filter(Boolean).join(" — ").slice(0, 300) || title, { planId: claimed.id, href: "/dashboard/ads#plan" });
   const settings = await getSettings(claimed.ownerId, claimed.accountId);
@@ -214,7 +217,7 @@ export async function notifyDailyPlan(row: typeof adDailyPlans.$inferSelect): Pr
 
   const li = (name: string, text: string, color: string) =>
     `<li style="margin:0 0 10px;"><strong style="color:${color};">${escapeHtml(name)}</strong><br/><span style="color:${C.body};">${escapeHtml(text.slice(0, 260))}</span></li>`;
-  const cutList = cuts.map((c) => li(c.name, c.reason, C.ink)).join("");
+  const cutList = cuts.map((c) => li(c.cutKind === "early_read" ? `${c.name} · early read (a suggestion)` : c.name, c.reason, C.ink)).join("");
   const winners = plan.calls.filter((c) => c.tag === "winner" || c.tag === "tiring").slice(0, 4);
   const keepList = winners.map((c) => li(c.name, c.reason, C.ink)).join("");
   const cards = (make?.cards ?? []).map((m) => `<li style="margin:0 0 10px;"><strong style="color:${C.ink};">${m.count} × ${escapeHtml(m.label)}</strong> <span style="color:${C.body};">(${m.format === "video" ? "videos" : "photo ads"})</span><br/><span style="color:${C.body};">${escapeHtml(m.why.slice(0, 260))}</span></li>`).join("");
@@ -227,6 +230,7 @@ export async function notifyDailyPlan(row: typeof adDailyPlans.$inferSelect): Pr
      ${cutList ? `${h("Turn these off in Ads Manager")}<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${cutList}</ul>` : ""}
      ${add ? `${h(`Add ${add} new creative${add === 1 ? "" : "s"} ${plan.need.when === "today" ? "today" : "this week"}`)}<p style="margin:0 0 8px;color:${C.body};font-size:13px;line-height:1.6;">${escapeHtml(plan.need.why)}</p>${cards ? `<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${cards}</ul>` : ""}` : ""}
      ${keepList ? `${h("Your best creatives right now")}<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${keepList}</ul>` : ""}
+     ${vsl ? `${h("Best VSL right now")}<p style="margin:0;color:${C.body};font-size:13px;line-height:1.6;">${escapeHtml(vsl.text)}</p>` : ""}
      ${button("/dashboard/ads#plan", "Open today's plan")}`,
     "ads_daily_plan",
     claimed.id

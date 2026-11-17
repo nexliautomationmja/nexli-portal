@@ -1,3 +1,5 @@
+import { vslBoardFor } from "@/lib/ads/vsl";
+import { vslPackSummary } from "@/lib/ads/vsl-shared";
 import { and, desc, eq, inArray, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { adAnalyses, adSteps, ACTIVE_ANALYSIS, type AnalysisStatus, type RunKind } from "@/lib/ads/tables";
@@ -437,8 +439,8 @@ const ANALYSIS_SPEC: RunSpec<ParsedAnalysis> = {
     if (!snaps.s30.campaigns.length && snaps.s30.totals.cur.spendCents === 0 && snaps.s30.errors.meta) return { fail: snaps.s30.errors.meta };
     const now = snapshotSummary(snaps.s30);
     const history = await packHistory(r.ownerId, r.accountId, now);
-    const research = await latestResearchForPack(r.ownerId, r.accountId).catch(() => null);
-    const built = buildPack({ s7: snaps.s7, s30: snaps.s30, s90: snaps.s90, settings, history, research });
+    const [research, vsl] = await Promise.all([latestResearchForPack(r.ownerId, r.accountId).catch(() => null), vslBoardFor(r.ownerId, r.accountId).catch(() => null)]);
+    const built = buildPack({ s7: snaps.s7, s30: snaps.s30, s90: snaps.s90, settings, history, research, vsl: vslPackSummary(vsl) });
     return {
       dataPack: { pack: built.pack, stills: built.stills } satisfies StoredPack,
       patch: { snapshotSummary: now, throughDate: snaps.s30.range.until, timezone: snaps.s30.account.timezone, playbookVersion: PLAYBOOK_VERSION, schemaVersion: SCHEMA_VERSION },

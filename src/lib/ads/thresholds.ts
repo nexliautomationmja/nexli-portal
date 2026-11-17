@@ -62,6 +62,16 @@ export const THRESHOLDS = {
   idealLiveCreatives: 5,
   minLiveCreatives: 3,
   maxAddPerAdset: 8,
+  // Early read (early-read.ts): a new creative whose hook or clicks are clearly weak after a first look.
+  /** Impressions before an early read is trusted. */
+  earlyMinImpressions: 1500,
+  /** Only new creatives (days since created). */
+  earlyMaxAgeDays: 14,
+  /** Weak = under this share of the benchmark median (and significantly lower). */
+  earlyRatio: 0.6,
+  /** Benchmark ads need this many impressions in 30 days, and there must be this many of them. */
+  earlyBenchMinImpressions: 3000,
+  earlyMinBenchAds: 3,
 } as const;
 
 export type Thresholds = typeof THRESHOLDS;

@@ -1,3 +1,4 @@
+import type { vslPackSummary } from "@/lib/ads/vsl-shared";
 import { DRS_PRICING, PIPELINE, TOTAL_MONTHLY_CENTS } from "@/lib/drs-pricing";
 import { buildAdsSnapshot } from "@/lib/ads/snapshot";
 import { decideAds } from "@/lib/ads/decide";
@@ -188,7 +189,7 @@ export interface Still {
 
 export type DataPack = ReturnType<typeof buildPack>;
 
-export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnapshot | null; settings: AdSettingsRow; history: PackHistory; research?: ResearchPackSummary | null }) {
+export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnapshot | null; settings: AdSettingsRow; history: PackHistory; research?: ResearchPackSummary | null; vsl?: ReturnType<typeof vslPackSummary> }) {
   const { s7, s30, s90, settings, history } = src;
   // Ads that matter: live ones and anything that spent in the last 30 days (biggest first, max 60).
   const ads = s30.ads
@@ -300,7 +301,7 @@ export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnap
     daily_calls: (() => {
       const p = decideAds(s30);
       return {
-        rules: `CUT when an ad spent 2x the target cost per booked call with no booked call, 3x the target cost per lead with no lead, booked calls cost 2x target after 3x target spent, CTR under 0.4% on 3,000+ views in 7 days, or it's worn out and not a winner. Otherwise KEEP (winner / working / testing / tiring). Target per booked call ${money(p.targets.cpbCents)}, per lead ${money(p.targets.cplCents)}. A call with marcels_call is Marcel's own decision and wins until its date; leads and booked calls he marked as not real are already left out of every number.`,
+        rules: `CUT when an ad spent 2x the target cost per booked call with no booked call, 3x the target cost per lead with no lead, booked calls cost 2x target after 3x target spent, CTR under 0.4% on 3,000+ views in 7 days, or it's worn out and not a winner. An early_read cut is a suggestion on a new testing creative (14 days or younger, 1,500+ views, no lead yet) whose 3-second view rate or CTR is under 0.6x the median of the account's producing ads and significantly lower. Otherwise KEEP (winner / working / testing / tiring). Target per booked call ${money(p.targets.cpbCents)}, per lead ${money(p.targets.cplCents)}. A call with marcels_call is Marcel's own decision and wins until its date; leads and booked calls he marked as not real are already left out of every number.`,
         calls: p.calls.map((c) => ({ ad_id: c.adId, ad_name: c.name, call: c.call, kind: c.tag ?? c.cutKind, reason: c.reason, ...(c.override ? { marcels_call: { until: c.override.untilDate, rules_said: c.override.ruleCall, rules_reason: c.override.ruleReason } } : {}) })),
         creatives_to_add: { count: p.need.add, when: p.need.when, why: p.need.why },
       };
@@ -308,6 +309,8 @@ export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnap
     history,
     /** The latest Ad Library research (patterns, long-running competitor ads, briefs) — null when there's none from the last 60 days. */
     market_research: src.research ?? null,
+    /** Which of the four VSL funnels books calls best (CRM leads by VSL tag) — null when GoHighLevel isn't connected. */
+    vsl_scoreboard: src.vsl ?? null,
     notes,
   };
   return { pack, stills };

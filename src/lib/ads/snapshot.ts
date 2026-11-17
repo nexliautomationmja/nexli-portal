@@ -295,7 +295,9 @@ function adCreative(ad: GraphAd | undefined): AdRow["creative"] {
   const c = ad?.creative;
   const t = (c?.object_type ?? "").toUpperCase();
   const mediaType: AdRow["creative"]["mediaType"] = c?.video_id || t === "VIDEO" ? "video" : c?.image_url || t === "PHOTO" || t === "SHARE" ? "image" : c ? "other" : "other";
-  const link = c?.link_url || c?.object_url || null;
+  const oss = c?.object_story_spec;
+  const afs = c?.asset_feed_spec;
+  const link = oss?.video_data?.call_to_action?.value?.link || oss?.link_data?.link || c?.link_url || c?.object_url || afs?.link_urls?.[0]?.website_url || null;
   const hasUtm = c ? /utm_content=/i.test(c.url_tags ?? "") || /utm_content=/i.test(link ?? "") : null;
   return {
     mediaType,
@@ -307,6 +309,7 @@ function adCreative(ad: GraphAd | undefined): AdRow["creative"] {
     linkUrl: link,
     urlTags: c?.url_tags || null,
     hasUtmContent: hasUtm,
+    videoId: c?.video_id || oss?.video_data?.video_id || afs?.videos?.[0]?.video_id || null,
   };
 }
 
@@ -989,6 +992,23 @@ export async function cachedStructure(ownerId: string, accountId: string): Promi
     adsets: B.adsets.map((a) => ent(a, a.campaign_id ?? null)),
     ads: B.ads.map((a) => ent(a, a.adset_id ?? null, adCreative(a).hasUtmContent)),
   };
+}
+
+/** Every ad's link, video and age from the last cached structure (no Meta call) — the VSL board and the grader read it. */
+export async function cachedAdCreatives(ownerId: string, accountId: string): Promise<Map<string, { name: string; status: string; createdTime: string | null; linkUrl: string | null; videoId: string | null; mediaType: AdRow["creative"]["mediaType"] }>> {
+  const out = new Map<string, { name: string; status: string; createdTime: string | null; linkUrl: string | null; videoId: string | null; mediaType: AdRow["creative"]["mediaType"] }>();
+  const [row] = await db
+    .select({ data: analyticsSnapshots.data })
+    .from(analyticsSnapshots)
+    .where(and(eq(analyticsSnapshots.userId, ownerId), eq(analyticsSnapshots.source, "ads-base"), sql`${analyticsSnapshots.data}->>'rangeKey' = ${`v1:${accountId}`}`))
+    .orderBy(desc(analyticsSnapshots.createdAt))
+    .limit(1);
+  const B = (row?.data as { result?: BaseLayer } | undefined)?.result;
+  for (const a of B?.ads ?? []) {
+    const c = adCreative(a);
+    out.set(a.id, { name: a.name ?? a.id, status: a.effective_status ?? "UNKNOWN", createdTime: a.created_time ?? null, linkUrl: c.linkUrl, videoId: c.videoId ?? null, mediaType: c.mediaType });
+  }
+  return out;
 }
 
 /** The ad account's timezone from the cached account info (no Meta call). */

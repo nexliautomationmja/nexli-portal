@@ -11,6 +11,8 @@ import { stopCards, typeStats, type MakeCard, type StopCard, type TypeStat } fro
 import { loadTrackingData } from "@/lib/ads/tracking-data";
 import { trackingVerdict, type TrackingSeverity, type TrackingStatus } from "@/lib/ads/tracking-check";
 import { notifyDailyPlan } from "@/lib/ads/notify";
+import { vslBoardFor } from "@/lib/ads/vsl";
+import { vslHeadline, type VslHeadline } from "@/lib/ads/vsl-shared";
 
 /**
  * The morning plan: once a day (07:00 in the ad account's timezone, or when
@@ -43,6 +45,8 @@ export interface DailyPlanView {
   plan: AdPlan | null;
   make: PlanMake | null;
   tracking: PlanTracking | null;
+  /** The best VSL that morning. */
+  vsl: VslHeadline | null;
   actionable: boolean;
   error: string | null;
   seen: boolean;
@@ -59,6 +63,7 @@ export const planView = (r: Row): DailyPlanView => ({
   plan: (r.plan as AdPlan | null) ?? null,
   make: (r.make as PlanMake | null) ?? null,
   tracking: (r.tracking as PlanTracking | null) ?? null,
+  vsl: (r.vsl as VslHeadline | null) ?? null,
   actionable: r.actionable,
   error: r.error,
   seen: Boolean(r.seenAt),
@@ -129,6 +134,8 @@ export async function makeDailyPlan(ownerId: string, accountId: string, opts: { 
     const v = trackingVerdict({ data, snapshot: s });
     const tracking: PlanTracking = { status: v.status, severity: v.severity, title: v.title, detail: v.detail };
 
+    const vsl = vslHeadline(await vslBoardFor(ownerId, accountId).catch(() => null));
+
     const actionable = plan.counts.cut > 0 || plan.need.when === "today" || v.severity === "warning" || v.severity === "critical";
     const [saved] = await db
       .update(adDailyPlans)
@@ -138,6 +145,7 @@ export async function makeDailyPlan(ownerId: string, accountId: string, opts: { 
         plan,
         make,
         tracking,
+        vsl,
         actionable,
         error: tagRun.error ? `Creative tagging: ${tagRun.error}`.slice(0, 500) : null,
         updatedAt: new Date(),

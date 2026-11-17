@@ -3,6 +3,7 @@ import { count, decimal, money, pct } from "@/lib/ads/format";
 import { addDays } from "@/lib/ads/time";
 import type { AdRow, AdsSnapshot } from "@/lib/ads/types";
 import { dayLabel, overrideActive, type CallOverride } from "@/lib/ads/corrections-shared";
+import { earlyBenchmark, earlyReadFor, type EarlyRead } from "@/lib/ads/early-read";
 
 /**
  * The daily call on every live creative — CUT or KEEP, in plain words with
@@ -15,11 +16,13 @@ import { dayLabel, overrideActive, type CallOverride } from "@/lib/ads/correctio
  *    not earning its keep.
  *  - KEEP: Winner (2+ booked calls at ≤ T) · Working · Testing (with the
  *    spend where it gets decided) · Tiring (still producing, wearing out).
+ *  - Early read (early-read.ts): a new "testing" creative whose hook or
+ *    clicks are clearly weak after ~1,500 views is suggested as a cut.
  */
 
 export type KeepTag = "winner" | "working" | "testing" | "tiring";
-/** your_call = Marcel cut it himself (Ask chat), against the rules. */
-export type CutKind = "no_booked" | "no_leads" | "expensive" | "no_clicks" | "worn_out" | "your_call";
+/** your_call = Marcel cut it himself (Ask chat), against the rules. early_read = a weak first look (a suggestion). */
+export type CutKind = "no_booked" | "no_leads" | "expensive" | "no_clicks" | "worn_out" | "your_call" | "early_read";
 
 /** Marcel's own call on a creative, and what the rules said. */
 export interface CallOverrideInfo {
@@ -52,6 +55,8 @@ export interface CreativeCall {
   done: boolean;
   /** Marcel's own call, when he made one (it wins until its date). */
   override?: CallOverrideInfo | null;
+  /** The early read behind an early_read cut (or behind the rules' call Marcel overrode). */
+  early?: EarlyRead | null;
   /** Leads counted from the CRM, or from Meta when the ad can't be credited in the CRM. */
   leadsFrom: "crm" | "meta";
   numbers: {
@@ -88,7 +93,7 @@ export interface AdPlan {
   throughDate: string;
   targets: { cpbCents: number; cpbSource: string; cplCents: number; cplSource: string };
   calls: CreativeCall[];
-  counts: { cut: number; cutDone: number; keep: number; winners: number; testing: number; tiring: number; working: number };
+  counts: { cut: number; cutDone: number; keep: number; winners: number; testing: number; tiring: number; working: number; early?: number };
   need: CreativeNeed;
 }
 
@@ -232,13 +237,18 @@ export function decideAds(s: AdsSnapshot, opts: { earlierCuts?: Record<string, s
   const day = addDays(s.range.until, 1);
   const overrides = s.corrections?.overrides ?? {};
   const live = s.ads.filter((a) => a.effectiveStatus === "ACTIVE");
-  const calls = live.map((a) => withOverride(callFor(a, cpbT, cplT), overrides[a.id], day));
+  const bench = earlyBenchmark(s.ads);
+  const calls = live.map((a) => {
+    const rules = callFor(a, cpbT, cplT);
+    return withOverride(earlyReadFor(a, rules, bench) ?? rules, overrides[a.id], day);
+  });
   for (const [id, reason] of Object.entries(opts.earlierCuts ?? {})) {
     if (calls.some((c) => c.adId === id)) continue;
     const ad = s.ads.find((a) => a.id === id);
     if (!ad) continue;
     const c = callFor(ad, cpbT, cplT);
-    calls.push({ ...c, call: "cut", tag: null, cutKind: c.cutKind ?? "no_booked", reason, action: "Done — it's off.", decideAt: null, done: true });
+    const kind: CutKind = reason.startsWith("Early read") ? "early_read" : (c.cutKind ?? "no_booked");
+    calls.push({ ...c, call: "cut", tag: null, cutKind: kind, reason, action: "Done — it's off.", decideAt: null, done: true });
   }
   // Marcel's own cuts that he has since turned off (still within his date, and spending until recently).
   for (const [id, o] of Object.entries(overrides)) {
@@ -297,6 +307,7 @@ export function decideAds(s: AdsSnapshot, opts: { earlierCuts?: Record<string, s
     testing: calls.filter((c) => c.tag === "testing").length,
     tiring: tiringAll,
     working: calls.filter((c) => c.tag === "working").length,
+    early: calls.filter((c) => c.cutKind === "early_read" && !c.done).length,
   };
   return {
     date: addDays(s.range.until, 1),

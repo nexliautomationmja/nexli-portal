@@ -226,6 +226,12 @@ export interface GraphAd {
     url_tags?: string;
     link_url?: string;
     object_url?: string;
+    /** Video ads keep their link and video here (the richest fetch tier only). */
+    object_story_spec?: {
+      video_data?: { video_id?: string; call_to_action?: { value?: { link?: string } } };
+      link_data?: { link?: string };
+    };
+    asset_feed_spec?: { videos?: { video_id?: string }[]; link_urls?: { website_url?: string }[] };
   };
 }
 
@@ -410,6 +416,14 @@ export const fetchAds = (creds: Creds, budget: Budget) =>
     creds,
     `act_${encodeURIComponent(creds.account)}/ads`,
     [
+      // Richest: also the video ad's own link and video id (which VSL it sends people to; which video to watch).
+      {
+        fields:
+          "id,name,adset_id,campaign_id,status,effective_status,created_time,issues_info,creative{id,object_type,video_id,image_url,thumbnail_url,title,body,call_to_action_type,url_tags,link_url,object_url,object_story_spec{video_data{video_id,call_to_action{value{link}}},link_data{link}},asset_feed_spec{videos{video_id},link_urls{website_url}}}",
+        thumbnail_width: "480",
+        thumbnail_height: "480",
+        limit: "200",
+      },
       {
         fields:
           "id,name,adset_id,campaign_id,status,effective_status,created_time,issues_info,creative{id,object_type,video_id,image_url,thumbnail_url,title,body,call_to_action_type,url_tags,link_url,object_url}",

@@ -172,6 +172,8 @@ export interface AdRow {
     urlTags: string | null;
     /** utm_content set in the URL parameters (or the link itself). */
     hasUtmContent: boolean | null;
+    /** Meta video id (video ads; optional — older cached snapshots don't have it). */
+    videoId?: string | null;
   };
   /** The chosen range vs the previous one. */
   metrics: Compare;

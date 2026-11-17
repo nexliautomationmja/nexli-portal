@@ -22,6 +22,8 @@ import { TodayPlan } from "@/components/ads/today-plan";
 import { CreateCreativesButton, NewCreativesSheet, useDeck } from "@/components/ads/new-creatives";
 import type { DeckItem } from "@/lib/ads/ideas-shared";
 import { TrackingCheck } from "@/components/ads/tracking-check";
+import { VslScoreboard } from "@/components/ads/vsl-scoreboard";
+import type { VslBoard } from "@/lib/ads/vsl-shared";
 import { AskPanel } from "@/components/ads/ask-panel";
 import { decideAds, type CreativeCall } from "@/lib/ads/decide";
 import { trackingVerdict, type TrackingData } from "@/lib/ads/tracking-check";
@@ -45,6 +47,7 @@ export const SECTIONS = [
   { id: "ask", label: "Ask" },
   { id: "plan", label: "Today's plan" },
   { id: "creatives", label: "Creatives" },
+  { id: "vsls", label: "VSLs" },
   { id: "tracking", label: "Tracking" },
   { id: "research", label: "Ad Library" },
   { id: "read", label: "Manus weekly" },
@@ -373,6 +376,29 @@ export function AdsCommandCenter() {
     return () => clearInterval(t);
   }, [loadTracking]);
 
+  // ── VSL scoreboard (its own GoHighLevel scan, cached 15 min on the server) ──
+  const [vsl, setVsl] = useState<VslBoard | null>(null);
+  const [vslLoading, setVslLoading] = useState(false);
+  const [vslError, setVslError] = useState<string | null>(null);
+  const loadVsl = useCallback(async (refresh = false) => {
+    setVslLoading(true);
+    try {
+      const r = await fetch(`/api/dashboard/ads/vsl${refresh ? "?refresh=1" : ""}`, { cache: "no-store" });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.board) {
+        setVsl(d.board as VslBoard);
+        setVslError(null);
+      } else setVslError(d?.error ?? (r.ok ? null : "Couldn't load the VSL scoreboard right now."));
+    } catch {
+      setVslError("Couldn't reach the server for the VSL scoreboard.");
+    } finally {
+      setVslLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void loadVsl();
+  }, [loadVsl]);
+
   // Follow runs while they're in flight (the analysis and the Ad Library research run side by side).
   const finished = async () => {
     await loadAnalysis();
@@ -567,6 +593,7 @@ export function AdsCommandCenter() {
                 }}
                 onChanged={({ goals }) => {
                   void reload();
+                  void loadVsl();
                   if (goals) void loadAnalysis();
                 }}
               />
@@ -591,6 +618,7 @@ export function AdsCommandCenter() {
                     making={making}
                     makeError={makeError}
                     tracking={verdict}
+                    vsl={vsl}
                     studioKey={studioKey}
                     deck={deck}
                     onMake={() => void makePlan()}
@@ -612,6 +640,16 @@ export function AdsCommandCenter() {
                 sub={`Each one carries today's call. Uncropped at their real size — videos play muted while on screen; tap for sound. Last 7 days (${shortDay(s.fatigueWindow.l7[0])} – ${shortDay(s.fatigueWindow.l7[1])}) against the 14 before, plus 30-day results.`}
               />
               <FatigueBoard s={s} calls={calls} tags={planState?.tags ?? {}} onVariations={variations} />
+            </section>
+
+            <section className="lp-card mb-10">
+              <SectionHead
+                id="vsls"
+                eyebrow="VSLs"
+                title="Which VSL books calls"
+                sub="Your four VSL funnels side by side: how many of each one's CRM leads booked a call, and how sure that is with the leads so far."
+              />
+              <VslScoreboard board={vsl} loading={vslLoading} error={vslError} onRefresh={() => void loadVsl(true)} />
             </section>
 
             <section className="lp-card mb-10">

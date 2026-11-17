@@ -158,6 +158,8 @@ export const adDailyPlans = pgTable("ad_daily_plans", {
   plan: jsonb("plan"),
   make: jsonb("make"),
   tracking: jsonb("tracking"),
+  /** The VSL scoreboard's one-line verdict that morning (VslHeadline). */
+  vsl: jsonb("vsl"),
   actionable: boolean("actionable").notNull().default(false),
   error: text("error"),
   emailedAt: timestamp("emailed_at"),
@@ -473,6 +475,8 @@ export function ensureAdsTables(): Promise<void> {
         )
       `);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_chats_owner_idx" ON "ad_chats" ("owner_id", "account_id", "updated_at" DESC)`);
+      // Nov 17 2026: the VSL scoreboard's line in the morning plan.
+      await db.execute(sql`ALTER TABLE "ad_daily_plans" ADD COLUMN IF NOT EXISTS "vsl" jsonb`);
     })().catch((err) => {
       ensured = null;
       throw err;

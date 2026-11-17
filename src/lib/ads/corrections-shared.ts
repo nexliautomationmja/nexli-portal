@@ -80,11 +80,11 @@ export interface LeadCorrection {
 }
 
 /** Leads with Marcel's fixes: dropped contacts gone, un-booked ones no longer booked. */
-export function applyLeadCorrections(leads: CompactLead[], fixes: LeadCorrection[]): CompactLead[] {
+export function applyLeadCorrections<L extends Pick<CompactLead, "i" | "b"> = CompactLead>(leads: L[], fixes: LeadCorrection[]): L[] {
   if (!fixes.length) return leads;
   const drop = new Set(fixes.filter((f) => f.kind === "lead_not_real").map((f) => f.contactId));
   const unbook = new Set(fixes.filter((f) => f.kind === "booking_not_real").map((f) => f.contactId));
-  const out: CompactLead[] = [];
+  const out: L[] = [];
   for (const l of leads) {
     if (l.i && drop.has(l.i)) continue;
     out.push(l.i && unbook.has(l.i) && l.b ? { ...l, b: 0 } : l);

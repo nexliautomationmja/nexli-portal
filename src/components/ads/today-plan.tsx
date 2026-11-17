@@ -16,6 +16,8 @@ import { photosHref, videosHref } from "@/components/ads/handoff";
 import { VIZ } from "@/components/ads/viz";
 import { CreateCreativesButton, OnDeck, type DeckState } from "@/components/ads/new-creatives";
 import type { DeckItem } from "@/lib/ads/ideas-shared";
+import type { VslBoard } from "@/lib/ads/vsl-shared";
+import { VslStrip } from "@/components/ads/vsl-scoreboard";
 
 /**
  * Today's plan — the top of the Ads page: which creatives to cut (by name,
@@ -37,6 +39,7 @@ export function TodayPlan({
   making,
   makeError,
   tracking,
+  vsl,
   studioKey,
   deck,
   onMake,
@@ -52,6 +55,7 @@ export function TodayPlan({
   making: boolean;
   makeError: string | null;
   tracking: TrackingVerdict | null;
+  vsl?: VslBoard | null;
   studioKey: string;
   deck: DeckState | null;
   onMake: () => void;
@@ -100,12 +104,19 @@ export function TodayPlan({
 
       {/* The three numbers */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Counter n={plan.counts.cut} label="Cut" sub={plan.counts.cut ? "turn off in Ads Manager" : plan.counts.cutDone ? `${plan.counts.cutDone} done today` : "nothing to cut"} color={VIZ.status.critical} href="#plan-cut" />
+        <Counter
+          n={plan.counts.cut}
+          label="Cut"
+          sub={plan.counts.cut ? (plan.counts.early ? `${plan.counts.early} early read${plan.counts.early === 1 ? "" : "s"} · turn off in Ads Manager` : "turn off in Ads Manager") : plan.counts.cutDone ? `${plan.counts.cutDone} done today` : "nothing to cut"}
+          color={VIZ.status.critical}
+          href="#plan-cut"
+        />
         <Counter n={plan.counts.keep} label="Keep" sub={[plan.counts.winners ? `${plan.counts.winners} winner${plan.counts.winners === 1 ? "" : "s"}` : null, plan.counts.testing ? `${plan.counts.testing} testing` : null].filter(Boolean).join(" · ") || "running"} color={VIZ.status.good} href="#plan-keep" />
         <Counter n={plan.need.add} label="Add" sub={plan.need.when === "today" ? "new creatives today" : plan.need.when === "this_week" ? "new creatives this week" : "none needed"} color={VIZ.current} href="#plan-add" />
       </div>
 
       {tracking && <TrackingStrip v={tracking} />}
+      {vsl && <VslStrip board={vsl} />}
 
       <div className="grid gap-3 lg:grid-cols-2">
         <Glass id="plan-cut" className="scroll-mt-28 p-4 md:scroll-mt-20">
@@ -282,6 +293,14 @@ function CallRow({ c, ad, tags, fixes, onJump }: { c: CreativeCall; ad?: AdRow; 
         </div>
         {t && <p className="text-[10px] text-neutral-500">{typeLabel(t)}</p>}
         <p className="mt-0.5 text-xs leading-snug text-neutral-300">{c.reason}</p>
+        {c.cutKind === "early_read" && c.early && !c.done && (
+          <p className="mt-1 inline-flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-bold text-amber-100">Suggestion</span>
+            <span className="text-neutral-400" style={NUM_FONT}>
+              from its first {c.early.impressions.toLocaleString("en-US")} views{c.early.saveCents > 0 ? ` — the full test would wait until ${money(c.numbers.spendCents + c.early.saveCents)} spent` : ""}
+            </span>
+          </p>
+        )}
         {c.override && c.override.ruleCall !== c.override.call && (
           <p className="mt-0.5 text-[11px] leading-snug text-neutral-500">
             The rules say {c.override.ruleCall}: {c.override.ruleReason}

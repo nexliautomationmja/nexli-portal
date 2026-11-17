@@ -18,6 +18,8 @@ import { CHAT_MAX_USER_TURNS, type ChatBlock, type ChatEvent, type ChatView, typ
 import { decimal, money, pct } from "@/lib/ads/format";
 import { getContactById } from "@/lib/ghl-client";
 import { parseAdsRange, type AdRow, type AdsSnapshot, type Metrics } from "@/lib/ads/types";
+import { vslBoardFor } from "@/lib/ads/vsl";
+import { vslHeadline, vslPackSummary, type VslBoard } from "@/lib/ads/vsl-shared";
 
 /**
  * The Ask chat on the Ads page: Marcel asks about his numbers in plain words;
@@ -169,6 +171,12 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: "vsl_scores",
+    description:
+      "The VSL scoreboard: Marcel's four VSL funnels on nexli.net (Agency, Better Clients, Systems, Acquisition) — CRM leads, qualified, booked calls, booking rate, won, spend, cost per lead / booked call, and the chance each truly books best. Use for any question about which VSL or landing page works.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
 ];
 
 const LAST_TOOLS = TOOLS.map((t, i) => (i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t));
@@ -220,6 +228,7 @@ interface Ctx {
   plan: AdPlan;
   tz: string;
   changes: ChangeView[];
+  vsl: VslBoard | null;
   emit: (e: ChatEvent) => void;
   push: (item: DisplayItem) => void;
 }
@@ -288,7 +297,7 @@ const lean = (m: Metrics | null) => {
 };
 
 function callText(c: CreativeCall): string {
-  const kind = c.call === "cut" ? (c.done ? "CUT (already off)" : "CUT") : `KEEP · ${c.tag}`;
+  const kind = c.call === "cut" ? (c.done ? "CUT (already off)" : c.cutKind === "early_read" ? "CUT · early read (a suggestion)" : "CUT") : `KEEP · ${c.tag}`;
   return `${kind}${c.override ? ` · Marcel's call through ${dayLabel(c.override.untilDate)} (rules say ${c.override.ruleCall})` : ""}`;
 }
 
@@ -319,7 +328,14 @@ function brief(ctx: Ctx, verdict: { title: string; detail: string } | null): str
     for (const a of off) lines.push(`- [${a.id}] "${a.name}" — ${money(a.l30?.spendCents ?? 0)} spent, ${a.l30?.ghlLeads ?? "?"} leads, ${a.l30?.booked ?? "?"} booked`);
   }
   lines.push("", `Creatives to add: ${plan.need.add} (${plan.need.when.replace("_", " ")}) — ${plan.need.why}`);
+  if (plan.counts.early) {
+    lines.push(
+      "An early read (CUT · early read) is only a suggestion: a testing creative 14 days old or less, with 1,500+ views and no lead yet, whose 3-second view rate or CTR is under 0.6x the median of the producing ads and significantly lower. The regular rules would wait longer; Marcel decides."
+    );
+  }
   if (verdict) lines.push(`Tracking check: ${verdict.title}. ${verdict.detail}`);
+  const vh = vslHeadline(ctx.vsl);
+  if (vh) lines.push(`Best VSL right now: ${vh.text} (vsl_scores has all four).`);
   const applied = ctx.changes.filter((c) => c.status === "applied");
   const open = ctx.changes.filter((c) => c.status === "proposed");
   lines.push("", applied.length ? `Marcel's corrections in force:\n${applied.map((c) => `- [${c.id}] ${c.summary}`).join("\n")}` : "Marcel's corrections in force: none.");
@@ -388,6 +404,8 @@ function toolLabel(ctx: Ctx, name: string, input: Record<string, unknown>): stri
     case "propose_call":
     case "propose_goals":
       return "Writing up a change for you to approve";
+    case "vsl_scores":
+      return "Reading the VSL scoreboard";
     default:
       return null;
   }
@@ -638,6 +656,11 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
       block({ kind: "creatives", count, note });
       return { content: JSON.stringify({ shown: true, note: "A Create new creatives button is in the chat." }) };
     }
+    case "vsl_scores": {
+      const sum = vslPackSummary(ctx.vsl);
+      if (!sum) return fail("The VSL scoreboard isn't available (GoHighLevel isn't connected or didn't answer).");
+      return { content: JSON.stringify(sum) };
+    }
   }
   return fail(`Unknown tool ${name}.`);
 }
@@ -700,12 +723,13 @@ export async function runChatTurn(o: { ownerId: string; accountId: string; actor
 
   // The numbers, the same way the page makes them.
   const settings = await getSettings(ownerId, accountId);
-  const [s, stored, today, changes, tracking] = await Promise.all([
+  const [s, stored, today, changes, tracking, vsl] = await Promise.all([
     snapshot30(ownerId, accountId, settings),
     latestPlan(ownerId, accountId).catch(() => null),
     planDateFor(ownerId, accountId).catch(() => null),
     listChanges(ownerId, accountId),
     loadTrackingData(ownerId, accountId).catch(() => null),
+    vslBoardFor(ownerId, accountId).catch(() => null),
   ]);
   if (!s) throw new Error("Meta ads aren't connected.");
   const earlierCuts: Record<string, string> = {};
@@ -723,6 +747,7 @@ export async function runChatTurn(o: { ownerId: string; accountId: string; actor
     plan,
     tz: s.account.timezone,
     changes,
+    vsl,
     emit: o.emit,
     push: (item) => {
       turn.items = item.type === "text" ? addText(turn.items, item.text) : [...turn.items, item];
