@@ -102,7 +102,7 @@ export async function writeIdeas(o: { ownerId: string; accountId: string; actorI
           const t = tags[a.id];
           const m = a.l30;
           const c = callOf.get(a.id);
-          return `${i + 1}. "${a.name}" — ${t ? typeLabel(t) : a.creative.mediaType} — 30d: ${money(m?.spendCents ?? 0)} spent, ${m?.ghlLeads ?? 0} leads, ${m?.booked ?? 0} booked${m?.costPerBookedCents ? ` (${money(m.costPerBookedCents)} per booked call)` : ""} — today's call: ${c ? (c.call === "cut" ? "CUT" : `KEEP (${c.tag})`) : "not running"}${t ? `\n   hook: ${t.hook} · ${t.summary}` : ""}${a.creative.primaryText ? `\n   copy: ${a.creative.primaryText.slice(0, 240)}` : ""}`;
+          return `${i + 1}. "${a.name}" — ${t ? typeLabel(t) : a.creative.mediaType} — 30d: ${money(m?.spendCents ?? 0)} spent, ${m?.ghlLeads ?? 0} leads, ${m?.booked ?? 0} booked${m?.costPerBookedCents ? ` (${money(m.costPerBookedCents)} per booked call)` : ""} — today's call: ${c ? (c.call === "cut" ? "CUT" : `KEEP (${c.tag})`) + (c.override ? " (Marcel's call)" : "") : "not running"}${t ? `\n   hook: ${t.hook} · ${t.summary}` : ""}${a.creative.primaryText ? `\n   copy: ${a.creative.primaryText.slice(0, 240)}` : ""}`;
         })
         .join("\n")
     : "(no ads with spend in the last 30 days)";

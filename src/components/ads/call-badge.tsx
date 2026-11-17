@@ -23,7 +23,7 @@ export function CallBadge({ call, size = "md", onImage = false }: { call: Creati
   const cut = call.call === "cut";
   const color = cut ? (call.done ? VIZ.inkMuted : VIZ.status.critical) : call.tag === "tiring" ? VIZ.status.warning : VIZ.status.good;
   const icon = cut ? (call.done ? CHECK : X) : call.tag === "winner" ? CROWN : call.tag === "testing" ? FLASK : call.tag === "tiring" ? BATTERY : CHECK;
-  const word = cut ? (call.done ? "Cut · done" : "Cut") : `Keep${call.tag ? ` · ${KEEP_TAG[call.tag]}` : ""}`;
+  const word = (cut ? (call.done ? "Cut · done" : "Cut") : `Keep${call.tag ? ` · ${KEEP_TAG[call.tag]}` : ""}`) + (call.override ? " · yours" : "");
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1 rounded-full border font-black uppercase tracking-wide ${size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"} ${onImage ? "backdrop-blur-sm" : ""}`}

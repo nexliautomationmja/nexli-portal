@@ -2,6 +2,7 @@ import { THRESHOLDS as T } from "@/lib/ads/thresholds";
 import { count, decimal, money, pct } from "@/lib/ads/format";
 import { addDays } from "@/lib/ads/time";
 import type { AdRow, AdsSnapshot } from "@/lib/ads/types";
+import { dayLabel, overrideActive, type CallOverride } from "@/lib/ads/corrections-shared";
 
 /**
  * The daily call on every live creative — CUT or KEEP, in plain words with
@@ -17,7 +18,20 @@ import type { AdRow, AdsSnapshot } from "@/lib/ads/types";
  */
 
 export type KeepTag = "winner" | "working" | "testing" | "tiring";
-export type CutKind = "no_booked" | "no_leads" | "expensive" | "no_clicks" | "worn_out";
+/** your_call = Marcel cut it himself (Ask chat), against the rules. */
+export type CutKind = "no_booked" | "no_leads" | "expensive" | "no_clicks" | "worn_out" | "your_call";
+
+/** Marcel's own call on a creative, and what the rules said. */
+export interface CallOverrideInfo {
+  changeId: string;
+  call: "keep" | "cut";
+  untilDate: string;
+  /** Marcel's reason (from the chat). */
+  note: string;
+  /** The rules' call and reason underneath. */
+  ruleCall: "keep" | "cut";
+  ruleReason: string;
+}
 
 export interface CreativeCall {
   adId: string;
@@ -36,6 +50,8 @@ export interface CreativeCall {
   decideAt: { spendCents: number; days: number | null; progress: number } | null;
   /** A cut that's already off in Meta. */
   done: boolean;
+  /** Marcel's own call, when he made one (it wins until its date). */
+  override?: CallOverrideInfo | null;
   /** Leads counted from the CRM, or from Meta when the ad can't be credited in the CRM. */
   leadsFrom: "crm" | "meta";
   numbers: {
@@ -180,20 +196,57 @@ export function callFor(ad: AdRow, cpbT: number, cplT: number): CreativeCall {
 }
 
 /**
+ * Marcel's call wins over the rules until its date (then the rules take
+ * over again). A keep he forces stays "testing" (or "working" when it has
+ * booked calls), so the creatives-to-add math counts it as a keeper.
+ */
+export function withOverride(c: CreativeCall, o: CallOverride | undefined, day: string): CreativeCall {
+  if (!overrideActive(o, day)) return c;
+  const info: CallOverrideInfo = { changeId: o.changeId, call: o.call, untilDate: o.untilDate, note: o.reason, ruleCall: c.call, ruleReason: c.reason };
+  const until = dayLabel(o.untilDate);
+  const why = o.reason ? ` — ${o.reason.replace(/\.$/, "")}` : "";
+  if (o.call === c.call) return { ...c, override: info };
+  if (o.call === "keep") {
+    return {
+      ...c,
+      call: "keep",
+      tag: c.numbers.booked ? "working" : "testing",
+      cutKind: null,
+      reason: `Your call: keep it through ${until}${why}.`,
+      action: `Leave it on. After ${until} the rules decide again.`,
+      decideAt: null,
+      override: info,
+    };
+  }
+  return { ...c, call: "cut", tag: null, cutKind: "your_call", reason: `Your call: cut it${why}.`, action: "Turn it off in Ads Manager.", decideAt: null, override: info };
+}
+
+/**
  * The whole plan. `earlierCuts` = this morning's cuts (id → reason): those
- * that are now off in Meta show as done.
+ * that are now off in Meta show as done. Marcel's own calls (the snapshot's
+ * corrections) win over the rules until their date.
  */
 export function decideAds(s: AdsSnapshot, opts: { earlierCuts?: Record<string, string> } = {}): AdPlan {
   const cpbT = s.targetCpb.cents;
   const cplT = s.targetCpl?.cents ?? Math.round(cpbT / 3);
+  const day = addDays(s.range.until, 1);
+  const overrides = s.corrections?.overrides ?? {};
   const live = s.ads.filter((a) => a.effectiveStatus === "ACTIVE");
-  const calls = live.map((a) => callFor(a, cpbT, cplT));
+  const calls = live.map((a) => withOverride(callFor(a, cpbT, cplT), overrides[a.id], day));
   for (const [id, reason] of Object.entries(opts.earlierCuts ?? {})) {
     if (calls.some((c) => c.adId === id)) continue;
     const ad = s.ads.find((a) => a.id === id);
     if (!ad) continue;
     const c = callFor(ad, cpbT, cplT);
     calls.push({ ...c, call: "cut", tag: null, cutKind: c.cutKind ?? "no_booked", reason, action: "Done — it's off.", decideAt: null, done: true });
+  }
+  // Marcel's own cuts that he has since turned off (still within his date, and spending until recently).
+  for (const [id, o] of Object.entries(overrides)) {
+    if (o.call !== "cut" || !overrideActive(o, day) || calls.some((c) => c.adId === id)) continue;
+    const ad = s.ads.find((a) => a.id === id);
+    if (!ad || (ad.l7?.spendCents ?? 0) <= 0) continue;
+    const c = withOverride(callFor(ad, cpbT, cplT), o, day);
+    calls.push({ ...c, call: "cut", tag: null, cutKind: "your_call", action: "Done — it's off.", decideAt: null, done: true });
   }
   const order = (c: CreativeCall) => (c.call === "cut" ? (c.done ? 1 : 0) : c.tag === "winner" ? 2 : c.tag === "tiring" ? 3 : c.tag === "working" ? 4 : 5);
   calls.sort((a, b) => order(a) - order(b) || b.numbers.spendCents - a.numbers.spendCents);

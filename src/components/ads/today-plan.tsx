@@ -115,7 +115,7 @@ export function TodayPlan({
           ) : (
             <ul className="mt-3 space-y-2.5">
               {cuts.map((c) => (
-                <CallRow key={c.adId} c={c} ad={adById.get(c.adId)} tags={tags} onJump={onJumpAd} />
+                <CallRow key={c.adId} c={c} ad={adById.get(c.adId)} tags={tags} fixes={s.corrections?.leadFixes} onJump={onJumpAd} />
               ))}
             </ul>
           )}
@@ -148,7 +148,7 @@ export function TodayPlan({
           {keeps.length === 0 ? (
             <p className="mt-3 text-sm text-neutral-300">No live creatives to keep — the account needs new ones.</p>
           ) : (
-            <KeepList keeps={keeps} adById={adById} tags={tags} onJump={onJumpAd} />
+            <KeepList keeps={keeps} adById={adById} tags={tags} fixes={s.corrections?.leadFixes} onJump={onJumpAd} />
           )}
         </Glass>
       </div>
@@ -267,8 +267,9 @@ function Thumb({ ad }: { ad?: AdRow }) {
   );
 }
 
-function CallRow({ c, ad, tags, onJump }: { c: CreativeCall; ad?: AdRow; tags: Record<string, CreativeTags>; onJump: (id: string) => void }) {
+function CallRow({ c, ad, tags, fixes, onJump }: { c: CreativeCall; ad?: AdRow; tags: Record<string, CreativeTags>; fixes?: Record<string, { leads: number; bookings: number }>; onJump: (id: string) => void }) {
   const t = tags[c.adId];
+  const fix = fixes?.[c.adId];
   return (
     <li className="flex gap-3 rounded-xl border border-white/5 bg-black/20 p-2.5">
       <Thumb ad={ad} />
@@ -281,6 +282,16 @@ function CallRow({ c, ad, tags, onJump }: { c: CreativeCall; ad?: AdRow; tags: R
         </div>
         {t && <p className="text-[10px] text-neutral-500">{typeLabel(t)}</p>}
         <p className="mt-0.5 text-xs leading-snug text-neutral-300">{c.reason}</p>
+        {c.override && c.override.ruleCall !== c.override.call && (
+          <p className="mt-0.5 text-[11px] leading-snug text-neutral-500">
+            The rules say {c.override.ruleCall}: {c.override.ruleReason}
+          </p>
+        )}
+        {fix && (fix.leads > 0 || fix.bookings > 0) && (
+          <p className="mt-0.5 text-[11px] font-semibold text-cyan-300/90">
+            {[fix.leads ? `${fix.leads} lead${fix.leads === 1 ? "" : "s"}` : null, fix.bookings ? `${fix.bookings} booked call${fix.bookings === 1 ? "" : "s"}` : null].filter(Boolean).join(" and ")} you marked not real {fix.leads + fix.bookings === 1 ? "isn't" : "aren't"} counted
+          </p>
+        )}
         {c.decideAt && (
           <div className="mt-1.5 flex items-center gap-2">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(c.decideAt.progress * 100)} aria-label="Spent toward the decision">
@@ -305,14 +316,14 @@ function CallRow({ c, ad, tags, onJump }: { c: CreativeCall; ad?: AdRow; tags: R
   );
 }
 
-function KeepList({ keeps, adById, tags, onJump }: { keeps: CreativeCall[]; adById: Map<string, AdRow>; tags: Record<string, CreativeTags>; onJump: (id: string) => void }) {
+function KeepList({ keeps, adById, tags, fixes, onJump }: { keeps: CreativeCall[]; adById: Map<string, AdRow>; tags: Record<string, CreativeTags>; fixes?: Record<string, { leads: number; bookings: number }>; onJump: (id: string) => void }) {
   const [all, setAll] = useState(false);
   const shown = all ? keeps : keeps.slice(0, 6);
   return (
     <>
       <ul className="mt-3 space-y-2.5">
         {shown.map((c) => (
-          <CallRow key={c.adId} c={c} ad={adById.get(c.adId)} tags={tags} onJump={onJump} />
+          <CallRow key={c.adId} c={c} ad={adById.get(c.adId)} tags={tags} fixes={fixes} onJump={onJump} />
         ))}
       </ul>
       {keeps.length > 6 && (

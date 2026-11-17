@@ -22,6 +22,7 @@ import { TodayPlan } from "@/components/ads/today-plan";
 import { CreateCreativesButton, NewCreativesSheet, useDeck } from "@/components/ads/new-creatives";
 import type { DeckItem } from "@/lib/ads/ideas-shared";
 import { TrackingCheck } from "@/components/ads/tracking-check";
+import { AskPanel } from "@/components/ads/ask-panel";
 import { decideAds, type CreativeCall } from "@/lib/ads/decide";
 import { trackingVerdict, type TrackingData } from "@/lib/ads/tracking-check";
 import type { DailyPlanView } from "@/lib/ads/daily-plan";
@@ -41,6 +42,7 @@ type SnapshotResponse = { configured: false } | { configured: true; snapshot: Ad
 const RANGE_KEY = "nexli.ads.range";
 
 export const SECTIONS = [
+  { id: "ask", label: "Ask" },
   { id: "plan", label: "Today's plan" },
   { id: "creatives", label: "Creatives" },
   { id: "tracking", label: "Tracking" },
@@ -334,6 +336,8 @@ export function AdsCommandCenter() {
   // ── Creatives on deck + "Create new creatives" ──
   const { deck, reloadDeck } = useDeck();
   const [creating, setCreating] = useState(false);
+  // Opened from the Ask chat: start from Claude's count and note.
+  const [createFrom, setCreateFrom] = useState<{ count: number; note: string } | null>(null);
   const markLive = useCallback(
     async (item: DeckItem, live: boolean) => {
       await fetch(`/api/dashboard/ads/ideas/${item.setId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: live ? "live" : "not_live", projectId: item.projectId }) }).catch(() => {});
@@ -549,6 +553,27 @@ export function AdsCommandCenter() {
 
             <section className="lp-card mb-10">
               <SectionHead
+                id="ask"
+                eyebrow="Ask"
+                title="Ask about your ads"
+                sub="Claude reads the same numbers as this page and can suggest fixes. Nothing changes until you tap Apply."
+              />
+              <AskPanel
+                plan={livePlan}
+                onJumpAd={jumpAd}
+                onCreate={(count, note) => {
+                  setCreateFrom({ count, note });
+                  setCreating(true);
+                }}
+                onChanged={({ goals }) => {
+                  void reload();
+                  if (goals) void loadAnalysis();
+                }}
+              />
+            </section>
+
+            <section className="lp-card mb-10">
+              <SectionHead
                 id="plan"
                 eyebrow="Today's plan"
                 title="Cut, keep, add"
@@ -704,8 +729,12 @@ export function AdsCommandCenter() {
       {report && <ReportModal id={report} tz={tz} onClose={() => setReport(null)} />}
       {creating && (
         <NewCreativesSheet
-          onClose={() => setCreating(false)}
-          defaultCount={livePlan && livePlan.need.add > 0 ? livePlan.need.add : 1}
+          onClose={() => {
+            setCreating(false);
+            setCreateFrom(null);
+          }}
+          defaultCount={createFrom?.count ?? (livePlan && livePlan.need.add > 0 ? livePlan.need.add : 1)}
+          defaultNote={createFrom?.note ?? ""}
           studioKey={studioKey}
           deck={deck}
           onMade={() => void reloadDeck()}

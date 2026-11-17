@@ -14,6 +14,8 @@ import type { Outcomes } from "@/lib/ads/types";
  */
 
 export interface CompactLead {
+  /** GoHighLevel contact id (for Marcel's corrections; never shown on its own). */
+  i?: string;
   /** dateAdded, epoch ms. */
   d: number;
   /** Platform: facebook / instagram / other Meta / unknown Meta. */
@@ -63,7 +65,7 @@ export async function loadLeads(opts: { ownerId: string; scanSince: string; unti
   const r = await adsCache<LeadScan>({
     userId: opts.ownerId,
     layer: "ghl",
-    key: `v1:${days}`,
+    key: `v2:${days}`,
     ttlMs: 10 * 60 * 1000,
     refresh: opts.refresh,
     isFresh: (v) => v.until === opts.until && v.scanSince === opts.scanSince,
@@ -97,7 +99,7 @@ export function compactLeads(contacts: ClassifiedContact[]): CompactLead[] {
     if (!c.platform) continue; // not a Meta lead
     const d = new Date(c.contact.dateAdded).getTime();
     if (!Number.isFinite(d)) continue;
-    leads.push({ d, p: P[c.platform] ?? "u", c: norm(c.utm?.campaign), a: norm(c.utm?.content), b: c.booked ? 1 : 0, w: c.won ? 1 : 0 });
+    leads.push({ i: c.contact.id, d, p: P[c.platform] ?? "u", c: norm(c.utm?.campaign), a: norm(c.utm?.content), b: c.booked ? 1 : 0, w: c.won ? 1 : 0 });
   }
   return leads;
 }

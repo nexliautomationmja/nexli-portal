@@ -77,19 +77,23 @@ export function NewCreativesSheet({
   studioKey,
   deck,
   onMade,
+  defaultNote = "",
 }: {
   onClose: () => void;
   defaultCount: number;
   studioKey: string;
   deck: DeckState | null;
   onMade: () => void;
+  /** A note to start from (the Ask chat's suggestion) — then it's always a new pick. */
+  defaultNote?: string;
 }) {
   const [unmade] = useState<IdeaSetView | null>(() => {
+    if (defaultNote) return null;
     const last = deck?.latest;
     return last && last.projectIds.every((p) => !p) && Date.now() - new Date(last.createdAt).getTime() < DAY ? last : null;
   });
   const [count, setCount] = useState(String(Math.max(1, Math.min(IDEAS_MAX, defaultCount))));
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(defaultNote);
   const [set, setSet] = useState<IdeaSetView | null>(unmade);
   const [picked, setPicked] = useState<boolean[]>(() => (unmade ? unmade.ideas.map(() => true) : []));
   const [busy, setBusy] = useState<string | null>(null);

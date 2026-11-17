@@ -300,8 +300,8 @@ export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnap
     daily_calls: (() => {
       const p = decideAds(s30);
       return {
-        rules: `CUT when an ad spent 2x the target cost per booked call with no booked call, 3x the target cost per lead with no lead, booked calls cost 2x target after 3x target spent, CTR under 0.4% on 3,000+ views in 7 days, or it's worn out and not a winner. Otherwise KEEP (winner / working / testing / tiring). Target per booked call ${money(p.targets.cpbCents)}, per lead ${money(p.targets.cplCents)}.`,
-        calls: p.calls.map((c) => ({ ad_id: c.adId, ad_name: c.name, call: c.call, kind: c.tag ?? c.cutKind, reason: c.reason })),
+        rules: `CUT when an ad spent 2x the target cost per booked call with no booked call, 3x the target cost per lead with no lead, booked calls cost 2x target after 3x target spent, CTR under 0.4% on 3,000+ views in 7 days, or it's worn out and not a winner. Otherwise KEEP (winner / working / testing / tiring). Target per booked call ${money(p.targets.cpbCents)}, per lead ${money(p.targets.cplCents)}. A call with marcels_call is Marcel's own decision and wins until its date; leads and booked calls he marked as not real are already left out of every number.`,
+        calls: p.calls.map((c) => ({ ad_id: c.adId, ad_name: c.name, call: c.call, kind: c.tag ?? c.cutKind, reason: c.reason, ...(c.override ? { marcels_call: { until: c.override.untilDate, rules_said: c.override.ruleCall, rules_reason: c.override.ruleReason } } : {}) })),
         creatives_to_add: { count: p.need.add, when: p.need.when, why: p.need.why },
       };
     })(),

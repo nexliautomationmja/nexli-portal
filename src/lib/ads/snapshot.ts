@@ -26,6 +26,8 @@ import {
   type ListResult,
 } from "@/lib/ads/graph";
 import { bounds, buildAttribution, loadLeads, outcomesOf, type CompactLead } from "@/lib/ads/attribution";
+import { loadCorrections } from "@/lib/ads/corrections";
+import { applyLeadCorrections } from "@/lib/ads/corrections-shared";
 import { businessCounts, toBusiness, type BusinessCounts } from "@/lib/ads/business";
 import { addRaw, compare, computeMetrics, div, ZERO_OUTCOMES, ZERO_RAW } from "@/lib/ads/math";
 import { buildSignals, classifyFatigue, isWinner, temperatureOf } from "@/lib/ads/signals";
@@ -407,11 +409,12 @@ export async function buildAdsSnapshot(opts: {
   const tz = account?.timezone ?? safeTz(null);
   const w = rangeWindows(days, tz);
 
-  const [base, range, leadScan, biz] = await Promise.all([
+  const [base, range, leadScan, biz, corrections] = await Promise.all([
     loadBase(creds, opts.ownerId, w, budget, refresh),
     loadRange(creds, opts.ownerId, w, budget, refresh),
     loadLeads({ ownerId: opts.ownerId, scanSince: w.scanSince, until: w.until, tz, refresh }),
     loadBusiness(opts.ownerId, w, tz, refresh),
+    loadCorrections(opts.ownerId, creds.account),
   ]);
   const B = base.value;
   const R = range.value;
@@ -419,7 +422,8 @@ export async function buildAdsSnapshot(opts: {
   for (const e of [...B.errors, ...R.errors]) partial.push(e);
   const metaError = !account && !B.campaigns.length && !R.totals.length ? "Meta didn't answer — check the ads token in Vercel (META_ADS_ACCESS_TOKEN) and try again." : null;
 
-  const leads: CompactLead[] = leadScan.leads;
+  // Marcel's corrections (a lead or booked call that didn't really happen) count everywhere below.
+  const leads: CompactLead[] = applyLeadCorrections(leadScan.leads, corrections.fixes);
   const curB = bounds({ since: w.since, until: w.until }, tz);
   const prevB = bounds({ since: w.prevSince, until: w.prevUntil }, tz);
   const l7B = bounds(w.l7, tz);
@@ -945,6 +949,7 @@ export async function buildAdsSnapshot(opts: {
     thresholds: THRESHOLDS,
     targetCpb,
     targetCpl,
+    corrections: corrections.snapshot,
   };
   return { configured: true, snapshot, cachedAt: snapshot.fetchedAt, stale: base.stale || range.stale };
 }

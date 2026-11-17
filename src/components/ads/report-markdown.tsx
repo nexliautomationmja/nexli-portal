@@ -123,6 +123,11 @@ export function ReportMarkdown({ text }: { text: string }) {
       para.push(lines[i].trim());
       i++;
     }
+    // A table row without its separator yet (text still streaming in) is shown as plain text — never loop on it.
+    if (!para.length) {
+      para.push(lines[i].trim());
+      i++;
+    }
     blocks.push(
       <p key={k} className="my-2 text-sm leading-relaxed text-neutral-300">
         {para.map((p, j) => (

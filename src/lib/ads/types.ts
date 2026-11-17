@@ -1,3 +1,4 @@
+import type { SnapshotCorrections } from "@/lib/ads/corrections-shared";
 import type { Thresholds } from "@/lib/ads/thresholds";
 
 /**
@@ -290,4 +291,6 @@ export interface AdsSnapshot {
   targetCpb: { cents: number; source: "settings" | "history" | "default" };
   /** Target cost per lead: Goals, else the account's own average, else a third of the booked-call target. */
   targetCpl: { cents: number; source: "settings" | "history" | "default" };
+  /** Marcel's applied corrections (lead fixes are already in every number above; Cut / Keep calls go to decideAds). */
+  corrections?: SnapshotCorrections;
 }

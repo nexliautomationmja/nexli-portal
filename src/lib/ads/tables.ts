@@ -208,6 +208,51 @@ export const adCreativeIdeas = pgTable("ad_creative_ideas", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/**
+ * Changes Claude proposed in the Ask chat (and Marcel applied, dismissed or
+ * undid): a lead or booked call that didn't really happen, Marcel's own Cut /
+ * Keep call on a creative, or new goals. Only "applied" rows count anywhere.
+ */
+export type AdChangeKind = "lead_not_real" | "booking_not_real" | "call_override" | "goals";
+export type AdChangeStatus = "proposed" | "applied" | "dismissed" | "undone";
+
+export const adChanges = pgTable("ad_changes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  chatId: uuid("chat_id"),
+  kind: text("kind").$type<AdChangeKind>().notNull(),
+  adId: text("ad_id"),
+  payload: jsonb("payload").notNull(),
+  summary: text("summary").notNull(),
+  reason: text("reason").notNull().default(""),
+  status: text("status").$type<AdChangeStatus>().notNull().default("proposed"),
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  appliedAt: timestamp("applied_at"),
+  appliedBy: uuid("applied_by"),
+  undoneAt: timestamp("undone_at"),
+});
+
+/** The Ask chat: the model's history (append-only, as returned) and what the page shows. */
+export const adChats = pgTable("ad_chats", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  messages: jsonb("messages").notNull().default([]),
+  display: jsonb("display").notNull().default([]),
+  /** Hash of the last account brief sent (sent again only when it changes). */
+  briefHash: text("brief_hash"),
+  version: integer("version").notNull().default(0),
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 let ensured: Promise<void> | null = null;
 
 export function ensureAdsTables(): Promise<void> {
@@ -392,6 +437,42 @@ export function ensureAdsTables(): Promise<void> {
       await db.execute(
         sql`CREATE INDEX IF NOT EXISTS "ad_steps_check_back_idx" ON "ad_steps" ("check_back_at") WHERE "checked_at" IS NULL AND "status" IN ('open','done')`
       );
+      // Nov 17 2026: the Ask chat and the changes it proposes.
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "ad_changes" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "account_id" text NOT NULL,
+          "chat_id" uuid,
+          "kind" text NOT NULL,
+          "ad_id" text,
+          "payload" jsonb NOT NULL,
+          "summary" text NOT NULL,
+          "reason" text NOT NULL DEFAULT '',
+          "status" text NOT NULL DEFAULT 'proposed',
+          "created_by" uuid,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "applied_at" timestamp,
+          "applied_by" uuid,
+          "undone_at" timestamp
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_changes_owner_idx" ON "ad_changes" ("owner_id", "account_id", "status")`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "ad_chats" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "account_id" text NOT NULL,
+          "messages" jsonb NOT NULL DEFAULT '[]'::jsonb,
+          "display" jsonb NOT NULL DEFAULT '[]'::jsonb,
+          "brief_hash" text,
+          "version" integer NOT NULL DEFAULT 0,
+          "created_by" uuid,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "ad_chats_owner_idx" ON "ad_chats" ("owner_id", "account_id", "updated_at" DESC)`);
     })().catch((err) => {
       ensured = null;
       throw err;
