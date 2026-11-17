@@ -3,7 +3,8 @@
  * (Nov 16 2026, Marcel). Client-safe data only.
  *
  * It mirrors nexli.net/ai-avatars (lib/ai-avatars.ts in the marketing site
- * repo): same slugs, names and Mux intro videos, alphabetical. Daniela is
+ * repo): same slugs, names and Mux intro videos, alphabetical — plus any
+ * avatar added here before the site has her (onSite: false). Daniela is
  * Nexli's own presenter and is never offered. WHEN THE SITE ADDS OR REMOVES
  * AN AVATAR, UPDATE THIS LIST TOO: the portrait images and intro pages are
  * served from nexli.net by slug.
@@ -21,9 +22,15 @@ export interface RosterAvatar {
   name: string;
   /** Mux playback id of her intro video. */
   playbackId: string;
+  /**
+   * false = not on nexli.net yet (no portrait or page there): her card uses
+   * the first frame of her intro video and links to her video instead. Flip
+   * to true once the site has her.
+   */
+  onSite: boolean;
 }
 
-const avatar = (name: string, playbackId: string): RosterAvatar => ({ slug: name.toLowerCase(), name, playbackId });
+const avatar = (name: string, playbackId: string, opts: { onSite?: boolean } = {}): RosterAvatar => ({ slug: name.toLowerCase(), name, playbackId, onSite: opts.onSite ?? true });
 
 export const AI_AVATAR_ROSTER: readonly RosterAvatar[] = [
   avatar("Abbey", "Rl1S1B537ZkFBmlCmNFCpECDcZt7h5uYYCNJrKYobjk"),
@@ -41,6 +48,8 @@ export const AI_AVATAR_ROSTER: readonly RosterAvatar[] = [
   avatar("Rene", "yllxGWf6AVrx4nAEg76i1RVmRb5FI3GgKhi3nmSCqIE"),
   avatar("Sofia", "zi14WHwTKvzsX9HCDiW6O3UU2IVSs02F3VEV2mJpVH01Y"),
   avatar("Vivian", "6Hdih9wWtXjCu3BtvtuJxvbf2W3sPzVZA4OgFlRbjw8"),
+  // Nov 17 2026 (Marcel). Not on nexli.net/ai-avatars yet — see onSite.
+  avatar("Yasmin", "6G5cdFpYM4ww6H19QNnxeWS00ibkoOFYigKCKtRWpBJI", { onSite: false }),
   avatar("Zoey", "F5RCKS3800Lbyl022micl67OafLWfEnzHQlzWdi8xTVh8"),
 ];
 
@@ -53,13 +62,17 @@ export function rosterAvatar(slug: unknown): RosterAvatar | null {
   return typeof slug === "string" ? (AI_AVATAR_ROSTER.find((a) => a.slug === slug) ?? null) : null;
 }
 
-/** Her 9:16 portrait (the card image on nexli.net; CSP img-src allows the site). */
+/** Her 9:16 portrait (the card image on nexli.net, or her intro video's first frame from Mux until the site has her; CSP img-src allows both). */
 export function portraitUrl(slug: string): string {
+  const r = rosterAvatar(slug);
+  if (r && !r.onSite) return `https://image.mux.com/${r.playbackId}/thumbnail.webp?time=0&width=720`;
   return `${SITE}/ai-avatars/${slug}/portrait.webp`;
 }
 
-/** Her page on nexli.net, with her intro video. */
+/** Her page on nexli.net, with her intro video (or Mux's player for her video until the site has her). */
 export function avatarPageUrl(slug: string): string {
+  const r = rosterAvatar(slug);
+  if (r && !r.onSite) return `https://player.mux.com/${r.playbackId}`;
   return `${SITE}/ai-avatars/${slug}`;
 }
 
