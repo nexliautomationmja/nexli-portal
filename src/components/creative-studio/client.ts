@@ -10,11 +10,15 @@ export function api(path: string) {
 export const inStudioQs = (key: string) => `?studio=${encodeURIComponent(key)}`;
 
 /** A studio's home page ("nexli" = Nexli's own studio). */
-export type StudioTab = "videos" | "photos" | "adcopy" | "avatars";
+export type StudioTab = "videos" | "photos" | "hooks" | "adcopy" | "avatars";
 
-const TAB_PATH: Record<StudioTab, string> = { videos: "", photos: "/photos", adcopy: "/ad-copy", avatars: "/avatars" };
+const TAB_PATH: Record<StudioTab, string> = { videos: "", photos: "/photos", hooks: "/hooks", adcopy: "/ad-copy", avatars: "/avatars" };
+
 
 export const studioHref = (key: string, tab: StudioTab = "videos") => `/dashboard/creative-studio/s/${encodeURIComponent(key)}${TAB_PATH[tab]}`;
+
+/** One hook test's page. */
+export const hookTestHref = (key: string, testId: string) => `${studioHref(key, "hooks")}/${testId}`;
 
 /** The AI avatar library lives in Nexli's studio (avatars are made there, then given to a firm). */
 export const avatarsHref = () => studioHref("nexli", "avatars");

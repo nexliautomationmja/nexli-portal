@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
     // Reaction videos: stills and the light copy of the video she reacts to.
     "/api/dashboard/creative-studio/projects/[projectId]/source/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
     "/api/dashboard/creative-studio/ad-copy/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
+    // Hook Tester: watches a dropped-in video (stills at chosen seconds).
+    "/api/dashboard/creative-studio/hook-tests/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
     // Ads grader: watches past ads and new creatives (stills at chosen seconds); the cron carries it on.
     "/api/dashboard/ads/grader/**": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
     "/api/cron/ads": ["./node_modules/@ffmpeg-installer/linux-x64/**"],

@@ -270,6 +270,17 @@ export async function projectDetail(project: Project) {
       studio: studioRef(studio),
       /** The chosen presenter (null = the studio's default: Daniela in Nexli's studio). */
       presenter: project.presenter ?? null,
+      /** Made from a hook test: the original video, the new hook, and whether the original's edit can be put on it. */
+      hookOf: project.hookOf
+        ? {
+            testId: project.hookOf.testId,
+            projectId: project.hookOf.projectId,
+            title: project.hookOf.title,
+            line: project.hookOf.line,
+            look: project.hookOf.look ? { style: project.hookOf.look.style, instruction: project.hookOf.look.instruction ?? null } : null,
+            trims: Object.values(project.hookOf.cut?.entries ?? {}).filter((e) => e.manual || e.sections.length || e.overrides.length).length,
+          }
+        : null,
       approvedAt: project.approvedAt?.toISOString() ?? null,
       updatedAt: project.updatedAt.toISOString(),
     },

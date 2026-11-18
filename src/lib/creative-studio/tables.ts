@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "@/db/schema";
 import type { CaptionWord, EditOverlays, EditStyle, PipTrack } from "@/remotion/types";
+import type { HookBasis, HookIdea, HookOrigin, HookRead } from "@/lib/creative-studio/hook-shared";
 
 /**
  * Creative Studio tables (admin-only tab: frame → script → Kling clips →
@@ -434,6 +435,8 @@ export const creativeProjects = pgTable("creative_projects", {
   reaction: jsonb("reaction").$type<ReactionInfo | null>(),
   /** Videos shown on screen, or a video to recreate; null = every other video. */
   media: jsonb("media").$type<MediaInfo | null>(),
+  /** Made from a hook test: the original video, the hook, and the original's trims and edit look. Null on every other video. */
+  hookOf: jsonb("hook_of").$type<HookOrigin | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -781,6 +784,63 @@ export const isWaiting = (e: { status: string; renderId: string | null }) =>
   e.status === "rendering" && (!e.renderId || e.renderId === RENDER_STARTING);
 
 /**
+ * Hook Tester (Nov 2026): one video in (made here, or dropped in), the three
+ * hooks most worth testing out. studio_id null = Nexli's studio.
+ */
+export const creativeHookTests = pgTable("creative_hook_tests", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  studioId: uuid("studio_id"),
+  createdBy: uuid("created_by"),
+  /** project = a video made here (its clips can be reused); upload = a video dropped in. */
+  source: text("source").$type<"project" | "upload">().notNull(),
+  projectId: uuid("project_id"),
+  title: text("title").notNull(),
+  /** A dropped-in video: where the file is. */
+  upload: jsonb("upload").$type<{ path: string; mime: string; filename: string; sizeBytes: number | null } | null>(),
+  /** A dropped-in video as Claude watched it: stills with times, every word with its time. */
+  media: jsonb("media").$type<import("@/lib/ads/grader-shared").ReadMedia | null>(),
+  /** new | reading | ready | failed */
+  status: text("status").$type<"new" | "reading" | "ready" | "failed">().notNull().default("new"),
+  read: jsonb("read").$type<HookRead | null>(),
+  hooks: jsonb("hooks").$type<HookIdea[]>().notNull().default([]),
+  basis: jsonb("basis").$type<HookBasis | null>(),
+  /** What the user asked for on the last rewrite ("more aggressive", "lead with the number"). */
+  note: text("note"),
+  /** Rewrite only this hook (null = all that have no clip yet). */
+  noteHookId: text("note_hook_id"),
+  /** When a request took the reading (older than 320 s = that request died). */
+  claimedAt: timestamp("claimed_at"),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** One hook's clip on Kling (a video made here only): the newest take per hook is the one shown. */
+export const creativeHookTakes = pgTable("creative_hook_takes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  testId: uuid("test_id")
+    .notNull()
+    .references(() => creativeHookTests.id, { onDelete: "cascade" }),
+  hookId: text("hook_id").notNull(),
+  fields: jsonb("fields").$type<ClipFields>().notNull(),
+  durationS: integer("duration_s").notNull(),
+  prompt: text("prompt").notNull(),
+  model: text("model"),
+  frameAssetId: uuid("frame_asset_id"),
+  klingTaskId: text("kling_task_id"),
+  /** draft | rendering | done | failed | blocked */
+  status: text("status").$type<"draft" | "rendering" | "done" | "failed" | "blocked">().notNull().default("draft"),
+  /** creative_assets (kind hook_take, on the original video so it's cleaned up with it). */
+  videoAssetId: uuid("video_asset_id"),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
  * The workspace's Kling connection: the portal is its own MCP client of
  * Kling's MCP server (OAuth 2.1 + PKCE, dynamic client registration), so
  * renders spend the same kling.ai credits Marcel uses in Claude. Tokens are
@@ -1070,6 +1130,51 @@ export function ensureCreativeStudioTables(): Promise<void> {
           ADD COLUMN IF NOT EXISTS "trial_project_id" uuid
       `);
       await db.execute(sql`ALTER TABLE "creative_studios" ADD COLUMN IF NOT EXISTS "default_presenter_id" uuid`);
+      // Nov 2026 Hook Tester.
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "hook_of" jsonb`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_hook_tests" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "owner_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "studio_id" uuid,
+          "created_by" uuid,
+          "source" text NOT NULL,
+          "project_id" uuid,
+          "title" text NOT NULL,
+          "upload" jsonb,
+          "media" jsonb,
+          "status" text NOT NULL DEFAULT 'new',
+          "read" jsonb,
+          "hooks" jsonb NOT NULL DEFAULT '[]'::jsonb,
+          "basis" jsonb,
+          "note" text,
+          "note_hook_id" text,
+          "claimed_at" timestamp,
+          "error" text,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_hook_tests_owner_idx" ON "creative_hook_tests" ("owner_id", "created_at")`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "creative_hook_takes" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          "test_id" uuid NOT NULL REFERENCES "creative_hook_tests"("id") ON DELETE CASCADE,
+          "hook_id" text NOT NULL,
+          "fields" jsonb NOT NULL,
+          "duration_s" integer NOT NULL,
+          "prompt" text NOT NULL,
+          "model" text,
+          "frame_asset_id" uuid,
+          "kling_task_id" text,
+          "status" text NOT NULL DEFAULT 'draft',
+          "video_asset_id" uuid,
+          "error" text,
+          "created_at" timestamp NOT NULL DEFAULT now(),
+          "updated_at" timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS "creative_hook_takes_test_idx" ON "creative_hook_takes" ("test_id")`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_kling_connections" (
           "owner_id" uuid PRIMARY KEY REFERENCES "users"("id") ON DELETE CASCADE,

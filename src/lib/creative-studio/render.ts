@@ -47,7 +47,7 @@ function isNoCredits(message: string): boolean {
 }
 
 /** Kling URL for the clip's frame (uploaded once, reused for ~20 h). */
-async function klingFrameUrl(token: string, frameId: string, taskTraceId: string): Promise<string> {
+export async function klingFrameUrl(token: string, frameId: string, taskTraceId: string): Promise<string> {
   const [frame] = await db.select().from(creativeAssets).where(eq(creativeAssets.id, frameId)).limit(1);
   if (!frame?.storagePath) throw new Error("The opening frame is missing");
   const meta = (frame.metadata ?? {}) as { klingUrl?: string; klingUrlAt?: string };

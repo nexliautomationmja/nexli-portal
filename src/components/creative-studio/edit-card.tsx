@@ -284,6 +284,20 @@ export function EditCard({
       onChange(r.data);
     } else onError(r.error);
   }
+  // A video made from a hook test: the original's edit (style, placements, colours, caption look) on this cut.
+  const origin = p.hookOf?.look && (p.hookOf.look.style !== "custom" || p.hookOf.look.instruction) ? p.hookOf : null;
+  async function startLikeOriginal() {
+    const look = origin?.look;
+    if (!look || !chosenCut) return;
+    setPicking(false);
+    setView("auto");
+    setBusy({ label: "Claude is putting the original's edit on this video…", detail: `${STYLE_LABEL[look.style]}, with its placements, colours and caption look. About a minute.` });
+    const durationS = chosenCut.url ? await measureDuration(chosenCut.url) : null;
+    const r = await send(api(`${p.id}/edit/start`), "POST", { style: look.style, instruction: look.instruction ?? undefined, finalCutId: chosenCut.id, durationS, keepLook: true });
+    setBusy(null);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
   // The clips changed after this edit was made (re-made clips → a newer final cut).
   const newestCut = finalCuts[finalCuts.length - 1];
   const onOldCut = Boolean(latest && newestCut && latest.finalCutId !== newestCut.id);
@@ -697,6 +711,21 @@ export function EditCard({
                   ))}
                 </select>
               </label>
+            )}
+            {!latest && origin?.look && (
+              <div className="rounded-2xl border border-cyan-400/60 bg-cyan-500/10 p-3 sm:p-4">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-bold text-white">Same edit as the original</p>
+                  <Chip tone="blue">{STYLE_LABEL[origin.look.style]}</Chip>
+                  <Chip>Fastest</Chip>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-300">
+                  The edit from “{origin.title}” on this cut: same style, and the spots, colours, sizes and caption look you set there. Claude re-times the graphics for the new hook.
+                </p>
+                <button type="button" onClick={() => void startLikeOriginal()} disabled={Boolean(busy) || rendering || !chosenCut} className={`${CTA_CLASSES} mt-3 !px-5 !py-2.5`}>
+                  Use the original&apos;s edit
+                </button>
+              </div>
             )}
             <div className="grid gap-3 sm:grid-cols-2">
               {EDIT_STYLES.map((s) => {

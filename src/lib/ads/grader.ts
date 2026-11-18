@@ -1141,6 +1141,53 @@ export async function graderState(ownerId: string, accountId: string): Promise<G
 }
 
 /** The grader in a few lines, for the Ask chat. */
+/**
+ * What's known about hooks, for the Creative Studio's Hook Tester: his own
+ * past videos (what each opened with, how many kept watching past 3 seconds,
+ * and what it produced) and long-running ads in the niche. Null when there's
+ * nothing to go on. Refs (A1…, N1…) map to a short label for the page.
+ */
+export async function hookEvidence(ownerId: string, accountId: string): Promise<{ text: string; refs: Record<string, string>; judged: number; market: number; researchAgeDays: number | null } | null> {
+  const ctx = await accountContext(ownerId, accountId);
+  const pool = ctx.all
+    .filter((j) => j.label !== "too_little")
+    .sort((a, b) => (b.hookRate ?? -1) - (a.hookRate ?? -1))
+    .slice(0, 14);
+  const m = ctx.research;
+  if (!pool.length && !m?.long_running_competitor_ads.length) return null;
+  const refs: Record<string, string> = {};
+  const lines: string[] = [];
+  if (pool.length) {
+    lines.push(`HIS OWN ADS — ${pool.length} videos that ran long enough to judge (last 90 days), best 3-second view rate first. The 3-second view rate is the hook's own score: the share of people who kept watching past the hook.`);
+    pool.forEach((j, i) => {
+      const ref = `A${i + 1}`;
+      const said = j.media.hookWords || j.read.hook.spoken || "(no words)";
+      const result =
+        j.label === "winner" || j.label === "booked_expensive"
+          ? `${j.outcome.booked} booked at ${money(j.cpbCents)} each`
+          : j.outcome.leads
+            ? `${j.outcome.leads} leads at ${money(j.cplCents)} each, none booked`
+            : "no leads";
+      refs[ref] = `Your ad “${j.name.slice(0, 60)}” · ${r2(j.hookRate)} watched 3 s · ${OUTCOME[j.label].label}`;
+      lines.push(`${ref} · 3-second view rate ${r2(j.hookRate)} · hold ${r2(j.holdRate)} · CTR ${r2(j.ctr)} · ${OUTCOME[j.label].label.toUpperCase()} (${result}; ${money(j.outcome.spendCents)} spent) · hook (${j.read.hook.type}): said "${said}" / on screen "${j.read.hook.onScreenText}" / seen: ${j.read.hook.visual} · angle ${j.read.angle} · ${j.read.format}`);
+    });
+    const med = median(pool.map((j) => j.hookRate).filter((x): x is number => x !== null));
+    if (med !== null) lines.push(`Median 3-second view rate across them: ${r2(med)}.`);
+  } else {
+    lines.push("HIS OWN ADS — none has run long enough to judge yet.");
+  }
+  if (m?.long_running_competitor_ads.length) {
+    lines.push("", `THE NICHE — long-running ads from his Ad Library research (${m.age_days} days old). An ad that keeps running is one that keeps paying.`);
+    m.long_running_competitor_ads.slice(0, 12).forEach((a, i) => {
+      const ref = `N${i + 1}`;
+      refs[ref] = `${a.advertiser} · running ${a.days_active ?? "?"} days`;
+      lines.push(`${ref} · ${a.advertiser} · ${a.format} · running ${a.days_active ?? "?"} days · hook "${a.hook}" · angle ${a.angle}`);
+    });
+    m.market_patterns.slice(0, 4).forEach((pt) => lines.push(`pattern: ${pt.title} — ${pt.detail}`));
+  }
+  return { text: lines.join("\n"), refs, judged: pool.length, market: m?.long_running_competitor_ads.length ?? 0, researchAgeDays: m?.age_days ?? null };
+}
+
 export async function gradesForChat(ownerId: string, accountId: string) {
   const [rows, bt] = await Promise.all([
     db

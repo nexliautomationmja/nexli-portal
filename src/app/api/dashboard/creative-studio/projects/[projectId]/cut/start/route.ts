@@ -28,14 +28,17 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (base?.status === "cutting") {
     return NextResponse.json({ ...(await projectDetail(project)), cutId: base.id });
   }
+  // A video made from a hook test: its first cut starts from the original's trims on the clips it reuses.
+  const seed = base ? null : project.hookOf?.cut ?? null;
   const [cut] = await db
     .insert(creativeCuts)
     .values({
       projectId: project.id,
       version: (base?.version ?? 0) + 1,
-      settings: base?.settings ?? DEFAULT_CUT,
+      settings: base?.settings ?? seed?.settings ?? DEFAULT_CUT,
       plan: clips.map((c) => {
-        const prev = entryFor(base, c);
+        const carried = seed?.entries[c.id];
+        const prev = carried && carried.version === c.version ? carried : entryFor(base, c);
         return {
           clipId: c.id,
           version: c.version,

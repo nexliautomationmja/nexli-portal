@@ -44,17 +44,20 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const words = sameCut && prev.props.words.length > 0 ? prev.props.words : built.words;
     // Spots placed by hand (title clear of her face…) carry over to a new style on the same cut,
     // and to a new cut when asked ("put this edit on the new cut": same frame, same spots).
-    const keep = sameCut || (body?.keepLook === true && prev);
-    const layout = keep ? prev.props.overlays.layout : undefined;
-    const captionStyle = keep ? prev.props.overlays.captionStyle : undefined;
-    const sizes = keep ? prev.props.overlays.sizes : undefined;
+    // A video made from a hook test has no edit of its own yet: "keep the look" then means the original's.
+    const seed = !prev && body?.keepLook === true ? project.hookOf?.look ?? null : null;
+    const from = prev ? prev.props : seed ? { overlays: seed.overlays, pip: undefined, media: undefined } : null;
+    const keep = from && (sameCut || body?.keepLook === true) ? from : null;
+    const layout = keep ? keep.overlays.layout : undefined;
+    const captionStyle = keep ? keep.overlays.captionStyle : undefined;
+    const sizes = keep ? keep.overlays.sizes : undefined;
     const durationS = await durationOf(finalCut, body.durationS, words);
     // A reaction video: the video she reacts to, in the corner (its size and captions carry over on the same cut).
-    const reaction = await reactionTrack(project, built.lines, keep ? prev.props.pip : undefined);
+    const reaction = await reactionTrack(project, built.lines, keep ? keep.pip : undefined);
     // Clips on screen: shown over their lines (how a cue shows, and a window's spot and size, carry over on the same cut).
     const onscreen = await mediaTrack(project, built.lines);
-    if (onscreen.media && keep && prev.props.media) {
-      const before = prev.props.media;
+    if (onscreen.media && keep && keep.media) {
+      const before = keep.media;
       onscreen.media.cues = onscreen.media.cues.map((c) => {
         const id = onscreen.media!.clips[c.clip]?.mediaId;
         const old = before.cues.find((o) => Math.abs(o.start - c.start) < 0.05 && before.clips[o.clip]?.mediaId === id);
@@ -80,7 +83,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         words,
         overlays: {
           // Hand-picked colours and icons carry over like the spots: the title, qualifier and CTA, and cards or stickers that say the same thing.
-          ...(keep ? carryDecor(prev.props.overlays, result.overlays, false) : result.overlays),
+          ...(keep ? carryDecor(keep.overlays, result.overlays, false) : result.overlays),
           ...(layout ? { layout } : {}),
           ...(captionStyle ? { captionStyle } : {}),
           ...(sizes ? { sizes } : {}),

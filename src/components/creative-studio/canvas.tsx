@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ACCENT, SHIMMER_CONIC, SYNE, type Accent } from "@/components/launch-pad";
 import { LimeBadge, META_LIME, META_LIME_CONIC, META_LIME_FILL, MetaLogo } from "@/components/creative-studio/meta";
@@ -337,26 +337,11 @@ export function ScrollJump() {
 }
 
 const STUDIO_TABS = [
-  {
-    id: "videos",
-    label: "Videos",
-    sub: "Script → Kling → edit",
-  },
-  {
-    id: "photos",
-    label: "Photo Ads",
-    sub: "Prompt → Manus statics",
-  },
-  {
-    id: "adcopy",
-    label: "Meta Ad Copy",
-    sub: "Drop creatives, get the copy",
-  },
-  {
-    id: "avatars",
-    label: "Avatars",
-    sub: "A face + voice per firm",
-  },
+  { id: "videos", label: "Videos", short: "Videos", sub: "Script → Kling → edit" },
+  { id: "photos", label: "Photo Ads", short: "Photos", sub: "Prompt → Manus statics" },
+  { id: "hooks", label: "Hook Tester", short: "Hooks", sub: "3 new hooks for any video" },
+  { id: "adcopy", label: "Meta Ad Copy", short: "Ad Copy", sub: "Drop creatives, get the copy" },
+  { id: "avatars", label: "Avatars", short: "Avatars", sub: "A face + voice per firm" },
 ] as const;
 
 /** A person icon for the Avatars tab. */
@@ -367,69 +352,75 @@ const AVATAR_ICON = (
   </>
 );
 
+/** A fishing hook for the Hook Tester tab. */
+export const HOOK_ICON = (
+  <>
+    <circle cx="15" cy="4" r="1.6" />
+    <path d="M15 5.6V15a5 5 0 0 1-10 0v-3.5" />
+    <path d="m5 11.5 3 2.6" />
+  </>
+);
+
 /**
- * The studio's tabs — Videos, Photo Ads and Meta Ad Copy — as a glass segmented
- * control in a shimmer frame, so it reads as navigation at a glance. Meta Ad
- * Copy wears the lime "Campaigns built and run on Meta" chip look from
- * nexli.net; the frame's shimmer follows the active tab.
+ * The studio's tabs as one compact glass pill in a shimmer frame: an icon and
+ * a name per tab, sized to its label so all of them fit on one line (they
+ * scroll sideways on a narrow phone). Meta Ad Copy keeps the lime look of the
+ * "Campaigns built and run on Meta" chip from nexli.net; the frame's shimmer
+ * follows the active tab. Each tab's one-line description is its tooltip.
  */
 export function StudioTabs({ active, studioKey }: { active: StudioTab; studioKey: string }) {
   const frame = active === "adcopy" ? META_LIME_CONIC : SHIMMER_CONIC;
   // The avatar library is made in Nexli's studio, then each avatar is given to one firm.
   const tabs = STUDIO_TABS.filter((t) => t.id !== "avatars" || studioKey === "nexli");
+  // On a phone too narrow for every tab, start with the active one in view.
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = row.current;
+    const on = box?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (box && on && box.scrollWidth > box.clientWidth) box.scrollLeft = on.offsetLeft - (box.clientWidth - on.offsetWidth) / 2;
+  }, [active]);
   return (
-    <nav aria-label="Creative Studio" className={`relative inline-flex w-full ${tabs.length === 4 ? "max-w-4xl" : "max-w-2xl"} overflow-hidden rounded-[22px] p-[1.5px] sm:w-auto`}>
+    <nav aria-label="Creative Studio" className="relative inline-flex max-w-full overflow-hidden rounded-full p-[1.5px]">
       <span aria-hidden="true" className="pointer-events-none absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-70" style={{ background: frame }} />
       <span aria-hidden="true" className="pointer-events-none absolute inset-[-100%] animate-[shimmer_8s_linear_infinite] opacity-40 blur-md" style={{ background: frame }} />
-      <div className={`relative z-10 grid w-full gap-1 rounded-[21px] bg-[#0b1220]/95 p-1 backdrop-blur-xl ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+      <div ref={row} className="relative z-10 flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full bg-[#0b1220]/95 p-1 backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((t) => {
           const on = t.id === active;
           const meta = t.id === "adcopy";
           const tabClass = on
             ? meta
               ? "text-lime-300"
-              : "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/40"
-            : "text-neutral-400 hover:bg-white/[0.06] hover:text-white";
+              : "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-md shadow-blue-500/40"
+            : meta
+              ? "text-neutral-400 hover:bg-lime-400/10 hover:text-lime-200"
+              : "text-neutral-400 hover:bg-white/[0.07] hover:text-white";
           return (
             <Link
               key={t.id}
               href={studioHref(studioKey, t.id)}
               aria-current={on ? "page" : undefined}
-              className={`group relative flex min-h-11 min-w-0 items-center gap-2 rounded-[18px] px-2.5 py-2 transition-all duration-200 sm:gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 sm:px-4 sm:py-2.5 ${tabClass}`}
-              style={
-                on && meta
-                  ? { background: META_LIME_FILL, boxShadow: "inset 0 0 0 1px rgba(190,242,100,0.55), 0 10px 28px -10px rgba(163,230,53,0.55)" }
-                  : undefined
-              }
+              title={t.sub}
+              className={`group relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-xs font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 sm:min-h-9 sm:px-3.5 sm:text-[13px] ${tabClass}`}
+              style={{
+                ...SYNE,
+                ...(on && meta ? { background: META_LIME_FILL, boxShadow: "inset 0 0 0 1px rgba(190,242,100,0.55), 0 8px 22px -10px rgba(163,230,53,0.55)" } : {}),
+              }}
             >
-              <span
-                className={`${tabs.length === 4 ? "hidden sm:flex" : "flex"} h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors sm:h-9 sm:w-9 sm:rounded-xl ${
-                  on
-                    ? meta
-                      ? "bg-[#0a0f1c] ring-1 ring-lime-300/40"
-                      : "bg-white/20 text-white"
-                    : meta
-                      ? "bg-white/5 group-hover:bg-lime-400/15"
-                      : "bg-white/5 text-neutral-400 group-hover:bg-blue-500/20 group-hover:text-blue-200"
-                }`}
-              >
-                {meta ? <MetaLogo className="h-auto w-[19px]" /> : <SvgIcon d={t.id === "photos" ? SP.image : t.id === "avatars" ? AVATAR_ICON : SP.film} size={18} />}
+              <span className={`hidden shrink-0 sm:flex ${on || meta ? "" : "text-neutral-500 group-hover:text-cyan-200"}`}>
+                {meta ? (
+                  <MetaLogo className="h-auto w-[17px]" />
+                ) : (
+                  <SvgIcon d={t.id === "photos" ? SP.image : t.id === "avatars" ? AVATAR_ICON : t.id === "hooks" ? HOOK_ICON : SP.film} size={15} />
+                )}
               </span>
-              <span className="min-w-0 flex-1 text-left">
-                <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-sm font-bold leading-tight" style={SYNE}>
-                  <span className="truncate sm:hidden">{meta ? "Ad Copy" : t.id === "photos" ? "Photos" : t.label}</span>
-                  <span className="hidden sm:inline">{t.label}</span>
-                  {meta && on && <LimeBadge size={14} />}
-                  {meta && !on && (
-                    <span className="hidden animate-pulse rounded-full px-1.5 py-px text-[8px] font-black uppercase tracking-wider text-[#0a0f1c] shadow shadow-lime-400/40 sm:inline" style={{ background: META_LIME }}>
-                      New
-                    </span>
-                  )}
+              <span className="sm:hidden">{t.short}</span>
+              <span className="hidden sm:inline">{t.label}</span>
+              {meta && on && <LimeBadge size={13} />}
+              {t.id === "hooks" && !on && (
+                <span className="hidden rounded-full px-1.5 py-px text-[8px] font-black uppercase tracking-wider text-[#0a0f1c] sm:inline" style={{ background: META_LIME }}>
+                  New
                 </span>
-                <span className={`hidden truncate text-[11px] leading-tight sm:block ${on ? (meta ? "text-lime-200/70" : "text-white/75") : "text-neutral-500 group-hover:text-neutral-300"}`}>
-                  {t.sub}
-                </span>
-              </span>
+              )}
             </Link>
           );
         })}

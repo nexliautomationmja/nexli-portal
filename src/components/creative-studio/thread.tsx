@@ -8,7 +8,7 @@ import type { CreativeFormat } from "@/lib/creative-studio/tables";
 import { MAX_SCENES, scriptPresenterMismatch } from "@/lib/creative-studio/prompts";
 import { defaultPresenterName } from "@/components/creative-studio/presenter-picker";
 import { SYNE } from "@/components/launch-pad";
-import { studioHref, api, send } from "@/components/creative-studio/client";
+import { studioHref, api, send, hookTestHref, inStudioQs } from "@/components/creative-studio/client";
 import { recreateWithManus, uploadFrameFile, uploadMedia, uploadSource } from "@/components/creative-studio/upload";
 import { MediaCard } from "@/components/creative-studio/media-card";
 import { SourceCard, presenterName } from "@/components/creative-studio/source-card";
@@ -16,6 +16,7 @@ import {
   AssistantCard,
   Chip,
   ErrorStrip,
+  HOOK_ICON,
   SP,
   STATUS_PILL,
   ScrollJump,
@@ -195,6 +196,27 @@ export function StudioThread({ projectId }: { projectId: string }) {
     setFormat(d.project.format);
   }, []);
   const fail = useCallback((msg: string) => setError(msg), []);
+  // "Test new hooks": a hook test on this video (it opens on its own page; this video isn't changed).
+  const [startingHooks, setStartingHooks] = useState(false);
+  const testHooks = useCallback(
+    async (studioKey: string) => {
+      setStartingHooks(true);
+      try {
+        const r = await fetch(`/api/dashboard/creative-studio/hook-tests${inStudioQs(studioKey)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "project", projectId }),
+        });
+        const d = await r.json().catch(() => null);
+        if (!r.ok || !d?.id) throw new Error(d?.error || "Couldn't start the hook test.");
+        router.push(hookTestHref(studioKey, d.id));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't start the hook test.");
+        setStartingHooks(false);
+      }
+    },
+    [projectId, router]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -589,6 +611,24 @@ export function StudioThread({ projectId }: { projectId: string }) {
                   ← Back to batch
                 </Link>
               )}
+              {p.hookOf && (
+                <Link href={hookTestHref(p.studio.key, p.hookOf.testId)} className="inline-flex min-h-6 items-center text-[11px] font-semibold text-cyan-300 hover:text-white">
+                  ← Hook test
+                </Link>
+              )}
+              {/* Every clip is made: a new hook can be swapped in (as a new video). */}
+              {p.status === "clips_ready" && detail.clips.length > 1 && (
+                <button
+                  type="button"
+                  disabled={startingHooks}
+                  onClick={() => void testHooks(p.studio.key)}
+                  className="inline-flex min-h-6 items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:text-white disabled:opacity-60"
+                  title="Claude writes three new hooks for this video. Kling makes only the hook clip; the rest of this video is reused in a new one."
+                >
+                  <SvgIcon d={HOOK_ICON} size={12} />
+                  {startingHooks ? "Starting…" : "Test new hooks"}
+                </button>
+              )}
             </div>
           </div>
           <span className="hidden sm:inline-flex">
@@ -601,6 +641,19 @@ export function StudioThread({ projectId }: { projectId: string }) {
 
         {/* Thread */}
         <div className="flex-1 space-y-5 py-6">
+          {p.hookOf?.projectId && (
+            <div className="lp-card rounded-2xl border border-cyan-400/25 bg-cyan-500/[0.07] px-4 py-3 text-sm leading-relaxed text-neutral-200">
+              <p>
+                <b className="text-white">New hook, same video.</b> This is{" "}
+                <Link href={`/dashboard/creative-studio/${p.hookOf.projectId}`} className="font-semibold text-cyan-300 hover:text-white">
+                  “{p.hookOf.title}”
+                </Link>{" "}
+                with a new first clip. Its other clips were reused as they are
+                {p.hookOf.trims > 0 ? `, with your trims on ${p.hookOf.trims} of them` : ""}, and the original is untouched.
+              </p>
+              <p className="mt-1.5 text-neutral-300">“{p.hookOf.line}”</p>
+            </div>
+          )}
           {p.direction ? (
             <UserBubble meta={<Chip tone="blue">{p.format === "vsl_16x9" ? "VSL · 16:9" : "Ad · 9:16"}</Chip>}>{p.direction}</UserBubble>
           ) : null}
