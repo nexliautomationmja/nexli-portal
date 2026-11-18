@@ -11,12 +11,15 @@ import { count, decimal, money, pct } from "@/lib/ads/format";
 import type { AdPlan } from "@/lib/ads/decide";
 import { addText, takeLines, CHAT_MAX_MESSAGE, CHAT_MAX_USER_TURNS, type ChatBlock, type ChatEvent, type ChatView, type CreativeCardData, type DisplayTurn, type LeadRowData, type WindowNumbers } from "@/lib/ads/chat-shared";
 import type { ChangeView } from "@/lib/ads/corrections-shared";
+import type { MetaAccessView } from "@/lib/ads/meta-changes-shared";
+import { MetaDetails, MetaSetup, isMeta, metaApplyLabel, metaBusyLabel, metaUndoLabel } from "@/components/ads/meta-change";
 
 /**
  * "Ask about your ads" — the chat at the top of the Ads page. Marcel asks in
  * plain words; Claude answers from the same numbers as the page (streamed),
- * shows creative and lead cards, and puts any change it suggests on a card:
- * nothing changes until he taps Apply, and he can undo it.
+ * shows creative and lead cards, and puts any change it suggests on a card —
+ * in the portal or, once switched on, in Meta itself: nothing changes until
+ * he taps Apply, and he can undo it.
  */
 
 const SEND = <path d="M5 12h14M13 6l6 6-6 6" />;
@@ -27,11 +30,16 @@ type Live = { user: DisplayTurn; turn: DisplayTurn } | null;
 
 export function AskPanel({
   plan,
+  meta,
+  onMetaRecheck,
   onChanged,
   onCreate,
   onJumpAd,
 }: {
   plan: AdPlan | null;
+  /** Can it change Meta (null while loading). */
+  meta: MetaAccessView | null;
+  onMetaRecheck: () => Promise<void>;
   /** A change was applied or undone: reload the numbers (and Goals when they changed). */
   onChanged: (o: { goals: boolean }) => void;
   onCreate: (count: number, note: string) => void;
@@ -187,8 +195,9 @@ export function AskPanel({
     const testing = plan?.calls.find((c) => c.call === "keep" && c.tag === "testing");
     if (testing) out.push(`Should I keep “${testing.name.length > 40 ? `${testing.name.slice(0, 38)}…` : testing.name}”?`);
     out.push("What should I make next?");
+    if (meta?.canWrite && plan?.counts.cut) out.push("Turn off today's cuts");
     return out;
-  }, [plan]);
+  }, [plan, meta?.canWrite]);
 
   const list = useMemo(() => Object.values(changes).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [changes]);
   const empty = turns.length === 0;
@@ -201,7 +210,8 @@ export function AskPanel({
           <div className="px-4 pb-2 pt-5 sm:px-6">
             <p className="text-sm leading-relaxed text-neutral-300">
               Ask in plain words, the way you&apos;d ask Manus — it answers in seconds. Claude reads the same numbers as this page, can open a creative&apos;s leads one by one, and can suggest fixes: a lead or
-              booked call that didn&apos;t really happen, your own Cut or Keep on a creative, new targets.{" "}
+              booked call that didn&apos;t really happen, your own Cut or Keep on a creative, new targets
+              {meta?.canWrite ? " — and changes in Meta: turn ads off or on, budgets, duplicates, a new campaign" : ""}.{" "}
               <span className="font-semibold text-white">Nothing changes until you tap Apply.</span>
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -283,7 +293,7 @@ export function AskPanel({
             </form>
           )}
           <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-neutral-500">
-            <span>Claude · reads Meta and your CRM · changes only on your Apply · never changes Meta</span>
+            <span>Claude · reads Meta and your CRM · changes only on your Apply{meta?.canWrite ? " — in the portal or in Meta" : " · read-only in Meta"}</span>
             {!empty && !full && (
               <button type="button" onClick={() => void newChat()} disabled={sending} className="min-h-8 font-semibold text-neutral-300 hover:text-white disabled:opacity-50">
                 New chat
@@ -294,6 +304,7 @@ export function AskPanel({
         </div>
       </div>
 
+      <MetaSetup meta={meta} onRecheck={onMetaRecheck} />
       <Corrections list={list} onAct={act} />
     </div>
   );
@@ -532,6 +543,18 @@ const KIND_LABEL: Record<ChangeView["kind"], string> = {
   booking_not_real: "Fix tracking",
   call_override: "Your call",
   goals: "Goals",
+  meta_status: "Meta · on / off",
+  meta_budget: "Meta · budget",
+  meta_copy: "Meta · new copy",
+};
+
+const STATUS_TEXT: Record<ChangeView["status"], string> = {
+  proposed: "· waiting for you",
+  applying: "· changing Meta now…",
+  applied: "· applied",
+  undoing: "· undoing in Meta…",
+  undone: "· undone",
+  dismissed: "· dismissed",
 };
 
 function ChangeCard({ c, onAct, compact = false }: { c: ChangeView; onAct: (id: string, action: "apply" | "dismiss" | "undo") => Promise<string | null>; compact?: boolean }) {
@@ -543,16 +566,25 @@ function ChangeCard({ c, onAct, compact = false }: { c: ChangeView; onAct: (id: 
     setErr(await onAct(c.id, action));
     setBusy(null);
   };
+  const meta = isMeta(c);
+  const working = c.status === "applying" || c.status === "undoing";
   const tone =
-    c.status === "proposed" ? "border-cyan-400/35 bg-cyan-500/[0.07]" : c.status === "applied" ? "border-emerald-400/25 bg-emerald-500/[0.06]" : "border-white/10 bg-white/[0.03] opacity-70";
+    c.status === "proposed"
+      ? meta
+        ? "border-rose-400/30 bg-rose-500/[0.05]"
+        : "border-cyan-400/35 bg-cyan-500/[0.07]"
+      : c.status === "applied" || working
+        ? "border-emerald-400/25 bg-emerald-500/[0.06]"
+        : "border-white/10 bg-white/[0.03] opacity-70";
   return (
     <div className={`rounded-2xl border ${compact ? "p-2.5" : "p-3"} ${tone}`}>
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-cyan-200">
+        <div className="min-w-0 flex-1 basis-full sm:basis-0">
+          <p className={`text-[10px] font-black uppercase tracking-[0.15em] ${meta ? "text-rose-200" : "text-cyan-200"}`}>
             {KIND_LABEL[c.kind]}
             <span className="ml-2 font-bold normal-case tracking-normal text-neutral-400">
-              {c.status === "proposed" ? "· waiting for you" : c.status === "applied" ? `· applied${c.appliedAt ? ` ${new Date(c.appliedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}` : c.status === "undone" ? "· undone" : "· dismissed"}
+              {STATUS_TEXT[c.status]}
+              {c.status === "applied" && c.appliedAt ? ` ${new Date(c.appliedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
             </span>
           </p>
           <p className="mt-0.5 text-sm font-semibold leading-snug text-white">{c.summary}</p>
@@ -561,8 +593,13 @@ function ChangeCard({ c, onAct, compact = false }: { c: ChangeView; onAct: (id: 
         <div className="flex items-center gap-1.5">
           {c.status === "proposed" && (
             <>
-              <button type="button" disabled={Boolean(busy)} onClick={() => void run("apply")} className="min-h-10 rounded-full bg-cyan-500 px-4 text-xs font-bold text-[#04121a] hover:bg-cyan-400 disabled:opacity-50">
-                {busy === "apply" ? "Applying…" : "Apply"}
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => void run("apply")}
+                className={`min-h-10 rounded-full px-4 text-xs font-bold disabled:opacity-50 ${meta ? "bg-rose-500 text-white hover:bg-rose-400" : "bg-cyan-500 text-[#04121a] hover:bg-cyan-400"}`}
+              >
+                {busy === "apply" ? (meta ? metaBusyLabel(c) : "Applying…") : meta ? metaApplyLabel(c) : "Apply"}
               </button>
               <button type="button" disabled={Boolean(busy)} onClick={() => void run("dismiss")} className="min-h-10 rounded-full px-3 text-xs font-semibold text-neutral-300 hover:text-white disabled:opacity-50">
                 Not now
@@ -571,12 +608,14 @@ function ChangeCard({ c, onAct, compact = false }: { c: ChangeView; onAct: (id: 
           )}
           {c.status === "applied" && (
             <button type="button" disabled={Boolean(busy)} onClick={() => void run("undo")} className="min-h-10 rounded-full border border-white/15 px-4 text-xs font-bold text-white hover:bg-white/10 disabled:opacity-50">
-              {busy === "undo" ? "Undoing…" : "Undo"}
+              {busy === "undo" ? "Undoing…" : meta ? metaUndoLabel(c) : "Undo"}
             </button>
           )}
+          {working && <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-300 border-t-transparent" aria-label="Working" />}
         </div>
       </div>
-      {c.status === "applied" && c.kind === "call_override" && !compact && <p className="mt-1.5 text-[11px] text-neutral-400">On Today&apos;s plan now. Cutting still means turning it off in Ads Manager.</p>}
+      {meta && <MetaDetails c={c} compact={compact} />}
+      {c.status === "applied" && c.kind === "call_override" && !compact && <p className="mt-1.5 text-[11px] text-neutral-400">On Today&apos;s plan now. This doesn&apos;t touch Meta.</p>}
       {c.status === "applied" && (c.kind === "lead_not_real" || c.kind === "booking_not_real") && !compact && (
         <p className="mt-1.5 text-[11px] text-neutral-400">Left out of the plan, the cards and the scorecard now; the morning email counts it from tomorrow.</p>
       )}
@@ -590,13 +629,15 @@ function ChangeCard({ c, onAct, compact = false }: { c: ChangeView; onAct: (id: 
 function Corrections({ list, onAct }: { list: ChangeView[]; onAct: (id: string, action: "apply" | "dismiss" | "undo") => Promise<string | null> }) {
   const [open, setOpen] = useState(false);
   const waiting = list.filter((c) => c.status === "proposed");
-  const applied = list.filter((c) => c.status === "applied");
+  // Meta changes stay listed for two weeks (they can be undone); portal corrections for as long as they count.
+  const [recent] = useState(() => Date.now() - 14 * 86_400_000);
+  const applied = list.filter((c) => (c.status === "applied" || c.status === "applying" || c.status === "undoing") && (!isMeta(c) || Date.parse(c.appliedAt ?? c.createdAt) > recent));
   if (!waiting.length && !applied.length) return null;
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03]">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex min-h-11 w-full items-center gap-2 px-4 text-left">
         <span className="text-sm font-bold text-white" style={SYNE}>
-          Your corrections
+          Your changes
         </span>
         <span className="text-xs text-neutral-400" style={NUM_FONT}>
           {[applied.length ? `${applied.length} in force` : null, waiting.length ? `${waiting.length} waiting for you` : null].filter(Boolean).join(" · ")}

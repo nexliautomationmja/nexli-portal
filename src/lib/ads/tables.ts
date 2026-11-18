@@ -215,8 +215,8 @@ export const adCreativeIdeas = pgTable("ad_creative_ideas", {
  * undid): a lead or booked call that didn't really happen, Marcel's own Cut /
  * Keep call on a creative, or new goals. Only "applied" rows count anywhere.
  */
-export type AdChangeKind = "lead_not_real" | "booking_not_real" | "call_override" | "goals";
-export type AdChangeStatus = "proposed" | "applied" | "dismissed" | "undone";
+export type AdChangeKind = "lead_not_real" | "booking_not_real" | "call_override" | "goals" | "meta_status" | "meta_budget" | "meta_copy";
+export type AdChangeStatus = "proposed" | "applying" | "applied" | "undoing" | "dismissed" | "undone";
 
 export const adChanges = pgTable("ad_changes", {
   id: uuid("id").defaultRandom().primaryKey(),

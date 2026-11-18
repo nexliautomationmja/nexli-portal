@@ -18,6 +18,7 @@ import { CreateCreativesButton, OnDeck, type DeckState } from "@/components/ads/
 import type { DeckItem } from "@/lib/ads/ideas-shared";
 import type { VslBoard } from "@/lib/ads/vsl-shared";
 import { VslStrip } from "@/components/ads/vsl-scoreboard";
+import { TurnOffButton } from "@/components/ads/meta-change";
 
 /**
  * Today's plan — the top of the Ads page: which creatives to cut (by name,
@@ -46,6 +47,8 @@ export function TodayPlan({
   onJumpAd,
   onCreate,
   onLive,
+  canTurnOff = false,
+  onTurnedOff,
 }: {
   s: AdsSnapshot;
   plan: AdPlan;
@@ -62,6 +65,9 @@ export function TodayPlan({
   onJumpAd: (id: string) => void;
   onCreate: () => void;
   onLive: (item: DeckItem, live: boolean) => void;
+  /** Changes in Meta are on: cuts get a Turn off button. */
+  canTurnOff?: boolean;
+  onTurnedOff?: () => void;
 }) {
   const ready = (deck?.deck ?? []).filter((d) => d.stage === "ready");
   const openCuts = plan.counts.cut;
@@ -107,7 +113,13 @@ export function TodayPlan({
         <Counter
           n={plan.counts.cut}
           label="Cut"
-          sub={plan.counts.cut ? (plan.counts.early ? `${plan.counts.early} early read${plan.counts.early === 1 ? "" : "s"} · turn off in Ads Manager` : "turn off in Ads Manager") : plan.counts.cutDone ? `${plan.counts.cutDone} done today` : "nothing to cut"}
+          sub={
+            plan.counts.cut
+              ? `${plan.counts.early ? `${plan.counts.early} early read${plan.counts.early === 1 ? "" : "s"} · ` : ""}${canTurnOff ? "turn off below" : "turn off in Ads Manager"}`
+              : plan.counts.cutDone
+                ? `${plan.counts.cutDone} done today`
+                : "nothing to cut"
+          }
           color={VIZ.status.critical}
           href="#plan-cut"
         />
@@ -121,12 +133,22 @@ export function TodayPlan({
       <div className="grid gap-3 lg:grid-cols-2">
         <Glass id="plan-cut" className="scroll-mt-28 p-4 md:scroll-mt-20">
           <ListHead title="Cut these" count={cuts.length} color={VIZ.status.critical} />
+          {canTurnOff && cuts.filter((c) => !c.done).length >= 2 && (
+            <div className="mt-2">
+              <TurnOffButton
+                adIds={cuts.filter((c) => !c.done).map((c) => c.adId)}
+                label={`Turn off all ${cuts.filter((c) => !c.done).length} in Meta`}
+                confirmText={`Turn off all ${cuts.filter((c) => !c.done).length} cuts now?`}
+                onDone={() => onTurnedOff?.()}
+              />
+            </div>
+          )}
           {cuts.length === 0 ? (
             <p className="mt-3 text-sm text-neutral-300">Nothing to cut today — every live creative is earning its keep or still being tested.</p>
           ) : (
             <ul className="mt-3 space-y-2.5">
               {cuts.map((c) => (
-                <CallRow key={c.adId} c={c} ad={adById.get(c.adId)} tags={tags} fixes={s.corrections?.leadFixes} onJump={onJumpAd} />
+                <CallRow key={c.adId} c={c} ad={adById.get(c.adId)} tags={tags} fixes={s.corrections?.leadFixes} onJump={onJumpAd} canTurnOff={canTurnOff} onTurnedOff={onTurnedOff} />
               ))}
             </ul>
           )}
@@ -278,7 +300,23 @@ function Thumb({ ad }: { ad?: AdRow }) {
   );
 }
 
-function CallRow({ c, ad, tags, fixes, onJump }: { c: CreativeCall; ad?: AdRow; tags: Record<string, CreativeTags>; fixes?: Record<string, { leads: number; bookings: number }>; onJump: (id: string) => void }) {
+function CallRow({
+  c,
+  ad,
+  tags,
+  fixes,
+  onJump,
+  canTurnOff = false,
+  onTurnedOff,
+}: {
+  c: CreativeCall;
+  ad?: AdRow;
+  tags: Record<string, CreativeTags>;
+  fixes?: Record<string, { leads: number; bookings: number }>;
+  onJump: (id: string) => void;
+  canTurnOff?: boolean;
+  onTurnedOff?: () => void;
+}) {
   const t = tags[c.adId];
   const fix = fixes?.[c.adId];
   return (
@@ -324,9 +362,19 @@ function CallRow({ c, ad, tags, fixes, onJump }: { c: CreativeCall; ad?: AdRow; 
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           {!(c.call === "cut" && !c.done && ad?.adsManagerUrl) && <span className="text-[11px] font-semibold text-neutral-400">{c.action}</span>}
+          {c.call === "cut" && !c.done && canTurnOff && <TurnOffButton adIds={[c.adId]} label="Turn off in Meta" confirmText="Turn it off now?" onDone={() => onTurnedOff?.()} />}
           {c.call === "cut" && !c.done && ad?.adsManagerUrl && (
-            <a href={ad.adsManagerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1 rounded-full bg-rose-500/20 px-3 text-[11px] font-bold text-rose-50 hover:bg-rose-500/30">
-              Turn it off in Ads Manager <Ico d={EXT} size={11} />
+            <a
+              href={ad.adsManagerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={
+                canTurnOff
+                  ? "inline-flex min-h-9 items-center gap-1 text-[11px] font-semibold text-neutral-400 hover:text-white"
+                  : "inline-flex min-h-9 items-center gap-1 rounded-full bg-rose-500/20 px-3 text-[11px] font-bold text-rose-50 hover:bg-rose-500/30"
+              }
+            >
+              {canTurnOff ? "Ads Manager" : "Turn it off in Ads Manager"} <Ico d={EXT} size={11} />
             </a>
           )}
         </div>

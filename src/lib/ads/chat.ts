@@ -20,6 +20,9 @@ import { getContactById } from "@/lib/ghl-client";
 import { parseAdsRange, type AdRow, type AdsSnapshot, type Metrics } from "@/lib/ads/types";
 import { vslBoardFor } from "@/lib/ads/vsl";
 import { gradesForChat } from "@/lib/ads/grader";
+import { metaStructure } from "@/lib/ads/base-cache";
+import { LEVEL_LABEL, isMetaKind, money0, planBudget, planDuplicate, planNewCampaign, planStatus, type MetaLevel, type Structure } from "@/lib/ads/meta-changes-shared";
+import { metaWriteAccess, type MetaWriteAccess } from "@/lib/ads/meta-write";
 import { vslHeadline, vslPackSummary, type VslBoard } from "@/lib/ads/vsl-shared";
 
 /**
@@ -27,8 +30,9 @@ import { vslHeadline, vslPackSummary, type VslBoard } from "@/lib/ads/vsl-shared
  * Claude answers from the same numbers the page shows (a brief of the account
  * up front, tools for the details) and can PROPOSE changes — a lead or booked
  * call that didn't really happen, his own Cut / Keep on a creative, new
- * goals. Nothing changes until Marcel taps Apply on the card. Portal only:
- * Meta is never changed from here.
+ * goals — and, when the manage token is set, changes in Meta itself (off /
+ * on, budgets, copies, a new campaign from one of his). Nothing changes until
+ * Marcel taps Apply on the card; Claude never changes anything by itself.
  *
  * The model's history is append-only (saved exactly as returned, thinking
  * included); the account brief rides in front of each of Marcel's messages,
@@ -48,7 +52,7 @@ const SYSTEM = `You are the ad analyst inside Nexli's Ads Command Center, talkin
 
 WHAT YOU KNOW
 - Each of Marcel's messages starts with <account_now>: the latest numbers and today's Cut / Keep call on every live creative. The newest one is the truth; if it says the numbers are unchanged, use the last full one.
-- Tools give you the details: a creative's numbers by window, the CRM leads credited to it, the account's numbers for 7/14/30/90 days, and the Meta-vs-CRM tracking check.
+- Tools give you the details: a creative's numbers by window, the CRM leads credited to it, the account's numbers for 7/14/30/90 days, the Meta-vs-CRM tracking check, and how the account is set up (account_structure: every campaign, ad set and ad with its id, on/off and budget).
 - Only use numbers from <account_now> or your tools. If you don't have something, say so — never guess a number.
 
 HOW THE NUMBERS WORK
@@ -68,8 +72,13 @@ WHAT YOU CAN CHANGE — ONLY BY PROPOSING
 - Marcel's own Cut / Keep on a live creative, for 1–30 days (7 by default), with his reason.
 - New targets or a standing note (Goals).
 - For an ad counted from Meta's numbers (no utm_content), you can't remove a single Meta lead: explain that, propose his own Cut / Keep call instead, and tell him to add utm_content={{ad.name}} to the ad's URL parameters.
-- You can't touch Meta. Turning ads off or on and budgets are done by Marcel in Ads Manager (each creative card links there).
-- Propose only what he asked for or what clearly fixes the problem he raised; one card per change.
+- In Meta itself — only when account_now says changes in Meta are on: turn ads, ad sets or campaigns off or on; set an ad set's or a campaign's daily budget; duplicate a campaign, ad set or ad; build a new campaign from one of his campaigns with the ads he picks. Call account_structure first for the ids; never guess an id, and if a name could mean more than one thing, ask.
+- A Meta card changes his live ad account — real money — once he taps Apply. Say plainly what it will do and what it will spend per day; never say it's done until he has applied it.
+- When he says to cut or turn off a creative, propose turning it off in Meta. His own Cut / Keep call is for when he wants the plan to say so without touching Meta.
+- Copies are made paused unless he asks to launch or turn them on. Copied ads get their own names ("… - Copy") so the CRM credits their leads to the right ad; they keep the same post (likes and comments), link and URL parameters.
+- Budgets: when a campaign has its own budget (campaign budget), change the campaign, not its ad sets. A change of 20% or more usually restarts Meta's learning — say so. Only the changes he asked for; never turn one request into extra budget moves.
+- If account_now says changes in Meta are off, don't propose them: tell him they need switching on (the steps are under the Ask box) and that for now it's done in Ads Manager.
+- Propose only what he asked for or what clearly fixes the problem he raised; one card per change (one card can turn several things off or on at once).
 
 HOW TO ANSWER
 - Lead with the answer (cut it / keep it / the number is wrong because…), then the why with the key numbers. Plain words, no jargon, no emojis. Usually under 180 words; more only when he asks for detail.
@@ -127,7 +136,7 @@ const TOOLS = [
   {
     name: "propose_call",
     description:
-      "Propose Marcel's own Cut or Keep on a live creative, overriding the rules for 1–30 days (then the rules decide again). Puts a card in the chat; nothing changes until Marcel taps Apply. Cutting still means he turns it off in Ads Manager.",
+      "Propose Marcel's own Cut or Keep on a live creative, overriding the rules for 1–30 days (then the rules decide again). Puts a card in the chat; nothing changes until Marcel taps Apply. This only changes the plan — to actually stop the ad, use propose_meta_status.",
     input_schema: {
       type: "object",
       properties: {
@@ -184,6 +193,94 @@ const TOOLS = [
       "The Ad Grader on this page: the latest creatives Marcel graded before spending (score out of 100, verdict, caps, weakest lines, fixes, the live ad each became) and how the grader did when it graded his past videos blind. Use for questions about a grade, or whether to trust the grader.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
+  {
+    name: "account_structure",
+    description:
+      "How the ad account is set up right now: every campaign (id, on/off, what's actually running, campaign budget or ad set budgets), its ad sets (id, on/off, daily budget) and ads (id, on/off, 30-day spend, CRM leads, booked calls). Use it for the ids before any change in Meta.",
+    input_schema: {
+      type: "object",
+      properties: { include_off: { type: "boolean", description: "Also list things that are off and spent nothing in 30 days (default false)." } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_meta_status",
+    description:
+      "Propose turning ads, ad sets or campaigns off or on in Meta (up to 10 in one card). Puts a card in the chat; Meta changes only when Marcel taps Apply, and Undo puts them back.",
+    input_schema: {
+      type: "object",
+      properties: {
+        turn: { type: "string", enum: ["off", "on"] },
+        targets: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { level: { type: "string", enum: ["campaign", "adset", "ad"] }, id: { type: "string", description: "The id from account_structure." } },
+            required: ["level", "id"],
+            additionalProperties: false,
+          },
+        },
+        reason: { type: "string", description: "Why, in Marcel's words if he gave them (one sentence)." },
+      },
+      required: ["turn", "targets", "reason"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_meta_budget",
+    description:
+      "Propose a new daily budget (USD) for one ad set, or for a campaign that has its own budget. Shows before → after and the learning-phase warning. Puts a card in the chat; Meta changes only when Marcel taps Apply.",
+    input_schema: {
+      type: "object",
+      properties: {
+        level: { type: "string", enum: ["campaign", "adset"] },
+        id: { type: "string", description: "The id from account_structure." },
+        daily_budget_usd: { type: "number" },
+        reason: { type: "string" },
+      },
+      required: ["level", "id", "daily_budget_usd", "reason"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_duplicate",
+    description:
+      "Propose duplicating in Meta: a campaign (with its ad sets and the ads that are on), an ad set (into its own campaign or another, with its ads that are on), or an ad (into its own ad set or another). Made paused unless turn_on. Optional new name and new daily budget. Puts a card in the chat; Meta changes only when Marcel taps Apply.",
+    input_schema: {
+      type: "object",
+      properties: {
+        what: { type: "string", enum: ["campaign", "adset", "ad"] },
+        id: { type: "string", description: "What to copy (id from account_structure)." },
+        into: { type: "string", description: "Ad set copy: the campaign id to put it in. Ad copy: the ad set id. Leave out to keep it next to the original." },
+        name: { type: "string", description: "A name for the copy (campaign or ad set; leave out for '… - Copy')." },
+        daily_budget_usd: { type: "number", description: "A new daily budget for the copy (leave out to keep the original's)." },
+        turn_on: { type: "boolean", description: "Turn the copy on once it's made (only when Marcel says to launch / turn it on). Default false." },
+        include_off_ads: { type: "boolean", description: "Copy the ads that are off too (default false)." },
+        reason: { type: "string" },
+      },
+      required: ["what", "id", "reason"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_new_campaign",
+    description:
+      "Propose a new campaign built from one of Marcel's campaigns: the template campaign's settings, one ad set copied from the template's ad set (targeting, optimization, pixel event), the ads he picks (from anywhere in the account), and a daily budget. Made paused unless turn_on. Puts a card in the chat; Meta changes only when Marcel taps Apply.",
+    input_schema: {
+      type: "object",
+      properties: {
+        template_campaign: { type: "string", description: "Campaign id to copy the settings from." },
+        template_ad_set: { type: "string", description: "Ad set id in that campaign to copy the targeting from (leave out for its main one)." },
+        name: { type: "string", description: "The new campaign's name." },
+        daily_budget_usd: { type: "number" },
+        ads: { type: "array", items: { type: "string" }, description: "Ad ids to copy into it." },
+        turn_on: { type: "boolean", description: "Launch it (turn it on) once it's made. Default false." },
+        reason: { type: "string" },
+      },
+      required: ["template_campaign", "name", "daily_budget_usd", "ads", "reason"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 const LAST_TOOLS = TOOLS.map((t, i) => (i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t));
@@ -236,6 +333,8 @@ interface Ctx {
   tz: string;
   changes: ChangeView[];
   vsl: VslBoard | null;
+  meta: MetaWriteAccess;
+  structure?: Structure | null;
   emit: (e: ChatEvent) => void;
   push: (item: DisplayItem) => void;
 }
@@ -341,11 +440,21 @@ function brief(ctx: Ctx, verdict: { title: string; detail: string } | null): str
     );
   }
   if (verdict) lines.push(`Tracking check: ${verdict.title}. ${verdict.detail}`);
+  lines.push(
+    !ctx.meta.configured
+      ? "Changes in Meta: OFF (the manage token isn't set up) — don't propose Meta changes."
+      : ctx.meta.problems.length
+        ? `Changes in Meta: switched on, but Meta will refuse until this is fixed: ${ctx.meta.problems.join(" ")}`
+        : "Changes in Meta: ON — Meta cards change the ad account when Marcel taps Apply."
+  );
   const vh = vslHeadline(ctx.vsl);
   if (vh) lines.push(`Best VSL right now: ${vh.text} (vsl_scores has all four).`);
-  const applied = ctx.changes.filter((c) => c.status === "applied");
+  const applied = ctx.changes.filter((c) => c.status === "applied" && !isMetaKind(c.kind));
   const open = ctx.changes.filter((c) => c.status === "proposed");
+  const weekAgo = Date.now() - 14 * 86_400_000;
+  const metaDone = ctx.changes.filter((c) => isMetaKind(c.kind) && c.status === "applied" && c.appliedAt && Date.parse(c.appliedAt) > weekAgo).slice(0, 12);
   lines.push("", applied.length ? `Marcel's corrections in force:\n${applied.map((c) => `- [${c.id}] ${c.summary}`).join("\n")}` : "Marcel's corrections in force: none.");
+  if (metaDone.length) lines.push(`Changes made in Meta from here (last 14 days):\n${metaDone.map((c) => `- [${c.id}] ${dayLabel((c.appliedAt ?? "").slice(0, 10))}: ${c.summary}`).join("\n")}`);
   if (open.length) lines.push(`Cards waiting for Apply:\n${open.map((c) => `- [${c.id}] ${c.summary}`).join("\n")}`);
   if (ctx.settings.context.trim()) lines.push("", `Standing notes (Goals): ${ctx.settings.context.trim().slice(0, 1200)}`);
   return lines.join("\n");
@@ -415,6 +524,13 @@ function toolLabel(ctx: Ctx, name: string, input: Record<string, unknown>): stri
       return "Reading the VSL scoreboard";
     case "creative_grades":
       return "Reading your graded creatives";
+    case "account_structure":
+      return "Reading how your account is set up";
+    case "propose_meta_status":
+    case "propose_meta_budget":
+    case "propose_duplicate":
+    case "propose_new_campaign":
+      return "Writing up a change in Meta for you to approve";
     default:
       return null;
   }
@@ -673,17 +789,146 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
     case "creative_grades": {
       return { content: JSON.stringify(await gradesForChat(ctx.ownerId, ctx.accountId)) };
     }
+    case "account_structure": {
+      const st = await structureOf(ctx);
+      if (!st) return fail("The account's structure isn't loaded yet — ask Marcel to reload the page.");
+      return { content: JSON.stringify(structureJson(ctx, st, Boolean(input.include_off))) };
+    }
+    case "propose_meta_status":
+    case "propose_meta_budget":
+    case "propose_duplicate":
+    case "propose_new_campaign": {
+      const gate = metaGate(ctx);
+      if (gate) return fail(gate);
+      const st = await structureOf(ctx);
+      if (!st) return fail("The account's structure isn't loaded yet — ask Marcel to reload the page.");
+      const reason = String(input.reason ?? "");
+      const monthly = ctx.settings.monthlyBudgetCents;
+      if (name === "propose_meta_status") {
+        const targets = (Array.isArray(input.targets) ? input.targets : []).map((t) => {
+          const x = (t ?? {}) as { level?: unknown; id?: unknown };
+          const level: MetaLevel = x.level === "campaign" || x.level === "adset" ? x.level : "ad";
+          return { level, ref: x.id };
+        });
+        const plan = planStatus(st, { to: input.turn === "on" ? "ACTIVE" : "PAUSED", targets, from: "chat" });
+        if ("error" in plan) return fail(plan.error);
+        return propose(ctx, "meta_status", plan.adId, plan.payload, plan.summary, reason, plan.payload.warnings);
+      }
+      if (name === "propose_meta_budget") {
+        const plan = planBudget(st, { level: input.level === "campaign" ? "campaign" : "adset", ref: input.id, dailyUsd: Number(input.daily_budget_usd), monthlyBudgetCents: monthly });
+        if ("error" in plan) return fail(plan.error);
+        return propose(ctx, "meta_budget", null, plan.payload, plan.summary, reason, plan.payload.warnings);
+      }
+      if (name === "propose_duplicate") {
+        const what = input.what === "campaign" || input.what === "adset" ? input.what : "ad";
+        const plan = planDuplicate(st, {
+          what,
+          ref: input.id,
+          into: input.into,
+          name: typeof input.name === "string" ? input.name : null,
+          dailyUsd: input.daily_budget_usd === undefined ? null : Number(input.daily_budget_usd),
+          turnOn: input.turn_on === true,
+          include: input.include_off_ads === true ? "all" : "on",
+          monthlyBudgetCents: monthly,
+        });
+        if ("error" in plan) return fail(plan.error);
+        return propose(ctx, "meta_copy", what === "ad" ? String(input.id) : null, plan.payload, plan.summary, reason, plan.payload.warnings);
+      }
+      const plan = planNewCampaign(st, {
+        template: input.template_campaign,
+        templateAdset: input.template_ad_set,
+        name: String(input.name ?? ""),
+        dailyUsd: Number(input.daily_budget_usd),
+        ads: Array.isArray(input.ads) ? input.ads : [],
+        turnOn: input.turn_on === true,
+        monthlyBudgetCents: monthly,
+      });
+      if ("error" in plan) return fail(plan.error);
+      return propose(ctx, "meta_copy", null, plan.payload, plan.summary, reason, plan.payload.warnings);
+    }
   }
   return fail(`Unknown tool ${name}.`);
 }
 
-async function propose(ctx: Ctx, kind: ChangeView["kind"], adId: string | null, payload: unknown, summary: string, reason: string) {
+async function propose(ctx: Ctx, kind: ChangeView["kind"], adId: string | null, payload: unknown, summary: string, reason: string, warnings: string[] = []) {
   const change = await proposeChange({ ownerId: ctx.ownerId, accountId: ctx.accountId, chatId: ctx.chatId, actorId: ctx.actorId, kind, adId, payload, summary, reason: reason.trim() });
   ctx.changes = [change, ...ctx.changes];
   ctx.emit({ t: "change", change });
   ctx.push({ type: "block", block: { kind: "change", changeId: change.id } });
   ctx.emit({ t: "block", block: { kind: "change", changeId: change.id } });
-  return { content: JSON.stringify({ proposed: true, change_id: change.id, summary: change.summary, note: "A card is in the chat. Nothing has changed until Marcel taps Apply." }) };
+  const meta = isMetaKind(kind);
+  return {
+    content: JSON.stringify({
+      proposed: true,
+      change_id: change.id,
+      summary: change.summary,
+      ...(warnings.length ? { card_warnings: warnings } : {}),
+      note: meta ? "A card is in the chat. Nothing has changed in Meta until Marcel taps Apply." : "A card is in the chat. Nothing has changed until Marcel taps Apply.",
+    }),
+  };
+}
+
+// ── Meta structure for changes ────────────────────────────
+
+/** Why Meta changes can't be proposed right now (null = they can). */
+function metaGate(ctx: Ctx): string | null {
+  if (!ctx.meta.configured) return "Changes in Meta aren't switched on yet (no manage token). Tell Marcel: the three setup steps are under the Ask box (\"Let it make changes in Meta\"); until then it's done in Ads Manager.";
+  if (ctx.meta.problems.length) return `Meta would refuse it: ${ctx.meta.problems.join(" ")} Tell Marcel what to fix.`;
+  return null;
+}
+
+async function structureOf(ctx: Ctx): Promise<Structure | null> {
+  if (ctx.structure !== undefined) return ctx.structure;
+  const spend = new Map(ctx.s.ads.map((a) => [a.id, a.l30?.spendCents ?? 0]));
+  ctx.structure = await metaStructure(ctx.ownerId, ctx.accountId, spend).catch(() => null);
+  return ctx.structure;
+}
+
+function structureJson(ctx: Ctx, st: Structure, includeOff: boolean) {
+  const adRow = new Map(ctx.s.ads.map((a) => [a.id, a]));
+  const on = (x: { status: string }) => x.status === "ACTIVE";
+  const spentAd = (id: string) => (adRow.get(id)?.l30?.spendCents ?? 0) > 0;
+  const keepAd = (a: Structure["ads"][number]) => includeOff || on(a) || spentAd(a.id);
+  const keepSet = (s: Structure["adsets"][number]) => includeOff || on(s) || st.ads.some((a) => a.adsetId === s.id && spentAd(a.id));
+  const keepCamp = (c: Structure["campaigns"][number]) => includeOff || on(c) || st.adsets.some((s) => s.campaignId === c.id && keepSet(s));
+  let hidden = 0;
+  const campaigns = st.campaigns.filter((c) => {
+    const k = keepCamp(c);
+    if (!k) hidden++;
+    return k;
+  });
+  return {
+    meta_changes: ctx.meta.configured && !ctx.meta.problems.length ? "on" : "off",
+    campaigns: campaigns.slice(0, 15).map((c) => ({
+      id: c.id,
+      name: c.name,
+      on: on(c),
+      running: c.effectiveStatus,
+      budget: c.isCbo ? (c.dailyBudgetCents ? `campaign budget ${money0(c.dailyBudgetCents)}/day` : `campaign lifetime budget ${money0(c.lifetimeBudgetCents ?? 0)}`) : "each ad set has its own budget",
+      ad_sets: st.adsets
+        .filter((s) => s.campaignId === c.id && keepSet(s))
+        .slice(0, 10)
+        .map((s) => {
+          const ads = st.ads.filter((a) => a.adsetId === s.id);
+          const shown = ads.filter(keepAd).slice(0, 15);
+          return {
+            id: s.id,
+            name: s.name,
+            on: on(s),
+            running: s.effectiveStatus,
+            daily_budget_usd: c.isCbo ? null : usd(s.dailyBudgetCents),
+            lifetime_budget_usd: c.isCbo ? null : usd(s.lifetimeBudgetCents),
+            ads: shown.map((a) => {
+              const r = adRow.get(a.id);
+              return { id: a.id, name: a.name, on: on(a), running: a.effectiveStatus, spend_30d_usd: usd(r?.l30?.spendCents ?? 0), crm_leads_30d: r?.l30?.ghlLeads ?? null, booked_30d: r?.l30?.booked ?? null };
+            }),
+            ...(ads.length > shown.length ? { more_ads_off: ads.length - shown.length } : {}),
+          };
+        }),
+    })),
+    ...(hidden ? { campaigns_off_not_listed: hidden } : {}),
+    levels: Object.values(LEVEL_LABEL).join(" / "),
+  };
 }
 
 // ── The turn ──────────────────────────────────────────────
@@ -735,13 +980,15 @@ export async function runChatTurn(o: { ownerId: string; accountId: string; actor
 
   // The numbers, the same way the page makes them.
   const settings = await getSettings(ownerId, accountId);
-  const [s, stored, today, changes, tracking, vsl] = await Promise.all([
+  const noMeta: MetaWriteAccess = { configured: false, canWrite: false, problems: [], notes: [], checkedAt: new Date().toISOString() };
+  const [s, stored, today, changes, tracking, vsl, meta] = await Promise.all([
     snapshot30(ownerId, accountId, settings),
     latestPlan(ownerId, accountId).catch(() => null),
     planDateFor(ownerId, accountId).catch(() => null),
     listChanges(ownerId, accountId),
     loadTrackingData(ownerId, accountId).catch(() => null),
     vslBoardFor(ownerId, accountId).catch(() => null),
+    metaWriteAccess(ownerId, accountId).catch(() => noMeta),
   ]);
   if (!s) throw new Error("Meta ads aren't connected.");
   const earlierCuts: Record<string, string> = {};
@@ -760,6 +1007,7 @@ export async function runChatTurn(o: { ownerId: string; accountId: string; actor
     tz: s.account.timezone,
     changes,
     vsl,
+    meta,
     emit: o.emit,
     push: (item) => {
       turn.items = item.type === "text" ? addText(turn.items, item.text) : [...turn.items, item];

@@ -25,6 +25,7 @@ import { TrackingCheck } from "@/components/ads/tracking-check";
 import { VslScoreboard } from "@/components/ads/vsl-scoreboard";
 import { AdGrader } from "@/components/ads/ad-grader";
 import type { VslBoard } from "@/lib/ads/vsl-shared";
+import type { MetaAccessView } from "@/lib/ads/meta-changes-shared";
 import { AskPanel } from "@/components/ads/ask-panel";
 import { decideAds, type CreativeCall } from "@/lib/ads/decide";
 import { trackingVerdict, type TrackingData } from "@/lib/ads/tracking-check";
@@ -378,6 +379,22 @@ export function AdsCommandCenter() {
     return () => clearInterval(t);
   }, [loadTracking]);
 
+  // ── Changes in Meta: is the manage token set and accepted? ──
+  const [metaAccess, setMetaAccess] = useState<MetaAccessView | null>(null);
+  const loadMeta = useCallback(async (refresh = false) => {
+    try {
+      const r = await fetch(`/api/dashboard/ads/meta${refresh ? "?refresh=1" : ""}`, { cache: "no-store" });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d) setMetaAccess(d as MetaAccessView);
+    } catch {
+      /* stays read-only on the page */
+    }
+  }, []);
+  useEffect(() => {
+    void loadMeta();
+  }, [loadMeta]);
+  const canChangeMeta = Boolean(metaAccess?.configured && metaAccess.canWrite);
+
   // ── VSL scoreboard (its own GoHighLevel scan, cached 15 min on the server) ──
   const [vsl, setVsl] = useState<VslBoard | null>(null);
   const [vslLoading, setVslLoading] = useState(false);
@@ -584,10 +601,16 @@ export function AdsCommandCenter() {
                 id="ask"
                 eyebrow="Ask"
                 title="Ask about your ads"
-                sub="Claude reads the same numbers as this page and can suggest fixes. Nothing changes until you tap Apply."
+                sub={
+                  canChangeMeta
+                    ? "Claude reads the same numbers as this page and can suggest fixes — in the portal and in Meta. Nothing changes until you tap Apply."
+                    : "Claude reads the same numbers as this page and can suggest fixes. Nothing changes until you tap Apply."
+                }
               />
               <AskPanel
                 plan={livePlan}
+                meta={metaAccess}
+                onMetaRecheck={() => loadMeta(true)}
                 onJumpAd={jumpAd}
                 onCreate={(count, note) => {
                   setCreateFrom({ count, note });
@@ -606,7 +629,11 @@ export function AdsCommandCenter() {
                 id="plan"
                 eyebrow="Today's plan"
                 title="Cut, keep, add"
-                sub="Every live creative gets one call, made from booked calls and leads in your CRM. Do these in Ads Manager — the page ticks cuts off once they're paused."
+                sub={
+                  canChangeMeta
+                    ? "Every live creative gets one call, made from booked calls and leads in your CRM. Turn cuts off right here (or in Ads Manager) — the page ticks them off once they're paused."
+                    : "Every live creative gets one call, made from booked calls and leads in your CRM. Do these in Ads Manager — the page ticks cuts off once they're paused."
+                }
                 right={<CreateCreativesButton onClick={() => setCreating(true)} />}
               />
               <div ref={planRef}>
@@ -627,6 +654,8 @@ export function AdsCommandCenter() {
                     onJumpAd={jumpAd}
                     onCreate={() => setCreating(true)}
                     onLive={(item, live) => void markLive(item, live)}
+                    canTurnOff={canChangeMeta}
+                    onTurnedOff={() => void reload()}
                   />
                 ) : (
                   <Skeleton className="h-64" />

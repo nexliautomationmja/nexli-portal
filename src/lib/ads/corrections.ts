@@ -2,6 +2,8 @@ import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { adChanges, adSettings } from "@/lib/ads/tables";
 import { getSettings } from "@/lib/ads/settings";
+import { isMetaKind, type MetaPayload } from "@/lib/ads/meta-changes-shared";
+import { runMetaApply, runMetaUndo } from "@/lib/ads/meta-write";
 import {
   snapshotCorrections,
   type CallOverridePayload,
@@ -23,13 +25,18 @@ import {
 
 type Row = typeof adChanges.$inferSelect;
 
+/** A change in Meta that's been "applying" or "undoing" this long stopped part-way (the request died): treat it as applied. */
+const STUCK_MS = 6 * 60 * 1000;
+const stuck = (r: Row) =>
+  (r.status === "applying" && (!r.appliedAt || Date.now() - r.appliedAt.getTime() > STUCK_MS)) || (r.status === "undoing" && (!r.undoneAt || Date.now() - r.undoneAt.getTime() > STUCK_MS));
+
 export const changeView = (r: Row): ChangeView => ({
   id: r.id,
   kind: r.kind as ChangeKind,
   adId: r.adId,
   summary: r.summary,
   reason: r.reason,
-  status: r.status,
+  status: stuck(r) ? "applied" : r.status,
   payload: r.payload as ChangeView["payload"],
   createdAt: r.createdAt.toISOString(),
   appliedAt: r.appliedAt ? r.appliedAt.toISOString() : null,
@@ -116,13 +123,16 @@ const sameGoals = (a: GoalsValues, b: GoalsValues) =>
 export type ChangeAction = "apply" | "dismiss" | "undo";
 
 /** Apply, dismiss or undo one change. Returns the updated change, or an error Marcel can read. */
-export async function actOnChange(o: { ownerId: string; accountId: string; actorId: string; id: string; action: ChangeAction }): Promise<{ ok: true; change: ChangeView; goalsChanged: boolean } | { ok: false; status: number; error: string }> {
+export type ActResult = { ok: true; change: ChangeView; goalsChanged: boolean; metaChanged?: boolean; warning?: string | null } | { ok: false; status: number; error: string };
+
+export async function actOnChange(o: { ownerId: string; accountId: string; actorId: string; id: string; action: ChangeAction }): Promise<ActResult> {
   const [row] = await db
     .select()
     .from(adChanges)
     .where(and(eq(adChanges.id, o.id), eq(adChanges.ownerId, o.ownerId), eq(adChanges.accountId, o.accountId)))
     .limit(1);
   if (!row) return { ok: false, status: 404, error: "That change isn't there anymore." };
+  if (isMetaKind(row.kind)) return actOnMeta(o, row);
   const now = new Date();
   const set = async (patch: Partial<typeof adChanges.$inferInsert>, from: Row["status"]) => {
     const [saved] = await db
@@ -192,4 +202,95 @@ export async function actOnChange(o: { ownerId: string; accountId: string; actor
   }
   const saved = await set({ status: "undone", undoneAt: now }, "applied");
   return saved ? { ok: true, change: changeView(saved), goalsChanged } : { ok: false, status: 409, error: "It changed just now — reload and try again." };
+}
+
+// ── Changes in Meta ───────────────────────────────────────
+
+/**
+ * Apply / undo a change in Meta. The row is claimed first (proposed →
+ * applying, applied → undoing) so a double tap can never run it twice; each
+ * step's result is saved as it happens.
+ */
+async function actOnMeta(o: { ownerId: string; accountId: string; actorId: string; id: string; action: ChangeAction }, row: Row): Promise<ActResult> {
+  const kind = row.kind as "meta_status" | "meta_budget" | "meta_copy";
+  const payload = row.payload as MetaPayload;
+  const byId = and(eq(adChanges.id, row.id), eq(adChanges.ownerId, o.ownerId));
+  const claim = async (from: Row["status"][], patch: Partial<typeof adChanges.$inferInsert>) => {
+    const [saved] = await db
+      .update(adChanges)
+      .set(patch)
+      .where(and(byId, inArray(adChanges.status, from)))
+      .returning();
+    return saved ?? null;
+  };
+
+  if (o.action === "dismiss") {
+    if (row.status !== "proposed") return { ok: false, status: 409, error: "Only a suggestion that hasn't been applied can be dismissed." };
+    const saved = await claim(["proposed"], { status: "dismissed" });
+    return saved ? { ok: true, change: changeView(saved), goalsChanged: false } : { ok: false, status: 409, error: "It changed just now — reload and try again." };
+  }
+
+  if (o.action === "apply") {
+    if (row.status !== "proposed") return { ok: false, status: 409, error: row.status === "applied" ? "That's already applied." : row.status === "applying" ? "It's being applied right now." : "That suggestion was closed." };
+    const started = new Date();
+    const claimed = await claim(["proposed"], { status: "applying", appliedAt: started, appliedBy: o.actorId });
+    if (!claimed) return { ok: false, status: 409, error: "It's already being applied — give it a moment." };
+    const save = async (result: MetaPayload["result"]) => {
+      await db.update(adChanges).set({ payload: { ...payload, result } }).where(byId);
+    };
+    let out: Awaited<ReturnType<typeof runMetaApply>>;
+    try {
+      out = await runMetaApply({ ownerId: o.ownerId, accountId: o.accountId, kind, payload, save });
+    } catch (err) {
+      console.error("[ads] Meta change failed:", err instanceof Error ? err.message : err);
+      // Whatever was saved before it broke still counts.
+      const [now] = await db.select().from(adChanges).where(byId).limit(1);
+      const r = (now?.payload as MetaPayload | undefined)?.result;
+      const any = Boolean(r?.done.some((d) => d.what !== "already"));
+      const [saved] = await db
+        .update(adChanges)
+        .set(any ? { status: "applied" } : { status: "proposed", appliedAt: null, appliedBy: null, payload })
+        .where(byId)
+        .returning();
+      return any && saved
+        ? { ok: true, change: changeView(saved), goalsChanged: false, metaChanged: true, warning: "It stopped part-way — what was done is on the card, and Undo takes it back." }
+        : { ok: false, status: 502, error: "Something went wrong talking to Meta — nothing was changed. Try again." };
+    }
+    if (out.nothingChanged && out.error) {
+      await db.update(adChanges).set({ status: "proposed", appliedAt: null, appliedBy: null, payload }).where(byId);
+      return { ok: false, status: 502, error: out.error };
+    }
+    const [saved] = await db
+      .update(adChanges)
+      .set({ status: "applied", payload: { ...payload, result: out.result } })
+      .where(byId)
+      .returning();
+    return { ok: true, change: changeView(saved ?? claimed), goalsChanged: false, metaChanged: !out.nothingChanged, warning: out.error };
+  }
+
+  // undo
+  const view = changeView(row);
+  if (view.status !== "applied") return { ok: false, status: 409, error: row.status === "undoing" ? "It's being undone right now." : "Only an applied change can be undone." };
+  const claimed = await claim([row.status], { status: "undoing", undoneAt: new Date() });
+  if (!claimed) return { ok: false, status: 409, error: "It's already being undone — give it a moment." };
+  let u: Awaited<ReturnType<typeof runMetaUndo>>;
+  try {
+    u = await runMetaUndo({ ownerId: o.ownerId, accountId: o.accountId, kind, payload });
+  } catch (err) {
+    console.error("[ads] Meta undo failed:", err instanceof Error ? err.message : err);
+    u = { done: payload.result?.undo?.done ?? [], ids: payload.result?.undo?.ids ?? [], error: "Something went wrong talking to Meta.", nothing: true };
+  }
+  const result = payload.result ? { ...payload.result, undo: { at: new Date().toISOString(), done: u.done, failed: u.error, ids: u.ids } } : undefined;
+  const finished = !u.error;
+  const [saved] = await db
+    .update(adChanges)
+    .set({ status: finished ? "undone" : "applied", undoneAt: finished ? new Date() : null, payload: { ...payload, result } })
+    .where(byId)
+    .returning();
+  if (!finished) {
+    return u.nothing
+      ? { ok: false, status: 502, error: u.error ?? "Couldn't undo it." }
+      : { ok: true, change: changeView(saved ?? claimed), goalsChanged: false, metaChanged: true, warning: `Undid part of it: ${u.error}` };
+  }
+  return { ok: true, change: changeView(saved ?? claimed), goalsChanged: false, metaChanged: true, warning: null };
 }

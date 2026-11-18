@@ -4,7 +4,10 @@ import { actOnChange, type ChangeAction } from "@/lib/ads/corrections";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** POST { action: "apply" | "dismiss" | "undo" } → only Marcel's tap changes anything. */
+// A change in Meta can copy a whole campaign, one step at a time.
+export const maxDuration = 300;
+
+/** POST { action: "apply" | "dismiss" | "undo" } → only Marcel's tap changes anything (in the portal or, for Meta cards, in Meta). */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const access = await requireAdsAdmin();
   if (!access.ok) return access.response;
@@ -16,5 +19,5 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (!action) return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   const r = await actOnChange({ ownerId: access.ownerId, accountId: access.accountId, actorId: access.actorId, id, action });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  return NextResponse.json({ change: r.change, goalsChanged: r.goalsChanged });
+  return NextResponse.json({ change: r.change, goalsChanged: r.goalsChanged, metaChanged: Boolean(r.metaChanged), warning: r.warning ?? null });
 }

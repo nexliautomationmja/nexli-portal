@@ -1,4 +1,5 @@
 import type { CompactLead } from "@/lib/ads/attribution";
+import type { MetaPayload } from "@/lib/ads/meta-changes-shared";
 
 /**
  * Marcel's corrections from the Ask chat (client-safe, pure). Only applied
@@ -7,6 +8,8 @@ import type { CompactLead } from "@/lib/ads/attribution";
  *  - booking_not_real: still a lead, but the booked call didn't happen.
  *  - call_override: his own Cut / Keep on a creative until a date.
  *  - goals: new targets (applied to Goals, listed here so they can be undone).
+ *  - meta_status / meta_budget / meta_copy: changes in Meta itself (see
+ *    meta-changes-shared.ts) — they change the ad account, not the numbers.
  */
 
 export interface LeadFixPayload {
@@ -41,8 +44,11 @@ export interface GoalsPayload {
   after: GoalsValues;
 }
 
-export type ChangeKind = "lead_not_real" | "booking_not_real" | "call_override" | "goals";
-export type ChangeStatus = "proposed" | "applied" | "dismissed" | "undone";
+export type ChangeKind = "lead_not_real" | "booking_not_real" | "call_override" | "goals" | "meta_status" | "meta_budget" | "meta_copy";
+/** applying / undoing: Meta is being changed right now (a stuck one counts as applied after a few minutes). */
+export type ChangeStatus = "proposed" | "applying" | "applied" | "undoing" | "dismissed" | "undone";
+
+export const CORRECTION_KINDS: ChangeKind[] = ["lead_not_real", "booking_not_real", "call_override", "goals"];
 
 /** A change as the page sees it. */
 export interface ChangeView {
@@ -52,7 +58,7 @@ export interface ChangeView {
   summary: string;
   reason: string;
   status: ChangeStatus;
-  payload: LeadFixPayload | CallOverridePayload | GoalsPayload;
+  payload: LeadFixPayload | CallOverridePayload | GoalsPayload | MetaPayload;
   createdAt: string;
   appliedAt: string | null;
   undoneAt: string | null;
@@ -110,7 +116,7 @@ export function snapshotCorrections(applied: { id: string; kind: ChangeKind; adI
       leadFixes[c.adId] = f;
     }
   }
-  return { overrides, leadFixes, count: applied.length };
+  return { overrides, leadFixes, count: applied.filter((c) => CORRECTION_KINDS.includes(c.kind)).length };
 }
 
 /** Is Marcel's call still in force on `day` (the plan's date)? */
