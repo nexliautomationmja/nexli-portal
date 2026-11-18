@@ -27,6 +27,7 @@ import {
   HOOK_MAX_WORDS,
   HOOK_UPLOAD_TYPES,
   hookClipFields,
+  hookFrameId,
   hookSpan,
   wordCountOf,
   type HookBasis,
@@ -252,7 +253,9 @@ async function askForProject(project: Project, studio: Studio): Promise<Ask> {
   const [clips, frames] = await Promise.all([clipsOf(project.id), framesOf(project.id)]);
   if (clips.length < 2) throw new HookError("That video has no script yet.");
   const first = clips[0];
-  const frame = frames.find((f) => f.id === first.frameAssetId) ?? frames[0];
+  // Claude looks at the frame Kling will be given.
+  const frameId = hookFrameId(first, frames.map((f) => f.id), project.frameSpec);
+  const frame = frames.find((f) => f.id === frameId) ?? frames[0];
   const signed = await signPaths([frame?.storagePath], 2 * 3600);
   const url = frame?.storagePath ? signed.get(frame.storagePath) : undefined;
   const story = isStory(project.frameSpec);
@@ -507,7 +510,8 @@ export async function submitTakes(token: string, test: Test, hookIds: string[]):
   const [clips, frames, existing] = await Promise.all([clipsOf(project.id), framesOf(project.id), takesOf(test.id)]);
   const first = clips[0];
   if (!first) throw new HookError("That video has no script.");
-  const frameId = first.frameAssetId ?? frames[0]?.id;
+  // The frame the original's hook was made from, so the new clip matches the clips kept after it.
+  const frameId = hookFrameId(first, frames.map((f) => f.id), project.frameSpec);
   if (!frameId) throw new HookError("That video has no opening frame.");
   // Not twice: a hook with a clip, one rendering, or one being sent right now (a double tap) is left alone.
   const chosen = test.hooks.filter((h) => {
@@ -666,7 +670,8 @@ async function projectVideoPath(projectId: string): Promise<string | null> {
 
 export async function testView(test: Test): Promise<HookTestView> {
   const [project, takes] = await Promise.all([projectOf(test), takesOf(test.id)]);
-  const clips = project ? await clipsOf(project.id) : [];
+  const [clips, frames] = project ? await Promise.all([clipsOf(project.id), framesOf(project.id)]) : [[], []];
+  const hookFrame = project && clips[0] ? frames.find((f) => f.id === hookFrameId(clips[0], frames.map((f) => f.id), project.frameSpec)) : undefined;
   const takeAssets = [...takes.values()].map((t) => t.videoAssetId).filter((v): v is string => Boolean(v));
   const madeIds = test.hooks.map((h) => h.projectId).filter((v): v is string => Boolean(v));
   const [assets, made, sourcePath] = await Promise.all([
@@ -680,7 +685,7 @@ export async function testView(test: Test): Promise<HookTestView> {
     project ? projectVideoPath(project.id) : Promise.resolve(test.upload?.path ?? null),
   ]);
   const pathOf = new Map(assets.map((a) => [a.id, a.path]));
-  const signed = await signPaths([sourcePath, ...assets.map((a) => a.path)], 6 * 3600);
+  const signed = await signPaths([sourcePath, hookFrame?.storagePath, ...assets.map((a) => a.path)], 6 * 3600);
   const titleOf = new Map(made.map((m) => [m.id, m.title]));
   const m = test.media;
   const hooks: HookIdeaView[] = test.hooks.map((h) => {
@@ -716,7 +721,13 @@ export async function testView(test: Test): Promise<HookTestView> {
     },
     project:
       test.source === "project"
-        ? { id: test.projectId ?? "", title: project?.title ?? test.title, exists: Boolean(project), ready: Boolean(project) && clips.length > 1 && clips.every((c) => c.status === "done" && c.videoAssetId) }
+        ? {
+            id: test.projectId ?? "",
+            title: project?.title ?? test.title,
+            exists: Boolean(project),
+            ready: Boolean(project) && clips.length > 1 && clips.every((c) => c.status === "done" && c.videoAssetId),
+            frameUrl: hookFrame?.storagePath ? signed.get(hookFrame.storagePath) ?? null : null,
+          }
         : null,
     read: test.read,
     basis: test.basis,

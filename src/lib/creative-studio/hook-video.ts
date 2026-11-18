@@ -125,7 +125,10 @@ export function planHookVideo(o: {
     metadata: { clipId: hookClipId, version: 1, hookTestId: o.test.id },
   });
   const firstFrame = carried.find((a) => a.kind === "frame");
-  const frameOfHook = (take.frameAssetId && ids.get(take.frameAssetId)) || ids.get(clips[0]?.frameAssetId ?? "") || (firstFrame ? ids.get(firstFrame.id) : undefined) || null;
+  // The hook clip sits in the scene of the clip it replaces; its take remembers the frame it was really made from
+  // (the same pair the original's clips carry, so a video whose frame changed reads the same way in the new one).
+  const sceneFrame = ids.get(clips[0]?.frameAssetId ?? "") || (firstFrame ? ids.get(firstFrame.id) : undefined) || null;
+  const madeFrom = (take.frameAssetId && ids.get(take.frameAssetId)) || sceneFrame;
 
   // The original's trims on the reused clips, and its edit, for the new video to start from.
   const entries: NonNullable<HookOrigin["cut"]>["entries"] = {};
@@ -175,8 +178,8 @@ export function planHookVideo(o: {
       ...clipColumns(take.fields),
       durationS: take.durationS,
       prompt: take.prompt,
-      frameAssetId: frameOfHook,
-      takeFrameId: frameOfHook,
+      frameAssetId: sceneFrame,
+      takeFrameId: madeFrom,
       model: take.model,
       klingTaskId: take.klingTaskId,
       status: "done",

@@ -1,4 +1,5 @@
-import type { ClipFields, CutOverride, CutSettings, ManualTrim, TimeCut } from "@/lib/creative-studio/tables";
+import type { ClipFields, CutOverride, CutSettings, FrameSpec, ManualTrim, TimeCut } from "@/lib/creative-studio/tables";
+import { describedFor } from "@/lib/creative-studio/remake-shared";
 import type { EditOverlays, EditStyle } from "@/remotion/types";
 
 /**
@@ -128,7 +129,7 @@ export interface HookTestView {
   createdAt: string;
   video: { url: string | null; vertical: boolean; durationS: number | null };
   /** The video it was made from (a video made here); null for a dropped-in one. */
-  project: { id: string; title: string; exists: boolean; ready: boolean } | null;
+  project: { id: string; title: string; exists: boolean; ready: boolean; /** The frame the hook clips are made from (the original hook's own). */ frameUrl: string | null } | null;
   read: HookRead | null;
   basis: HookBasis | null;
   hooks: HookIdeaView[];
@@ -163,6 +164,23 @@ export function hookClipFields(first: ClipFields, idea: Pick<HookIdea, "line" | 
     kind: first.kind && first.kind !== "silent" ? first.kind : "to_camera",
     frameId: first.frameId ?? null,
   };
+}
+
+/**
+ * The frame a new hook clip is made from: the one the original's hook clip
+ * was actually made from, so the new clip matches the clips it sits next to.
+ * `frameIds` = the video's frames, opening frame first.
+ *
+ * If the video's frame was changed since and its clips weren't re-made, that
+ * is still the OLD frame (the one the kept clips show) — unless the script's
+ * description has already been rewritten for the new frame, where the old
+ * picture would no longer match the words Kling is given.
+ */
+export function hookFrameId(first: { frameAssetId: string | null; takeFrameId: string | null }, frameIds: string[], frameSpec: FrameSpec | null): string | null {
+  const current = (first.frameAssetId && frameIds.includes(first.frameAssetId) ? first.frameAssetId : null) ?? frameIds[0] ?? null;
+  const madeFrom = first.takeFrameId && frameIds.includes(first.takeFrameId) ? first.takeFrameId : null;
+  if (!madeFrom || madeFrom === current) return current;
+  return current && describedFor(frameSpec, current) ? current : madeFrom;
 }
 
 /** How many opening clips read as the hook, from their section names (at least 1, never the whole video). */

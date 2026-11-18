@@ -370,10 +370,21 @@ export function HookTest({ studio, testId }: { studio: StudioProp; testId: strin
                         </div>
                       ) : (
                         <div className="flex flex-wrap items-center justify-between gap-3">
+                          {test.project?.frameUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element -- signed storage URL
+                            <img
+                              src={test.project.frameUrl}
+                              alt="The frame the hook clips are made from"
+                              className={`shrink-0 rounded-lg border border-white/15 object-cover ${test.video.vertical ? "h-20 w-[45px]" : "h-12 w-[85px]"}`}
+                            />
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-bold text-white">Make the hook clips on Kling</p>
                             <p className="mt-0.5 text-xs leading-relaxed text-neutral-400">
-                              Same presenter, same frame as the original&apos;s hook. Then watch them side by side and pick the strongest.
+                              {test.project?.frameUrl
+                                ? "Made from this frame, the one the original's hook was made from, so the new hook matches the rest of the video. Nothing to attach."
+                                : "Same presenter, same frame as the original's hook."}{" "}
+                              Then watch them side by side and pick the strongest.
                             </p>
                           </div>
                           <button type="button" disabled={chosen.length === 0 || waiting} onClick={() => setConfirm(true)} className={`${CTA_CLASSES} !px-5 !py-2.5`}>
@@ -425,7 +436,7 @@ export function HookTest({ studio, testId }: { studio: StudioProp; testId: strin
                     : [
                         ["1 · Pick a hook", "These are written for a presenter talking to camera, leading into what the video says next."],
                         ["2 · Re-make the video with it", "A new video opens, set up to recreate this one with your hook as its first line."],
-                        ["3 · Add the frame", "Paste the presenter's frame there. Claude writes the script, Kling renders it, Remotion edits it."],
+                        ["3 · Add the frame", "Paste the frame that video was made with (or any frame of the presenter) on the new video's page, so the look matches. Claude writes the script, Kling renders it, Remotion edits it."],
                       ]
                   ).map(([t, d]) => (
                     <div key={t} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
