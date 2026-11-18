@@ -4,7 +4,7 @@ import { RIG_LABEL } from "@/lib/creative-studio/prompts";
 import type { CreativeFormat, CreativeRig, FramePosition } from "@/lib/creative-studio/tables";
 import type { CaptionWord, EditOverlays, EditStyle, LadderRung, TimedText, VslCard, Zoom } from "@/remotion/types";
 import { normalizeWord } from "@/lib/creative-studio/words";
-import { withoutDecor } from "@/lib/creative-studio/edit-text";
+import { TITLE_MAX, withoutDecor } from "@/lib/creative-studio/edit-text";
 
 /**
  * Claude lays out the on-screen graphics for one finished cut, following
@@ -35,7 +35,7 @@ zooms: [] unless the style is custom.
 
 Writing rules:
 - Never restate the caption running underneath. A title or card uses words that are not being spoken in that moment; check the words list around each window. The title is a distillation, not a quote.
-- Title: 2–6 words, 36 characters or fewer, normal case (the renderer sets ALL CAPS).
+- Title: 2–6 words, 36 characters or fewer, normal case (the renderer sets ALL CAPS). When the user gives the title's exact words, use them as written, up to 60 characters.
 - Figures as digits ($9,997). Use only figures that appear in the words or the script — never invent numbers or results. No guarantees, no savior positioning, "investment" never "price". Write CPA, never C-P-A.
 - Each element stays on screen at least 1.5 s (stickers and cards at least 2.5 s).
 - Silence on screen is a legitimate choice. Don't pad.
@@ -286,7 +286,7 @@ export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: nu
   };
   const empty: EditOverlays = { title: null, qualifier: null, cta: null, rungs: [], stickers: [], cards: [] };
 
-  if (style === "solo") return { ...empty, title: timed(raw.title, 48) };
+  if (style === "solo") return { ...empty, title: timed(raw.title, TITLE_MAX) };
   if (style === "pov") {
     const stickers = (raw.stickers ?? []).map((s) => timed(s, 90, 1.5)).filter((s): s is TimedText => Boolean(s));
     return { ...empty, stickers: sequence(stickers, 1.5, keepTimes).slice(0, 6) };
@@ -312,7 +312,7 @@ export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: nu
     cta = cta.end - (qualifier.end + 0.1) >= 1 ? { ...cta, start: r2(qualifier.end + 0.1) } : null;
   }
 
-  if (style === "ladder") return { ...empty, title: timed(raw.title, 48), qualifier, cta, rungs };
+  if (style === "ladder") return { ...empty, title: timed(raw.title, TITLE_MAX), qualifier, cta, rungs };
 
   // Custom: every slot, captions on/off, zooms.
   const stickers = (raw.stickers ?? []).map((x) => timed(x, 90, 1.5)).filter((x): x is TimedText => Boolean(x));
@@ -325,7 +325,7 @@ export function sanitizeOverlays(style: EditStyle, raw: RawLayout, durationS: nu
     0.5
   ).slice(0, 40);
   return {
-    title: timed(raw.title, 48),
+    title: timed(raw.title, TITLE_MAX),
     qualifier,
     cta,
     rungs: positions.length >= 2 ? rungs : [],

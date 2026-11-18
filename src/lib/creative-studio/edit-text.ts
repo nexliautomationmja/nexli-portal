@@ -11,10 +11,13 @@ export type TextTarget =
   | { slot: "card"; index: number; field: "text" | "sub" }
   | { slot: "rung"; index: number; field: "pill" | "tag" };
 
+/** The title banner's cap: two lines at the default size (Marcel wanted 58+). */
+export const TITLE_MAX = 60;
+
 export function textLimit(t: TextTarget): number {
   switch (t.slot) {
     case "title":
-      return 48;
+      return TITLE_MAX;
     case "qualifier":
       return 70;
     case "cta":
@@ -31,7 +34,7 @@ export function textLimit(t: TextTarget): number {
 export function slotBrief(t: TextTarget): string {
   switch (t.slot) {
     case "title":
-      return "the title banner: 2–6 words, 36 characters or fewer, a distillation of the video's idea, never a quote of what she says";
+      return "the title banner: a distillation of the video's idea, never a quote of what she says; short reads fastest (2–6 words), but up to 60 characters is fine when the user's version is longer";
     case "qualifier":
       return "the red qualifier band: who this is for, short and filtering (e.g. \"For CPA firms doing $750K+\")";
     case "cta":
