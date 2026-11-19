@@ -841,6 +841,16 @@ export async function sendOnboardingWelcomeEmails(engagementId: string): Promise
       console.error("Onboarding state read failed:", err);
     }
 
+    // Nov 19 2026 pricing: the client pays its ad budget straight to Meta, so
+    // the email says its own card goes on the ad account.
+    let adBudgetDirect = false;
+    try {
+      const [eng] = await db.select({ content: engagements.content }).from(engagements).where(eq(engagements.id, engagementId)).limit(1);
+      adBudgetDirect = isPerformanceLetter(eng?.content);
+    } catch (err) {
+      console.error("Onboarding welcome: letter read failed:", err);
+    }
+
     for (const s of signers) {
       if (s.order === 0) continue; // sender's own token isn't a client link
       if (s.status === "declined") continue;
@@ -851,6 +861,7 @@ export async function sendOnboardingWelcomeEmails(engagementId: string): Promise
           onboardingUrl: `${PORTAL_URL()}/onboarding/${s.token}`,
           clientDueAt,
           avatarStep,
+          adBudgetDirect,
         });
         await sendEmailWithLog({
           to: s.email,
