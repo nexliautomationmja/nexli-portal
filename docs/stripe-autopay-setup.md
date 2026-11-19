@@ -1,7 +1,9 @@
 # Stripe setup — Digital Rainmaker autopay
 
-Autopay for the DRS monthly invoices (`platform_monthly` $9,997 / `ad_spend_monthly` $5,000)
-runs on Nexli's **platform** Stripe account. Code: `src/lib/autopay.ts`,
+Autopay for the DRS monthly invoices (`agency_monthly` $10,000 on the Nov 19 2026 pricing, whose
+first invoice goes out at signing; `platform_monthly` $9,997 / `ad_spend_monthly` $5,000 on the
+previous pricing) runs on Nexli's **platform** Stripe account. A recorded non-renewal sets
+`cancel_at` on the subscription (`setAutopayEnd`). Code: `src/lib/autopay.ts`,
 `src/lib/payments-webhook-handlers.ts`, `src/app/api/webhooks/payments/route.ts`.
 Do all of the following in **live mode** (and test mode if you test there first).
 

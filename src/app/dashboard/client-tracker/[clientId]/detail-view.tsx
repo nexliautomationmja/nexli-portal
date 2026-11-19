@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Globe, KeyRound, LayoutDashboard, Magnet, PenLine, Receipt, Users, Wallet } from "lucide-react";
 import {
   ButtonLink,
@@ -23,10 +24,14 @@ import {
 } from "@/components/rainmaker";
 import { moneyWhole, relativeDay } from "@/lib/format";
 import { timeAgo } from "./detail-status";
+import { PerformancePanel } from "./performance-panel";
 import { SetupPanel } from "./setup-panel";
 import { SuccessPanel } from "./success-panel";
 import { WeeklyUpdatePanel } from "./weekly-update";
 import type { ActivityType, DetailData, WeeklyUpdateItem } from "./detail-types";
+
+// "Performance pay" is only listed for clients on the Nov 19 2026 pricing (the panel says when it is).
+const PERFORMANCE_SECTION = { id: "performance", label: "Performance pay" } as const;
 
 const SECTIONS = [
   { id: "glance", label: "At a glance" },
@@ -58,6 +63,8 @@ export function DetailView({
   const { client, theirBook, traffic, youCollect, activity, campaign } = data;
   const displayName = client.name || client.email.split("@")[0];
   const site = client.websiteUrl?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const [hasPerformance, setHasPerformance] = useState(false);
+  const sections = hasPerformance ? [SECTIONS[0], SECTIONS[1], PERFORMANCE_SECTION, ...SECTIONS.slice(2)] : SECTIONS;
 
   return (
     <RainmakerCanvas>
@@ -101,7 +108,7 @@ export function DetailView({
           </Notice>
         )}
 
-        <SectionNav sections={SECTIONS} />
+        <SectionNav sections={sections} />
 
         <Section id="glance" eyebrow="At a glance" title="What their system is producing">
           <KpiGrid>
@@ -185,6 +192,8 @@ export function DetailView({
             </div>
           </div>
         </Section>
+
+        <PerformancePanel clientId={client.id} clientLabel={client.company || displayName} onEnabled={() => setHasPerformance(true)} />
 
         <Section id="update" eyebrow="Customer success" title="Weekly update" sub="Emailed to them and shown on their Overview. One a week keeps them in the loop.">
           <WeeklyUpdatePanel

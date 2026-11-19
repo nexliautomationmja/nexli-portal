@@ -25,7 +25,8 @@ export type NotificationType =
   | "autopay_canceled"
   | "bank_transfer_sent"
   | "bank_transfer_review"
-  | "annual_term_ending";
+  | "annual_term_ending"
+  | "performance_statement";
 
 interface CreateNotificationParams {
   userId: string;
@@ -65,6 +66,7 @@ const TYPE_CONFIG: Record<
   bank_transfer_sent: { emoji: "\u{1F3E6}", color: "#2563EB" },
   bank_transfer_review: { emoji: "\u{1F50E}", color: "#F59E0B" },
   annual_term_ending: { emoji: "\u{1F4C5}", color: "#F59E0B" },
+  performance_statement: { emoji: "\u{1F4C8}", color: "#10B981" },
 };
 
 export async function createNotification({

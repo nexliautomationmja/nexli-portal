@@ -176,6 +176,10 @@ interface DrsMetadata {
   oneTimeCents?: number;
   /** The library avatar the client chose (slug), when oneTimeCents is its fee. */
   aiAvatar?: string;
+  /** performance_pay only: the billing Month this invoice is for (1 = the Month that begins at signing). */
+  monthIndex?: number;
+  /** performance_pay only: the Month's statement totals, shown on the invoice page. */
+  statement?: Record<string, unknown>;
 }
 
 interface EngagementMeta {
@@ -290,9 +294,10 @@ export async function isDigitalRainmakerEngagement(
 async function drsInvoiceExists(
   engagementId: string,
   drsRole: DrsRole,
-  renewalYear?: number
+  renewalYear?: number,
+  unique?: Record<string, string | number>
 ): Promise<boolean> {
-  const match: Record<string, unknown> = { engagementId, drsRole };
+  const match: Record<string, unknown> = { engagementId, drsRole, ...(unique ?? {}) };
   if (renewalYear !== undefined) match.renewalYear = renewalYear;
   const rows = await db
     .select({ id: invoices.id })
@@ -372,6 +377,10 @@ interface DrsInvoiceSpec {
   oneTimeCents?: number;
   /** The chosen AI avatar's slug, tagged on the invoice. */
   aiAvatar?: string;
+  /** Extra tags that are also part of the idempotency key (Performance Pay: { monthIndex } — one invoice per Month). */
+  unique?: Record<string, string | number>;
+  /** Extra tags written to the invoice metadata (Performance Pay: the statement totals). */
+  meta?: Record<string, unknown>;
 }
 
 function setupLine(setupCents: number) {
@@ -478,6 +487,44 @@ function agencyMonthlySpec(terms: PerformanceLetterTerms, notes: string, label: 
       },
     ],
     ...(dueDate ? { dueDate } : {}),
+  };
+}
+
+/**
+ * Nov 19 2026 pricing — a Month's Performance Pay, sent from its statement
+ * (lib/performance). One per Month (monthIndex is part of the idempotency
+ * key); due a week after it is sent (letter 3(h)). The invoice carries the
+ * statement's totals, never the client list.
+ */
+export function drsPerformanceInvoiceSpec(args: {
+  monthIndex: number;
+  periodLabel: string;
+  dueCents: number;
+  dueDate: Date;
+  /** The Month's totals (cents) — shown on the invoice page. */
+  statement: Record<string, unknown>;
+  /** One sentence spelling the calculation out, for the invoice notes. */
+  summary: string;
+}): DrsInvoiceSpec {
+  return {
+    role: "performance_pay",
+    recurring: false,
+    interval: "monthly",
+    totalCents: args.dueCents,
+    adSpendCents: 0,
+    label: "Performance pay",
+    notificationTitle: "Performance pay invoice sent",
+    notes: `Performance Pay for ${args.periodLabel}, under Section 3 of your engagement letter. ${args.summary} The client-by-client statement is in your portal; tell us within ${AGENCY.DISPUTE_DAYS} days if any line looks wrong.`,
+    dueDate: args.dueDate,
+    unique: { monthIndex: args.monthIndex },
+    meta: { statement: args.statement },
+    lines: [
+      {
+        description: `Digital Rainmaker System — Performance Pay (${args.periodLabel})`,
+        amountCents: args.dueCents,
+        billingType: "one_time",
+      },
+    ],
   };
 }
 
@@ -599,7 +646,7 @@ export async function createDrsInvoices(args: {
   const created: (typeof invoices.$inferSelect)[] = [];
 
   for (const spec of specs) {
-    if (await drsInvoiceExists(engagement.id, spec.role, spec.renewal?.renewalYear)) continue;
+    if (await drsInvoiceExists(engagement.id, spec.role, spec.renewal?.renewalYear, spec.unique)) continue;
 
     const dueDate = spec.dueDate ? new Date(spec.dueDate) : new Date();
 
@@ -622,6 +669,8 @@ export async function createDrsInvoices(args: {
       ...(spec.renewal ?? {}),
       ...(spec.oneTimeCents ? { oneTimeCents: spec.oneTimeCents } : {}),
       ...(spec.aiAvatar ? { aiAvatar: spec.aiAvatar } : {}),
+      ...(spec.meta ?? {}),
+      ...(spec.unique ?? {}),
     };
 
     const [invoice] = await db

@@ -280,6 +280,26 @@ export async function mergeAutopayEverywhere(
 }
 
 /**
+ * Nov 19 2026 pricing: stop a client's monthly autopay on the day their
+ * agreement ends (a recorded non-renewal), or — with null — let it run on
+ * again when that record is removed. No proration. Returns false when Stripe
+ * refused; the caller tells Marcel to end it in Stripe by hand.
+ */
+export async function setAutopayEnd(subscriptionId: string, endsAt: Date | null): Promise<boolean> {
+  try {
+    const stripe = getStripe();
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at: endsAt ? Math.floor(endsAt.getTime() / 1000) : "",
+      proration_behavior: "none",
+    });
+    return true;
+  } catch (err) {
+    console.error(`Autopay: could not set the end date on subscription ${subscriptionId}:`, err);
+    return false;
+  }
+}
+
+/**
  * Annual-plan letters that don't renew automatically (Nov 9 2026 on) bill
  * the ad budget from Launch through the end of the Initial Term only (letter
  * Section 2(c)). Checkout's subscription_data has no cancel_at in stripe@21,

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useHashScroll } from "@/components/rainmaker";
 import { UtmBuilder } from "@/components/dashboard/utm-builder";
 import { AdAnalyticsSection } from "./ad-analytics-section";
+import { FirmPerformanceSection } from "./firm-performance";
 import { TrackerView } from "./tracker-view";
 import { EMPTY_KPIS, type ClientRow, type DueClient, type Kpis } from "./tracker-types";
 
@@ -139,6 +140,7 @@ export function ClientTrackerClient() {
       onOpenClient={(c) => router.push(`/dashboard/client-tracker/${c.clientUserId}`)}
       adAnalytics={<AdAnalyticsSection />}
       utm={<UtmBuilder />}
+      performance={isAdmin ? null : <FirmPerformanceSection />}
     />
   );
 }

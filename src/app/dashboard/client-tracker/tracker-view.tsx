@@ -49,6 +49,8 @@ export interface TrackerViewProps {
   adAnalytics: React.ReactNode;
   /** The UTM link builder. */
   utm: React.ReactNode;
+  /** A client firm's own performance-pay statements (renders nothing when it has none). */
+  performance?: React.ReactNode;
 }
 
 const SECTIONS = [
@@ -426,6 +428,8 @@ export function TrackerView(p: TrackerViewProps) {
             </>
           )}
         </Section>
+
+        {p.performance}
 
         {p.adAnalytics}
 
