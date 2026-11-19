@@ -116,7 +116,12 @@ export function OnboardingDashboardClient() {
 
   async function startMonthly() {
     const id = openRef.current;
-    if (!id || !window.confirm("Send the first monthly invoice now? Do this once the build is finished.")) return;
+    // Nov 19 2026 pricing: the monthly fee has run since signing, so this only records the launch.
+    const performance = detail?.billing?.model === "performance";
+    const question = performance
+      ? "Mark the build complete? This records the launch. No monthly invoice goes out, since their fee is already running. An AI avatar they chose is invoiced on its own."
+      : "Send the first monthly invoice now? Do this once the build is finished.";
+    if (!id || !window.confirm(question)) return;
     setBillingBusy(true);
     setBillingError(null);
     try {
@@ -127,7 +132,7 @@ export function OnboardingDashboardClient() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setBillingError(body.error || "Couldn't send the first monthly invoice");
+        setBillingError(body.error || (performance ? "Couldn't record the launch" : "Couldn't send the first monthly invoice"));
         return;
       }
       if (openRef.current === id) setDetail(body as AdminDetail);

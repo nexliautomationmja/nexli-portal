@@ -18,6 +18,7 @@ import { takenAvatarSlugs } from "@/lib/ai-avatar-claims";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { getNexliAdminId } from "@/lib/foundation-project";
+import { isPerformanceLetter } from "@/lib/drs-performance-letter";
 
 // Public Launch Pad API. The signer token in the URL is the credential.
 // serializePublicOnboarding is the security boundary: credential
@@ -70,6 +71,20 @@ export async function GET(
   const onboarding = serializePublicOnboarding(ctx.onboarding);
   // A firm's own Launch Pads for its clients never offer Nexli's avatars.
   if (!avatar) onboarding.tasks = onboarding.tasks.filter((t) => t.id !== "ai_avatar");
+  // Nov 19 2026 pricing: the ad budget is paid by the client straight to
+  // Meta, so their own card has to be on the ad account.
+  if (nexli && isPerformanceLetter(ctx.engagement.content)) {
+    onboarding.tasks = onboarding.tasks.map((t) =>
+      t.id === "fb_ads_invite"
+        ? {
+            ...t,
+            description:
+              t.description +
+              " Your ad budget is paid straight to Meta on your own card and never passes through Nexli, so make sure a card is on the ad account (if we set the account up, we'll show you where to add it).",
+          }
+        : t
+    );
+  }
 
   return NextResponse.json({
     clientName: ctx.signer.name,
@@ -149,7 +164,7 @@ export async function POST(
     }
     if (billingStarted(ctx.engagement.metadata)) {
       return NextResponse.json(
-        { error: "Your build is complete and your first monthly invoice has gone out, so your avatar is locked in. Message us if you'd like to change it." },
+        { error: "Your build is complete, so your avatar is locked in. Message us if you'd like to change it." },
         { status: 409 }
       );
     }
@@ -171,8 +186,8 @@ export async function POST(
     submissionValue = v;
     const firm = ctx.signer.name;
     if (v.choice === "pick" && v.slug) {
-      activityMessage = `${firm} chose ${avatarName(v.slug)} as their AI avatar ✨ (${feeText(v.feeCents)} one-time, on the first monthly invoice)`;
-      notifyMessage = `${firm} chose ${avatarName(v.slug)} as their AI avatar: ${feeText(v.feeCents)} one-time, added to their first monthly invoice. Assign her to their studio in Creative Studio → Avatars.`;
+      activityMessage = `${firm} chose ${avatarName(v.slug)} as their AI avatar ✨ (${feeText(v.feeCents)} one-time, billed at Build complete)`;
+      notifyMessage = `${firm} chose ${avatarName(v.slug)} as their AI avatar: ${feeText(v.feeCents)} one-time, billed when you mark the build complete. Assign her to their studio in Creative Studio → Avatars.`;
     } else {
       const assigned = effectiveAvatar({ avatarAssigned: ctx.onboarding.avatarAssigned ?? null });
       activityMessage = `${firm} would like Nexli to choose their AI avatar ✨`;

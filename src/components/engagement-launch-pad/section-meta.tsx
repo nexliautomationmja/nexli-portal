@@ -5,6 +5,7 @@
 
 import { PATHS, type Accent } from "@/components/launch-pad";
 import {
+  AGENCY,
   DRS_PRICING,
   FIRST_MONTH_AD_BONUS_CENTS,
   TOTAL_MONTHLY_CENTS,
@@ -19,6 +20,7 @@ import {
   renewalCents,
   type EnterpriseTier,
 } from "@/lib/enterprise-pricing";
+import { performanceLetterTerms, type PerformanceLetterTerms } from "@/lib/drs-performance-letter";
 import { LETTER_ICONS as X } from "./icons";
 import { usd } from "./parse";
 
@@ -31,6 +33,8 @@ export interface SummaryContext {
   setupCents: number;
   /** DRS: the letter promises the first-month ad bonus (Section 3(e), Nov 16 2026 on). */
   bonus: boolean;
+  /** DRS on the Nov 19 2026 pricing: the letter's own fee, percentage and billing. */
+  agency?: PerformanceLetterTerms;
 }
 
 export interface SectionMeta {
@@ -173,6 +177,116 @@ export const DRS_SECTION_META: Record<string, SectionMeta> = {
     summary: () =>
       "Signing electronically is legally binding, under the federal ESIGN Act and UETA.",
   },
+};
+
+// ─── Digital Rainmaker System, Nov 19 2026 pricing ─────────
+// Agency Fee + Performance Pay, no setup fee (lib/drs-performance-letter.ts).
+// Same section headings as the previous letter except Section 3; every
+// figure comes from the letter itself (ctx.agency).
+
+const agencyOf = (ctx: SummaryContext): PerformanceLetterTerms => ctx.agency ?? performanceLetterTerms(null);
+
+/** Display figures for one performance letter, shared with its at-a-glance card. */
+export function agencyFigures(t: PerformanceLetterTerms) {
+  const breakEvenCents = Math.round((t.feeCents * 100) / t.percent);
+  return {
+    fee: usd(t.feeCents),
+    prepay: t.prepayCents ? usd(t.prepayCents) : null,
+    saving: t.prepayCents ? usd(Math.max(0, t.feeCents * t.termMonths - t.prepayCents)) : null,
+    percent: `${t.percent}%`,
+    term: t.termMonths,
+    minBudget: usd(AGENCY.MIN_AD_BUDGET_CENTS),
+    /** Net attributed revenue up to which no performance pay is owed. */
+    breakEven: usd(breakEvenCents),
+    notice: AGENCY.CANCEL_NOTICE_DAYS,
+  };
+}
+
+export const DRS_PERFORMANCE_SECTION_META: Record<string, SectionMeta> = {
+  "SCOPE OF SERVICES": {
+    icon: PATHS.rocket,
+    accent: "blue",
+    body: "scope",
+    summary: (ctx) => {
+      const f = agencyFigures(agencyOf(ctx));
+      return `Nexli builds your complete system — website, funnel, client portal, CRM, automations, launch ad creative and ad engineering — and then maintains, supports and runs it all every month. Both are covered by ${f.prepay ? `your ${f.prepay} six-month prepayment` : `the ${f.fee} monthly agency fee`}: there is no setup fee. The build takes about ${LAUNCH_TARGET_DAYS} days from kickoff, and launch is the day it's done and your ads go live. Billing and your ${f.term}-month term start at signing, so the build runs inside your first month. Hosting isn't part of Nexli's fees: you keep your own hosting provider.`;
+    },
+  },
+  "FEE STRUCTURE": {
+    icon: PATHS.circleDollar,
+    accent: "emerald",
+    body: "fee",
+    summary: (ctx) => {
+      const f = agencyFigures(agencyOf(ctx));
+      const fee = f.prepay
+        ? `${f.prepay} is due at signing and covers your first ${f.term} months, in place of ${f.term} monthly fees of ${f.fee} (you save ${f.saving}). Later terms are billed ${f.fee} a month on autopay unless you prepay again.`
+        : `${f.fee} a month. The first ${f.fee} is due at signing, and each month after is charged automatically.`;
+      return `${fee} On top of that comes ${f.percent} performance pay (Section 3): ${f.prepay ? `each prepaid month counts as ${f.fee} toward it` : `your ${f.fee} for the month counts toward it`}, so you're only invoiced the difference. Your ad budget, at least ${f.minBudget} a month, isn't paid to Nexli: you pay the ad platform directly on your own card, within the budget you approve. Initial term: ${f.term} months from signing, renewing ${f.term} months at a time.`;
+    },
+  },
+  "PERFORMANCE PAY": {
+    icon: X.megaphone,
+    accent: "violet",
+    summary: (ctx) => {
+      const t = agencyOf(ctx);
+      const f = agencyFigures(t);
+      const exampleNet = 12_000_000;
+      const total = Math.round((exampleNet * t.percent) / 100);
+      const extra = Math.max(0, total - t.feeCents);
+      return `Each month, Nexli's pay is the greater of your ${f.fee} agency fee or ${f.percent} of your net attributed revenue. Net attributed revenue is the money you actually collected that month from clients who first came to you through the ads and funnel Nexli runs, minus that month's ad spend. It is never a share of your firm's total revenue. Your ${f.fee} for the month is credited, so only the difference is invoiced: at ${usd(exampleNet)} net the total is ${usd(total)} and the extra invoice is ${usd(extra)}; at ${f.breakEven} or less there is nothing extra. Each month stands on its own. You bill those clients through your portal so the numbers are on record, and each month you get a statement listing them, with ${AGENCY.DISPUTE_DAYS} days to question a line. Your last month still gets its statement after the agreement ends; nothing is owed on money you collect after that.`;
+    },
+  },
+  "PAYMENT TERMS": {
+    icon: X.creditCard,
+    accent: "cyan",
+    summary: (ctx) => {
+      const f = agencyFigures(agencyOf(ctx));
+      return `Every charge can be paid by card, ACH or wire at the same price; the monthly fee runs on autopay after the first payment. Fees are non-refundable, except that a duplicate or mistaken charge is refunded in full, and by signing you agree not to dispute a properly charged fee with your bank or card issuer. The agreement takes effect, work starts and your Launch Pad opens once ${f.prepay ? `the ${f.prepay} prepayment` : `the first ${f.fee}`} is paid. Your ${f.term}-month term counts from the day you sign and renews ${f.term} months at a time. To stop a renewal, give written notice at least ${f.notice} days before the term ends; later notice ends the agreement a term later. The fees and performance pay for a term stay payable through its end.`;
+    },
+  },
+  "PROJECT TIMELINE & CLIENT COOPERATION": {
+    icon: X.calendar,
+    accent: "amber",
+    summary: () =>
+      `Work starts with a kickoff call once your first payment arrives. Submit your Launch Pad items within 5 days of getting the link, including access to your ad account with a card on it. Launch is targeted ${LAUNCH_TARGET_DAYS} days after Nexli has everything, and the build wraps within 30 days. Third-party reviews — the carriers' review of your texting registration, the ad platforms' review of your ad accounts — move these dates by however long they take. Billing and your term don't wait for launch. If required access or materials aren't provided in the 30-day window, the build is treated as complete.`,
+  },
+  "INTELLECTUAL PROPERTY": {
+    icon: X.shield,
+    accent: "violet",
+    summary: () =>
+      "What Nexli builds for you is yours: your website, client portal and dashboard, funnel and automations, plus your domain, content, brand, ad accounts and all your data. The ad videos and images Nexli makes stay Nexli's; you can run them in your campaigns while you're a client. Your portal and automations run on Nexli's platform, and Nexli's underlying software and templates stay Nexli's. When the agreement ends, Nexli's upkeep stops and your portal, dashboard and automations stop with it. Within 30 days you can get an export of your data and a full copy of your website to host anywhere. Nexli may show your website in its portfolio unless you opt out.",
+  },
+  "ADDITIONAL SERVICES": DRS_SECTION_META["ADDITIONAL SERVICES"],
+  "LIMITATION OF LIABILITY": {
+    icon: X.scale,
+    accent: "amber",
+    summary: () =>
+      "Nexli's liability is capped at the fees you paid in the prior 12 months and excludes indirect losses. Results (leads, revenue, ROI) are not guaranteed: performance pay is how Nexli's fee is worked out, not a promise of results. Outages at third parties like Stripe, the ad platforms, your hosting provider or DNS providers aren't Nexli's liability.",
+  },
+  INDEMNIFICATION: DRS_SECTION_META.INDEMNIFICATION,
+  CONFIDENTIALITY: {
+    icon: PATHS.lock,
+    accent: "emerald",
+    summary: () =>
+      "Both sides keep each other's proprietary information confidential, including after the agreement ends. Your data, including your clients' documents and tax information, belongs to you: Nexli uses it only to run your system and prepare your monthly statements, never sells it or uses it for its own marketing, protects it with reasonable safeguards, tells you within 72 hours of confirming any unauthorized access, and deletes it after the 30-day export window (unless the law requires keeping it).",
+  },
+  TERMINATION: {
+    icon: X.logOut,
+    accent: "amber",
+    summary: (ctx) => {
+      const f = agencyFigures(agencyOf(ctx));
+      return `Either side can end the agreement by written notice of non-renewal (email to mail@nexli.net works). It ends at the end of the current ${f.term}-month term if the notice comes at least ${f.notice} days before that, otherwise at the end of the next term. Nexli can suspend or end access for non-payment, breach or misuse. When it ends, the end-of-agreement terms in Section 6 apply (your data export and website copy within 30 days), and your last month's performance pay is still invoiced.`;
+    },
+  },
+  "DISPUTE RESOLUTION": {
+    icon: X.gavel,
+    accent: "violet",
+    summary: () =>
+      "Disputes go to binding arbitration in Florida under the American Arbitration Association's Commercial Arbitration Rules, and the award can be enforced in court. Each side pays its own costs and attorneys' fees, except that a client who wrongly disputes a properly charged fee also owes the collection costs (Section 4(b)). Either side may still go to court to protect its intellectual property or confidential information.",
+  },
+  "GOVERNING LAW": DRS_SECTION_META["GOVERNING LAW"],
+  "ENTIRE AGREEMENT": DRS_SECTION_META["ENTIRE AGREEMENT"],
+  "ELECTRONIC SIGNATURES": DRS_SECTION_META["ELECTRONIC SIGNATURES"],
 };
 
 // ─── Nexli Enterprise License ──────────────────────────────

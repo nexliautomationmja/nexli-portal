@@ -1,6 +1,6 @@
 // Pipeline page: types and pure helpers (client-safe).
 
-import { DRS_PRICING, PIPELINE } from "@/lib/drs-pricing";
+import { AGENCY, PIPELINE } from "@/lib/drs-pricing";
 import type { Tone } from "@/components/rainmaker";
 
 export type Stage = "open" | "won" | "lost";
@@ -67,10 +67,10 @@ export const contactName = (c: ContactResult) => [c.firstName, c.lastName].filte
 export const shortDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
 
-/** "$40,000 setup + 8 × $4,997/mo ≈ $79,976" — what an open lead counts for until it's edited. */
-export const DEFAULT_VALUE_TEXT = `${money(DRS_PRICING.SETUP_FEE_CENTS)} setup + ${PIPELINE.EXPECTED_LIFETIME_MONTHS} × ${money(
-  DRS_PRICING.MONTHLY_CENTS
-)}/mo ≈ ${money(PIPELINE.DEFAULT_DEAL_VALUE_CENTS)}`;
+/** "8 × $10,000/mo = $80,000, before performance pay" — what an open lead counts for until it's edited. */
+export const DEFAULT_VALUE_TEXT = `${PIPELINE.EXPECTED_LIFETIME_MONTHS} × ${money(AGENCY.FEE_MONTHLY_CENTS)}/mo = ${money(
+  PIPELINE.DEFAULT_DEAL_VALUE_CENTS
+)}, before performance pay`;
 
 export const emptyForm = (): LeadForm => ({
   name: "",

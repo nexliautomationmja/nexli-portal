@@ -1,4 +1,4 @@
-import { isBankTransferInvoiceMeta } from "@/lib/drs-pricing";
+import { isBankTransferInvoiceMeta, isWireOptionInvoiceMeta } from "@/lib/drs-pricing";
 import { getNexliAdminId } from "@/lib/foundation-project";
 
 /**
@@ -14,5 +14,16 @@ export function mercuryConfigured(): boolean {
 /** Mercury is connected, Nexli issued it, and it's an up-front kind (setup, annual, renewal, Enterprise). */
 export async function usesBankTransfer(invoice: { ownerId: string; metadata: unknown }): Promise<boolean> {
   if (!mercuryConfigured() || !isBankTransferInvoiceMeta(invoice.metadata)) return false;
+  return invoice.ownerId === (await getNexliAdminId());
+}
+
+/**
+ * Nov 19 2026 pricing: the six-month prepayment and Performance Pay invoices
+ * are paid through Stripe (card or ACH) but may ALSO be paid by wire, so
+ * their pay page shows Nexli's bank details as a second way to pay and a
+ * transfer that arrives is matched to them (lib/mercury.ts).
+ */
+export async function offersWire(invoice: { ownerId: string; metadata: unknown }): Promise<boolean> {
+  if (!mercuryConfigured() || !isWireOptionInvoiceMeta(invoice.metadata)) return false;
   return invoice.ownerId === (await getNexliAdminId());
 }

@@ -50,9 +50,17 @@ export function nexliLetterKind(content: string | null | undefined): NexliLetter
  * under the letter. Says what each letter's payment clause says (DRS 4(a):
  * up-front invoice by ACH or wire only, monthly by card or ACH on Stripe
  * autopay; Enterprise: ACH or wire only; Foundation: card subscription).
+ * Pass the letter text for a DRS letter: the Nov 19 2026 pricing (no setup
+ * fee; every charge by card, ACH or wire) says something different.
  */
-export function nexliPaymentDisclosure(kind: NexliLetterKind): string {
+/** Section 3's heading in the Nov 19 2026 DRS letter (lib/drs-performance-letter.ts imports this file, so the phrase is repeated here). */
+const DRS_PERFORMANCE_HEADING = "3. PERFORMANCE PAY";
+
+export function nexliPaymentDisclosure(kind: NexliLetterKind, content?: string | null): string {
   const n = NEXLI_LEGAL.name;
+  if (kind === "drs" && (content ?? "").includes(DRS_PERFORMANCE_HEADING)) {
+    return `Every charge under this agreement (the Agency Fee, a six-month prepayment and any Performance Pay invoice) can be paid by credit/debit card, ACH bank transfer or wire, at the same price. Card and ACH payments go through Stripe, Inc., Nexli's payment processor; wires go directly to ${n}'s bank account, using the details on the invoice. The monthly Agency Fee is on autopay: you pay the first invoice once and each later month is charged automatically to that payment method. Your advertising budget is not paid to Nexli: you pay the advertising platform directly, on your own payment method. Card details are handled by Stripe; Nexli never sees or stores your full card number. Nexli is not responsible for holds, delays or disputes imposed by your bank, card issuer or payment provider.`;
+  }
   switch (kind) {
     case "drs":
       return `The up-front invoice (the Setup Fee, or the Setup Fee and the Annual Investment on the annual plan) is paid by ACH bank transfer or wire directly to ${n}'s bank account, using the details on the invoice; cards are not accepted for it. Monthly invoices are paid by credit/debit card or ACH through Stripe, Inc., Nexli's payment processor, at the same price, and each month after the first is charged automatically. Card details are handled by Stripe; Nexli never sees or stores your full card number. Nexli is not responsible for holds, delays or disputes imposed by your bank, card issuer or payment provider.`;

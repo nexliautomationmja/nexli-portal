@@ -393,7 +393,7 @@ export function OnboardingClient({ token }: { token: string }) {
         }
         body={
           notStarted
-            ? "Your Launch Pad opens as soon as your setup invoice is paid. Check your inbox for the invoice, or reach out to your Nexli team."
+            ? "Your Launch Pad opens as soon as your first invoice is paid. Check your inbox for the invoice, or reach out to your Nexli team."
             : "Double-check the link from your email, or contact your Nexli team for a fresh one."
         }
       />

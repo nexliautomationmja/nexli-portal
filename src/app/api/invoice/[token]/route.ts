@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAchOnlyInvoiceMeta, isChargebackWaivedInvoiceMeta } from "@/lib/drs-pricing";
 import { db } from "@/db";
-import { invoices, invoiceLineItems, users } from "@/db/schema";
+import { engagements, invoices, invoiceLineItems, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getAutopayInfo } from "@/lib/autopay";
-import { remitDetails, usesBankTransfer } from "@/lib/mercury";
+import { offersWire, remitDetails, usesBankTransfer } from "@/lib/mercury";
 
 /** What the invoice is for — drives the pay page's "what happens next" copy. */
 type InvoiceKind =
@@ -14,6 +14,10 @@ type InvoiceKind =
   | "ad_budget"
   | "renewal"
   | "enterprise"
+  // Nov 19 2026 pricing:
+  | "agency" // the monthly Agency Fee
+  | "prepay" // the six-month prepayment
+  | "performance" // a month's Performance Pay
   | "other";
 
 function invoiceKind(meta: Record<string, unknown> | null): InvoiceKind {
@@ -28,6 +32,12 @@ function invoiceKind(meta: Record<string, unknown> | null): InvoiceKind {
       return "ad_budget";
     case "platform_annual_renewal":
       return "renewal";
+    case "agency_monthly":
+      return "agency";
+    case "agency_prepay":
+      return "prepay";
+    case "performance_pay":
+      return "performance";
   }
   if (meta?.offer === "enterprise") return "enterprise";
   return "other";
@@ -77,6 +87,24 @@ export async function GET(
   const bankTransfer = await usesBankTransfer(invoice);
   const open = !["paid", "canceled", "void"].includes(invoice.status) && invoice.balanceDue > 0;
   const remit = bankTransfer && open ? await remitDetails() : null;
+  // Prepayment and Performance Pay invoices: card or ACH through Stripe, or a wire to the same bank account.
+  const wireRemit = !bankTransfer && open && (await offersWire(invoice)) ? await remitDetails() : null;
+
+  // An Agency Fee invoice paid before the client has a Launch Pad is their
+  // first payment: paying it opens the Launch Pad (the page says so).
+  let firstPayment = false;
+  if ((meta?.drsRole === "agency_monthly" || meta?.drsRole === "agency_prepay") && typeof meta.engagementId === "string") {
+    try {
+      const [eng] = await db
+        .select({ metadata: engagements.metadata })
+        .from(engagements)
+        .where(eq(engagements.id, meta.engagementId))
+        .limit(1);
+      firstPayment = Boolean(eng) && !(eng.metadata as { onboarding?: unknown } | null)?.onboarding;
+    } catch (err) {
+      console.error("Invoice page: engagement lookup failed:", err);
+    }
+  }
 
   const [owner] = await db
     .select({ name: users.name, email: users.email, companyName: users.companyName })
@@ -115,6 +143,10 @@ export async function GET(
       autopay,
       payVia: bankTransfer ? "bank_transfer" : "stripe",
       remit,
+      wireRemit,
+      firstPayment,
+      // Performance Pay invoices: the month's totals (never the client list — that stays inside the portal).
+      statement: meta?.drsRole === "performance_pay" && meta.statement && typeof meta.statement === "object" ? meta.statement : null,
       transferSentAt: typeof meta?.transferSentAt === "string" ? meta.transferSentAt : null,
     },
     lineItems: lineItems.sort((a, b) => a.order - b.order),

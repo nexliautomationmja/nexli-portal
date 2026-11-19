@@ -88,7 +88,8 @@ export function FeeBody({ paragraphs }: { paragraphs: string[] }) {
             </div>
           );
         }
-        const amount = p.match(AMOUNT_RE)?.[0] ?? null;
+        // A clause that states a percentage instead of a price ("Performance Pay: 10% of …") shows the percentage.
+        const amount = p.match(AMOUNT_RE)?.[0] ?? c.rest.match(/^\s*(\d+(?:\.\d+)?%)/)?.[1] ?? null;
         const afterAmount = amount ? p.slice(p.indexOf(amount) + amount.length, p.indexOf(amount) + amount.length + 20) : "";
         const unit = /USD\/month/.test(afterAmount)
           ? "/month"

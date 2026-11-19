@@ -7,6 +7,8 @@ export {
   TotalsCard,
   PayCard,
   BankTransferCard,
+  WireOptionCard,
+  StatementCard,
   InlineNote,
   AchPendingCard,
   AutopayOnCard,
@@ -17,4 +19,4 @@ export {
 } from "./sections";
 export { INVOICE_PATHS } from "./icons";
 export { DAY_MS, money, fmtDay, fmtLongDay, paymentMethodLabel, monthlySplit } from "./format";
-export type { InvoiceKind, BillingType, InvoiceLine, PayMethod, HeroStatus, BankRemit } from "./types";
+export type { InvoiceKind, BillingType, InvoiceLine, PayMethod, HeroStatus, BankRemit, InvoiceStatement } from "./types";

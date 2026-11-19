@@ -10,8 +10,11 @@ import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { ErrorStrip, LaunchPadCanvas, SP, SvgIcon } from "@/components/creative-studio/canvas";
 import { BIG_NUM, GradientText } from "@/components/rainmaker";
 import { generateDrsContent, fillClientPlaceholder } from "@/lib/engagement-defaults";
+import { generateDrsPerformanceContent, isPerformanceTemplateName } from "@/lib/drs-performance-letter";
 import { generateEnterpriseContent } from "@/lib/enterprise-engagement";
 import {
+  AGENCY,
+  AGENCY_PREPAY_SAVING_CENTS,
   DRS_PRICING,
   DRS_PRICING_LABEL,
   DRS_SETUP_FEES,
@@ -19,8 +22,9 @@ import {
   TERM_MONTHS,
   TOTAL_MONTHLY_CENTS,
   annualUpfrontCents,
+  type AgencyBilling,
   type BillingPlan,
-  type DrsPricing,
+  type DrsSetupPricing,
 } from "@/lib/drs-pricing";
 import { ENTERPRISE_TIER_ORDER, ENTERPRISE_TIERS, isEnterpriseTemplateName, renewalCents, type EnterpriseTier } from "@/lib/enterprise-pricing";
 import { autoSubject, leadMatches, letterStatus, type ComposerLead, type ComposerLetter } from "@/components/engagements/composer-logic";
@@ -34,10 +38,16 @@ interface Template {
   content: string;
 }
 
-type Offer = "drs_monthly" | "drs_annual" | "enterprise" | `tpl:${string}`;
+// drs_agency_*: the Nov 19 2026 pricing ($10,000/month or $50,000 prepaid, + 10% performance pay).
+// drs_monthly / drs_annual: the previous pricing (setup fee), on the back tab.
+type Offer = "drs_agency_monthly" | "drs_agency_prepay" | "drs_monthly" | "drs_annual" | "enterprise" | `tpl:${string}`;
+type PricingTab = "new" | "previous";
+const isAgencyOffer = (o: Offer | null): o is "drs_agency_monthly" | "drs_agency_prepay" => o === "drs_agency_monthly" || o === "drs_agency_prepay";
+const isSetupOffer = (o: Offer | null): o is "drs_monthly" | "drs_annual" => o === "drs_monthly" || o === "drs_annual";
 type Signer = { name: string; email: string };
 
 const isDrs = (t: Template) => t.name.toLowerCase().includes("digital rainmaker");
+const isPerf = (t: Template) => isPerformanceTemplateName(t.name);
 
 const STEPS = ["Who", "Agreement", "Review & send"] as const;
 
@@ -66,8 +76,10 @@ export function EngagementComposer() {
 
   const [offer, setOffer] = useState<Offer | null>(null);
   const [tier, setTier] = useState<EnterpriseTier>("core");
-  // Digital Rainmaker setup fee: the new $40,000 by default, or the original $32,000.
-  const [pricing, setPricing] = useState<DrsPricing>("current");
+  // Digital Rainmaker pricing: the Nov 19 2026 pricing first, the previous (setup fee) pricing behind it.
+  const [pricingTab, setPricingTab] = useState<PricingTab>("new");
+  // Previous pricing's setup fee: $40,000, or the original $32,000.
+  const [pricing, setPricing] = useState<DrsSetupPricing>("current");
   const setupCents = DRS_SETUP_FEES[pricing];
   const [content, setContent] = useState("");
   const [contentTouched, setContentTouched] = useState(false);
@@ -113,20 +125,45 @@ export function EngagementComposer() {
   }, [loading]);
 
   // ── Templates → agreement cards ──
-  const drsMonthly = templates.find((t) => isDrs(t) && !t.name.toLowerCase().includes("annual"));
-  const drsAnnual = templates.find((t) => isDrs(t) && t.name.toLowerCase().includes("annual")) ?? drsMonthly;
+  // The new pricing's two templates carry "Performance" in their names; keep them out of the previous pricing's slots.
+  const perfMonthly = templates.find((t) => isPerf(t) && !t.name.toLowerCase().includes("prepaid"));
+  const perfPrepaid = templates.find((t) => isPerf(t) && t.name.toLowerCase().includes("prepaid")) ?? perfMonthly;
+  const drsMonthly = templates.find((t) => isDrs(t) && !isPerf(t) && !t.name.toLowerCase().includes("annual"));
+  const drsAnnual = templates.find((t) => isDrs(t) && !isPerf(t) && t.name.toLowerCase().includes("annual")) ?? drsMonthly;
+  const hasNewPricing = Boolean(perfMonthly || perfPrepaid);
+  const hasPreviousPricing = Boolean(drsMonthly || drsAnnual);
+  // An account with only one of the two (never the case for Nexli) just sees that one.
+  const shownTab: PricingTab = !hasNewPricing ? "previous" : !hasPreviousPricing ? "new" : pricingTab;
   const enterprise = templates.find((t) => isEnterpriseTemplateName(t.name));
   const saved = templates.filter((t) => !isDrs(t) && !isEnterpriseTemplateName(t.name));
 
   const templateId =
-    offer === "drs_monthly" ? drsMonthly?.id : offer === "drs_annual" ? drsAnnual?.id : offer === "enterprise" ? enterprise?.id : offer?.startsWith("tpl:") ? offer.slice(4) : undefined;
+    offer === "drs_agency_monthly"
+      ? perfMonthly?.id
+      : offer === "drs_agency_prepay"
+        ? perfPrepaid?.id
+        : offer === "drs_monthly"
+          ? drsMonthly?.id
+          : offer === "drs_annual"
+            ? drsAnnual?.id
+            : offer === "enterprise"
+              ? enterprise?.id
+              : offer?.startsWith("tpl:")
+                ? offer.slice(4)
+                : undefined;
   const billingPlan: BillingPlan = offer === "drs_annual" ? "annual" : "monthly";
+  const agencyBilling: AgencyBilling = offer === "drs_agency_prepay" ? "prepay" : "monthly";
 
   const firm = company.trim() || signers[0]?.name.trim() || "";
   const subject = subjectTouched ? subjectText : autoSubject(offer, tier, firm, saved.find((t) => `tpl:${t.id}` === offer)?.name);
 
   const offerSummary = useMemo(() => {
-    const version = pricing === "original" ? " (original pricing)" : "";
+    const performance = `${AGENCY.PERFORMANCE_PERCENT}% performance pay · ad budget paid to Meta`;
+    if (offer === "drs_agency_monthly")
+      return { title: "Digital Rainmaker · Monthly", price: `${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)}/mo from signing + ${performance}` };
+    if (offer === "drs_agency_prepay")
+      return { title: "Digital Rainmaker · Prepaid", price: `${fmtWhole(AGENCY.PREPAY_CENTS)} at signing for ${AGENCY.TERM_MONTHS} months + ${performance}` };
+    const version = pricing === "original" ? " (original pricing)" : " (previous pricing)";
     if (offer === "drs_monthly")
       return {
         title: `Digital Rainmaker · Monthly${version}`,
@@ -147,16 +184,31 @@ export function EngagementComposer() {
     setOffer(next);
     setTier(nextTier);
     setContentTouched(false);
-    if (next === "drs_monthly") setContent(generateDrsContent("monthly", setupCents));
+    if (next === "drs_agency_monthly") setContent(generateDrsPerformanceContent("monthly"));
+    else if (next === "drs_agency_prepay") setContent(generateDrsPerformanceContent("prepay"));
+    else if (next === "drs_monthly") setContent(generateDrsContent("monthly", setupCents));
     else if (next === "drs_annual") setContent(generateDrsContent("annual", setupCents));
     else if (next === "enterprise") setContent(generateEnterpriseContent(nextTier));
     else setContent(saved.find((t) => `tpl:${t.id}` === next)?.content ?? "");
   }
 
-  // New ($40,000) vs original ($32,000) setup: regenerates a DRS letter that's already chosen.
-  function choosePricing(next: DrsPricing) {
+  // New pricing vs previous pricing: a Digital Rainmaker card picked on the other tab is dropped with it.
+  function choosePricingTab(next: PricingTab) {
+    if (next === shownTab) return;
+    const drops = next === "new" ? isSetupOffer(offer) : isAgencyOffer(offer);
+    if (drops && contentTouched && !confirm("Switching replaces the letter text you edited. Continue?")) return;
+    setPricingTab(next);
+    if (drops) {
+      setOffer(null);
+      setContent("");
+      setContentTouched(false);
+    }
+  }
+
+  // Previous pricing only — $40,000 vs original $32,000 setup: regenerates a letter that's already chosen.
+  function choosePricing(next: DrsSetupPricing) {
     if (next === pricing) return;
-    const isDrsOffer = offer === "drs_monthly" || offer === "drs_annual";
+    const isDrsOffer = isSetupOffer(offer);
     if (isDrsOffer && contentTouched && !confirm("Switching replaces the letter text you edited. Continue?")) return;
     setPricing(next);
     if (isDrsOffer) {
@@ -200,7 +252,8 @@ export function EngagementComposer() {
           saveAsTemplate,
           templateName: saveAsTemplate ? templateName.trim() : undefined,
           billingPlan,
-          drsPricing: offer === "drs_monthly" || offer === "drs_annual" ? pricing : undefined,
+          drsPricing: isAgencyOffer(offer) ? "performance" : isSetupOffer(offer) ? pricing : undefined,
+          agencyBilling: isAgencyOffer(offer) ? agencyBilling : undefined,
           enterpriseTier: offer === "enterprise" ? tier : undefined,
           pipelineLeadId: leadId ?? undefined,
         }),
@@ -467,7 +520,7 @@ export function EngagementComposer() {
               <div ref={signerRef} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">{leadId ? "Signing · from your pipeline" : "Signing"}</p>
-                  {leadId && <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold text-cyan-200">Linked to the lead · turns Won when the setup is paid</span>}
+                  {leadId && <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold text-cyan-200">Linked to the lead · turns Won when the first invoice is paid</span>}
                 </div>
                 <div className="space-y-3">
                   {signers.map((s, i) => {
@@ -535,22 +588,27 @@ export function EngagementComposer() {
             </div>
           ) : step === 2 ? (
             <div className="mx-auto max-w-4xl space-y-5">
-              {(drsMonthly || drsAnnual) && (
+              {hasNewPricing && hasPreviousPricing && (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Digital Rainmaker setup fee</p>
-                  <div role="radiogroup" aria-label="Digital Rainmaker pricing" className="grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1 sm:inline-grid">
-                    {(["current", "original"] as const).map((v) => {
-                      const on = pricing === v;
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Digital Rainmaker pricing</p>
+                  <div role="tablist" aria-label="Digital Rainmaker pricing" className="grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1 sm:inline-grid">
+                    {(
+                      [
+                        ["new", "New pricing"],
+                        ["previous", "Previous pricing"],
+                      ] as const
+                    ).map(([v, label]) => {
+                      const on = shownTab === v;
                       return (
                         <button
                           key={v}
                           type="button"
-                          role="radio"
-                          aria-checked={on}
-                          onClick={() => choosePricing(v)}
+                          role="tab"
+                          aria-selected={on}
+                          onClick={() => choosePricingTab(v)}
                           className={`min-h-10 rounded-xl px-3 text-xs font-bold transition sm:px-4 ${on ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
                         >
-                          {fmtWhole(DRS_SETUP_FEES[v])} · {DRS_PRICING_LABEL[v]}
+                          {label}
                         </button>
                       );
                     })}
@@ -558,7 +616,53 @@ export function EngagementComposer() {
                 </div>
               )}
               <div className="grid gap-3 sm:grid-cols-2">
-                {drsMonthly && (
+                {shownTab === "new" && perfMonthly && (
+                  <OfferCard
+                    on={offer === "drs_agency_monthly"}
+                    onClick={() => chooseOffer("drs_agency_monthly")}
+                    emoji="🌧️"
+                    accent="from-blue-500/25 to-cyan-500/10"
+                    title="Digital Rainmaker · Monthly"
+                    price={`${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)} a month`}
+                    sub={`First ${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)} at signing, then monthly on autopay · no setup fee · ad budget (from ${fmtWhole(AGENCY.MIN_AD_BUDGET_CENTS)}/mo) paid straight to Meta · ${AGENCY.TERM_MONTHS}-month term from signing, renews ${AGENCY.TERM_MONTHS} months at a time`}
+                    bonus={`+ ${AGENCY.PERFORMANCE_PERCENT}% performance pay · the month's ${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)} counts toward it`}
+                  />
+                )}
+                {shownTab === "new" && perfPrepaid && (
+                  <OfferCard
+                    on={offer === "drs_agency_prepay"}
+                    onClick={() => chooseOffer("drs_agency_prepay")}
+                    emoji="📆"
+                    accent="from-cyan-500/25 to-emerald-500/10"
+                    title="Digital Rainmaker · Prepaid"
+                    price={`${fmtWhole(AGENCY.PREPAY_CENTS)} for ${AGENCY.TERM_MONTHS} months`}
+                    sub={`Paid at signing, saves ${fmtWhole(AGENCY_PREPAY_SAVING_CENTS)} · no setup fee · ad budget (from ${fmtWhole(AGENCY.MIN_AD_BUDGET_CENTS)}/mo) paid straight to Meta · later terms ${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)}/mo unless prepaid again`}
+                    bonus={`+ ${AGENCY.PERFORMANCE_PERCENT}% performance pay · each prepaid month counts as ${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)}`}
+                  />
+                )}
+                {shownTab === "previous" && hasPreviousPricing && (
+                  <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Setup fee</p>
+                    <div role="radiogroup" aria-label="Previous pricing setup fee" className="grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1 sm:inline-grid">
+                      {(["current", "original"] as const).map((v) => {
+                        const on = pricing === v;
+                        return (
+                          <button
+                            key={v}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            onClick={() => choosePricing(v)}
+                            className={`min-h-10 rounded-xl px-3 text-xs font-bold transition sm:px-4 ${on ? "bg-white/15 text-white" : "text-neutral-400 hover:text-white"}`}
+                          >
+                            {fmtWhole(DRS_SETUP_FEES[v])} · {DRS_PRICING_LABEL[v]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {shownTab === "previous" && drsMonthly && (
                   <OfferCard
                     on={offer === "drs_monthly"}
                     onClick={() => chooseOffer("drs_monthly")}
@@ -570,7 +674,7 @@ export function EngagementComposer() {
                     bonus={`+${fmtWhole(FIRST_MONTH_AD_BONUS_CENTS.monthly)} first-month ad bonus · we match their first month of ads`}
                   />
                 )}
-                {drsAnnual && (
+                {shownTab === "previous" && drsAnnual && (
                   <OfferCard
                     on={offer === "drs_annual"}
                     onClick={() => chooseOffer("drs_annual")}
@@ -824,7 +928,7 @@ function OfferCard({
   title: string;
   price: string;
   sub: string;
-  /** Gold line: the first-month ad bonus (letter Section 3(e)). */
+  /** Gold line: the performance pay (new pricing) or the first-month ad bonus (previous pricing). */
   bonus?: string;
 }) {
   return (

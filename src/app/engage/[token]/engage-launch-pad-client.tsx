@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { annualUpfrontCents, type BillingPlan } from "@/lib/drs-pricing";
 import { drsLetterTerms } from "@/lib/engagement-defaults";
+import { isPerformanceLetter, performanceLetterTerms } from "@/lib/drs-performance-letter";
 import type { EnterpriseTier } from "@/lib/enterprise-pricing";
 import {
   ACCENT,
@@ -139,12 +140,17 @@ function SignedNextSteps({
       </p>
     );
   }
+  // Nov 19 2026 pricing: no setup invoice. The first Agency Fee (or the six-month prepayment) is what's due.
+  const agency = isPerformanceLetter(content) ? performanceLetterTerms(content) : null;
+  const dollars = (cents: number) => "$" + (cents / 100).toLocaleString("en-US");
   return (
     <>
       <p className="text-sm mt-2 text-neutral-300">
-        {plan === "annual"
-          ? `Next: your $${(annualUpfrontCents(drsLetterTerms(content).setupCents) / 100).toLocaleString("en-US")} invoice is in your inbox. Your Launch Pad opens the moment it's paid.`
-          : "Next: your setup invoice is in your inbox. Your Launch Pad opens the moment it's paid."}
+        {agency
+          ? `Next: your ${dollars(agency.prepayCents ?? agency.feeCents)} invoice is in your inbox. Your Launch Pad opens the moment it's paid.`
+          : plan === "annual"
+            ? `Next: your ${dollars(annualUpfrontCents(drsLetterTerms(content).setupCents))} invoice is in your inbox. Your Launch Pad opens the moment it's paid.`
+            : "Next: your setup invoice is in your inbox. Your Launch Pad opens the moment it's paid."}
       </p>
       {result.onboardingUrl && (
         <div className="mt-5 flex justify-center">
@@ -348,7 +354,7 @@ export function EngageLaunchPadClient({
         <div className="space-y-4">
           <div>
             <p className={labelCls}>How payments work</p>
-            <p className="text-xs leading-relaxed text-neutral-400">{nexliPaymentDisclosure(kind)}</p>
+            <p className="text-xs leading-relaxed text-neutral-400">{nexliPaymentDisclosure(kind, data.content)}</p>
           </div>
           <div>
             <p className={labelCls}>Who you&apos;re contracting with</p>

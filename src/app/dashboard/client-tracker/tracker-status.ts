@@ -50,10 +50,12 @@ export function updateView(update: UpdateStatus | null | undefined): StatusView 
   }
 }
 
-export function planView(plan: ClientRow["billingPlan"]): { tone: Tone; label: string } | null {
+export function planView(plan: ClientRow["billingPlan"], performancePay = false): { tone: Tone; label: string } | null {
   if (plan === "enterprise") return { tone: "amber", label: "Enterprise" };
   if (plan === "annual") return { tone: "violet", label: "Annual" };
-  if (plan === "monthly") return { tone: "blue", label: "Monthly" };
+  // Nov 19 2026 pricing: the 10% performance pay rides on top of the fee.
+  if (plan === "prepaid") return { tone: "violet", label: "Prepaid + 10%" };
+  if (plan === "monthly") return { tone: "blue", label: performancePay ? "Monthly + 10%" : "Monthly" };
   return null;
 }
 
@@ -63,7 +65,10 @@ export function statusView(status: ClientRow["status"]): { tone: Tone; label: st
 
 export function termView(c: ClientRow): { started: string; ends: string; atLaunch: boolean } {
   const atLaunch = Boolean(c.termStartsAtLaunch && !c.termEnd);
-  return { started: dateOrDash(c.startDate ?? c.signedAt), ends: atLaunch ? "Starts at launch" : dateOrDash(c.termEnd), atLaunch };
+  // Performance pricing renews six months at a time: say whether the date is a renewal or the end.
+  const ends = atLaunch ? "Starts at launch" : dateOrDash(c.termEnd);
+  const suffix = c.performancePay && c.termEnd ? (c.termRenews ? " · renews" : " · ends") : "";
+  return { started: dateOrDash(c.startDate ?? c.signedAt), ends: ends + suffix, atLaunch };
 }
 
 /** Tone of a "weekly update due" link: red when overdue or never sent. */

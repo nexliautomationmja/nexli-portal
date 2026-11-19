@@ -34,7 +34,11 @@ export interface ClientRow {
   email: string;
   name: string;
   company: string | null;
-  billingPlan: "monthly" | "annual" | "enterprise" | null;
+  billingPlan: "monthly" | "annual" | "prepaid" | "enterprise" | null;
+  /** Nov 19 2026 pricing: Agency Fee + Performance Pay. */
+  performancePay?: boolean;
+  /** Performance pricing: the term renews automatically (false once a non-renewal is recorded). */
+  termRenews?: boolean;
   signedAt: string | null;
   startDate: string | null;
   termEnd?: string | null;

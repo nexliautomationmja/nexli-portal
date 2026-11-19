@@ -10,6 +10,7 @@ import {
   type BillingPlan,
 } from "@/lib/drs-pricing";
 import { drsLetterTerms } from "@/lib/engagement-defaults";
+import { isPerformanceLetter, performanceLetterTerms, type PerformanceLetterTerms } from "@/lib/drs-performance-letter";
 import {
   ENTERPRISE,
   ENTERPRISE_TIERS,
@@ -19,7 +20,7 @@ import {
 import { LETTER_ICONS as X } from "./icons";
 import { StatTile } from "./bodies";
 import { usd } from "./parse";
-import { drsFigures, type LetterKind } from "./section-meta";
+import { agencyFigures, drsFigures, type LetterKind } from "./section-meta";
 
 interface Tile {
   label: string;
@@ -173,6 +174,49 @@ export function DrsAtAGlance({
   return <GlanceCard tiles={tiles} steps={steps} bonus={bonus} />;
 }
 
+/** The Nov 19 2026 pricing: Agency Fee (or the six months prepaid) + Performance Pay, ad budget paid to the platform. */
+export function DrsPerformanceAtAGlance({ terms }: { terms: PerformanceLetterTerms }) {
+  const f = agencyFigures(terms);
+  const tiles: Tile[] = [
+    f.prepay
+      ? {
+          label: "Six-month prepayment",
+          value: f.prepay,
+          sub: `due at signing · covers your first ${f.term} months · no setup fee · later terms ${f.fee}/mo`,
+          accent: "blue",
+        }
+      : { label: "Agency fee", value: `${f.fee}/mo`, sub: "first one at signing · then autopay · no setup fee", accent: "blue" },
+    {
+      label: "Performance pay",
+      value: f.percent,
+      sub: `of net attributed revenue · ${f.prepay ? `each prepaid month counts as ${f.fee}` : `your ${f.fee} for the month counts`} toward it`,
+      accent: "emerald",
+    },
+    {
+      label: "Your ad budget",
+      value: `${f.minBudget}+/mo`,
+      sub: "paid straight to the ad platform on your own card · never passes through Nexli",
+      accent: "cyan",
+    },
+    {
+      label: "Initial term",
+      value: `${f.term} months`,
+      sub: `from signing · renews ${f.term} months at a time · ${f.notice} days' notice to stop`,
+      accent: "violet",
+    },
+  ];
+  const steps: Step[] = [
+    {
+      n: 1,
+      title: "Pay the first invoice",
+      sub: f.prepay ? `${f.prepay} at signing · card, ACH or wire` : `${f.fee} at signing · card or ACH`,
+    },
+    { n: 2, title: "Launch Pad opens, build begins", sub: "Opens once paid · submit your items within 5 days" },
+    { n: 3, title: "Launch: your ads go live", sub: `About ${LAUNCH_TARGET_DAYS} days after your materials` },
+  ];
+  return <GlanceCard tiles={tiles} steps={steps} />;
+}
+
 export function EnterpriseAtAGlance({ tier }: { tier: EnterpriseTier }) {
   const info = ENTERPRISE_TIERS[tier];
   const fee = usd(info.priceCents);
@@ -220,6 +264,7 @@ export function LetterAtAGlance({
   content?: string;
 }) {
   if (kind === "drs") {
+    if (isPerformanceLetter(content)) return <DrsPerformanceAtAGlance terms={performanceLetterTerms(content)} />;
     const terms = drsLetterTerms(content);
     return <DrsAtAGlance plan={plan} setupCents={terms.setupCents} bonus={terms.bonus} />;
   }

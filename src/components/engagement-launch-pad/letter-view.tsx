@@ -9,12 +9,13 @@ import { useEffect, useMemo, useState } from "react";
 import { LpCard } from "@/components/launch-pad";
 import type { BillingPlan } from "@/lib/drs-pricing";
 import { drsLetterTerms } from "@/lib/engagement-defaults";
+import { isPerformanceLetter, performanceLetterTerms } from "@/lib/drs-performance-letter";
 import type { EnterpriseTier } from "@/lib/enterprise-pricing";
 import { parseLetter } from "./parse";
 import { Paragraph } from "./bodies";
 import { SectionCard } from "./section-card";
 import { SectionNav, useSectionNav } from "./section-nav";
-import { FALLBACK_META, SECTION_META_BY_KIND, type LetterKind } from "./section-meta";
+import { DRS_PERFORMANCE_SECTION_META, FALLBACK_META, SECTION_META_BY_KIND, type LetterKind } from "./section-meta";
 
 export function EngagementLetterView({
   content,
@@ -38,6 +39,8 @@ export function EngagementLetterView({
   const { preamble, sections } = useMemo(() => parseLetter(content), [content]);
   // DRS: the Setup Fee and bonus come from the letter itself (two pricing versions).
   const terms = useMemo(() => drsLetterTerms(content), [content]);
+  // DRS on the Nov 19 2026 pricing (Agency Fee + Performance Pay) has its own summaries and figures.
+  const agency = useMemo(() => (kind === "drs" && isPerformanceLetter(content) ? performanceLetterTerms(content) : null), [kind, content]);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const { active, readPct, listRef, registerRef } = useSectionNav(sections, expanded);
 
@@ -45,10 +48,10 @@ export function EngagementLetterView({
     onReadProgress?.(readPct);
   }, [readPct, onReadProgress]);
 
-  const metaMap = SECTION_META_BY_KIND[kind];
+  const metaMap = agency ? DRS_PERFORMANCE_SECTION_META : SECTION_META_BY_KIND[kind];
   const [titleLines, ...preambleRest] = preamble;
   // Re-key cards when the letter variant changes so their entrance animates.
-  const variantKey = kind === "enterprise" ? tier : kind === "drs" ? plan : kind;
+  const variantKey = kind === "enterprise" ? tier : agency ? `agency-${agency.billing}` : kind === "drs" ? plan : kind;
 
   return (
     <>
@@ -72,7 +75,7 @@ export function EngagementLetterView({
 
         {sections.map((s, i) => {
           const base = metaMap[s.heading] ?? FALLBACK_META;
-          const summary = showSummaries ? (base.summary?.({ plan, tier, ...terms }) ?? "") : "";
+          const summary = showSummaries ? (base.summary?.({ plan, tier, ...terms, ...(agency ? { agency } : {}) }) ?? "") : "";
           // A clause is only tucked away behind its summary — never on its own.
           const meta = summary ? base : { ...base, collapsed: false };
           return (

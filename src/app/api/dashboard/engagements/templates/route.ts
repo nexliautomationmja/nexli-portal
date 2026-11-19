@@ -13,20 +13,31 @@ import {
 } from "@/lib/engagement-defaults";
 import { DRS_PRICING, type BillingPlan } from "@/lib/drs-pricing";
 import {
+  DRS_PERFORMANCE_MONTHLY_TEMPLATE_NAME,
+  DRS_PERFORMANCE_MONTHLY_TEMPLATE_CONTENT,
+  DRS_PERFORMANCE_PREPAID_TEMPLATE_NAME,
+  DRS_PERFORMANCE_PREPAID_TEMPLATE_CONTENT,
+  isPerformanceLetter,
+} from "@/lib/drs-performance-letter";
+import {
   ENTERPRISE_TEMPLATE_CONTENT,
   isCurrentEnterpriseRevision,
 } from "@/lib/enterprise-engagement";
 import { ENTERPRISE_TEMPLATE_NAME } from "@/lib/enterprise-pricing";
 import { getNexliAdminId } from "@/lib/foundation-project";
 
-// Default templates auto-seeded for every user: the two flat all-in-one DRS
-// letters (Monthly + Annual) and the Nexli Enterprise License letter (seeded
-// at the Core tier; the compose UI regenerates per tier).
+// Default templates auto-seeded for the Nexli admin: the Nov 19 2026 pricing's
+// two DRS letters (Performance Monthly + Prepaid), the previous pricing's two
+// (Monthly + Annual, setup fee), and the Nexli Enterprise License letter
+// (seeded at the Core tier; the compose UI regenerates per tier).
 type DefaultTemplate =
+  | { name: string; content: string; kind: "drs_performance"; plan?: undefined }
   | { name: string; content: string; kind: "drs"; plan: BillingPlan }
   | { name: string; content: string; kind: "enterprise"; plan?: undefined };
 
 const DEFAULT_TEMPLATES: DefaultTemplate[] = [
+  { name: DRS_PERFORMANCE_MONTHLY_TEMPLATE_NAME, content: DRS_PERFORMANCE_MONTHLY_TEMPLATE_CONTENT, kind: "drs_performance" },
+  { name: DRS_PERFORMANCE_PREPAID_TEMPLATE_NAME, content: DRS_PERFORMANCE_PREPAID_TEMPLATE_CONTENT, kind: "drs_performance" },
   { name: DRS_MONTHLY_TEMPLATE_NAME, content: DRS_MONTHLY_TEMPLATE_CONTENT, kind: "drs", plan: "monthly" },
   { name: DRS_ANNUAL_TEMPLATE_NAME, content: DRS_ANNUAL_TEMPLATE_CONTENT, kind: "drs", plan: "annual" },
   { name: ENTERPRISE_TEMPLATE_NAME, content: ENTERPRISE_TEMPLATE_CONTENT, kind: "enterprise" },
@@ -57,6 +68,10 @@ function isStaleOldPricing(content: string): boolean {
 // revenue-share letters, the $39,997 annual letter, the stacking-bonus
 // letter, etc.
 function isStaleShippedRevision(content: string, tmpl: DefaultTemplate): boolean {
+  // A performance-letter row that differs from what the code builds today is
+  // an older revision of it (the caller already checked it differs). The
+  // composer regenerates these letters from code, so nothing is lost.
+  if (tmpl.kind === "drs_performance") return isPerformanceLetter(content);
   if (tmpl.kind === "enterprise") {
     return (
       content.includes("LICENSE AND IMPLEMENTATION AGREEMENT") &&

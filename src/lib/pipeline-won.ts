@@ -6,15 +6,21 @@ import { ensurePipelineTable } from "@/lib/pipeline-table";
 /**
  * A pipeline lead turns Won only when the client pays the UP-FRONT invoice
  * of their engagement (Marcel's rule): the setup fee on a monthly DRS letter,
- * the full annual invoice on an annual one, or the bank invoice on an
- * Enterprise license. Sending or signing the letter doesn't move the lead.
+ * the full annual invoice on an annual one, the bank invoice on an
+ * Enterprise license — or, on the Nov 19 2026 pricing (no setup fee), the
+ * first Agency Fee or the six-month prepayment. Sending or signing the
+ * letter doesn't move the lead.
  *
  * Called from onDrsInvoicePaid (lib/digital-rainmaker.ts), which every paid
  * path already runs: card checkout, ACH settled, autopay, manual mark-paid.
  */
 
-/** DRS invoice roles paid up front at signing (see SETUP_ROLES in digital-rainmaker.ts). */
-const UPFRONT_DRS_ROLES = ["setup_fee", "setup_annual"];
+/**
+ * DRS invoice roles paid up front at signing (see SETUP_ROLES and
+ * AGENCY_ROLES in digital-rainmaker.ts). Later monthly Agency Fees carry
+ * "agency_monthly" too; by then the lead is already Won, so nothing changes.
+ */
+const UPFRONT_DRS_ROLES = ["setup_fee", "setup_annual", "agency_monthly", "agency_prepay"];
 
 /** Is this paid invoice the engagement's up-front invoice? Pure, for tests. */
 export function isUpfrontInvoice(meta: Record<string, unknown> | null | undefined): boolean {

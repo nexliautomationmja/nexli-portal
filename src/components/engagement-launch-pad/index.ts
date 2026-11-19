@@ -1,5 +1,5 @@
 export { EngagementLetterView } from "./letter-view";
-export { DrsAtAGlance, EnterpriseAtAGlance, LetterAtAGlance } from "./at-a-glance";
+export { DrsAtAGlance, DrsPerformanceAtAGlance, EnterpriseAtAGlance, LetterAtAGlance } from "./at-a-glance";
 export { SectionCard } from "./section-card";
 export { SectionNav, useSectionNav } from "./section-nav";
 export {
@@ -28,6 +28,8 @@ export {
 export type { Section, Clause, ParsedLetter } from "./parse";
 export {
   DRS_SECTION_META,
+  DRS_PERFORMANCE_SECTION_META,
+  agencyFigures,
   ENTERPRISE_SECTION_META,
   FOUNDATION_SECTION_META,
   SECTION_META_BY_KIND,

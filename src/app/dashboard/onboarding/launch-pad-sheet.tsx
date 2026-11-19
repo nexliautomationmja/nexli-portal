@@ -222,6 +222,49 @@ function Billing({
   const { setup, firstMonthly, plan } = billing;
   const setupPaid = setup?.status === "paid";
   const monthly = plan === "annual" ? `${formatUsd(DRS_PRICING.AD_SPEND_MONTHLY_CENTS)} ad budget` : formatUsd(TOTAL_MONTHLY_CENTS);
+  // Nov 19 2026 pricing: the monthly fee has run since signing, so Build
+  // complete only records the launch (and bills an AI avatar pick on its own).
+  if (billing.model === "performance") {
+    const prepaid = billing.agency?.billing === "prepay";
+    const launched = billing.billingStartedAt;
+    return (
+      <Surface className="space-y-3 p-4">
+        {setup ? (
+          <InvoiceRow label={prepaid ? "Six-month prepayment" : "First month"} inv={setup} />
+        ) : (
+          <p className="text-sm text-neutral-400">No first invoice found for this engagement.</p>
+        )}
+        {billing.agency && (
+          <p className="text-[11px] text-neutral-400">
+            {prepaid
+              ? `Later terms bill ${formatUsd(billing.agency.feeCents)} a month. Performance pay is invoiced from each month's statement.`
+              : `${formatUsd(billing.agency.feeCents)} a month on autopay from this payment. Performance pay is invoiced from each month's statement.`}
+          </p>
+        )}
+        {launched ? (
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
+            <Check className="h-3.5 w-3.5" aria-hidden="true" /> Build complete, launched {formatShortDate(launched)}.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            <Button size="sm" busy={busy} disabled={!setupPaid} onClick={onStart} className="whitespace-normal text-left">
+              {busy ? "Saving…" : "Build complete: mark launched"}
+            </Button>
+            <p className="text-[11px] text-neutral-400">
+              {setupPaid ? "No invoice goes out: their monthly fee is already running." : "Unlocks once the first invoice is paid."}
+            </p>
+            {avatarPick && (
+              <p className="text-[11px] font-semibold text-amber-200">
+                + {formatUsd(avatarPick.feeCents)} one-time for {avatarPick.name}, the AI avatar they chose, is sent as its own invoice
+                when you press this.
+              </p>
+            )}
+          </div>
+        )}
+        {error && <Notice tone="error">{error}</Notice>}
+      </Surface>
+    );
+  }
   return (
     <Surface className="space-y-3 p-4">
       {setup ? <InvoiceRow label="Setup invoice" inv={setup} /> : <p className="text-sm text-neutral-400">No setup invoice found for this engagement.</p>}
@@ -644,7 +687,7 @@ function AvatarPanel({ task, avatar, onPatch }: { task: AdminTask; avatar: Admin
             <p className="text-sm font-bold text-white">{avatar.current.name}</p>
             <p className="text-xs text-neutral-300">
               {avatar.current.source === "client"
-                ? `They chose her · ${formatUsd(avatar.pick?.feeCents ?? 0)} one-time on the first monthly invoice${choice?.acceptedAt ? ` · agreed ${formatDate(choice.acceptedAt)}${choice.acceptedBy ? ` by ${choice.acceptedBy}` : ""}` : ""}`
+                ? `They chose her · ${formatUsd(avatar.pick?.feeCents ?? 0)} one-time, billed at Build complete${choice?.acceptedAt ? ` · agreed ${formatDate(choice.acceptedAt)}${choice.acceptedBy ? ` by ${choice.acceptedBy}` : ""}` : ""}`
                 : "Your pick for them · no charge"}
             </p>
             <a href={avatarPageUrl(avatar.current.slug)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-300 hover:text-white">
@@ -660,7 +703,7 @@ function AvatarPanel({ task, avatar, onPatch }: { task: AdminTask; avatar: Admin
       )}
 
       {avatar.locked ? (
-        <p className="text-[11px] text-neutral-400">Locked: the first monthly invoice has gone out.</p>
+        <p className="text-[11px] text-neutral-400">Locked: Build complete has been recorded.</p>
       ) : avatar.pick ? (
         <p className="text-[11px] text-neutral-400">
           Assign {avatar.pick.name} to their studio in Creative Studio → Avatars. To change it, send their choice back with a note.
@@ -873,7 +916,7 @@ export function LaunchPadSheet(p: LaunchPadSheetProps) {
           </Block>
 
           {d.billing?.isDrs && (
-            <Block eyebrow="Billing" title="Setup and first monthly invoice">
+            <Block eyebrow="Billing" title={d.billing.model === "performance" ? "First payment and launch" : "Setup and first monthly invoice"}>
               <Billing billing={d.billing} avatarPick={d.avatar?.pick ?? null} busy={p.billingBusy} error={p.billingError} onStart={p.onStartMonthly} />
             </Block>
           )}

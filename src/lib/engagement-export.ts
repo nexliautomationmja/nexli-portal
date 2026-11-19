@@ -42,7 +42,7 @@ export const FIRM_PLATFORM_LINE = "This document is delivered through the Nexli 
 export function paymentSection(content: string, company: string): { heading: string; text: string; small: string; links: { label: string; href: string }[] } {
   const kind = nexliLetterKind(content);
   if (kind) {
-    return { heading: "How Payments Work", text: nexliPaymentDisclosure(kind), small: NEXLI_IDENTITY_LINE, links: [...NEXLI_POLICY_LINKS] };
+    return { heading: "How Payments Work", text: nexliPaymentDisclosure(kind, content), small: NEXLI_IDENTITY_LINE, links: [...NEXLI_POLICY_LINKS] };
   }
   return { heading: "Payment Processing Disclosure", text: firmPaymentDisclosure(company), small: FIRM_PLATFORM_LINE, links: [] };
 }

@@ -25,7 +25,7 @@ import {
 import { NUM_FONT, READ_FONT } from "@/components/engagement-launch-pad/styles";
 import { INVOICE_PATHS as P } from "./icons";
 import { fmtDay, fmtLongDay, money } from "./format";
-import type { BankRemit, BillingType, HeroStatus, InvoiceKind, InvoiceLine, PayMethod } from "./types";
+import type { BankRemit, BillingType, HeroStatus, InvoiceKind, InvoiceLine, InvoiceStatement, PayMethod } from "./types";
 
 const BILLING_PILL: Record<BillingType, { label: string; cls: string }> = {
   one_time: { label: "One-time", cls: "bg-white/5 text-neutral-300 border border-white/10" },
@@ -703,6 +703,104 @@ export function BankTransferCard({
   );
 }
 
+/**
+ * Nov 19 2026 pricing — a second way to pay a prepayment or Performance Pay
+ * invoice: by wire (or ACH) from the client's bank, straight to Nexli's
+ * account. Shown under the card/ACH checkout; a transfer that arrives is
+ * matched to the invoice by its number (lib/mercury.ts).
+ */
+export function WireOptionCard({
+  remit,
+  amountCents,
+  invoiceNumber,
+  currency,
+}: {
+  remit: BankRemit;
+  amountCents: number;
+  invoiceNumber: string;
+  currency?: string;
+}) {
+  const wire = remit.wire;
+  const amount = money(amountCents, currency);
+  return (
+    <LpCard className="lp-card" style={{ animationDelay: "0.22s" }}>
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300">
+              <Icon d={P.bank} size={18} />
+            </span>
+            <span>
+              <span className="block text-sm font-bold text-white">Prefer to pay by wire?</span>
+              <span className="block text-xs text-neutral-400">Send it from your bank instead. Same amount, nothing to sign up for.</span>
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-bold text-cyan-300 group-open:hidden">Show bank details</span>
+          <span className="hidden shrink-0 text-xs font-bold text-cyan-300 group-open:inline">Hide</span>
+        </summary>
+
+        <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-300/90">Send exactly</p>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <p className="text-2xl font-extrabold text-white" style={NUM_FONT}>
+              {amount}
+            </p>
+            <CopyButton value={(amountCents / 100).toFixed(2)} label="amount" />
+          </div>
+        </div>
+        <dl className="mt-3 divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-white/[0.02]">
+          <RemitRow label={wire ? "Beneficiary" : "Account name"} value={remit.beneficiary} />
+          {wire?.beneficiaryAddress && <RemitRow label="Beneficiary address" value={wire.beneficiaryAddress} />}
+          <RemitRow label={wire ? "Routing (ABA) number" : "Routing number"} value={remit.routingNumber} mono />
+          <RemitRow label="Account number" value={remit.accountNumber} mono />
+          <RemitRow label="Account type" value={remit.accountType} copy={false} />
+          {wire && <RemitRow label="Bank name" value={wire.bankName} />}
+          {wire && <RemitRow label="Bank address" value={wire.bankAddress} />}
+          <RemitRow label={wire ? "Reference (OBI)" : "Memo"} value={invoiceNumber} mono highlight />
+        </dl>
+        <p className="mt-3 text-xs leading-relaxed text-neutral-400" style={READ_FONT}>
+          Put <b className="text-white" style={NUM_FONT}>{invoiceNumber}</b> in the {wire ? "reference" : "memo"} so we can match it. We check
+          our bank every few minutes and email your receipt as soon as it lands. Nexli will never email you new bank
+          details: always pay from this page.
+        </p>
+      </details>
+    </LpCard>
+  );
+}
+
+/** Nov 19 2026 pricing — how a month's Performance Pay was worked out (totals only; the client list stays inside the portal). */
+export function StatementCard({ statement, currency }: { statement: InvoiceStatement; currency?: string }) {
+  const m = (cents: number) => money(cents, currency);
+  const rows: { label: string; value: string; strong?: boolean }[] = [
+    { label: `Collected from ${statement.clients} ad-sourced client${statement.clients === 1 ? "" : "s"}`, value: m(statement.collectedCents) },
+    { label: "Less ad spend for the month", value: `− ${m(statement.adSpendCents)}` },
+    { label: "Net attributed revenue", value: m(statement.netCents), strong: true },
+    { label: `${statement.percent}% of net attributed revenue`, value: m(Math.round((statement.netCents * statement.percent) / 100)) },
+    { label: "Less the agency fee already paid for the month", value: `− ${m(statement.creditCents)}` },
+    { label: "Performance pay due", value: m(statement.dueCents), strong: true },
+  ];
+  return (
+    <LpCard className="lp-card" style={{ animationDelay: "0.18s" }}>
+      <CardHeader
+        accent="violet"
+        icon={P.receipt}
+        title="How this was worked out"
+        sub={`Your statement for ${statement.periodLabel}. The client-by-client list is in your portal.`}
+      />
+      <dl className="mt-4 divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-white/[0.02]">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-baseline justify-between gap-4 px-4 py-2.5">
+            <dt className={`text-sm ${r.strong ? "font-bold text-white" : "text-neutral-300"}`}>{r.label}</dt>
+            <dd className={`shrink-0 text-sm ${r.strong ? "font-extrabold text-white" : "font-semibold text-neutral-200"}`} style={NUM_FONT}>
+              {r.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </LpCard>
+  );
+}
+
 function RemitRow({
   label,
   value,
@@ -873,7 +971,24 @@ export function AutopayOnCard({
 
 // ─── What happens next ─────────────────────────────────────
 
-function nextSteps(kind: InvoiceKind, autopay: boolean, bankTransfer: boolean): string[] {
+function nextSteps(kind: InvoiceKind, autopay: boolean, bankTransfer: boolean, firstPayment: boolean): string[] {
+  // Nov 19 2026 pricing. The first Agency Fee (or the prepayment) opens the Launch Pad; later ones just continue the service.
+  switch (kind) {
+    case "agency":
+      return firstPayment
+        ? [autopay ? "Pay & turn on autopay" : "Pay this invoice", "Your Launch Pad opens", "We start your build"]
+        : [
+            autopay ? "Pay & turn on autopay" : "Pay this invoice",
+            "Your service continues",
+            autopay ? "Autopay handles each month" : "Weekly updates from your team",
+          ];
+    case "prepay":
+      return firstPayment
+        ? ["Pay this invoice", "Your Launch Pad opens", "We start your build"]
+        : ["Pay this invoice", "Your next six months are covered", "Same team, same weekly updates"];
+    case "performance":
+      return ["Pay this invoice", "Receipt emailed to you", "Next statement after your next month"];
+  }
   if (bankTransfer) {
     switch (kind) {
       case "setup":
@@ -915,6 +1030,7 @@ export function NextSteps({
   paid,
   autopay = false,
   bankTransfer = false,
+  firstPayment = false,
 }: {
   kind: InvoiceKind;
   /** Marks step one done. */
@@ -922,6 +1038,8 @@ export function NextSteps({
   autopay?: boolean;
   /** Paid by bank transfer into Mercury. */
   bankTransfer?: boolean;
+  /** Nov 19 2026 pricing: this is the client's first payment (it opens their Launch Pad). */
+  firstPayment?: boolean;
 }) {
   return (
     <section className="lp-card" style={{ animationDelay: "0.25s" }} aria-labelledby="next-heading">
@@ -929,7 +1047,7 @@ export function NextSteps({
         What happens next
       </p>
       <ol className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {nextSteps(kind, autopay, bankTransfer).map((step, i) => {
+        {nextSteps(kind, autopay, bankTransfer, firstPayment).map((step, i) => {
           const done = paid && i === 0;
           return (
             <li

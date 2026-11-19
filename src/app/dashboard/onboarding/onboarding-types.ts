@@ -62,6 +62,10 @@ export interface BillingInvoiceRef {
 export interface AdminBilling {
   isDrs: boolean;
   plan: "monthly" | "annual";
+  /** "performance" = the Nov 19 2026 pricing: `setup` is the first Agency Fee invoice (or the prepayment) and there is no `firstMonthly`. */
+  model?: "setup" | "performance";
+  /** Performance model: how the Agency Fee is paid, and its monthly amount in cents. */
+  agency?: { billing: "monthly" | "prepay"; feeCents: number } | null;
   setup: BillingInvoiceRef | null;
   firstMonthly: (BillingInvoiceRef & { createdAt: string }) | null;
   billingStartedAt: string | null;

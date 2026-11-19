@@ -83,7 +83,7 @@ function ClientName({ c, linkable }: { c: ClientRow; linkable: boolean }) {
 }
 
 function PlanCell({ c }: { c: ClientRow }) {
-  const plan = planView(c.billingPlan);
+  const plan = planView(c.billingPlan, c.performancePay);
   const status = statusView(c.status);
   return (
     <div className="space-y-1">
@@ -201,7 +201,7 @@ export function TrackerView(p: TrackerViewProps) {
   ];
 
   const card = (c: ClientRow) => {
-    const plan = planView(c.billingPlan);
+    const plan = planView(c.billingPlan, c.performancePay);
     const status = statusView(c.status);
     const t = termView(c);
     const u = isAdmin ? updateView(c.update) : null;

@@ -30,6 +30,8 @@ import {
   TotalsCard,
   PayCard,
   BankTransferCard,
+  WireOptionCard,
+  StatementCard,
   InlineNote,
   AchPendingCard,
   AutopayOnCard,
@@ -46,6 +48,7 @@ import {
   type InvoiceLine,
   type PayMethod,
   type BankRemit,
+  type InvoiceStatement,
 } from "@/components/invoice-launch-pad";
 
 // ─── API shape (GET /api/invoice/[token]) ──────────────────
@@ -90,6 +93,12 @@ interface InvoiceResponse {
     /** bank_transfer: paid by ACH/wire into Nexli's Mercury account (no Stripe checkout). */
     payVia?: "bank_transfer" | "stripe";
     remit?: BankRemit | null;
+    /** Nov 19 2026 pricing: bank details for paying a prepayment or Performance Pay invoice by wire instead. */
+    wireRemit?: BankRemit | null;
+    /** Nov 19 2026 pricing: this Agency Fee invoice is the client's first payment (it opens their Launch Pad). */
+    firstPayment?: boolean;
+    /** Performance Pay invoices: the month's totals. */
+    statement?: InvoiceStatement | null;
     transferSentAt?: string | null;
   };
   lineItems: {
@@ -418,6 +427,8 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
         split={inv.kind === "monthly" ? monthlySplit(items) : null}
       />
 
+      {inv.kind === "performance" && inv.statement && <StatementCard statement={inv.statement} currency={currency} />}
+
       <TotalsCard
         subtotalCents={inv.subtotal}
         taxCents={inv.taxAmount ?? 0}
@@ -464,7 +475,17 @@ export function InvoiceLaunchPadClient({ token }: { token: string }) {
         </PayCard>
       )}
 
-      <NextSteps kind={inv.kind} paid={paid} autopay={autopayEligible || autopayActive} bankTransfer={bankTransfer} />
+      {showPay && !bankTransfer && inv.wireRemit && (
+        <WireOptionCard remit={inv.wireRemit} amountCents={balance} invoiceNumber={inv.invoiceNumber} currency={currency} />
+      )}
+
+      <NextSteps
+        kind={inv.kind}
+        paid={paid}
+        autopay={autopayEligible || autopayActive}
+        bankTransfer={bankTransfer}
+        firstPayment={Boolean(inv.firstPayment)}
+      />
 
       <NotesCard notes={inv.notes} terms={inv.terms} />
 

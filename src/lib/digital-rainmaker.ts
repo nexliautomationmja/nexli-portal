@@ -57,6 +57,31 @@
  * still carry "platform_annual" invoices from the previous flow.
  *
  * Template detection is by name (case-insensitive contains "digital rainmaker").
+ *
+ * ── Nov 19 2026 pricing (Agency Fee + Performance Pay, no setup fee) ──
+ * Letters built by lib/drs-performance-letter.ts follow a different sequence
+ * (isPerformanceEngagement decides, from the SIGNED letter). Everything above
+ * still describes the previous pricing, which keeps running unchanged.
+ *
+ *   1. SIGNING — the first Agency Fee is invoiced: drsRole "agency_monthly"
+ *      ($10,000, recurring; paying it once starts autopay), or
+ *      "agency_prepay" ($50,000 for the six months, one-time). No setup
+ *      invoice. The Initial Term is stamped from the signing date
+ *      (metadata.termStartsAt / termEndsAt), not from Launch.
+ *   2. THAT INVOICE PAID — the Launch Pad opens, welcome emails go out and
+ *      the pipeline lead turns Won.
+ *   3. BUILD COMPLETE (same admin button) — nothing is invoiced: it records
+ *      Launch (metadata.billingStartedAt). An AI avatar the client chose is
+ *      sent as its own one-time "ai_avatar" invoice, since their first
+ *      monthly invoice is already paid by then.
+ *   4. EVERY MONTH — autopay charges the Agency Fee; Performance Pay is a
+ *      separate "performance_pay" invoice Marcel sends from the month's
+ *      statement (lib/performance). Nothing is invoiced for it by itself.
+ *   5. PREPAID TERM ROLLS OVER (daily cron, runAgencyPrepaidRenewals) — the
+ *      first monthly Agency Fee of the renewal term is invoiced, unless a
+ *      non-renewal was recorded (metadata.cancellation).
+ * The ad budget never appears on any of these invoices: the client pays the
+ * platform directly.
  */
 
 import { db } from "@/db";
@@ -92,6 +117,7 @@ import {
 // Pricing lives in drs-pricing.ts (client-safe module); re-exported here so
 // existing server-side imports keep working.
 import {
+  AGENCY,
   DRS_PRICING,
   DRS_SETUP_FEES,
   FIRST_MONTH_AD_BONUS_CENTS,
@@ -102,6 +128,7 @@ import {
   type BillingPlan,
 } from "./drs-pricing";
 import { drsAnnualAutoRenews, drsHasFirstMonthBonus, drsTermRunsFromLaunch, setupFeeOfLetter } from "./engagement-defaults";
+import { isPerformanceLetter, performanceLetterTerms, type PerformanceLetterTerms } from "./drs-performance-letter";
 import { NEXLI_LEGAL } from "./nexli-legal";
 import { avatarPickOf, type AvatarStateLike } from "./ai-avatar-choice";
 import { getNexliAdminId } from "./foundation-project";
@@ -115,12 +142,19 @@ export type DrsRole =
   | "platform_monthly"
   | "platform_annual" // legacy (pre-Oct 18 2026 annual flow)
   | "ad_spend_monthly"
-  | "platform_annual_renewal"; // annual plan: $42,000 each anniversary (runAnnualRenewals)
+  | "platform_annual_renewal" // annual plan: $42,000 each anniversary (runAnnualRenewals)
+  // Nov 19 2026 pricing:
+  | "agency_monthly" // $10,000 monthly Agency Fee (recurring; autopay after the first payment)
+  | "agency_prepay" // $50,000 six-month prepayment (one-time)
+  | "performance_pay" // a month's Performance Pay, sent from its statement (lib/performance)
+  | "ai_avatar"; // the $2,500 AI avatar pick, on its own invoice at Build complete
 
 /** Up-front invoice roles (sent at signing; paying one opens onboarding). */
 const SETUP_ROLES: DrsRole[] = ["setup_fee", "setup_annual"];
 /** First-recurring invoice roles (sent when the build is complete). */
 const LAUNCH_ROLES: DrsRole[] = ["platform_monthly", "ad_spend_monthly"];
+/** Nov 19 2026 pricing: the Agency Fee invoices (the first one, sent at signing, opens onboarding when paid). */
+export const AGENCY_ROLES: DrsRole[] = ["agency_monthly", "agency_prepay"];
 
 interface DrsMetadata {
   engagementId: string;
@@ -163,6 +197,29 @@ interface EngagementMeta {
   termEndsAt?: string;
   /** ISO timestamp Marcel was reminded that a non-renewing annual term is ending. */
   termEndReminderAt?: string;
+  /** Nov 19 2026 pricing: how the Agency Fee is paid for the Initial Term. */
+  agencyBilling?: string;
+  /** Nov 19 2026 pricing: ISO signing date — the Initial Term and the first Month count from it. */
+  termStartsAt?: string;
+  /** Nov 19 2026 pricing: a recorded notice of non-renewal and the date the agreement then ends. */
+  cancellation?: { noticeAt?: string; endsAt?: string };
+}
+
+/**
+ * True for an engagement on the Nov 19 2026 pricing (Agency Fee +
+ * Performance Pay, no setup fee). The signed letter decides: its Section 3
+ * "PERFORMANCE PAY" makes it one, and a letter with a Setup Fee line never
+ * is. Metadata is only the fallback for a letter whose text says neither.
+ */
+export function isPerformanceEngagement(engagement: { metadata: unknown; content?: string | null }): boolean {
+  if (isPerformanceLetter(engagement.content)) return true;
+  if (setupFeeOfLetter(engagement.content)) return false;
+  return ((engagement.metadata ?? {}) as EngagementMeta).drsPricing === "performance";
+}
+
+/** The fee, percentage, billing choice and term a performance engagement's letter states. */
+export function agencyTermsOf(engagement: { content?: string | null }): PerformanceLetterTerms {
+  return performanceLetterTerms(engagement.content);
 }
 
 /**
@@ -366,6 +423,83 @@ export function drsSigningInvoiceSpecs(plan: BillingPlan, setupCents: number = D
       lines: [setupLine(setupCents)],
     },
   ];
+}
+
+/**
+ * Nov 19 2026 pricing — the invoice sent at signing (due immediately), at
+ * the letter's own amounts. Monthly: the first $10,000 Agency Fee, which is
+ * also the recurring parent (paying it once starts autopay). Prepaid: ONE
+ * $50,000 invoice for the six months. No setup fee, and no ad-budget line:
+ * the client pays the ad platform directly.
+ */
+export function drsAgencySigningSpecs(terms: PerformanceLetterTerms): DrsInvoiceSpec[] {
+  const fee = formatCurrency(terms.feeCents, "usd");
+  const performance = `Performance Pay (${terms.percent}% of net attributed revenue, with each month's Agency Fee credited against it) is invoiced separately, from each month's statement.`;
+  const adBudget = "Your advertising budget is not on this invoice: you pay the ad platform directly, on your own payment method.";
+  if (terms.billing === "prepay") {
+    const prepay = terms.prepayCents ?? terms.feeCents * terms.termMonths;
+    return [
+      {
+        role: "agency_prepay",
+        recurring: false,
+        interval: "monthly",
+        totalCents: prepay,
+        adSpendCents: 0,
+        label: "Six-month prepayment",
+        notes: `Six-Month Prepayment for the Digital Rainmaker System: the build and running all of it for your first ${terms.termMonths} months, in place of ${terms.termMonths} monthly Agency Fees of ${fee}. There is no setup fee. Due at signing; your Launch Pad opens once it is paid. Non-refundable. ${performance} ${adBudget}`,
+        lines: [
+          {
+            description: `Digital Rainmaker System — Six-Month Prepayment (months 1–${terms.termMonths})`,
+            amountCents: prepay,
+            billingType: "one_time",
+          },
+        ],
+      },
+    ];
+  }
+  return [agencyMonthlySpec(terms, `Your first monthly Agency Fee for the Digital Rainmaker System: the build and running all of it. There is no setup fee. Due at signing; your Launch Pad opens once it is paid. Pay once, by card or bank (ACH): your payment method is then charged automatically each month (autopay). ${performance} ${adBudget}`, "First month")];
+}
+
+/** The recurring $10,000 Agency Fee invoice (the first one of a monthly client, or of a prepaid client's renewal term). */
+function agencyMonthlySpec(terms: PerformanceLetterTerms, notes: string, label: string, dueDate?: Date): DrsInvoiceSpec {
+  return {
+    role: "agency_monthly",
+    recurring: true,
+    interval: "monthly",
+    totalCents: terms.feeCents,
+    adSpendCents: 0,
+    label,
+    notes,
+    lines: [
+      {
+        description: "Digital Rainmaker System — Monthly Agency Fee",
+        amountCents: terms.feeCents,
+        billingType: "monthly",
+      },
+    ],
+    ...(dueDate ? { dueDate } : {}),
+  };
+}
+
+/** Nov 19 2026 pricing: the AI avatar a client chose, on its own one-time invoice (their first monthly is already paid). */
+export function drsAvatarInvoiceSpec(avatar: { slug: string; name: string; feeCents: number }): DrsInvoiceSpec {
+  return {
+    role: "ai_avatar",
+    recurring: false,
+    interval: "monthly",
+    totalCents: avatar.feeCents,
+    adSpendCents: 0,
+    aiAvatar: avatar.slug,
+    label: "AI avatar",
+    notes: `One-time ${formatCurrency(avatar.feeCents, "usd")} for ${avatar.name}, the AI avatar you chose on your Launch Pad — exclusive to your firm. It is not part of your monthly Agency Fee and is charged once.`,
+    lines: [
+      {
+        description: `AI Avatar — ${avatar.name}, exclusive to your firm (one-time)`,
+        amountCents: avatar.feeCents,
+        billingType: "one_time",
+      },
+    ],
+  };
 }
 
 /**
@@ -580,12 +714,51 @@ export async function triggerDrsPostSign(args: PostSignTriggerArgs) {
     return null;
   }
 
+  // Nov 19 2026 pricing: the first Agency Fee (or the six-month prepayment),
+  // never a setup invoice. The term counts from signing — stamp it now.
+  if (isPerformanceEngagement(engagement)) {
+    const terms = agencyTermsOf(engagement);
+    await stampAgencyTerm(engagement.id, terms.termMonths);
+    const created = await createDrsInvoices({
+      engagement,
+      signer: primarySigner,
+      specs: drsAgencySigningSpecs(terms),
+    });
+    return created[0] ?? null;
+  }
+
   const created = await createDrsInvoices({
     engagement,
     signer: primarySigner,
     specs: drsSigningInvoiceSpecs(planOf(engagement), setupFeeOf(engagement)),
   });
   return created[0] ?? null;
+}
+
+/**
+ * Nov 19 2026 pricing: the Initial Term runs from the date of last signature
+ * (letter Section 4(d)), so it is stamped when signing completes — once; a
+ * replay keeps the first dates. Never throws.
+ */
+async function stampAgencyTerm(engagementId: string, termMonths: number): Promise<void> {
+  try {
+    const start = new Date();
+    const end = addMonthsClampedUtc(start, termMonths);
+    await db
+      .update(engagements)
+      .set({
+        metadata: sql`COALESCE(${engagements.metadata}, '{}'::jsonb) || jsonb_build_object('termStartsAt', ${start.toISOString()}::text, 'termEndsAt', ${end.toISOString()}::text)`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(engagements.id, engagementId),
+          sql`(${engagements.metadata} IS NULL OR ${engagements.metadata}->'termStartsAt' IS NULL)`
+        )
+      );
+  } catch (err) {
+    console.error("DRS: agency term stamp failed:", err);
+  }
 }
 
 // ── Step 2: Onboarding welcome ────────────────────────────
@@ -651,7 +824,8 @@ export async function sendOnboardingWelcomeEmails(engagementId: string): Promise
 // ── Step 3: Build complete → first recurring invoice ─────
 
 export type DrsLaunchBillingResult =
-  | { ok: true; invoiceId: string; billingStartedAt: string }
+  // invoiceId is null on the Nov 19 2026 pricing when nothing is invoiced at Build complete (no AI avatar pick).
+  | { ok: true; invoiceId: string | null; billingStartedAt: string }
   | { ok: false; error: "not_drs" | "setup_unpaid" | "already_started" | "no_signer" };
 
 /**
@@ -671,6 +845,10 @@ export async function triggerDrsLaunchBilling(
   if (!engagement || !(await isDigitalRainmakerEngagement(engagement.templateId))) {
     return { ok: false, error: "not_drs" };
   }
+
+  // Nov 19 2026 pricing: the monthly fee has been running since signing, so
+  // Build complete only records Launch (and bills an AI avatar pick).
+  if (isPerformanceEngagement(engagement)) return markAgencyLaunched(engagement);
 
   const [setup] = await db
     .select({ status: invoices.status, paidAt: invoices.paidAt })
@@ -778,6 +956,140 @@ export async function triggerDrsLaunchBilling(
   }
 
   return { ok: true, invoiceId: created[0].id, billingStartedAt };
+}
+
+/**
+ * Nov 19 2026 pricing — admin "Build complete": records Launch
+ * (metadata.billingStartedAt, claimed atomically; it also locks the client's
+ * AI avatar choice, as on the previous pricing). No monthly invoice goes out
+ * — the Agency Fee has been billed since signing. If the client chose a
+ * library AI avatar, that $2,500 is sent now as its own one-time invoice.
+ * Requires the first Agency Fee invoice (or the prepayment) to be paid.
+ */
+async function markAgencyLaunched(engagement: typeof engagements.$inferSelect): Promise<DrsLaunchBillingResult> {
+  const engagementId = engagement.id;
+  const [first] = await db
+    .select({ status: invoices.status })
+    .from(invoices)
+    .where(drsRoleCondition(engagementId, AGENCY_ROLES))
+    .orderBy(asc(invoices.createdAt))
+    .limit(1);
+  if (!first || first.status !== "paid") return { ok: false, error: "setup_unpaid" };
+
+  const billingStartedAt = new Date().toISOString();
+  const claimed = await db
+    .update(engagements)
+    .set({
+      metadata: sql`jsonb_set(COALESCE(${engagements.metadata}, '{}'::jsonb), '{billingStartedAt}', to_jsonb(${billingStartedAt}::text), true)`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(engagements.id, engagementId),
+        sql`(${engagements.metadata} IS NULL OR ${engagements.metadata}->'billingStartedAt' IS NULL)`
+      )
+    )
+    .returning({ id: engagements.id });
+  if (claimed.length === 0) return { ok: false, error: "already_started" };
+
+  let invoiceId: string | null = null;
+  const avatar = avatarPickOf((engagement.metadata as { onboarding?: AvatarStateLike } | null)?.onboarding);
+  if (avatar && avatar.feeCents > 0) {
+    const signer = await getPrimaryClientSigner(engagementId);
+    try {
+      if (!signer) throw new Error("no client signer for the AI avatar invoice");
+      const created = await createDrsInvoices({ engagement, signer, specs: [drsAvatarInvoiceSpec(avatar)] });
+      invoiceId = created[0]?.id ?? null;
+    } catch (err) {
+      // Release the claim so the admin can retry (nothing was invoiced).
+      await db
+        .update(engagements)
+        .set({ metadata: sql`${engagements.metadata} - 'billingStartedAt'` })
+        .where(eq(engagements.id, engagementId));
+      throw err;
+    }
+  }
+
+  try {
+    await appendActivity(engagementId, {
+      actor: "agency",
+      type: "billing_started",
+      message: "Build complete — your ads are cleared to launch 🚀",
+    });
+  } catch (err) {
+    console.error("DRS: launch activity failed:", err);
+  }
+
+  return { ok: true, invoiceId, billingStartedAt };
+}
+
+// ── Nov 19 2026 pricing: term, renewal and cancellation ───
+
+/** Where a performance engagement's term stands on a given day. */
+export interface AgencyTermState {
+  /** ISO start of the Initial Term (the signing date). */
+  startsAt: string;
+  /** ISO end of the term running on `now` (or of the last term, once the agreement has ended). */
+  currentEndsAt: string;
+  /** 1 = Initial Term, 2 = first renewal, … */
+  termNumber: number;
+  /** ISO date the agreement ends when a non-renewal is recorded; null while it keeps renewing. */
+  endsAt: string | null;
+  /** True once `now` is past endsAt. */
+  ended: boolean;
+  /** ISO last day a notice still stops the NEXT renewal (current term end − notice days). */
+  noticeDeadline: string;
+}
+
+/**
+ * The end of the term that contains `at`: terms run back to back from the
+ * start, each `termMonths` long (letter Section 4(d)). Pure.
+ */
+export function agencyTermEndAt(startsAt: Date, termMonths: number, at: Date): { end: Date; termNumber: number } {
+  let termNumber = 1;
+  let end = addMonthsClampedUtc(startsAt, termMonths);
+  // 200 terms of six months is a century: a guard, not a limit anyone reaches.
+  while (end.getTime() <= at.getTime() && termNumber < 200) {
+    termNumber += 1;
+    end = addMonthsClampedUtc(startsAt, termMonths * termNumber);
+  }
+  return { end, termNumber };
+}
+
+/**
+ * When the agreement ends for a notice of non-renewal received on
+ * `noticeAt`: the end of the term then running if the notice comes at least
+ * `noticeDays` before it, otherwise the end of the following term. Pure.
+ */
+export function agencyEndForNotice(startsAt: Date, termMonths: number, noticeAt: Date, noticeDays: number): Date {
+  const { end, termNumber } = agencyTermEndAt(startsAt, termMonths, noticeAt);
+  const deadline = new Date(end.getTime() - noticeDays * DAY_MS);
+  return noticeAt.getTime() <= deadline.getTime() ? end : addMonthsClampedUtc(startsAt, termMonths * (termNumber + 1));
+}
+
+/** The term state of a performance engagement, or null when its term was never stamped (not fully signed). */
+export function agencyTermState(
+  engagement: { metadata: unknown; content?: string | null },
+  now: Date = new Date()
+): AgencyTermState | null {
+  const meta = (engagement.metadata ?? {}) as EngagementMeta;
+  const start = typeof meta.termStartsAt === "string" ? new Date(meta.termStartsAt) : null;
+  if (!start || Number.isNaN(start.getTime())) return null;
+  const termMonths = agencyTermsOf(engagement).termMonths;
+  const endsAtRaw = meta.cancellation?.endsAt;
+  const endsAt = typeof endsAtRaw === "string" && !Number.isNaN(new Date(endsAtRaw).getTime()) ? new Date(endsAtRaw) : null;
+  const ended = Boolean(endsAt && now.getTime() >= endsAt.getTime());
+  // After the end, "current term" stays the last one.
+  const at = ended && endsAt ? new Date(endsAt.getTime() - 1) : now;
+  const { end, termNumber } = agencyTermEndAt(start, termMonths, at);
+  return {
+    startsAt: start.toISOString(),
+    currentEndsAt: end.toISOString(),
+    termNumber,
+    endsAt: endsAt ? endsAt.toISOString() : null,
+    ended,
+    noticeDeadline: new Date(end.getTime() - AGENCY.CANCEL_NOTICE_DAYS * DAY_MS).toISOString(),
+  };
 }
 
 // ── Step 4: Annual renewals (daily cron) ──────────────────
@@ -1040,11 +1352,121 @@ export async function runAnnualTermEndReminders(now: Date = new Date()): Promise
   return { sent };
 }
 
+// ── Nov 19 2026 pricing: prepaid term rolls over (daily cron) ──
+
+/** Marcel is told this many days before a prepaid Initial Term ends. */
+export const AGENCY_PREPAID_NOTICE_DAYS = 30;
+
+/**
+ * A client who prepaid the six months has no monthly invoice yet. Their
+ * letter renews automatically (Section 4(d)) and bills each renewal term at
+ * the monthly Agency Fee (2(b)), so:
+ *   - thirty days before the prepaid term ends, Marcel gets a bell + email
+ *     (once, metadata.prepaidRenewalNoticeAt): the cancellation deadline is
+ *     that day;
+ *   - on the day the term rolls over, the first $10,000 Agency Fee of the
+ *     renewal term is invoiced (recurring; paying it once starts autopay) —
+ *     unless a non-renewal was recorded that ends the agreement by then.
+ * Only when the prepayment itself was paid. Idempotent (one agency_monthly
+ * invoice per engagement). Never throws per engagement.
+ */
+export async function runAgencyPrepaidRenewals(now: Date = new Date()): Promise<{ notified: number; invoiced: number }> {
+  let notified = 0;
+  let invoiced = 0;
+  const rows = await db
+    .select()
+    .from(engagements)
+    .where(
+      and(
+        eq(engagements.status, "signed"),
+        sql`${engagements.metadata}->>'drsPricing' = 'performance'`,
+        sql`${engagements.metadata}->>'termStartsAt' IS NOT NULL`
+      )
+    );
+
+  for (const row of rows) {
+    try {
+      if (!isPerformanceEngagement(row)) continue;
+      const terms = agencyTermsOf(row);
+      if (terms.billing !== "prepay") continue;
+      const meta = (row.metadata ?? {}) as EngagementMeta & { prepaidRenewalNoticeAt?: string };
+      const start = new Date(meta.termStartsAt ?? "");
+      if (isNaN(start.getTime())) continue;
+      const initialEnd = addMonthsClampedUtc(start, terms.termMonths);
+      const cancelEnd = meta.cancellation?.endsAt ? new Date(meta.cancellation.endsAt) : null;
+      // A recorded non-renewal that ends the agreement at (or before) the prepaid term's end: nothing more is billed.
+      if (cancelEnd && !isNaN(cancelEnd.getTime()) && cancelEnd.getTime() <= initialEnd.getTime()) continue;
+      if (now.getTime() < initialEnd.getTime() - AGENCY_PREPAID_NOTICE_DAYS * DAY_MS) continue;
+
+      const [prepay] = await db
+        .select({ status: invoices.status })
+        .from(invoices)
+        .where(drsRoleCondition(row.id, ["agency_prepay"]))
+        .orderBy(asc(invoices.createdAt))
+        .limit(1);
+      if (!prepay || prepay.status !== "paid") continue;
+
+      const signer = await getPrimaryClientSigner(row.id);
+      const who = meta.clientCompany || signer?.name || "A client";
+      const fee = formatCurrency(terms.feeCents, "usd");
+
+      if (now.getTime() < initialEnd.getTime()) {
+        if (meta.prepaidRenewalNoticeAt) continue;
+        const stamp = now.toISOString();
+        const claimed = await db
+          .update(engagements)
+          .set({
+            metadata: sql`jsonb_set(COALESCE(${engagements.metadata}, '{}'::jsonb), '{prepaidRenewalNoticeAt}', to_jsonb(${stamp}::text), true)`,
+          })
+          .where(and(eq(engagements.id, row.id), sql`${engagements.metadata}->'prepaidRenewalNoticeAt' IS NULL`))
+          .returning({ id: engagements.id });
+        if (claimed.length === 0) continue;
+        await createNotification({
+          userId: row.ownerId,
+          type: "annual_term_ending",
+          title: "Prepaid term ending — renews in 30 days",
+          message: `${who}'s prepaid ${terms.termMonths} months end ${fmtDay(initialEnd)}. Their agreement renews for another ${terms.termMonths} months unless they give written notice by today, the ${AGENCY.CANCEL_NOTICE_DAYS}-day deadline. On ${fmtDay(initialEnd)} their first ${fee} monthly invoice goes out by itself. If they gave notice, record it on their Client Tracker page so nothing is sent.`,
+          metadata: { engagementId: row.id, termEndsAt: initialEnd.toISOString() },
+        });
+        notified++;
+        continue;
+      }
+
+      // The term has rolled over: the first monthly Agency Fee of the renewal term.
+      if (!signer) continue;
+      const created = await createDrsInvoices({
+        engagement: row,
+        signer,
+        specs: [
+          agencyMonthlySpec(
+            terms,
+            `Your six prepaid months have ended and your agreement has renewed for another ${terms.termMonths} months (Section 4(d) of your engagement letter). This is the first monthly Agency Fee of the renewal term. Pay once, by card or bank (ACH): your payment method is then charged automatically each month (autopay). Your advertising budget is not on this invoice: you pay the ad platform directly.`,
+            "Monthly (renewal term)"
+          ),
+        ],
+      });
+      if (created.length) invoiced++;
+    } catch (err) {
+      console.error("DRS: prepaid renewal failed:", err);
+    }
+  }
+  return { notified, invoiced };
+}
+
 // ── Status (admin onboarding view) ────────────────────────
 
 export interface DrsBillingStatus {
   isDrs: boolean;
   plan: BillingPlan;
+  /**
+   * "performance" = the Nov 19 2026 pricing: `setup` is then the first
+   * Agency Fee invoice (or the six-month prepayment), `firstMonthly` is null
+   * (the monthly has been running since signing) and `billingStartedAt` is
+   * the Launch the admin recorded at Build complete.
+   */
+  model: "setup" | "performance";
+  /** Performance model only: how the Agency Fee is paid, and its amount (cents). */
+  agency: { billing: "monthly" | "prepay"; feeCents: number } | null;
   setup: {
     invoiceId: string;
     invoiceNumber: string;
@@ -1082,8 +1504,10 @@ export async function getDrsBillingStatus(
     ? await isDigitalRainmakerEngagement(engagement.templateId)
     : false;
   if (!engagement || !isDrs) {
-    return { isDrs: false, plan, setup: null, firstMonthly: null, billingStartedAt: null, autopay: null };
+    return { isDrs: false, plan, model: "setup", agency: null, setup: null, firstMonthly: null, billingStartedAt: null, autopay: null };
   }
+  const performance = isPerformanceEngagement(engagement);
+  const agencyTerms = performance ? agencyTermsOf(engagement) : null;
 
   const cols = {
     invoiceId: invoices.id,
@@ -1097,20 +1521,25 @@ export async function getDrsBillingStatus(
   const [setup] = await db
     .select(cols)
     .from(invoices)
-    .where(drsRoleCondition(engagementId, SETUP_ROLES))
+    .where(drsRoleCondition(engagementId, performance ? AGENCY_ROLES : SETUP_ROLES))
     .orderBy(asc(invoices.createdAt))
     .limit(1);
-  const [first] = await db
-    .select(cols)
-    .from(invoices)
-    .where(drsRoleCondition(engagementId, LAUNCH_ROLES))
-    .orderBy(asc(invoices.createdAt))
-    .limit(1);
+  // Performance model: there is no separate "first monthly at launch" invoice.
+  const [first] = performance
+    ? []
+    : await db
+        .select(cols)
+        .from(invoices)
+        .where(drsRoleCondition(engagementId, LAUNCH_ROLES))
+        .orderBy(asc(invoices.createdAt))
+        .limit(1);
 
   const meta = (engagement.metadata ?? {}) as EngagementMeta;
   return {
     isDrs: true,
     plan,
+    model: performance ? "performance" : "setup",
+    agency: agencyTerms ? { billing: agencyTerms.billing, feeCents: agencyTerms.feeCents } : null,
     setup: setup
       ? {
           invoiceId: setup.invoiceId,
@@ -1131,7 +1560,8 @@ export async function getDrsBillingStatus(
         }
       : null,
     billingStartedAt: typeof meta.billingStartedAt === "string" ? meta.billingStartedAt : null,
-    autopay: autopayStatusOf(first?.metadata),
+    // Performance model: autopay lives on the first Agency Fee invoice (a prepayment has none).
+    autopay: autopayStatusOf(performance ? setup?.metadata : first?.metadata),
   };
 }
 
@@ -1185,6 +1615,33 @@ export async function onDrsInvoicePaid(invoiceId: string): Promise<void> {
       .where(eq(engagements.id, engagementId))
       .limit(1);
     if (!engagement) return;
+
+    // Nov 19 2026 pricing: the first Agency Fee (or the prepayment) opens
+    // onboarding. Later months and renewal invoices carry the same role;
+    // initOnboarding returns false for them, so nothing repeats.
+    if (AGENCY_ROLES.includes(role)) {
+      const opened = await initOnboarding(engagementId, "auto_sign", "drs");
+      if (!opened) return;
+      await sendOnboardingWelcomeEmails(engagementId);
+      const what = role === "agency_prepay" ? "six-month prepayment" : "first month";
+      try {
+        await createNotification({
+          userId: engagement.ownerId,
+          type: "setup_paid",
+          title: "First payment received — onboarding opened",
+          message: `${invoice.clientName} paid the ${formatCurrency(invoice.total, invoice.currency)} ${what} invoice. Their Launch Pad is live.`,
+          metadata: {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            engagementId,
+            drsRole: role,
+          },
+        });
+      } catch (err) {
+        console.error("DRS: first-payment notification failed:", err);
+      }
+      return;
+    }
 
     if (SETUP_ROLES.includes(role)) {
       const opened = await initOnboarding(engagementId, "auto_sign", "drs");

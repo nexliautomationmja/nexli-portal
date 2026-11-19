@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { getOwnerBranding, NEXLI_BRANDING } from "@/lib/branding";
 import { getNexliAdminId } from "@/lib/foundation-project";
 import { drsSummariesFit } from "@/lib/engagement-defaults";
+import { agencyBillingOfLetter, isCurrentPerformanceRevision, isPerformanceLetter } from "@/lib/drs-performance-letter";
 import { isCurrentEnterpriseRevision } from "@/lib/enterprise-engagement";
 import {
   isEnterpriseTemplateName,
@@ -57,8 +58,13 @@ function classifyLetter(row: LetterRow, nexliAdminId: string | null): LetterView
         : row.content.includes("Annual Investment (Paid in Full)")
           ? "annual"
           : "monthly";
-    // Either pricing version, and the Nov 9 letters (pre-bonus) too: the
-    // summaries read the letter's own Setup Fee and bonus.
+    // Nov 19 2026 pricing (Agency Fee + Performance Pay): its own summaries,
+    // shown when the letter is the revision they describe.
+    if (isPerformanceLetter(row.content)) {
+      return { kind: "drs", plan: "monthly", showSummaries: isCurrentPerformanceRevision(row.content, agencyBillingOfLetter(row.content)) };
+    }
+    // Previous pricing — either setup fee, and the Nov 9 letters (pre-bonus)
+    // too: the summaries read the letter's own Setup Fee and bonus.
     return { kind: "drs", plan, showSummaries: drsSummariesFit(row.content, plan) };
   }
 

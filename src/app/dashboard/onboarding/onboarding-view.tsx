@@ -275,7 +275,7 @@ export function OnboardingView(p: OnboardingViewProps) {
                 <EmptyState
                   icon={<Rocket className="h-5 w-5" aria-hidden="true" />}
                   title="No Launch Pads yet"
-                  body={p.startable.length ? "Start one for a signed client below." : "A Launch Pad opens once a client signs (DRS: once the setup invoice is paid)."}
+                  body={p.startable.length ? "Start one for a signed client below." : "A Launch Pad opens once a client signs (DRS: once the first invoice is paid)."}
                 />
               }
             />
@@ -295,7 +295,7 @@ export function OnboardingView(p: OnboardingViewProps) {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold text-white">{clientNameFor(e)}</div>
                       <div className="truncate text-xs text-neutral-400">{e.subject}</div>
-                      {auto && <div className="mt-1 text-[11px] text-cyan-300">Opens by itself when the setup invoice is paid</div>}
+                      {auto && <div className="mt-1 text-[11px] text-cyan-300">Opens by itself when the first invoice is paid</div>}
                     </div>
                     <Button
                       variant={auto ? "secondary" : "primary"}

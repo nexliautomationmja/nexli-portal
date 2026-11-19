@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { invoices } from "@/db/schema";
-import { isBankTransferInvoiceMeta } from "@/lib/drs-pricing";
+import { isBankTransferInvoiceMeta, isWireOptionInvoiceMeta } from "@/lib/drs-pricing";
 import { mercuryConfigured } from "@/lib/bank-transfer";
 import { getNexliAdminId } from "@/lib/foundation-project";
 import { createNotification } from "@/lib/notifications";
@@ -29,7 +29,7 @@ const BASE = "https://api.mercury.com/api/v1";
 
 export class MercuryError extends Error {}
 
-export { mercuryConfigured, usesBankTransfer } from "@/lib/bank-transfer";
+export { mercuryConfigured, offersWire, usesBankTransfer } from "@/lib/bank-transfer";
 
 async function mercury<T>(path: string): Promise<T> {
   const token = process.env.MERCURY_API_TOKEN?.trim();
@@ -158,7 +158,8 @@ async function openBankTransferInvoices(): Promise<OpenInvoice[]> {
     .from(invoices)
     .where(and(eq(invoices.ownerId, adminId), inArray(invoices.status, ["sent", "viewed", "overdue", "partial"]), gt(invoices.balanceDue, 0)));
   return rows
-    .filter((r) => isBankTransferInvoiceMeta(r.metadata))
+    // Bank-transfer-only invoices, plus the Stripe invoices that may also be wired (prepayment, Performance Pay).
+    .filter((r) => isBankTransferInvoiceMeta(r.metadata) || isWireOptionInvoiceMeta(r.metadata))
     .map((r) => ({
       id: r.id,
       invoiceNumber: r.invoiceNumber,

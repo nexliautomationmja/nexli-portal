@@ -231,7 +231,7 @@ export function AiAvatarStep({
             <p className="text-lg font-bold text-white">{avatarName(current.slug)}</p>
             <p className="mt-0.5 text-xs leading-relaxed text-neutral-300">
               {current.source === "client"
-                ? `You chose her · ${FEE} one-time, added to your first monthly invoice`
+                ? `You chose her · ${FEE} one-time, billed when your build is done`
                 : "Picked for your firm by Nexli · no charge"}
               {" · "}exclusive to your firm
             </p>
@@ -249,7 +249,7 @@ export function AiAvatarStep({
 
       {avatar.locked ? (
         <p className="text-xs leading-relaxed text-neutral-400">
-          Your avatar is locked in with your first monthly invoice. Message us if you&apos;d like to change it.
+          Your build is done, so your avatar is locked in. Message us if you&apos;d like to change it.
         </p>
       ) : mode === "view" ? (
         <div className="space-y-3">
@@ -269,7 +269,7 @@ export function AiAvatarStep({
                 <span className="font-semibold text-white">Let us know.</span>
               </p>
               <p className="mt-1 text-xs text-neutral-400">
-                {FEE} one-time, added to your first monthly invoice when your build is done.{" "}
+                {FEE} one-time, billed when your build is done.{" "}
                 {current ? `Otherwise ${avatarName(current.slug)} stays yours at no charge.` : "Otherwise we choose one for you at no charge."}
               </p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -313,8 +313,8 @@ export function AiAvatarStep({
                   <p className="text-lg font-bold text-white">{avatarName(selected)}</p>
                   <p className="text-xs font-semibold text-amber-200">Exclusive to your firm</p>
                   <p className="mt-2 text-xs leading-relaxed text-neutral-300">
-                    <span className="font-bold text-white">{FEE} one-time</span>, added to your first monthly invoice when
-                    your build is done. While you&apos;re with us, no other Nexli client&apos;s ads use her.
+                    <span className="font-bold text-white">{FEE} one-time</span>, billed when your build is done. While
+                    you&apos;re with us, no other Nexli client&apos;s ads use her.
                   </p>
                   <WatchButton slug={selected} onWatch={setWatching} className="mt-2 text-xs" />
                 </div>
@@ -327,7 +327,7 @@ export function AiAvatarStep({
                   className="mt-0.5 h-5 w-5 shrink-0 accent-cyan-400"
                 />
                 <span className="text-xs leading-relaxed text-neutral-200">
-                  I agree to the one-time {FEE} fee for {avatarName(selected)}, added to my first monthly invoice.
+                  I agree to the one-time {FEE} fee for {avatarName(selected)}, billed when my build is done.
                 </span>
               </label>
               {error && <p className="mt-2 text-xs font-semibold text-rose-400">{error}</p>}

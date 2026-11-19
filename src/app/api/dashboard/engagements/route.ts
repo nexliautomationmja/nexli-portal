@@ -10,7 +10,8 @@ import {
 } from "@/db/schema";
 import { and, eq, desc, inArray, isNull } from "drizzle-orm";
 import { ensurePipelineTable } from "@/lib/pipeline-table";
-import { type BillingPlan, DRS_SETUP_FEES, TERM_MONTHS, isDrsPricing } from "@/lib/drs-pricing";
+import { type BillingPlan, DRS_SETUP_FEES, TERM_MONTHS, isDrsSetupPricing } from "@/lib/drs-pricing";
+import { isPerformanceLetter, performanceLetterTerms } from "@/lib/drs-performance-letter";
 import { ENTERPRISE, isEnterpriseTier, isEnterpriseTemplateName } from "@/lib/enterprise-pricing";
 import { createEngagement } from "@/lib/engagements";
 import { fillClientPlaceholder, setupFeeOfLetter } from "@/lib/engagement-defaults";
@@ -178,12 +179,29 @@ export async function POST(req: NextRequest) {
       termMonths: TERM_MONTHS[plan],
       clientCompany,
     };
-    // DRS letters: which setup-fee version was chosen ($40,000 new / $32,000
-    // original) and the Setup Fee the letter states. Billing reads the signed
-    // letter's own line first (setupFeeOf in lib/digital-rainmaker.ts).
     const letterFee = typeof content === "string" ? setupFeeOfLetter(content) : null;
-    if (isDrsLetter || letterFee) {
-      const version = isDrsPricing(drsPricing) ? drsPricing : null;
+    if (typeof content === "string" && isPerformanceLetter(content)) {
+      // Nov 19 2026 pricing (Agency Fee + Performance Pay, no setup fee). The
+      // LETTER decides, since it is what the client signs: its own fee,
+      // percentage and billing choice are snapshotted, and it never gets a
+      // setupFeeCents whatever the request said. Billing reads the signed
+      // letter first (lib/digital-rainmaker.ts).
+      const terms = performanceLetterTerms(content);
+      engagementMetadata = {
+        billingPlan: "monthly",
+        termMonths: terms.termMonths,
+        drsPricing: "performance",
+        agencyBilling: terms.billing,
+        agencyFeeCents: terms.feeCents,
+        ...(terms.prepayCents ? { prepayCents: terms.prepayCents } : {}),
+        performancePercent: terms.percent,
+        clientCompany,
+      };
+    } else if (isDrsLetter || letterFee) {
+      // Previous pricing: which setup-fee version was chosen ($40,000 /
+      // $32,000 original) and the Setup Fee the letter states. Billing reads
+      // the signed letter's own line first (setupFeeOf).
+      const version = isDrsSetupPricing(drsPricing) ? drsPricing : null;
       engagementMetadata.setupFeeCents = letterFee ?? DRS_SETUP_FEES[version ?? "current"];
       if (version) engagementMetadata.drsPricing = version;
     }

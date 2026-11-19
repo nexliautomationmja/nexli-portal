@@ -13,7 +13,7 @@ import {
   generateInvoiceNumber,
   generateInvoiceToken,
 } from "@/lib/invoice-utils";
-import { runAnnualRenewals, runAnnualTermEndReminders } from "@/lib/digital-rainmaker";
+import { runAgencyPrepaidRenewals, runAnnualRenewals, runAnnualTermEndReminders } from "@/lib/digital-rainmaker";
 import { usesBankTransfer } from "@/lib/bank-transfer";
 
 export async function GET(req: NextRequest) {
@@ -285,6 +285,15 @@ export async function GET(req: NextRequest) {
     await runAnnualTermEndReminders(now);
   } catch (err) {
     console.error("Failed to process annual term-end reminders:", err);
+  }
+
+  // 6. Nov 19 2026 pricing, prepaid clients: a heads-up 30 days before the
+  //    prepaid six months end, then the first monthly Agency Fee of the
+  //    renewal term on the day it rolls over (unless a non-renewal is recorded).
+  try {
+    await runAgencyPrepaidRenewals(now);
+  } catch (err) {
+    console.error("Failed to process prepaid agency renewals:", err);
   }
 
   return NextResponse.json({

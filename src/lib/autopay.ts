@@ -27,7 +27,9 @@ import { addMonthsClampedUtc, planOf } from "@/lib/digital-rainmaker";
 import { drsAnnualAutoRenews } from "@/lib/engagement-defaults";
 import { isOneTimeLine } from "@/lib/recurring-copy";
 
-export const AUTOPAY_ROLES = ["platform_monthly", "ad_spend_monthly"] as const;
+// "agency_monthly": the Nov 19 2026 pricing's $10,000 Agency Fee — its first
+// invoice goes out at signing, and paying it starts the subscription.
+export const AUTOPAY_ROLES = ["platform_monthly", "ad_spend_monthly", "agency_monthly"] as const;
 export type AutopayRole = (typeof AUTOPAY_ROLES)[number];
 export type AutopayMethod = "ach" | "card";
 

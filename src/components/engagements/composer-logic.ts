@@ -70,7 +70,7 @@ export function autoSubject(
   templateName?: string
 ): string {
   const who = firm ? ` · ${firm}` : "";
-  if (offer === "drs_monthly" || offer === "drs_annual") return `Digital Rainmaker System — Engagement Agreement${who}`;
+  if (offer?.startsWith("drs_")) return `Digital Rainmaker System — Engagement Agreement${who}`;
   if (offer === "enterprise") return `Nexli Enterprise License — ${ENTERPRISE_TIERS[tier].label}${who}`;
   if (offer?.startsWith("tpl:") && templateName) return `${templateName}${who}`;
   return "";

@@ -2,7 +2,7 @@ import { oneTimeCentsOf } from "@/lib/recurring-copy";
 import { db } from "@/db";
 import { invoices, engagements, engagementSigners } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { DRS_PRICING } from "@/lib/drs-pricing";
+import { AGENCY, DRS_PRICING } from "@/lib/drs-pricing";
 
 /**
  * Book of business for any tenant: signed engagements + paid invoices owned
@@ -29,8 +29,16 @@ export interface BookRow {
   email: string;
   name: string;
   company: string | null;
-  /** DRS billing plan, or "enterprise" when the latest signed letter is a Nexli Enterprise License. */
-  billingPlan: "monthly" | "annual" | "enterprise" | null;
+  /**
+   * DRS billing plan, or "enterprise" when the latest signed letter is a
+   * Nexli Enterprise License. "prepaid" = the Nov 19 2026 pricing with the
+   * six months paid up front.
+   */
+  billingPlan: "monthly" | "annual" | "prepaid" | "enterprise" | null;
+  /** The latest letter is on the Nov 19 2026 pricing (Agency Fee + Performance Pay). */
+  performancePay: boolean;
+  /** Performance pricing: the term renews automatically (false once a non-renewal is recorded). */
+  termRenews: boolean;
   signedAt: string | null;
   /** Day the client started: the DRS engagement's execution date (fallbacks: any signed engagement, first payment). */
   startDate: string | null;
@@ -149,6 +157,20 @@ export async function getBookOfBusiness(
       latestLaunchTerm: sql<
         boolean | null
       >`(ARRAY_AGG(position('months from Launch' in COALESCE(${engagements.content}, '')) > 0 ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
+      // Nov 19 2026 pricing (Agency Fee + Performance Pay): term from signing,
+      // renewing; a recorded non-renewal carries the date the agreement ends.
+      latestPricing: sql<
+        string | null
+      >`(ARRAY_AGG(${engagements.metadata}->>'drsPricing' ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
+      latestAgencyBilling: sql<
+        string | null
+      >`(ARRAY_AGG(${engagements.metadata}->>'agencyBilling' ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
+      latestTermStartsAt: sql<
+        string | null
+      >`(ARRAY_AGG(${engagements.metadata}->>'termStartsAt' ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
+      latestCancelEndsAt: sql<
+        string | null
+      >`(ARRAY_AGG(${engagements.metadata}->'cancellation'->>'endsAt' ORDER BY ${engagementSigners.signedAt} DESC NULLS LAST))[1]`,
       // Offer of the most recently signed engagement ("enterprise" for the
       // Nexli Enterprise License; DRS letters leave it unset).
       latestOffer: sql<
@@ -254,6 +276,14 @@ export async function getBookOfBusiness(
         roll.mrr += Math.round(DRS_PRICING.ANNUAL_CENTS / 12);
       }
     }
+    // Nov 19 2026 pricing, prepaid: the six-month prepayment counts toward
+    // MRR for the months it covers.
+    if (drsRole === "agency_prepay" && r.status === "paid" && r.paidAt) {
+      const prepaidEnd = addMonths(new Date(r.paidAt), AGENCY.TERM_MONTHS).getTime();
+      if (now < prepaidEnd) {
+        roll.mrr += Math.round(total / AGENCY.TERM_MONTHS);
+      }
+    }
     invoiceMap.set(key, roll);
   }
 
@@ -268,20 +298,39 @@ export async function getBookOfBusiness(
         typeof sg.latestTerm === "number" && sg.latestTerm > 0 ? sg.latestTerm : null;
       const termStartsAtLaunch = Boolean(sg.latestLaunchTerm) && !sg.latestTermEndsAt;
       const legacyTermStart = inv?.firstPaymentAt || startDate;
-      const termEnd = sg.latestTermEndsAt
-        ? sg.latestTermEndsAt
-        : !termStartsAtLaunch && legacyTermStart && termMonths
-          ? addMonths(new Date(legacyTermStart), termMonths).toISOString()
-          : null;
+      const performancePay = sg.latestPricing === "performance";
+      // Performance pricing: terms run back to back from signing. Show the
+      // end of the term running today, or the end date of a recorded non-renewal.
+      let rollingEnd: string | null = null;
+      if (performancePay && sg.latestTermStartsAt && termMonths) {
+        if (sg.latestCancelEndsAt) rollingEnd = sg.latestCancelEndsAt;
+        else {
+          const start = new Date(sg.latestTermStartsAt);
+          let end = addMonths(start, termMonths);
+          for (let k = 2; end.getTime() <= now && k < 200; k++) end = addMonths(start, termMonths * k);
+          rollingEnd = end.toISOString();
+        }
+      }
+      const termEnd = rollingEnd
+        ? rollingEnd
+        : sg.latestTermEndsAt
+          ? sg.latestTermEndsAt
+          : !termStartsAtLaunch && legacyTermStart && termMonths
+            ? addMonths(new Date(legacyTermStart), termMonths).toISOString()
+            : null;
       const billingPlan: BookRow["billingPlan"] =
         sg.latestOffer === "enterprise"
           ? "enterprise"
-          : (sg.latestPlan as "monthly" | "annual" | null) || null;
+          : performancePay && sg.latestAgencyBilling === "prepay"
+            ? "prepaid"
+            : (sg.latestPlan as "monthly" | "annual" | null) || null;
       return {
         email: sg.email,
         name: inv?.name || sg.name || sg.email.split("@")[0],
         company: inv?.company || null,
         billingPlan,
+        performancePay,
+        termRenews: performancePay && !sg.latestCancelEndsAt,
         signedAt: sg.firstSignedAt,
         startDate,
         termMonths,

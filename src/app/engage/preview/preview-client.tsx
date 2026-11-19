@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildDrsTemplate, fillClientPlaceholder } from "@/lib/engagement-defaults";
-import { DRS_PRICING_LABEL, DRS_SETUP_FEES, type BillingPlan, type DrsPricing } from "@/lib/drs-pricing";
+import { AGENCY, DRS_PRICING_LABEL, DRS_SETUP_FEES, type AgencyBilling, type BillingPlan, type DrsPricing } from "@/lib/drs-pricing";
+import { buildDrsPerformanceLetter, performanceLetterTerms } from "@/lib/drs-performance-letter";
 import {
   ACCENT,
   SYNE,
@@ -22,8 +23,9 @@ import {
 } from "@/components/launch-pad";
 import { nexliPaymentDisclosure } from "@/lib/nexli-legal";
 import {
-  DrsAtAGlance,
+  LetterAtAGlance,
   EngagementLetterView,
+  agencyFigures,
   drsFigures,
   LETTER_ICONS as X,
   findSectionNum,
@@ -51,14 +53,18 @@ export function EngagePreviewClient() {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const [plan, setPlan] = useState<BillingPlan>("monthly");
-  const [pricing, setPricing] = useState<DrsPricing>("current");
-  const setupCents = DRS_SETUP_FEES[pricing];
+  // The Nov 19 2026 pricing first (Agency Fee + Performance Pay); the previous pricing's two setup fees behind it.
+  const [pricing, setPricing] = useState<DrsPricing>("performance");
+  const [plan, setPlan] = useState<BillingPlan>("monthly"); // previous pricing: monthly | annual
+  const [billing, setBilling] = useState<AgencyBilling>("monthly"); // new pricing: monthly | prepaid
+  const isNew = pricing === "performance";
+  const setupCents = DRS_SETUP_FEES[pricing === "performance" ? "current" : pricing];
   const figures = drsFigures(setupCents);
   const letter = useMemo(
-    () => fillClientPlaceholder(buildDrsTemplate(plan, setupCents), SAMPLE_FIRM),
-    [plan, setupCents]
+    () => fillClientPlaceholder(isNew ? buildDrsPerformanceLetter(billing) : buildDrsTemplate(plan, setupCents), SAMPLE_FIRM),
+    [isNew, billing, plan, setupCents]
   );
+  const agency = useMemo(() => (isNew ? agencyFigures(performanceLetterTerms(letter)) : null), [isNew, letter]);
   const { sections } = useMemo(() => parseLetter(letter), [letter]);
   const esignNum = findSectionNum(sections, "ELECTRONIC SIGNATURES");
   const [readPct, setReadPct] = useState(0);
@@ -96,36 +102,41 @@ export function EngagePreviewClient() {
           aria-label="Preview billing plan"
           className="inline-flex self-start rounded-full p-1 bg-white/5 border border-white/10"
         >
-          {(["monthly", "annual"] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setPlan(p)}
-              aria-pressed={plan === p}
-              className={`min-h-11 sm:min-h-0 px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-all ${
-                plan === p ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "text-neutral-400 hover:text-white"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+          {(isNew ? (["monthly", "prepay"] as const) : (["monthly", "annual"] as const)).map((p) => {
+            const on = isNew ? billing === p : plan === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => (p === "prepay" ? setBilling("prepay") : p === "annual" ? setPlan("annual") : isNew ? setBilling("monthly") : setPlan("monthly"))}
+                aria-pressed={on}
+                className={`min-h-11 sm:min-h-0 px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-all ${
+                  on ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "text-neutral-400 hover:text-white"
+                }`}
+              >
+                {p === "prepay" ? "prepaid" : p}
+              </button>
+            );
+          })}
         </div>
         <div
           role="group"
-          aria-label="Preview setup fee"
+          aria-label="Preview pricing"
           className="inline-flex self-start rounded-full p-1 bg-white/5 border border-white/10"
         >
-          {(["current", "original"] as const).map((v) => (
+          {(["performance", "current", "original"] as const).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setPricing(v)}
               aria-pressed={pricing === v}
-              className={`min-h-11 sm:min-h-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+              className={`min-h-11 sm:min-h-0 px-3 sm:px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
                 pricing === v ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "text-neutral-400 hover:text-white"
               }`}
             >
-              {DRS_PRICING_LABEL[v]} · {drsFigures(DRS_SETUP_FEES[v]).setup}
+              {v === "performance"
+                ? `New · $${(AGENCY.FEE_MONTHLY_CENTS / 100).toLocaleString("en-US")}/mo`
+                : `${DRS_PRICING_LABEL[v]} · ${drsFigures(DRS_SETUP_FEES[v]).setup}`}
             </button>
           ))}
         </div>
@@ -158,7 +169,7 @@ export function EngagePreviewClient() {
         </div>
       </section>
 
-      <DrsAtAGlance plan={plan} setupCents={setupCents} bonus />
+      <LetterAtAGlance kind="drs" plan={plan} content={letter} />
 
       {/* ─── The agreement ─── */}
       <EngagementLetterView content={letter} kind="drs" plan={plan} onReadProgress={setReadPct} />
@@ -168,7 +179,7 @@ export function EngagePreviewClient() {
         <div className="space-y-4">
           <div>
             <p className={labelCls}>How payments work</p>
-            <p className="text-xs leading-relaxed text-neutral-400">{nexliPaymentDisclosure("drs")}</p>
+            <p className="text-xs leading-relaxed text-neutral-400">{nexliPaymentDisclosure("drs", letter)}</p>
           </div>
           <div>
             <p className={labelCls}>Who you&apos;re contracting with</p>
@@ -186,8 +197,16 @@ export function EngagePreviewClient() {
               Signed — welcome aboard
             </h2>
             <p className="text-sm mt-1 text-neutral-300">
-              Next: your {plan === "annual" ? figures.annualUpfront : figures.setup} invoice arrives by
-              email. Pay it by bank transfer (ACH or wire) and your Launch Pad opens.
+              {agency ? (
+                <>
+                  Next: your {agency.prepay ?? agency.fee} invoice arrives by email. Pay it and your Launch Pad opens.
+                </>
+              ) : (
+                <>
+                  Next: your {plan === "annual" ? figures.annualUpfront : figures.setup} invoice arrives by
+                  email. Pay it by bank transfer (ACH or wire) and your Launch Pad opens.
+                </>
+              )}
             </p>
             <p className="text-[11px] mt-3 text-amber-300/80">(Preview — nothing was saved)</p>
           </ShimmerCard>

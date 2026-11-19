@@ -265,7 +265,7 @@ export function DocumentPreview({
           }}
         >
           {nexliKind ? (
-            nexliPaymentDisclosure(nexliKind)
+            nexliPaymentDisclosure(nexliKind, content)
           ) : (
             firmPaymentDisclosure(fromCompany || fromName)
           )}

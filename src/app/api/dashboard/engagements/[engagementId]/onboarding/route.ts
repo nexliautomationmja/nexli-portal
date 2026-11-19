@@ -42,8 +42,8 @@ async function loadBilling(engagementId: string): Promise<DrsBillingStatus | nul
 
 const LAUNCH_BILLING_ERRORS: Record<string, string> = {
   not_drs: "Monthly billing only applies to Digital Rainmaker engagements.",
-  setup_unpaid: "The setup invoice hasn't been paid yet.",
-  already_started: "The first monthly invoice was already sent.",
+  setup_unpaid: "The first invoice hasn't been paid yet.",
+  already_started: "Build complete was already recorded.",
   no_signer: "This engagement has no client signer to bill.",
 };
 
