@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
 import { BAND } from "@/lib/ads/grader-shared";
-import { WEAK_BELOW, nextScoreStep, pendingLive } from "@/lib/creative-studio/script-score-shared";
+import { TARGETS, nextScoreStep, offerCheck, pathTo, pendingLive, type ScorePath } from "@/lib/creative-studio/script-score-shared";
 import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send } from "@/components/creative-studio/client";
 import { Chip } from "@/components/creative-studio/canvas";
@@ -12,12 +12,14 @@ const BAND_TONE = { run: "green", fix: "amber", skip: "red" } as const;
 const BAND_RING = { run: "#34d399", fix: "#fbbf24", skip: "#fb7185" } as const;
 
 /**
- * The script's score out of 100 on the grader's points (Nov 19 2026; videos
- * recreated in Nexli's studio). While the script can still change it runs on
- * its own: scores a new or changed script, and once per video rewrites the
- * points under 7 of 10, then scores the result. The batch board does the
- * same for every video of a batch; a claim on the server keeps two open
- * pages from running it twice.
+ * The script's score out of 100 on the grader's seven points, as a fixed
+ * checklist (script-score-shared.ts): 12 checks measured from the words, 7
+ * yes/no answers that only count with a quote from the script. The same
+ * script always gets the same score. Shows how to reach 80 and 90 (exact
+ * points per change) with a rewrite button for each. While the script can
+ * still change it runs on its own: scores a new or changed script, and once
+ * per video rewrites it along the path to 90 when it's under 80. The batch
+ * board does the same; a claim on the server keeps two pages from running it twice.
  */
 export function ScriptScoreCard({
   detail,
@@ -73,16 +75,16 @@ export function ScriptScoreCard({
   const scored = s && !s.stale && s.subs.length > 0 ? s : null;
 
   if (!scored) {
-    const improving = pendingKind === "improve";
+    const improving = pendingKind === "improve" || pendingKind === "apply";
     return (
       <div className="mt-3 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-3">
         {!locked && <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/20 border-t-cyan-300" aria-hidden="true" />}
         <p className="text-xs text-neutral-300">
           {improving
-            ? "Rewriting the weak points, then scoring it again…"
+            ? "Rewriting it with the recommended changes and the current offer, then scoring it again…"
             : locked
               ? "Not scored (approved before it could be)."
-              : "Scoring the script on the grader's 7 points…"}
+              : "Scoring the script on 19 fixed checks…"}
         </p>
         {failed && (
           <button
@@ -98,9 +100,22 @@ export function ScriptScoreCard({
   }
 
   const band = BAND[scored.band];
-  const weak = scored.subs.filter((x) => x.score < WEAK_BELOW).length;
-  const improving = pendingKind === "improve";
+  const improving = pendingKind === "improve" || pendingKind === "apply";
   const pct = Math.max(0, Math.min(100, scored.score));
+  const offer = offerCheck(scored);
+  const checks = scored.checks ?? [];
+  const passed = checks.filter((c) => c.pass).length;
+  // How to get to 80 and 90: the fewest failed checks, biggest first. Every check is worth fixed points, so the projection is exact.
+  const paths = TARGETS.filter((t) => t > scored.score).map((t) => pathTo(scored, t));
+  const canRewrite = !locked && !improving && !live && p.status === "scripted";
+  const pointLabel = (key: string, label: string) => (p.format === "vsl_16x9" && key === "meta_fit" ? "Built for the page" : label);
+
+  async function rewrite(path: ScorePath) {
+    if (!confirm(`Rewrite the script with ${path.steps.length === 1 ? "this change" : `these ${path.steps.length} changes`} (→ ${path.reaches}/100 if every one lands)? The current version is kept in the script history, and the new one is scored again.`)) return;
+    const r = await send(api(`${p.id}/script/score`), "POST", { action: "apply", target: path.target });
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
 
   return (
     <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-3">
@@ -118,15 +133,25 @@ export function ScriptScoreCard({
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="text-sm font-bold text-white">Script score</p>
             <Chip tone={BAND_TONE[scored.band]}>{band.label}</Chip>
-            {scored.before !== null && <Chip tone="blue">Improved from {scored.before}</Chip>}
+            {scored.before !== null && <Chip tone="blue">Was {scored.before}</Chip>}
             {scored.caps.map((c) => (
               <Chip key={c.key} tone="red">
-                {c.label}
+                {c.label} · max {c.max}
               </Chip>
             ))}
           </div>
+          <p className="mt-0.5 text-[11px] text-neutral-400">
+            {passed} of {checks.length} checks pass · fixed checklist: the same script always gets the same score
+          </p>
           {scored.verdict && <p className="mt-0.5 text-xs leading-relaxed text-neutral-300">{scored.verdict}</p>}
-          {scored.oldOffer.length > 0 && <p className="mt-0.5 text-xs text-rose-300">Mentions the old offer: {scored.oldOffer.join(", ")}.</p>}
+          <p className={`mt-0.5 text-[11px] ${offer.ok ? "text-emerald-300/90" : "text-rose-300"}`}>
+            {offer.ok ? "✓" : "✕"} Offer check: {offer.text}.
+          </p>
+          {scored.caps.map((c) => (
+            <p key={c.key} className="mt-0.5 text-[11px] text-rose-300">
+              ✕ {c.label}: {c.why}. The score can&apos;t pass {c.max} until it&apos;s gone.
+            </p>
+          ))}
         </div>
         <button
           type="button"
@@ -134,36 +159,81 @@ export function ScriptScoreCard({
           aria-expanded={open}
           className="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-bold text-neutral-200 hover:bg-white/10"
         >
-          {open ? "Hide the points" : weak ? `See the points · ${weak} under ${WEAK_BELOW}` : "See the points"}
+          {open ? "Hide the checks" : `See all ${checks.length} checks`}
         </button>
       </div>
-      {improving && <p className="mt-2 text-[11px] text-cyan-200">Rewriting the points under {WEAK_BELOW} of 10, then scoring it again…</p>}
+
+      {improving && <p className="mt-2 text-[11px] text-cyan-200">Rewriting it with the recommended changes and the current offer, then scoring it again…</p>}
+
+      {paths.length > 0 && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {paths.map((path) => (
+            <div key={path.target} className="flex flex-col rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-bold text-white">To reach {path.target}</p>
+                <span className={`text-[11px] font-bold ${path.enough ? "text-cyan-200" : "text-amber-200"}`} style={NUM_FONT}>
+                  {scored.score} → {path.reaches}
+                </span>
+              </div>
+              <ol className="mt-2 flex-1 space-y-1.5">
+                {path.steps.map((st) => (
+                  <li key={st.id} className="flex gap-2 text-[11px] leading-relaxed">
+                    <span className="mt-px shrink-0 self-start rounded-md bg-emerald-500/15 px-1.5 font-bold text-emerald-300" style={NUM_FONT}>
+                      +{st.gain}
+                    </span>
+                    <span className="min-w-0 text-neutral-300">
+                      <b className="text-white">{st.label}.</b> {st.fix}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              {!path.enough && (
+                <p className="mt-2 text-[11px] text-neutral-400">
+                  Every failed check together reaches {path.reaches}
+                  {scored.caps.length ? ` (the risky claim holds it at ${scored.caps[0].max} until it's removed)` : ""}.
+                </p>
+              )}
+              {canRewrite && path.steps.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void rewrite(path)}
+                  className="mt-3 w-full rounded-full bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500 sm:w-auto sm:self-start"
+                >
+                  Rewrite for {path.target}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {paths.length === 0 && <p className="mt-2 text-[11px] text-emerald-300/90">At {scored.score}, it&apos;s past 90. Nothing on the path left.</p>}
+
       {open && (
         <ul className="mt-3 divide-y divide-white/5 rounded-xl border border-white/10">
           {scored.subs.map((x) => (
             <li key={x.key} className="px-3 py-2.5">
               <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 text-xs font-bold text-white">
-                  {p.format === "vsl_16x9" && x.key === "meta_fit" ? "Built for the page" : x.label}
-                </span>
-                <span className="text-[10px] text-neutral-500">{x.weight} pts</span>
-                <span className={`w-10 text-right text-sm font-extrabold ${x.score < WEAK_BELOW ? "text-amber-300" : "text-emerald-300"}`} style={NUM_FONT}>
-                  {x.score}/10
+                <span className="min-w-0 flex-1 text-xs font-bold text-white">{pointLabel(x.key, x.label)}</span>
+                <span className={`text-sm font-extrabold ${x.points < x.weight ? "text-amber-300" : "text-emerald-300"}`} style={NUM_FONT}>
+                  {x.points}/{x.weight}
                 </span>
               </div>
-              <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
-                <div className={`h-full rounded-full ${x.score < WEAK_BELOW ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${x.score * 10}%` }} />
-              </div>
-              {x.why && <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-300">{x.why}</p>}
-              {x.fix && x.score < 10 && <p className="mt-0.5 text-[11px] leading-relaxed text-cyan-200/90">Fix: {x.fix}</p>}
+              <ul className="mt-1.5 space-y-1">
+                {checks
+                  .filter((c) => c.point === x.key)
+                  .map((c) => (
+                    <li key={c.id} className="flex gap-2 text-[11px] leading-relaxed">
+                      <span className={`shrink-0 font-bold ${c.pass ? "text-emerald-300" : "text-rose-300"}`}>{c.pass ? "✓" : "✕"}</span>
+                      <span className="min-w-0 text-neutral-300">
+                        {c.label} <span className="text-neutral-500">({c.points} pts · {c.source === "measured" ? "measured" : "Claude, with a quote"})</span>
+                        <span className="block text-neutral-400">{c.evidence}</span>
+                      </span>
+                    </li>
+                  ))}
+              </ul>
             </li>
           ))}
         </ul>
-      )}
-      {scored.improved && weak > 0 && !improving && (
-        <p className="mt-2 text-[11px] text-neutral-400">
-          The one automatic rewrite is used. To push a point higher, ask for it in the chat box (e.g. &ldquo;make the hook a hard number&rdquo;); it&apos;s scored again after.
-        </p>
       )}
     </div>
   );

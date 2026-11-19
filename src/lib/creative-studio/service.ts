@@ -21,7 +21,7 @@ import { normalizeCopy } from "@/lib/creative-studio/ad-copy";
 import { firmBrief, studioById, studioRef } from "@/lib/creative-studio/studios";
 import type { ReferenceVideo, ScriptInput } from "@/lib/creative-studio/script";
 import { recreateEvidence, recreateFocus } from "@/lib/creative-studio/recreate-focus";
-import { scoreEligible, scriptKey } from "@/lib/creative-studio/script-score-shared";
+import { scoreEligible, scoreIsCurrent, scriptKey } from "@/lib/creative-studio/script-score-shared";
 export { scoreEligible };
 
 type Project = typeof creativeProjects.$inferSelect;
@@ -137,6 +137,19 @@ export async function scriptInputFor(
     .map(({ sc, path }) => ({ frameId: sc.frameId as string, label: sc.label, url: signed.get(path) ?? "" }))
     .filter((x) => x.url);
   return { ...base, frameUrls: list.map((x) => x.url), story: { scenes: list }, presenter: presenterOf(project) };
+}
+
+/** The words of the video to recreate (the score's "copied from the reference" check), or null. */
+export async function referenceTextOf(project: Project): Promise<string | null> {
+  const id = project.media?.mode === "recreate" ? project.media.ids[0] : null;
+  if (!id) return null;
+  const [a] = await db
+    .select({ metadata: creativeAssets.metadata })
+    .from(creativeAssets)
+    .where(and(eq(creativeAssets.id, id), eq(creativeAssets.projectId, project.id), eq(creativeAssets.kind, "media_video")))
+    .limit(1);
+  const m = (a?.metadata ?? {}) as SourceMeta;
+  return m.text?.trim() || (m.words ?? []).map((w) => w.text).join(" ").trim() || null;
 }
 
 /** A video to recreate, as the script writer reads it (null when there's none or it isn't read yet). */
@@ -280,7 +293,7 @@ export async function projectDetail(project: Project) {
       scoreEligible: scoreEligible(project),
       /** The script's score; `stale` once the lines changed since it was scored. */
       scriptScore: project.scriptScore
-        ? { ...project.scriptScore, stale: project.scriptScore.key !== scriptKey(clips.map((c) => ({ section: c.section, line: c.line }))) }
+        ? { ...project.scriptScore, stale: !scoreIsCurrent(project.scriptScore, scriptKey(clips.map((c) => ({ section: c.section, line: c.line })))) }
         : null,
       /** Made from a hook test: the original video, the new hook, and whether the original's edit can be put on it. */
       hookOf: project.hookOf

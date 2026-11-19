@@ -31,7 +31,8 @@ function stageOf(v: BatchVideo): { label: string; tone: Tone; step: number; need
   if (v.clips.total === 0) return { label: "Writing the script", tone: "blue", step: 1 };
   // Recreated in Nexli's studio: scored (and the weak points rewritten once) before review.
   if (v.status === "scripted" && v.score && (v.score.running || v.score.next)) {
-    return { label: (v.score.running ?? v.score.next) === "improve" ? "Improving weak points" : "Scoring the script", tone: "blue", step: 1 };
+    const doing = v.score.running ?? v.score.next;
+    return { label: doing === "improve" ? "Improving weak points" : doing === "apply" ? "Rewriting toward the target" : "Scoring the script", tone: "blue", step: 1 };
   }
   if (v.status === "scripted") return { label: v.score?.value != null ? `Script ready · ${v.score.value}/100` : "Script ready", tone: "amber", step: 2, needsYou: "Review" };
   if (v.status === "approved" || v.status === "rendering") {

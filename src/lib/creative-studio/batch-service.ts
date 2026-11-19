@@ -12,7 +12,7 @@ import {
   type SourceMeta,
 } from "@/lib/creative-studio/tables";
 import { claimLive } from "@/lib/creative-studio/reaction-shared";
-import { nextScoreStep, pendingLive, scoreEligible, scriptKey } from "@/lib/creative-studio/script-score-shared";
+import { nextScoreStep, pendingLive, scoreEligible, scoreIsCurrent, scriptKey } from "@/lib/creative-studio/script-score-shared";
 import { CREDITS_PER_SECOND } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
 import { studioById, studioRef, type StudioRef } from "@/lib/creative-studio/studios";
@@ -42,8 +42,8 @@ export interface BatchVideo {
     value: number | null;
     band: string | null;
     before: number | null;
-    /** A score or improvement running now. */
-    running: "score" | "improve" | null;
+    /** A score, improvement or rewrite toward 80/90 running now. */
+    running: "score" | "improve" | "apply" | null;
     next: "score" | "improve" | null;
   } | null;
 }
@@ -139,7 +139,7 @@ export async function batchSummary(batch: typeof creativeBatches.$inferSelect): 
     const ref = refId ? mine.find((a) => a.id === refId && a.kind === "media_video") : undefined;
     const refMeta = (ref?.metadata ?? {}) as SourceMeta;
     const ordered = [...pc].sort((a, b) => a.idx - b.idx);
-    const scored = p.scriptScore ? { ...p.scriptScore, stale: p.scriptScore.key !== scriptKey(ordered) } : null;
+    const scored = p.scriptScore ? { ...p.scriptScore, stale: !scoreIsCurrent(p.scriptScore, scriptKey(ordered)) } : null;
     const eligible = scoreEligible(p);
     return {
       id: p.id,

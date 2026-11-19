@@ -1,4 +1,7 @@
 import { RUBRIC } from "@/lib/ads/grader-shared";
+import { CHECKS } from "@/lib/creative-studio/script-score-shared";
+import { OFFER_FACTS } from "@/lib/creative-studio/offer-facts";
+export { OFFER_FACTS };
 
 /**
  * Recreating a video in Nexli's own studio (Nov 19 2026, Marcel): "now that I
@@ -14,26 +17,12 @@ import { RUBRIC } from "@/lib/ads/grader-shared";
  * Ad Grader's points, with his own hook results as evidence.
  */
 
-/** Nexli's offer as it is today (Nov 19 2026), as the writer and the scorer read it. Keep in step with section 9 of kling-framework.md. */
-export const OFFER_FACTS = `- $10,000 a month, with no setup fee.
-- The ad budget is separate: at least $5,000 a month, paid by the firm straight to Meta on its own card. It never passes through Nexli.
-- 10% performance pay on top of the monthly fee. Name it ("plus 10% performance pay, walked through on the call") and never explain it: no calculation, no example, and never call it a share of the firm's revenue.
-- A signed six-month agreement, counted from signing, that renews six months at a time.`;
-
-/** How each of the grader's points is earned in a script (what a 9–10 looks like). */
-export const POINT_GUIDE: Record<(typeof RUBRIC)[number]["key"], string> = {
-  hook: "the first line lands a specific claim, number, callout or pain in the first 3 seconds, names who it's for (CPA firm owners) or their problem, no warm-up or greeting; it opens the way his best-holding hooks open (evidence below)",
-  message: "one clear belief shift carried all the way through, and the offer stated plainly where the framework puts it, exactly as the current offer facts say",
-  meta_fit: "built for where it runs: one idea per clip, short spoken lines, a turn every few clips so attention never sags; a VSL keeps the framework's VSL size, an ad stays short",
-  proof: "concrete proof: the framework's math, mechanism and specifics (tax bills, planning fees, the system front to back), never an invented result, client or number",
-  cta: "asks for the booked call plainly, with the framework's close for the format, and says what happens next",
-  fresh: "fresh wording: no stock agency phrases, no sentence borrowed from the reference, a hook that doesn't read like every other ad in the feed",
-  audience: "unmistakably for owners of CPA firms doing 750K to 1 million a year: the qualifier line is there and the pains are theirs",
-};
-
 /** The writer's addendum. `evidence` is his hook results (null when they couldn't be read). */
 export function recreateFocus(evidence: string | null): string {
-  const points = RUBRIC.map((r) => `- **${r.label} (${r.weight} points):** ${POINT_GUIDE[r.key]}.`).join("\n");
+  // The exact checklist the script is scored on (script-score-shared.ts), so the writer aims at what is measured.
+  const points = RUBRIC.map(
+    (r) => `- **${r.label} (${r.weight} points):**\n${CHECKS.filter((c) => c.point === r.key).map((c) => `  - ${c.label} (${c.points})`).join("\n")}`
+  ).join("\n");
   return `
 ---
 
@@ -45,7 +34,7 @@ ${OFFER_FACTS}
 Where the reference states an older offer, replace it with the facts above, never repeat it: no setup fee of any amount, no $9,997 or $4,997, no ad budget folded into the fee, no annual plan, no month to month, no first-month ad bonus or ad credits. The system itself hasn't changed: what Nexli builds and runs (sections 3b and 8) is the same, so keep its walkthrough and positioning lines.
 
 ## Written to score
-Before anyone spends on it, this script is scored out of 100 on these points, the same ones every creative is graded on. Write every clip to earn full marks:
+Before anyone spends on it, this script is scored out of 100 on a fixed checklist: the grader's seven points, each split into checks worth fixed points. Most are measured straight from your words (clip 1's length, a number in clips 1–2, the qualifier line, the fee stated, no old offer, line lengths, clip count, the ask in the last 3 clips, no stock phrases, no 6-word run copied from the reference). Write so every check passes:
 ${points}
 
 The most points sit in the hook: put your best line first.
