@@ -1,5 +1,5 @@
 import { CAPS, RUBRIC, bandOf, type Band, type RubricKey } from "@/lib/ads/grader-shared";
-import { OFFER_FACTS } from "@/lib/creative-studio/offer-facts";
+import { AUDIENCE, OFFER_FACTS } from "@/lib/creative-studio/offer-facts";
 
 /**
  * A script's score out of 100 (Nov 19 2026), on the Ad Grader's seven points
@@ -18,14 +18,15 @@ import { OFFER_FACTS } from "@/lib/creative-studio/offer-facts";
  *     names. An unbacked "yes" is a no; an unbacked "no" (for checks that
  *     look for a problem) is a yes.
  *   - A score belongs to the exact script it read (`key`) and is never
- *     re-scored: only a changed script gets a new score.
+ *     re-scored: only a changed script (or a new checklist version) gets a new score.
  *
  * Scripts recreated in Nexli's studio are scored after they're written; a
  * script under 80 (or with a point under 7 of 10) gets ONE automatic rewrite
  * along its path to 90, then is scored again. Pure and client-safe.
  */
 
-export const SCORE_VERSION = 2;
+/** 3 (Nov 19 2026): the qualifier is the $1M–$5M+ range; the old 750K–1M range is flagged like the old offer. */
+export const SCORE_VERSION = 3;
 
 /** A point below this (of 10) triggers the automatic rewrite. */
 export const WEAK_BELOW = 7;
@@ -95,7 +96,7 @@ export const CHECKS: readonly CheckDef[] = [
   { id: "no_stock", point: "fresh", points: 5, source: "measured", label: "No stock agency phrases (game-changer, next level, unlock…)" },
   { id: "not_copied", point: "fresh", points: 5, source: "measured", label: "No 6-word run copied from the reference video" },
   // Right audience (10)
-  { id: "qualifier", point: "audience", points: 5, source: "measured", label: "Has the qualifier: CPA firms doing 750K to 1 million" },
+  { id: "qualifier", point: "audience", points: 5, source: "measured", label: "Has the qualifier: CPA firms doing 1 million to 5 million plus" },
   { id: "owner_pains", point: "audience", points: 5, source: "claude", proof: "presence", label: "The pains and outcomes are a firm owner's, not a consumer's", question: "Are the pains and outcomes those of a CPA firm owner (their clients, fees, capacity, the firm's growth) rather than a consumer's? Quote one clip that shows it." },
 ];
 
@@ -143,6 +144,8 @@ export interface ScriptScore {
   caps: { key: "policy_risk"; label: string; max: number; why: string }[];
   /** Old-offer wording found in the lines. */
   oldOffer: string[];
+  /** The lines still say the old firm size (750K to 1 million), not $1M–$5M+ (v3). */
+  oldAudience?: boolean;
   verdict: string;
   /** The one automatic improvement has been used on this video. */
   improved: boolean;
@@ -205,8 +208,16 @@ const words = (s: string) => s.trim().split(/\s+/).filter(Boolean);
 const NUMBER = /\$\s?\d|\d[\d,.]*\s?(?:k|%|percent)?\b|\b(?:hundred|thousand|million|billion|percent)\b/i;
 const WARMUP = /^(?:hi|hey|hello|welcome|so|okay|ok|alright|today|in this video|let me|i want to|i'm going to|my name|have you ever|what's up)\b/i;
 const STOCK = ["game-changer", "game changer", "next level", "unlock", "skyrocket", "secret sauce", "crush it", "in today's world", "cutting-edge", "cutting edge", "leverage", "synergy", "look no further", "revolutionary", "supercharge", "10x your", "dive in", "deep dive"];
-const QUALIFIER_SIZE = /750\s?k|750,000|seven hundred(?: and)? fifty/i;
-const QUALIFIER_TOP = /\bmillion\b|\b1\s?m\b|1,000,000/i;
+// The qualifier's range, both ends in one line: "1 million to 5 million plus", "$1M–$5M+", "one million to five million".
+const QUALIFIER_LOW = /\b(?:1|one)\s?(?:million|m)\b|\b1,000,000\b/i;
+const QUALIFIER_HIGH = /\b(?:5|five)\s?(?:million|m)\b|\b5,000,000\b/i;
+// The range it replaced ("750K to 1 million"); a bare $750,000 in the math is not it.
+const OLD_AUDIENCE = /(?:750\s?k|750,000|seven hundred(?: and)? fifty(?: thousand| k)?)\s*(?:to|-|–|—|and)\s*(?:\$?\s?1|one)\s?(?:million|m)\b/i;
+
+/** The first clip (0-based) that still says the old 750K–1M firm size, or -1. */
+export function oldAudienceAt(lines: string[]): number {
+  return lines.findIndex((l) => OLD_AUDIENCE.test(l));
+}
 const ASK_VSL = /\b(?:book|pick a (?:time|spot)|grab a (?:time|spot)|schedule|choose a time|calendar)\b/i;
 const ASK_AD = /\b(?:watch|tap|click|link|video|below|book)\b/i;
 const FEE = /\$\s?10,?000\b|\bten thousand\b|\b10k\b/i;
@@ -284,8 +295,17 @@ export function measureScript(clips: { line: string }[], format: "vsl_16x9" | "a
   const copied = copiedRun(lines, referenceText);
   add("not_copied", !copied, copied ? `Copies “${copied}” from the reference.` : referenceText ? "No 6-word run copied from the reference." : "No reference words to compare.", null, `Reword “${copied ?? ""}”: it's the reference's own words.`);
 
-  const qAt = lines.findIndex((l) => QUALIFIER_SIZE.test(l) && QUALIFIER_TOP.test(l));
-  add("qualifier", qAt >= 0, qAt >= 0 ? `Clip ${qAt + 1} has the qualifier.` : "No qualifier line.", qAt >= 0 ? qAt + 1 : null, "Add the qualifier before the close: “This is for C-P-A firms doing 750K to 1 million a year, who know they can 10x their business.”");
+  const qAt = lines.findIndex((l) => QUALIFIER_LOW.test(l) && QUALIFIER_HIGH.test(l));
+  const oldAt = oldAudienceAt(lines);
+  add(
+    "qualifier",
+    qAt >= 0,
+    qAt >= 0 ? `Clip ${qAt + 1} has the qualifier.` : oldAt >= 0 ? `Clip ${oldAt + 1} still says the old range (750K to 1 million).` : "No qualifier line.",
+    qAt >= 0 ? qAt + 1 : oldAt >= 0 ? oldAt + 1 : null,
+    oldAt >= 0
+      ? `Change clip ${oldAt + 1} to the current range: “${AUDIENCE.qualifier}”`
+      : `Add the qualifier before the close: “${AUDIENCE.qualifier}”`
+  );
   return out;
 }
 
@@ -367,6 +387,7 @@ export function buildScore(args: {
   now?: Date;
 }): ScriptScore {
   const lines = args.clips.map((c) => c.line.trim());
+  const oldAudience = oldAudienceAt(lines) >= 0;
   const results = [...measureScript(args.clips, args.format, args.referenceText), ...verifyAnswers(args.raw.checks ?? [], lines)];
   const checks: ScoreCheck[] = CHECKS.map((def) => {
     const r = results.find((x) => x.id === def.id) as Measured;
@@ -401,8 +422,10 @@ export function buildScore(args: {
     checks,
     caps,
     oldOffer: oldOfferIn(lines),
+    oldAudience,
     verdict: text(args.raw.verdict, 300),
-    improved: Boolean(prev?.improved),
+    // The once-only automatic rewrite, except that a script scored before v3 that still says the old range gets one more.
+    improved: Boolean(prev?.improved) && !(prev?.v !== SCORE_VERSION && oldAudience),
     before: prev?.justImproved ? prev.score : null,
     justImproved: false,
     pending: null,
@@ -475,9 +498,12 @@ export function pathNote(s: ScriptScore, path: ScorePath): string {
     ...path.steps.map((st) => `- ${st.label} (+${st.gain}): ${st.fix}`),
     ...s.caps.map((c) => `- Remove the risky claim (${c.why}): no guarantees or promised results.`),
     ...(s.oldOffer.length ? [`- Remove the old offer (${s.oldOffer.join(", ")}): it must not appear anywhere.`] : []),
+    ...(s.oldAudience && !path.steps.some((st) => st.id === "qualifier") ? [`- Replace the old firm size (750K to 1 million) with the current one: “${AUDIENCE.qualifier}”`] : []),
     "",
     "Every line must match Nexli's offer as it is today, and nothing else about the offer may appear:",
     OFFER_FACTS,
+    "",
+    `Who it's for: C-P-A firms doing ${AUDIENCE.spoken}. Keep the qualifier line as it is: “${AUDIENCE.qualifier}” Never the old 750K to 1 million.`,
     "",
     "Keep everything that already passes and the shape copied from the reference. Return the whole script.",
   ].join("\n");
@@ -489,9 +515,10 @@ export function improvementNote(s: ScriptScore): string {
 
 /** The offer check shown with the score. */
 export function offerCheck(s: ScriptScore): { ok: boolean; text: string } {
-  return s.oldOffer.length
-    ? { ok: false, text: `Mentions the old offer: ${s.oldOffer.join(", ")}` }
-    : { ok: true, text: "Matches the current offer: no setup fee, old price, annual plan or month to month" };
+  const old = [...s.oldOffer, ...(s.oldAudience ? ["the old 750K to 1 million firm size (now $1M to $5M+)"] : [])];
+  return old.length
+    ? { ok: false, text: `Mentions the old offer: ${old.join(", ")}` }
+    : { ok: true, text: "Matches the current offer: no setup fee, old price, annual plan, month to month or old firm size" };
 }
 
 /** A score or rewrite claimed less than 320 s ago (its route's limit is 300 s). */
@@ -505,8 +532,8 @@ export function nextScoreStep(args: { eligible: boolean; status: string; clips: 
   if (!eligible || status !== "scripted" || clips === 0) return null;
   if (score && pendingLive(score)) return null;
   if (!score || score.stale || score.v !== SCORE_VERSION || !score.subs.length) return "score";
-  const wants = score.score < AUTO_BELOW || weakPoints(score).length > 0 || score.oldOffer.length > 0 || score.caps.length > 0;
-  if (!score.improved && wants && improvementPath(score).steps.length + score.caps.length + score.oldOffer.length > 0) return "improve";
+  const wants = score.score < AUTO_BELOW || weakPoints(score).length > 0 || score.oldOffer.length > 0 || Boolean(score.oldAudience) || score.caps.length > 0;
+  if (!score.improved && wants && improvementPath(score).steps.length + score.caps.length + score.oldOffer.length + (score.oldAudience ? 1 : 0) > 0) return "improve";
   return null;
 }
 

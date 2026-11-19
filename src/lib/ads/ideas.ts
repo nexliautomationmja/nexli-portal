@@ -11,6 +11,7 @@ import { ANGLES, FORMATS, typeLabel, typeStats, type CreativeTags } from "@/lib/
 import { money } from "@/lib/ads/format";
 import { shortDay } from "@/lib/ads/time";
 import { IDEAS_MAX, type CreativeIdea, type DeckItem, type DeckStage, type IdeaBacking, type IdeaSetView } from "@/lib/ads/ideas-shared";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * "Create new creatives": Claude comes up with 1–5 fresh video ideas for the
@@ -51,7 +52,7 @@ const IDEAS_SCHEMA = {
   },
 } as const;
 
-const RULES = `You come up with new video ad ideas for Nexli. Nexli sells the Digital Rainmaker System — done-for-you client acquisition (website, funnel, Meta ads, CRM, automations) — to owners of US CPA and accounting firms. Every ad has one job: get the right firm owner to book a free strategy call.
+const RULES = `You come up with new video ad ideas for Nexli. Nexli sells the Digital Rainmaker System — done-for-you client acquisition (website, funnel, Meta ads, CRM, automations) — to owners of US CPA and accounting firms doing ${AUDIENCE.written} (the qualifier line: "${AUDIENCE.qualifier}"). Every ad has one job: get the right firm owner to book a free strategy call.
 Each idea is a 9:16 video of 15-35 seconds, made in Creative Studio (an AI presenter on Kling, or b-roll), for Facebook and Instagram.
 
 Make exactly the number of ideas asked for, each clearly different (different hook, scene and opening frame).

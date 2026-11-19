@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { KLING_FRAMEWORK } from "@/lib/creative-studio/rules.generated";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * Meta ad copy: 4 primary texts (mid-length, spaced out, with emojis — each
@@ -51,7 +52,10 @@ function section(start: string): string {
   return (next > 0 ? rest.slice(0, next) : rest).trim();
 }
 
-const SYSTEM = `You write Meta (Facebook and Instagram) ad copy for Nexli, which runs paid-ads client acquisition for CPA firms. The copy sits above one video or image in the feed. You get what's in the ad: a studio video's script, or the transcript and frames of a video (or the image itself) the user dropped in.
+/** Who Nexli is, in the prompt; a client firm's copy swaps it for the firm. */
+const NEXLI_INTRO = `for Nexli, which runs paid-ads client acquisition for CPA firms doing ${AUDIENCE.written}.`;
+
+const SYSTEM = `You write Meta (Facebook and Instagram) ad copy ${NEXLI_INTRO} The copy sits above one video or image in the feed. You get what's in the ad: a studio video's script, or the transcript and frames of a video (or the image itself) the user dropped in.
 
 ${section("## 1. Standing rules")}
 
@@ -76,7 +80,7 @@ Write ${VARIANTS} versions for A/B testing. Every version follows the same style
 
 # ${VARIANTS} headlines, a description, a button
 - headlines: ${VARIANTS} different ones, 27–40 characters each, the benefit or the outcome, each from a different angle.
-- description: 30 characters or fewer, supports the headlines (for example "For CPA firms doing $750K+").
+- description: 30 characters or fewer, supports the headlines (for example "For CPA firms doing ${AUDIENCE.short}").
 - cta: the button that fits the ad's ask (a call → "Book Now").
 
 notes: one or two plain sentences for the user: the angles you chose and anything to check (a claim, a number, a word you weren't sure you heard right).
@@ -131,7 +135,6 @@ function contextText(c: CopyContext): string {
     .join("\n\n");
 }
 
-const NEXLI_INTRO = "for Nexli, which runs paid-ads client acquisition for CPA firms.";
 
 /** Nexli: the prompt above, exactly. A client firm: about the firm, without Nexli's offer facts. */
 export function adCopySystem(firm?: CopyContext["firm"]): string {

@@ -58,7 +58,7 @@ Ask only what you can't infer:
 | 1 | Hook | Call out the audience plus the old belief or pain. "If you think your C-P-A firm needs more clients to grow…" |
 | 2–4 | Shatter | Why the old belief caps them. Concrete mechanism, short punchy lines. |
 | 5–6 | New belief | The reframe, with math or an analogy. |
-| Q | Qualifier | "This is for C-P-A firms doing 750K to 1 million a year, who know they can 10x their business." Goes right before the CTA. |
+| Q | Qualifier | "This is for C-P-A firms doing 1 million to 5 million plus a year, who know they can 10x their business." Goes right before the CTA. |
 | n-1 | CTA bridge | "I made a video that shows exactly how…" (angle-specific VSL) |
 | n | Close | "Tap below and watch it. …" Point one finger down toward the lower edge of the frame. |
 
@@ -133,9 +133,9 @@ Look at the image and describe, specifically and factually:
 |---|---|
 | "C-P-A" said as a word | Add: `She clearly pronounces each letter: C, P, A.` Same for C-E-O, P-and-L, I-R-S (`She says I-R-S as the letters I, R, S.`). |
 | Dollar amounts mangled | Add a guide. Write it exactly like this so she doesn't read both versions: `Pronunciation guide (she says each number only once): $10,000 as "ten thousand dollars"; $5,000 as "five thousand dollars".` |
-| She says the number twice (digits plus the words in the note) | Drop the note for that line and write the amount plainly in the line: "750K to 1 million a year". Proven to work on Kling 3.0. |
+| She says the number twice (digits plus the words in the note) | Drop the note for that line and write the amount plainly in the line: "1 million to 5 million plus a year". Plain digits with K or "million" are proven to work on Kling 3.0. |
 | Writing the amount fully in words still came out wrong | Go back to plain digits/K with no note (as above). |
-| Omni duo/trio turned "1 million" into "100 million" | Write "one million" as a word in multi-person prompts. Keep the spoken result identical to the single-presenter clips. |
+| Omni duo/trio turned "1 million" into "100 million" | Write the millions as words in multi-person prompts ("one million to five million plus a year"). Keep the spoken result identical to the single-presenter clips. |
 | "10x" said as "I times" | Guide `10x as "ten-X"`. For the phrase "ten times" add: `She clearly pronounces the number ten, the word T-E-N, before the word times: "ten times."` |
 | Decimals ($1.25 million) | Guide: `"one point two five million dollars"`. |
 | A single word garbled (e.g. "won't") | Redo with a targeted cue: `She pronounces the word "won't" clearly and fully, rhyming with "don't", with a crisp T at the end.` |
@@ -195,7 +195,7 @@ Positioning lines that recur:
 
 ## 9. Current Nexli offer facts (verify before reuse)
 
-- **Qualifier:** C-P-A firms doing 750K to 1 million a year, who know they can 10x their business.
+- **Qualifier:** C-P-A firms doing 1 million to 5 million plus a year, who know they can 10x their business. In written copy and on screen: "$1M–$5M+ a year" (never the old "750K to 1 million").
 - **Investment:** $10,000 a month. No setup fee.
 - **Ad budget:** separate from Nexli's fee, at least $5,000 a month. The firm pays Meta directly on its own card; it never passes through Nexli.
 - **Performance pay:** 10%, on top of the monthly fee. Name it and never explain it: it's walked through on the call. Never call it a share of the firm's revenue, and never give the calculation or an example.

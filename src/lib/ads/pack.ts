@@ -9,6 +9,7 @@ import type { AdSettingsRow } from "@/lib/ads/settings";
 import type { PackIndex, RefLevel } from "@/lib/ads/parse";
 import type { ResearchPackSummary } from "@/lib/ads/research-pack";
 import type { MetricName, WindowName } from "@/lib/ads/schema";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * The data pack Manus analyzes: one JSON file (snake_case, money in USD with
@@ -224,7 +225,7 @@ export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnap
     },
     business_model: {
       company: "Nexli — paid-ads client acquisition for CPA firms (the Digital Rainmaker System)",
-      ideal_client: "Owners and partners of US CPA / accounting firms who want more high-value clients",
+      ideal_client: `Owners and partners of US CPA / accounting firms doing ${AUDIENCE.written} who want more high-value clients`,
       path: "Meta ad → landing page → GoHighLevel lead → booked strategy call → signed client",
       // Nov 19 2026 pricing: no setup fee; the client pays its ad budget straight to Meta.
       setup_fee_usd: 0,

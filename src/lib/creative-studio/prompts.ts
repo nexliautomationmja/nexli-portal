@@ -149,9 +149,11 @@ function cuesText(clip: ClipFields, subj = "She"): string {
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
 
-/** §6: Omni turned "1 million" into "100 million" — write it as a word in multi-person prompts. */
+const DIGIT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+
+/** §6: Omni turned "1 million" into "100 million" — write the millions as words in multi-person prompts ("1 million to 5 million plus" → "one million to five million plus"). Not inside a decimal or a longer number. */
 function multiPersonLine(line: string): string {
-  return line.replace(/\b1 million\b/gi, "one million");
+  return line.replace(/(?<![.,\d])\b([1-9]) million\b/gi, (_, d: string) => `${DIGIT_WORDS[Number(d)]} million`);
 }
 
 const DEFAULT_REACTIONS = [
@@ -502,7 +504,7 @@ export function lintClip(clip: ClipFields): LintFlag[] {
   if (hasNumber && !/pronunciation guide|pronounces|says .* as/i.test(clip.cues)) {
     flags.push({
       level: "check",
-      message: "Number in the line: confirm it has a pronunciation strategy (§6), or is written plainly like 750K.",
+      message: "Number in the line: confirm it has a pronunciation strategy (§6), or is written plainly like '1 million to 5 million plus'.",
     });
   }
   if (/\bten times\b/i.test(line) && !/T-E-N/.test(clip.cues)) {

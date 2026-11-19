@@ -413,7 +413,7 @@ export function HookTest({ studio, testId }: { studio: StudioProp; testId: strin
                           onChange={(e) => setNote(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && !busy && void askAgain()}
                           maxLength={600}
-                          placeholder="e.g. more aggressive, lead with the $240,000 number, call out firm owners doing $1M+"
+                          placeholder="e.g. more aggressive, lead with the $240,000 number, call out firm owners doing $1M–$5M+"
                           className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 text-base text-white placeholder:text-neutral-500 focus:border-cyan-400/50 focus:outline-none sm:text-sm"
                         />
                         <button type="button" disabled={Boolean(busy)} onClick={() => void askAgain()} className="min-h-11 shrink-0 rounded-full border border-white/15 bg-white/5 px-5 text-sm font-bold text-white hover:bg-white/10 disabled:opacity-50">

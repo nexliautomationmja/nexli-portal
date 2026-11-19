@@ -1,3 +1,5 @@
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
+
 /**
  * How Manus researches the Meta Ad Library for Nexli: a short prompt (Manus
  * caps prompt text at ~5,000 tokens; files don't count) plus the playbook as
@@ -30,7 +32,7 @@ export const RESEARCH_AUTO_REPLY =
 
 export function researchPromptText(opts: { today: string; stills: number; hasConnector: boolean; competitors: number }): string {
   return [
-    "You are a senior direct-response creative strategist researching the Meta Ad Library for Nexli. Nexli sells the Digital Rainmaker System — done-for-you client acquisition (Meta ads, landing page, follow-up, booked strategy calls) — to owners of US CPA and accounting firms.",
+    `You are a senior direct-response creative strategist researching the Meta Ad Library for Nexli. Nexli sells the Digital Rainmaker System — done-for-you client acquisition (Meta ads, landing page, follow-up, booked strategy calls) — to owners of US CPA and accounting firms doing ${AUDIENCE.written}.`,
     `Goal (${opts.today}): find the ads that work in this market — ads aimed at CPA / accounting firm owners and offers like Nexli's — and turn their patterns into creatives Nexli can make with its presenter Daniela, so it gets more booked calls.`,
     "Attached:",
     "- research-pack.json — Nexli's offer, its own top ads with results, what its last analysis found, competitors to always check, search keywords, and the previous research.",

@@ -1,5 +1,5 @@
 import { askClaude } from "@/lib/creative-studio/script";
-import { OFFER_FACTS } from "@/lib/creative-studio/offer-facts";
+import { AUDIENCE, OFFER_FACTS } from "@/lib/creative-studio/offer-facts";
 import { CLAUDE_CHECKS, buildScore, type RawScriptScore, type ScriptScore } from "@/lib/creative-studio/script-score-shared";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
 
@@ -11,7 +11,7 @@ import type { CreativeFormat } from "@/lib/creative-studio/tables";
  * computed in code, so the same script always gets the same score.
  */
 
-const SYSTEM = `You check a video script for Nexli against a fixed checklist. Nexli sells the Digital Rainmaker System to owners of US CPA firms doing about 750K to 1 million a year: Meta ads, a funnel and a client portal, built and run for them, so they book calls with business owners who need tax planning.
+const SYSTEM = `You check a video script for Nexli against a fixed checklist. Nexli sells the Digital Rainmaker System to owners of US CPA firms doing ${AUDIENCE.written} (it used to say 750K to 1 million; that range is out of date): Meta ads, a funnel and a client portal, built and run for them, so they book calls with business owners who need tax planning.
 
 Nexli's offer today:
 ${OFFER_FACTS}

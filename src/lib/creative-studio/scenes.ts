@@ -3,6 +3,7 @@ import { askClaude } from "@/lib/creative-studio/script";
 import { KLING_FRAMEWORK } from "@/lib/creative-studio/rules.generated";
 import { withoutNexliSections } from "@/lib/creative-studio/framework-sections";
 import { MAX_SCENES } from "@/lib/creative-studio/prompts";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 import type { CreativeFormat, PresenterInfo, SceneAsk, SceneSlot } from "@/lib/creative-studio/tables";
 
 /**
@@ -30,7 +31,7 @@ const READ_SCHEMA = {
 function context(firmName: string | null): string {
   return firmName
     ? `You are the creative partner in a video studio. This video is an ad for ${firmName}, one of Nexli's client firms. Nexli makes the firm's short Facebook/Instagram video ads and longer VSLs with an AI presenter rendered on Kling.`
-    : "You are the creative partner in Nexli's Creative Studio. Nexli makes short Facebook/Instagram video ads and longer VSLs (AI presenters rendered on Kling) that sell its Digital Rainmaker System to C-P-A firm owners: ads, funnel, booked calls and a client portal, built and run for the firm.";
+    : `You are the creative partner in Nexli's Creative Studio. Nexli makes short Facebook/Instagram video ads and longer VSLs (AI presenters rendered on Kling) that sell its Digital Rainmaker System to owners of C-P-A firms doing ${AUDIENCE.written}: ads, funnel, booked calls and a client portal, built and run for the firm.`;
 }
 
 export async function readScenes(args: {

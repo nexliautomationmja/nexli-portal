@@ -49,7 +49,7 @@ interface BatchRow {
 
 const SUGGESTIONS = [
   "Belief-shift ad: C-P-A firms think they need more clients to grow — show the math on fewer, bigger planning clients.",
-  "VSL for firms doing 750K–1M: why a tax-planning offer beats chasing returns, ending with booking a call.",
+  "VSL for firms doing $1M–$5M+: why a tax-planning offer beats chasing returns, ending with booking a call.",
   "Selfie-style ad: Daniela talks straight to owners writing the I-R-S a seven-figure check.",
 ];
 

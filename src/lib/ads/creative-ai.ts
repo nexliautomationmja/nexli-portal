@@ -11,6 +11,7 @@ import { ANGLES, FORMATS, fallbackMake, fitCounts, typeLabel, type CreativeTags,
 export { fallbackMake, fitCounts };
 import type { AdPlan } from "@/lib/ads/decide";
 import type { AdRow } from "@/lib/ads/types";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * Claude's two jobs in the daily plan: read each creative once (what format,
@@ -191,7 +192,7 @@ const MAKE_SCHEMA = {
   },
 } as const;
 
-const MAKE_RULES = `You plan the next ad creatives for a marketing agency (Nexli) whose ads sell its "Digital Rainmaker System" to CPA and accounting firm owners. Results are judged by booked calls.
+const MAKE_RULES = `You plan the next ad creatives for a marketing agency (Nexli) whose ads sell its "Digital Rainmaker System" to owners of CPA and accounting firms doing ${AUDIENCE.written}. Results are judged by booked calls.
 You get: how many new creatives the account needs, how each creative type performed over 30 days (cost per booked call is what matters most; cost per lead next), the ads with their results, and notes from the owner.
 Split exactly the requested number into 1-3 cards:
 - Most of them copy the best-performing type (more booked calls per dollar), as fresh variations of its best ads: new hooks, new scenes, same angle.

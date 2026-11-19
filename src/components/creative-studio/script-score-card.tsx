@@ -83,7 +83,9 @@ export function ScriptScoreCard({
           {improving
             ? "Rewriting it with the recommended changes and the current offer, then scoring it again…"
             : locked
-              ? "Not scored (approved before it could be)."
+              ? s?.subs.length
+                ? "Scored on an earlier checklist or an earlier version of the script; approved, so it isn't scored again."
+                : "Not scored (approved before it could be)."
               : "Scoring the script on 19 fixed checks…"}
         </p>
         {failed && (

@@ -1,3 +1,5 @@
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
+
 /**
  * How Manus analyzes Nexli's ad account: a short prompt (Manus caps prompt
  * text at ~5,000 tokens, files don't count) plus the playbook as a Markdown
@@ -12,7 +14,7 @@ export const ADS_AUTO_REPLY =
 
 export function promptText(opts: { trigger: "weekly" | "manual"; throughDate: string; hasConnector: boolean; stills: number }): string {
   return [
-    "You are a senior Meta ads strategist reviewing Nexli's ad account. Nexli sells the Digital Rainmaker System — paid-ads client acquisition — to owners of US CPA firms. The goal of the ads is the lowest cost per booked strategy call with qualified CPA firm owners, while keeping volume up.",
+    `You are a senior Meta ads strategist reviewing Nexli's ad account. Nexli sells the Digital Rainmaker System — paid-ads client acquisition — to owners of US CPA firms doing ${AUDIENCE.written}. The goal of the ads is the lowest cost per booked strategy call with qualified CPA firm owners, while keeping volume up.`,
     `This is the ${opts.trigger === "weekly" ? "weekly" : "on-demand"} analysis, with data through ${opts.throughDate} (the ad account's own timezone).`,
     "Attached:",
     "- ads-data-pack.json — the whole account: 7/30/90-day windows vs the previous period, every campaign, ad set and ad (with last-7-days vs the 14 days before for fatigue), placements, audience, tracking health, signals, goals, the history of earlier analyses and what Marcel did with their steps, and market_research (the latest Meta Ad Library research: proven competitor patterns and creative briefs) when there is one. It is the source of truth. Leads, booked calls and clients come from GoHighLevel; delivery and spend from Meta.",

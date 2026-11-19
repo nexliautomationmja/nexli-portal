@@ -6,6 +6,7 @@ import type { AdSettingsRow } from "@/lib/ads/settings";
 import type { ParsedAnalysis } from "@/lib/ads/parse";
 import type { ParsedResearch, ResearchIndex } from "@/lib/ads/research-parse";
 import { ADJACENT_SEEDS, RESEARCH_SEEDS } from "@/lib/ads/research-playbook";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * What Manus is given for Ad Library research (compact; no personal data):
@@ -86,7 +87,7 @@ export function buildResearchPack(src: {
     today,
     nexli: {
       offer: "The Digital Rainmaker System: done-for-you client acquisition for CPA firms — Meta ads, landing page, follow-up, and booked strategy calls with qualified firm owners",
-      ideal_client: "Owners and partners of US CPA / accounting firms who want more high-value clients",
+      ideal_client: `Owners and partners of US CPA / accounting firms doing ${AUDIENCE.written} who want more high-value clients`,
       // Nov 19 2026 pricing: no setup fee; 10% performance pay; the client pays its ad budget straight to Meta.
       setup_fee_usd: 0,
       monthly_usd: usd(AGENCY.FEE_MONTHLY_CENTS),

@@ -1,6 +1,6 @@
 import { RUBRIC } from "@/lib/ads/grader-shared";
 import { CHECKS } from "@/lib/creative-studio/script-score-shared";
-import { OFFER_FACTS } from "@/lib/creative-studio/offer-facts";
+import { AUDIENCE, OFFER_FACTS } from "@/lib/creative-studio/offer-facts";
 export { OFFER_FACTS };
 
 /**
@@ -31,7 +31,11 @@ export function recreateFocus(evidence: string | null): string {
 The reference may be one of Nexli's own earlier videos or VSLs, or someone else's. Either way, the new script sells Nexli's offer as it is today, the "Current Nexli offer facts" in section 9:
 ${OFFER_FACTS}
 
-Where the reference states an older offer, replace it with the facts above, never repeat it: no setup fee of any amount, no $9,997 or $4,997, no ad budget folded into the fee, no annual plan, no month to month, no first-month ad bonus or ad credits. The system itself hasn't changed: what Nexli builds and runs (sections 3b and 8) is the same, so keep its walkthrough and positioning lines.
+Where the reference states an older offer, replace it with the facts above, never repeat it: no setup fee of any amount, no $9,997 or $4,997, no ad budget folded into the fee, no annual plan, no month to month, no first-month ad bonus or ad credits.
+
+The firms it's for changed too: C-P-A firms doing ${AUDIENCE.spoken}. Where the reference names the old size (750K to 1 million a year), use the new one; the qualifier line is “${AUDIENCE.qualifier}”
+
+The system itself hasn't changed: what Nexli builds and runs (sections 3b and 8) is the same, so keep its walkthrough and positioning lines.
 
 ## Written to score
 Before anyone spends on it, this script is scored out of 100 on a fixed checklist: the grader's seven points, each split into checks worth fixed points. Most are measured straight from your words (clip 1's length, a number in clips 1–2, the qualifier line, the fee stated, no old offer, line lengths, clip count, the ask in the last 3 clips, no stock phrases, no 6-word run copied from the reference). Write so every check passes:

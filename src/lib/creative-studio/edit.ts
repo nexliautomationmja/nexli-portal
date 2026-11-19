@@ -5,6 +5,7 @@ import type { CreativeFormat, CreativeRig, FramePosition } from "@/lib/creative-
 import type { CaptionWord, EditOverlays, EditStyle, LadderRung, TimedText, VslCard, Zoom } from "@/remotion/types";
 import { normalizeWord } from "@/lib/creative-studio/words";
 import { TITLE_MAX, withoutDecor } from "@/lib/creative-studio/edit-text";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * Claude lays out the on-screen graphics for one finished cut, following
@@ -476,8 +477,8 @@ function rulebookSection(start: string, end: string): string {
   return EDITING_RULES.slice(i, j > i ? j : undefined).trim();
 }
 
-const SUGGEST_NEXLI = "a short Nexli video ad (Nexli runs client acquisition for CPA firms)";
-const SUGGEST_SYSTEM = `You help write one piece of on-screen text for a short Nexli video ad (Nexli runs client acquisition for CPA firms). The user typed their own version; you offer alternatives that keep their idea.
+const SUGGEST_NEXLI = `a short Nexli video ad (Nexli runs client acquisition for CPA firms doing ${AUDIENCE.written})`;
+const SUGGEST_SYSTEM = `You help write one piece of on-screen text for ${SUGGEST_NEXLI}. The user typed their own version; you offer alternatives that keep their idea.
 
 ${rulebookSection("## Creative rules", "## Brand")}
 

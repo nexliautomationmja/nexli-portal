@@ -1,6 +1,7 @@
 import { money } from "@/lib/ads/format";
 import type { AdRow } from "@/lib/ads/types";
 import type { AdPlan } from "@/lib/ads/decide";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * What kind of creative each ad is — format and angle, as Claude read it
@@ -145,7 +146,7 @@ export function fallbackMake(input: { add: number; ads: AdRow[]; tags: Record<st
   const t = ad ? input.tags[ad.id] : undefined;
   const video = t ? isVideoFormat(t.format) : ad?.creative.mediaType === "video";
   if (!ad || !best) {
-    return [{ label: "New creatives", count: input.add, format: "video", why: "No creative has proven itself yet — test fresh angles.", brief: "Fresh ads for CPA firm owners: lead with a pain they feel (no time, inconsistent clients, referrals drying up), show how the system fixes it, end with booking a call.", basedOn: [] }];
+    return [{ label: "New creatives", count: input.add, format: "video", why: "No creative has proven itself yet — test fresh angles.", brief: `Fresh ads for owners of CPA firms doing ${AUDIENCE.short}: lead with a pain they feel (no time, inconsistent clients, referrals drying up), show how the system fixes it, end with booking a call.`, basedOn: [] }];
   }
   return [
     {

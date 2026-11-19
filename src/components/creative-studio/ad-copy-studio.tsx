@@ -409,7 +409,7 @@ export function AdCopyStudio({ studio }: { studio: StudioView }) {
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     disabled={running}
-                    placeholder="e.g. the free tax-planning audit · firms doing $750K+"
+                    placeholder="e.g. the free tax-planning audit · firms doing $1M–$5M+"
                     className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-lime-300/50 focus:outline-none"
                   />
                 </label>

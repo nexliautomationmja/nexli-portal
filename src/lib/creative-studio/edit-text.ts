@@ -1,4 +1,5 @@
 import { ICON_KINDS, ICON_MOTIONS, type BoxColors, type EditOverlays, type IconFx, type TimedText } from "@/remotion/types";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * Hand-editing one piece of on-screen text (client-safe, shared by the edit
@@ -36,7 +37,7 @@ export function slotBrief(t: TextTarget): string {
     case "title":
       return "the title banner: a distillation of the video's idea, never a quote of what she says; short reads fastest (2–6 words), but up to 60 characters is fine when the user's version is longer";
     case "qualifier":
-      return "the red qualifier band: who this is for, short and filtering (e.g. \"For CPA firms doing $750K+\")";
+      return `the red qualifier band: who this is for, short and filtering (e.g. "For CPA firms doing ${AUDIENCE.short}")`;
     case "cta":
       return "the CTA card at the end: a short directional line (an arrow is added), e.g. \"Book your call below\"";
     case "sticker":

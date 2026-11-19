@@ -24,6 +24,7 @@ import { metaStructure } from "@/lib/ads/base-cache";
 import { LEVEL_LABEL, isMetaKind, money0, planBudget, planDuplicate, planNewCampaign, planStatus, type MetaLevel, type Structure } from "@/lib/ads/meta-changes-shared";
 import { metaWriteAccess, type MetaWriteAccess } from "@/lib/ads/meta-write";
 import { vslHeadline, vslPackSummary, type VslBoard } from "@/lib/ads/vsl-shared";
+import { AUDIENCE } from "@/lib/creative-studio/offer-facts";
 
 /**
  * The Ask chat on the Ads page: Marcel asks about his numbers in plain words;
@@ -48,7 +49,7 @@ type ChatRow = typeof adChats.$inferSelect;
 type Msg = { role: "user" | "assistant"; content: unknown[] | string };
 type Block = { type: string; [k: string]: unknown };
 
-const SYSTEM = `You are the ad analyst inside Nexli's Ads Command Center, talking with Marcel, who owns Nexli. Nexli sells the Digital Rainmaker System (done-for-you client acquisition: website, funnel, Meta ads, CRM, automations) to owners of US CPA and accounting firms. Every ad has one job: get the right firm owner to book a free strategy call. Booked calls matter most, then leads.
+const SYSTEM = `You are the ad analyst inside Nexli's Ads Command Center, talking with Marcel, who owns Nexli. Nexli sells the Digital Rainmaker System (done-for-you client acquisition: website, funnel, Meta ads, CRM, automations) to owners of US CPA and accounting firms doing ${AUDIENCE.written}. Every ad has one job: get the right firm owner to book a free strategy call. Booked calls matter most, then leads.
 
 WHAT YOU KNOW
 - Each of Marcel's messages starts with <account_now>: the latest numbers and today's Cut / Keep call on every live creative. The newest one is the truth; if it says the numbers are unchanged, use the last full one.
