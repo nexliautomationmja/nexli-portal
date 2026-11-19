@@ -237,6 +237,7 @@ export interface Business {
   cashCents: number;
   cacCents: number | null;
   closeRate: number | null;
+  /** A new client's first monthly Agency Fee ÷ CAC (was the setup fee ÷ CAC before the Nov 19 2026 pricing). */
   setupCoverage: number | null;
   cashRoas: number | null;
 }

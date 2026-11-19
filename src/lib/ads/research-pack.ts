@@ -1,4 +1,4 @@
-import { DRS_PRICING, TOTAL_MONTHLY_CENTS } from "@/lib/drs-pricing";
+import { AGENCY } from "@/lib/drs-pricing";
 import { money, pct } from "@/lib/ads/format";
 import { daysBetween } from "@/lib/ads/time";
 import type { AdsSnapshot } from "@/lib/ads/types";
@@ -87,8 +87,10 @@ export function buildResearchPack(src: {
     nexli: {
       offer: "The Digital Rainmaker System: done-for-you client acquisition for CPA firms — Meta ads, landing page, follow-up, and booked strategy calls with qualified firm owners",
       ideal_client: "Owners and partners of US CPA / accounting firms who want more high-value clients",
-      setup_fee_usd: usd(DRS_PRICING.SETUP_FEE_CENTS),
-      monthly_usd: usd(TOTAL_MONTHLY_CENTS),
+      // Nov 19 2026 pricing: no setup fee; 10% performance pay; the client pays its ad budget straight to Meta.
+      setup_fee_usd: 0,
+      monthly_usd: usd(AGENCY.FEE_MONTHLY_CENTS),
+      performance_pay_percent: AGENCY.PERFORMANCE_PERCENT,
       main_conversion: "booked strategy call",
       presenter: "Daniela",
       creative_styles: "9:16 talking-head videos with Daniela; static ads with the headline on the image (9:16 story + 4:5 feed)",

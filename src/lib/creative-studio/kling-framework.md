@@ -18,7 +18,7 @@ You return a clip-by-clip script. Each clip has a **Line**, a **Register**, an *
 
 **How to write the words**
 - Write **"C-P-A"** (never CPA) in spoken lines, and add a cue for each letter.
-- **Dollar figures as digits** in the line ($9,997, $15,000).
+- **Dollar figures as digits** in the line ($10,000, $15,000).
 - For Nexli's offer, say **"investment"**, never "price".
 - **Numbers must be pronounceable.** Every number Daniela says gets a pronunciation strategy (see §6).
 
@@ -79,7 +79,7 @@ In multi-person ads the **new-belief speaker (RIGHT)** delivers the qualifier an
 | 4 · What you get | Walk the system front to back (see §8). |
 | 5 · Who this is for | Qualifier line, plus one angle-specific "owners who…" line. |
 | 6 · Who this isn't for | Not a rescue. We don't babysit. "If you won't show up for your own firm, we can't show up for you." Shopping for a guarantee or the cheapest option → plenty of agencies for that. |
-| 7 · The investment | Transparent monthly investment, ad spend portion, setup fee and contract walked through on the call, real scarcity. |
+| 7 · The investment | Transparent monthly fee with no setup fee, ad budget paid straight to Meta, performance pay and contract walked through on the call, real scarcity. |
 | 8 · Book the call | Pick a time below. The next page shows the entire system. "Pick a spot below, and I'll see you on the next page." |
 
 Sections 5–8 are a **shared tail** reused across every VSL. Only the angle-specific "who it's for" line changes.
@@ -132,7 +132,7 @@ Look at the image and describe, specifically and factually:
 | Problem | Fix |
 |---|---|
 | "C-P-A" said as a word | Add: `She clearly pronounces each letter: C, P, A.` Same for C-E-O, P-and-L, I-R-S (`She says I-R-S as the letters I, R, S.`). |
-| Dollar amounts mangled | Add a guide. Write it exactly like this so she doesn't read both versions: `Pronunciation guide (she says each number only once): $9,997 as "nine thousand nine hundred ninety-seven dollars"; $5,000 as "five thousand dollars".` |
+| Dollar amounts mangled | Add a guide. Write it exactly like this so she doesn't read both versions: `Pronunciation guide (she says each number only once): $10,000 as "ten thousand dollars"; $5,000 as "five thousand dollars".` |
 | She says the number twice (digits plus the words in the note) | Drop the note for that line and write the amount plainly in the line: "750K to 1 million a year". Proven to work on Kling 3.0. |
 | Writing the amount fully in words still came out wrong | Go back to plain digits/K with no note (as above). |
 | Omni duo/trio turned "1 million" into "100 million" | Write "one million" as a word in multi-person prompts. Keep the spoken result identical to the single-presenter clips. |
@@ -196,8 +196,10 @@ Positioning lines that recur:
 ## 9. Current Nexli offer facts (verify before reuse)
 
 - **Qualifier:** C-P-A firms doing 750K to 1 million a year, who know they can 10x their business.
-- **Investment:** $9,997 a month, of which $5,000 goes straight to ad spend.
-- **Terms:** a one-time setup fee (walked through on the call) and a signed agreement: a six-month minimum on the monthly plan, counted from launch and then month to month, or a 12-month annual plan that doesn't renew automatically. Never say "no contract" or "cancel anytime".
+- **Investment:** $10,000 a month. No setup fee.
+- **Ad budget:** separate from Nexli's fee, at least $5,000 a month. The firm pays Meta directly on its own card; it never passes through Nexli.
+- **Performance pay:** 10%, on top of the monthly fee. Name it and never explain it: it's walked through on the call. Never call it a share of the firm's revenue, and never give the calculation or an example.
+- **Terms:** a signed six-month agreement, counted from signing, that renews six months at a time. There is no annual plan. Never say "no contract", "cancel anytime" or "month to month".
 - **Scarcity:** only taking on three more firms right now.
 - **Tax planning fees** prospects pay the firm: $15,000–$55,000.
 

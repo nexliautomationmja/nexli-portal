@@ -80,7 +80,7 @@ export function KpiRow({ s }: { s: AdsSnapshot }) {
     { key: "hold", label: "Hold rate", value: pct(c.holdRate), delta: d.holdRate, hint: "ThruPlays ÷ 3-second plays (video ads)" },
     { key: "lpv", label: "Page loads", value: pct(c.lpvRate, 0), delta: d.lpvRate, hint: "Landing page views ÷ link clicks" },
     { key: "close", label: "Close rate", value: pct(b.closeRate, 0), delta: bizDelta(b.closeRate, bd?.closeRate, 1), hint: "New clients ÷ booked calls (start date in the period)" },
-    { key: "cac", label: "CAC", value: money(b.cacCents), delta: bizDelta(b.cacCents, bd?.cacCents, -1), hint: "Spend ÷ new clients", sub: b.setupCoverage ? `setup fee covers it ${multiple(b.setupCoverage)}` : undefined },
+    { key: "cac", label: "CAC", value: money(b.cacCents), delta: bizDelta(b.cacCents, bd?.cacCents, -1), hint: "Spend ÷ new clients", sub: b.setupCoverage ? `first month's fee covers it ${multiple(b.setupCoverage)}` : undefined },
     { key: "roas", label: "Cash ROAS", value: multiple(b.cashRoas), delta: bizDelta(b.cashRoas, bd?.cashRoas, 1), hint: "Cash collected from new clients ÷ spend (ad budget pass-through excluded)" },
     { key: "clients", label: "New clients", value: count(b.newClients), delta: bizDelta(b.newClients, bd?.newClients, 1), hint: "Clients whose start date falls in the period" },
   ];

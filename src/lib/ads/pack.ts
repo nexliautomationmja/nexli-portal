@@ -1,5 +1,5 @@
 import type { vslPackSummary } from "@/lib/ads/vsl-shared";
-import { DRS_PRICING, PIPELINE, TOTAL_MONTHLY_CENTS } from "@/lib/drs-pricing";
+import { AGENCY, PIPELINE } from "@/lib/drs-pricing";
 import { buildAdsSnapshot } from "@/lib/ads/snapshot";
 import { decideAds } from "@/lib/ads/decide";
 import { THRESHOLDS } from "@/lib/ads/thresholds";
@@ -101,7 +101,7 @@ const businessPack = (b: Business | null) =>
         cash_collected_usd: usd(b.cashCents),
         cac_usd: usd(b.cacCents),
         close_rate: r4(b.closeRate),
-        setup_fee_coverage: r4(b.setupCoverage),
+        first_month_fee_coverage: r4(b.setupCoverage),
         cash_roas: r4(b.cashRoas),
       }
     : null;
@@ -226,8 +226,12 @@ export function buildPack(src: { s7: AdsSnapshot; s30: AdsSnapshot; s90: AdsSnap
       company: "Nexli — paid-ads client acquisition for CPA firms (the Digital Rainmaker System)",
       ideal_client: "Owners and partners of US CPA / accounting firms who want more high-value clients",
       path: "Meta ad → landing page → GoHighLevel lead → booked strategy call → signed client",
-      setup_fee_usd: usd(DRS_PRICING.SETUP_FEE_CENTS),
-      monthly_usd: usd(TOTAL_MONTHLY_CENTS),
+      // Nov 19 2026 pricing: no setup fee; the client pays its ad budget straight to Meta.
+      setup_fee_usd: 0,
+      monthly_usd: usd(AGENCY.FEE_MONTHLY_CENTS),
+      performance_pay_percent: AGENCY.PERFORMANCE_PERCENT,
+      performance_pay_basis: "the client's net attributed revenue, with the month's fee credited against it",
+      initial_term_months: AGENCY.TERM_MONTHS,
       average_deal_value_usd: usd(PIPELINE.DEFAULT_DEAL_VALUE_CENTS),
       main_conversion: "booked strategy call",
     },

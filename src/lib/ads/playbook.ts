@@ -5,7 +5,7 @@
  * minimum-data and learning-phase rules, and what a good next step looks like.
  */
 
-export const PLAYBOOK_VERSION = "ads-playbook-v2";
+export const PLAYBOOK_VERSION = "ads-playbook-v3";
 
 export const ADS_AUTO_REPLY =
   "This request comes from an automated tool, so nobody can answer questions right now. Use your best judgment from the data pack and the playbook and finish the analysis now. Advise only — don't change anything in any account.";
@@ -38,7 +38,7 @@ export function playbookMarkdown(): string {
   return `# Nexli ads analysis playbook (${PLAYBOOK_VERSION})
 
 ## 1. The business
-- Nexli sells the Digital Rainmaker System to owners and partners of US CPA / accounting firms: a $32,000 setup plus a monthly fee (see business_model in the pack). One new client is worth roughly the average_deal_value_usd in the pack.
+- Nexli sells the Digital Rainmaker System to owners and partners of US CPA / accounting firms: $10,000 a month with no setup fee, plus 10% performance pay on the client's net attributed revenue (see business_model in the pack). One new client is worth roughly the average_deal_value_usd in the pack.
 - The ads' job: booked strategy calls with qualified firm owners. Cost per booked call is the headline metric; cost per lead and click metrics only matter as far as they lead to booked calls and clients.
 - goals in the pack holds Marcel's targets (or an assumption from the account's history — say which) and his notes. Read the notes first; they explain recent changes.
 

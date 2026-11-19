@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { invoices } from "@/db/schema";
 import { adSpendOf, getBookOfBusiness } from "@/lib/book-of-business";
 import { getNexliAdminId } from "@/lib/foundation-project";
-import { DRS_PRICING } from "@/lib/drs-pricing";
+import { AGENCY } from "@/lib/drs-pricing";
 import { div } from "@/lib/ads/math";
 import type { Business } from "@/lib/ads/types";
 
@@ -44,7 +44,7 @@ export async function businessCounts(ownerId: string, since: Date, until: Date):
   return { newClients: fresh.length, cashCents };
 }
 
-/** CAC, close rate, setup coverage and cash ROAS from the counts and the window's spend. */
+/** CAC, close rate, first-month coverage and cash ROAS from the counts and the window's spend. */
 export function toBusiness(c: BusinessCounts, spendCents: number, booked: number | null): Business {
   const cac = div(spendCents, c.newClients);
   return {
@@ -52,7 +52,8 @@ export function toBusiness(c: BusinessCounts, spendCents: number, booked: number
     cashCents: c.cashCents,
     cacCents: cac === null ? null : Math.round(cac),
     closeRate: booked ? div(c.newClients, booked) : null,
-    setupCoverage: cac && cac > 0 ? DRS_PRICING.SETUP_FEE_CENTS / cac : null,
+    // Nov 19 2026 pricing has no setup fee: how many times a new client's first monthly fee covers what it cost to win them.
+    setupCoverage: cac && cac > 0 ? AGENCY.FEE_MONTHLY_CENTS / cac : null,
     cashRoas: div(c.cashCents, spendCents),
   };
 }
