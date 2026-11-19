@@ -59,7 +59,12 @@ const DRS_PERFORMANCE_HEADING = "3. PERFORMANCE PAY";
 export function nexliPaymentDisclosure(kind: NexliLetterKind, content?: string | null): string {
   const n = NEXLI_LEGAL.name;
   if (kind === "drs" && (content ?? "").includes(DRS_PERFORMANCE_HEADING)) {
-    return `Every charge under this agreement (the Agency Fee, a six-month prepayment and any Performance Pay invoice) can be paid by credit/debit card, ACH bank transfer or wire, at the same price. Card and ACH payments go through Stripe, Inc., Nexli's payment processor; wires go directly to ${n}'s bank account, using the details on the invoice. The monthly Agency Fee is on autopay: you pay the first invoice once and each later month is charged automatically to that payment method. Your advertising budget is not paid to Nexli: you pay the advertising platform directly, on your own payment method. Card details are handled by Stripe; Nexli never sees or stores your full card number. Nexli is not responsible for holds, delays or disputes imposed by your bank, card issuer or payment provider.`;
+    // The prepaid letter: the Six-Month Prepayment goes by bank transfer only, because of its amount.
+    const prepaid = (content ?? "").includes("a) Six-Month Prepayment:");
+    const how = prepaid
+      ? `The Six-Month Prepayment is paid by ACH bank transfer or wire directly to ${n}'s bank account, using the details on the invoice; cards are not accepted for it. Every other charge (the Agency Fee and any Performance Pay invoice) can be paid by credit/debit card, ACH bank transfer or wire, at the same price.`
+      : `Every charge under this agreement (the Agency Fee and any Performance Pay invoice) can be paid by credit/debit card, ACH bank transfer or wire, at the same price.`;
+    return `${how} Card and ACH payments go through Stripe, Inc., Nexli's payment processor; wires go directly to ${n}'s bank account, using the details on the invoice. The monthly Agency Fee is on autopay: you pay the first invoice once and each later month is charged automatically to that payment method. Your advertising budget is not paid to Nexli: you pay the advertising platform directly, on your own payment method. Card details are handled by Stripe; Nexli never sees or stores your full card number. Nexli is not responsible for holds, delays or disputes imposed by your bank, card issuer or payment provider.`;
   }
   switch (kind) {
     case "drs":

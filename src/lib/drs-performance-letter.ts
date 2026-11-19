@@ -88,6 +88,14 @@ export function agencyPrepayLine(prepayCents: number = AGENCY.PREPAY_CENTS): str
   return `a) Six-Month Prepayment: ${fmt(prepayCents)} USD`;
 }
 
+/**
+ * The prepaid letter's 2(a): because of its amount, the Six-Month
+ * Prepayment is paid by bank transfer only (Nov 19 2026, Marcel: "50 is ACH
+ * or wire by Mercury only due to amount"). Also its revision marker.
+ */
+export const PREPAY_BANK_ONLY =
+  "Because of its amount, the Six-Month Prepayment is paid by ACH bank transfer or wire directly to Provider's bank account, using the payment instructions shown on the invoice; card payments are not accepted for the Six-Month Prepayment.";
+
 /** Section 2's Performance Pay line (b on monthly, c on prepaid). */
 export function performanceLine(percent: number = AGENCY.PERFORMANCE_PERCENT): string {
   return `) Performance Pay: ${percent}% of Net Attributed Revenue`;
@@ -152,9 +160,9 @@ export function buildDrsPerformanceLetter(billing: AgencyBilling = "monthly"): s
   const letters = prepaid ? { performance: "c", budget: "d", term: "e" } : { performance: "b", budget: "c", term: "d" };
 
   const feeClauses = prepaid
-    ? `${agencyPrepayLine()} — Due upon execution of this Agreement, in place of the ${n(AGENCY.TERM_MONTHS)} monthly Agency Fees of ${fee} USD for the Initial Term (a saving of ${saving} USD). It pays for the complete Phase 1 build itemized in Section 1 and for the Phase 2 ongoing operation of all of it — ${upkeepScope} — for the Initial Term. There is no separate setup fee. ${oneSystem} The Six-Month Prepayment is non-refundable, in whole and in part.
+    ? `${agencyPrepayLine()} — Due upon execution of this Agreement, in place of the ${n(AGENCY.TERM_MONTHS)} monthly Agency Fees of ${fee} USD for the Initial Term (a saving of ${saving} USD). It pays for the complete Phase 1 build itemized in Section 1 and for the Phase 2 ongoing operation of all of it — ${upkeepScope} — for the Initial Term. There is no separate setup fee. ${oneSystem} ${PREPAY_BANK_ONLY} The Six-Month Prepayment is non-refundable, in whole and in part.
 
-b) Agency Fee after the Initial Term: ${fee} USD/month — Each renewal term under Section 4(d) is billed at this monthly Agency Fee, the first one due on the first day of the renewal term and each later one due monthly after that. Client pays the first of them once, by credit or debit card or ACH bank transfer, and each later Agency Fee is then charged automatically to that payment method (autopay). Client may instead prepay a renewal term, before it begins, at the Six-Month Prepayment amount then offered by Provider.`
+b) Agency Fee after the Initial Term: ${fee} USD/month — Each renewal term under Section 4(d) is billed at this monthly Agency Fee, the first one due on the first day of the renewal term and each later one due monthly after that. Client pays the first of them once, by credit or debit card or ACH bank transfer, and each later Agency Fee is then charged automatically to that payment method (autopay). Client may instead prepay a renewal term, before it begins, at the Six-Month Prepayment amount then offered by Provider, paid by ACH bank transfer or wire in the same way as the Six-Month Prepayment.`
     : `${agencyFeeLine()} — The first Agency Fee is due upon execution of this Agreement, and each later Agency Fee is due monthly after that. Client pays the first invoice once, by credit or debit card or ACH bank transfer, and each later Agency Fee is then charged automatically to that payment method (autopay). The Agency Fee pays for the complete Phase 1 build itemized in Section 1 and for the Phase 2 ongoing operation of all of it — ${upkeepScope}. There is no separate setup fee. ${oneSystem}`;
 
   const feeStructure = `${feeClauses}
@@ -228,7 +236,7 @@ j) Client's Professional Rules: Performance Pay is compensation for Provider's m
 
 4. PAYMENT TERMS
 
-a) How Each Charge Is Paid: Every charge under this Agreement may be paid by credit or debit card, ACH bank transfer or wire, at the same price: no surcharge or card price applies to card payments. Card and ACH payments are processed through Stripe; wire instructions are shown on the invoice or available from Provider on request. Agency Fees run on autopay: Client pays the first Agency Fee invoice once, by card or ACH, and each later Agency Fee is charged automatically to that payment method on its due date. The exact amount is shown on each invoice before payment.
+a) How Each Charge Is Paid: ${prepaid ? "The Six-Month Prepayment, and any later prepaid term, is paid by ACH bank transfer or wire only, as set out in Section 2(a). Every other charge" : "Every charge"} under this Agreement may be paid by credit or debit card, ACH bank transfer or wire, at the same price: no surcharge or card price applies to card payments. Card and ACH payments are processed through Stripe; wire instructions are shown on the invoice or available from Provider on request. Agency Fees run on autopay: Client pays the first Agency Fee invoice once, by card or ACH, and each later Agency Fee is charged automatically to that payment method on its due date. The exact amount is shown on each invoice before payment.
 
 b) All fees are non-refundable once charged, in whole and in part, and no partial-month or partial-term refunds are issued, except that Provider refunds in full any duplicate or erroneous charge. Client will not dispute, reverse or charge back a fee properly charged under this Agreement through Client's bank, card issuer or payment provider. Any such dispute is a material breach of this Agreement; Client agrees that this signed Agreement may be submitted as evidence that the charge was authorized, and Client remains liable for the full amount disputed plus any dispute fees and reasonable collection costs, including attorneys' fees.
 
@@ -373,7 +381,9 @@ export function isCurrentPerformanceRevision(content: string, billing: AgencyBil
   return (
     content.includes(billing === "prepay" ? agencyPrepayLine() : agencyFeeLine()) &&
     content.includes(performanceLine()) &&
-    PERFORMANCE_REVISION_MARKERS.every((m) => content.includes(m))
+    PERFORMANCE_REVISION_MARKERS.every((m) => content.includes(m)) &&
+    // The prepaid letter's bank-transfer-only clause (Nov 19 2026, later the same day).
+    (billing !== "prepay" || content.includes(PREPAY_BANK_ONLY))
   );
 }
 

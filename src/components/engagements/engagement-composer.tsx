@@ -162,7 +162,7 @@ export function EngagementComposer() {
     if (offer === "drs_agency_monthly")
       return { title: "Digital Rainmaker · Monthly", price: `${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)}/mo from signing + ${performance}` };
     if (offer === "drs_agency_prepay")
-      return { title: "Digital Rainmaker · Prepaid", price: `${fmtWhole(AGENCY.PREPAY_CENTS)} at signing for ${AGENCY.TERM_MONTHS} months + ${performance}` };
+      return { title: "Digital Rainmaker · Prepaid", price: `${fmtWhole(AGENCY.PREPAY_CENTS)} at signing by ACH or wire, for ${AGENCY.TERM_MONTHS} months + ${performance}` };
     const version = pricing === "original" ? " (original pricing)" : " (previous pricing)";
     if (offer === "drs_monthly")
       return {
@@ -636,7 +636,7 @@ export function EngagementComposer() {
                     accent="from-cyan-500/25 to-emerald-500/10"
                     title="Digital Rainmaker · Prepaid"
                     price={`${fmtWhole(AGENCY.PREPAY_CENTS)} for ${AGENCY.TERM_MONTHS} months`}
-                    sub={`Paid at signing, saves ${fmtWhole(AGENCY_PREPAY_SAVING_CENTS)} · no setup fee · ad budget (from ${fmtWhole(AGENCY.MIN_AD_BUDGET_CENTS)}/mo) paid straight to Meta · later terms ${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)}/mo unless prepaid again`}
+                    sub={`Paid at signing by ACH or wire, saves ${fmtWhole(AGENCY_PREPAY_SAVING_CENTS)} · no setup fee · ad budget (from ${fmtWhole(AGENCY.MIN_AD_BUDGET_CENTS)}/mo) paid straight to Meta · later terms ${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)}/mo unless prepaid again`}
                     bonus={`+ ${AGENCY.PERFORMANCE_PERCENT}% performance pay · each prepaid month counts as ${fmtWhole(AGENCY.FEE_MONTHLY_CENTS)}`}
                   />
                 )}

@@ -147,7 +147,7 @@ function SignedNextSteps({
     <>
       <p className="text-sm mt-2 text-neutral-300">
         {agency
-          ? `Next: your ${dollars(agency.prepayCents ?? agency.feeCents)} invoice is in your inbox. Your Launch Pad opens the moment it's paid.`
+          ? `Next: your ${dollars(agency.prepayCents ?? agency.feeCents)} invoice is in your inbox.${agency.prepayCents ? " Pay it by bank transfer (ACH or wire)." : ""} Your Launch Pad opens the moment it's paid.`
           : plan === "annual"
             ? `Next: your ${dollars(annualUpfrontCents(drsLetterTerms(content).setupCents))} invoice is in your inbox. Your Launch Pad opens the moment it's paid.`
             : "Next: your setup invoice is in your inbox. Your Launch Pad opens the moment it's paid."}

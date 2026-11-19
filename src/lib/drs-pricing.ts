@@ -362,8 +362,10 @@ export function cardPriceCents(achPriceCents: number): number {
  * (BANK_TRANSFER_DRS_ROLES); listing them here makes every other path —
  * Mercury off, a failed admin lookup, the classic invoice page — refuse card
  * too (Stripe ACH only). Enterprise invoices carry metadata.achOnly.
+ * Nov 19 2026 (Marcel, "due to amount"): the new pricing's $50,000 six-month
+ * prepayment ("agency_prepay") too.
  */
-export const ACH_ONLY_DRS_ROLES: readonly string[] = ["setup_fee", "setup_annual", "platform_annual_renewal"];
+export const ACH_ONLY_DRS_ROLES: readonly string[] = ["setup_fee", "setup_annual", "platform_annual_renewal", "agency_prepay"];
 
 /** DRS invoices covered by the letter's chargeback waiver (paid at signing). */
 export const CHARGEBACK_WAIVED_DRS_ROLES = ["setup_fee", "setup_annual"] as const;
@@ -377,10 +379,11 @@ export function isChargebackWaivedInvoiceMeta(metadata: unknown): boolean {
  * Invoices paid by bank transfer (ACH or wire) straight into Nexli's Mercury
  * account instead of through Stripe (Nov 7 2026, Marcel): processors balk at
  * $32K–$500K charges. The setup fee, the annual up-front invoice and annual
- * renewals by role, plus every Enterprise invoice. Monthly invoices stay on
- * Stripe autopay. Only applies once Mercury is connected (lib/mercury.ts).
+ * renewals by role, plus every Enterprise invoice — and, on the Nov 19 2026
+ * pricing, the $50,000 six-month prepayment. Monthly invoices stay on Stripe
+ * autopay. Only applies once Mercury is connected (lib/mercury.ts).
  */
-export const BANK_TRANSFER_DRS_ROLES = ["setup_fee", "setup_annual", "platform_annual_renewal"] as const;
+export const BANK_TRANSFER_DRS_ROLES = ["setup_fee", "setup_annual", "platform_annual_renewal", "agency_prepay"] as const;
 
 export function isBankTransferInvoiceMeta(metadata: unknown): boolean {
   const meta = (metadata ?? {}) as { drsRole?: unknown; offer?: unknown };
@@ -399,14 +402,14 @@ export function isAchOnlyInvoiceMeta(metadata: unknown): boolean {
 }
 
 /**
- * New-pricing invoices that can ALSO be paid by wire (Nov 19 2026;
- * nexli.net: "every charge can be paid by card, ACH or wire"): the six-month
- * prepayment and Performance Pay invoices. They stay on Stripe (card or ACH)
- * and, once Mercury is connected, the pay page also shows the bank details;
- * a wire that arrives is matched like any other transfer (lib/mercury.ts).
- * The monthly Agency Fee is on autopay (card or ACH), so it isn't here.
+ * New-pricing invoices that can ALSO be paid by wire (Nov 19 2026): the
+ * Performance Pay invoices. They stay on Stripe (card or ACH) and, once
+ * Mercury is connected, the pay page also shows the bank details; a wire that
+ * arrives is matched like any other transfer (lib/mercury.ts). The monthly
+ * Agency Fee is on autopay (card or ACH); the $50,000 prepayment is bank
+ * transfer only (BANK_TRANSFER_DRS_ROLES).
  */
-export const WIRE_OPTION_DRS_ROLES = ["agency_prepay", "performance_pay"] as const;
+export const WIRE_OPTION_DRS_ROLES = ["performance_pay"] as const;
 
 export function isWireOptionInvoiceMeta(metadata: unknown): boolean {
   const role = ((metadata ?? {}) as { drsRole?: unknown }).drsRole;

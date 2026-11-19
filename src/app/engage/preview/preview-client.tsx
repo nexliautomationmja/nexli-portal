@@ -199,7 +199,7 @@ export function EngagePreviewClient() {
             <p className="text-sm mt-1 text-neutral-300">
               {agency ? (
                 <>
-                  Next: your {agency.prepay ?? agency.fee} invoice arrives by email. Pay it and your Launch Pad opens.
+                  Next: your {agency.prepay ?? agency.fee} invoice arrives by email. Pay it{agency.prepay ? " by bank transfer (ACH or wire)" : ""} and your Launch Pad opens.
                 </>
               ) : (
                 <>

@@ -455,7 +455,7 @@ export function drsAgencySigningSpecs(terms: PerformanceLetterTerms): DrsInvoice
         totalCents: prepay,
         adSpendCents: 0,
         label: "Six-month prepayment",
-        notes: `Six-Month Prepayment for the Digital Rainmaker System: the build and running all of it for your first ${terms.termMonths} months, in place of ${terms.termMonths} monthly Agency Fees of ${fee}. There is no setup fee. Due at signing; your Launch Pad opens once it is paid. Non-refundable. ${performance} ${adBudget}`,
+        notes: `Six-Month Prepayment for the Digital Rainmaker System: the build and running all of it for your first ${terms.termMonths} months, in place of ${terms.termMonths} monthly Agency Fees of ${fee}. There is no setup fee. Due at signing; your Launch Pad opens once it is paid. Non-refundable. Paid by bank transfer (ACH or wire); cards are not accepted. ${performance} ${adBudget}`,
         lines: [
           {
             description: `Digital Rainmaker System — Six-Month Prepayment (months 1–${terms.termMonths})`,

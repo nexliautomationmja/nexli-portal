@@ -219,7 +219,7 @@ export const DRS_PERFORMANCE_SECTION_META: Record<string, SectionMeta> = {
     summary: (ctx) => {
       const f = agencyFigures(agencyOf(ctx));
       const fee = f.prepay
-        ? `${f.prepay} is due at signing and covers your first ${f.term} months, in place of ${f.term} monthly fees of ${f.fee} (you save ${f.saving}). Later terms are billed ${f.fee} a month on autopay unless you prepay again.`
+        ? `${f.prepay} is due at signing, paid by bank transfer (ACH or wire), and covers your first ${f.term} months, in place of ${f.term} monthly fees of ${f.fee} (you save ${f.saving}). Later terms are billed ${f.fee} a month on autopay unless you prepay again.`
         : `${f.fee} a month. The first ${f.fee} is due at signing, and each month after is charged automatically.`;
       return `${fee} On top of that comes ${f.percent} performance pay (Section 3): ${f.prepay ? `each prepaid month counts as ${f.fee} toward it` : `your ${f.fee} for the month counts toward it`}, so you're only invoiced the difference. Your ad budget, at least ${f.minBudget} a month, isn't paid to Nexli: you pay the ad platform directly on your own card, within the budget you approve. Initial term: ${f.term} months from signing, renewing ${f.term} months at a time.`;
     },
@@ -241,7 +241,10 @@ export const DRS_PERFORMANCE_SECTION_META: Record<string, SectionMeta> = {
     accent: "cyan",
     summary: (ctx) => {
       const f = agencyFigures(agencyOf(ctx));
-      return `Every charge can be paid by card, ACH or wire at the same price; the monthly fee runs on autopay after the first payment. Fees are non-refundable, except that a duplicate or mistaken charge is refunded in full, and by signing you agree not to dispute a properly charged fee with your bank or card issuer. The agreement takes effect, work starts and your Launch Pad opens once ${f.prepay ? `the ${f.prepay} prepayment` : `the first ${f.fee}`} is paid. Your ${f.term}-month term counts from the day you sign and renews ${f.term} months at a time. To stop a renewal, give written notice at least ${f.notice} days before the term ends; later notice ends the agreement a term later. The fees and performance pay for a term stay payable through its end.`;
+      const how = f.prepay
+        ? `The ${f.prepay} prepayment is paid by bank transfer (ACH or wire) straight to Nexli's bank account, using the details on the invoice; cards aren't accepted for it. Every other charge can be paid by card, ACH or wire at the same price, and the monthly fee runs on autopay after the first payment.`
+        : "Every charge can be paid by card, ACH or wire at the same price; the monthly fee runs on autopay after the first payment.";
+      return `${how} Fees are non-refundable, except that a duplicate or mistaken charge is refunded in full, and by signing you agree not to dispute a properly charged fee with your bank or card issuer. The agreement takes effect, work starts and your Launch Pad opens once ${f.prepay ? `the ${f.prepay} prepayment` : `the first ${f.fee}`} is paid. Your ${f.term}-month term counts from the day you sign and renews ${f.term} months at a time. To stop a renewal, give written notice at least ${f.notice} days before the term ends; later notice ends the agreement a term later. The fees and performance pay for a term stay payable through its end.`;
     },
   },
   "PROJECT TIMELINE & CLIENT COOPERATION": {

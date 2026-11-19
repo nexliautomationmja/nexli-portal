@@ -983,9 +983,10 @@ function nextSteps(kind: InvoiceKind, autopay: boolean, bankTransfer: boolean, f
             autopay ? "Autopay handles each month" : "Weekly updates from your team",
           ];
     case "prepay":
+      // Paid by bank transfer into Mercury (BANK_TRANSFER_DRS_ROLES); Stripe ACH only if Mercury is off.
       return firstPayment
-        ? ["Pay this invoice", "Your Launch Pad opens", "We start your build"]
-        : ["Pay this invoice", "Your next six months are covered", "Same team, same weekly updates"];
+        ? [bankTransfer ? "Send the bank transfer" : "Pay this invoice", "We confirm it landed", "Your Launch Pad opens"]
+        : [bankTransfer ? "Send the bank transfer" : "Pay this invoice", "We confirm it landed", "Your next six months are covered"];
     case "performance":
       return ["Pay this invoice", "Receipt emailed to you", "Next statement after your next month"];
   }

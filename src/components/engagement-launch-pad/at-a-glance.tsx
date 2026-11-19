@@ -182,7 +182,7 @@ export function DrsPerformanceAtAGlance({ terms }: { terms: PerformanceLetterTer
       ? {
           label: "Six-month prepayment",
           value: f.prepay,
-          sub: `due at signing · covers your first ${f.term} months · no setup fee · later terms ${f.fee}/mo`,
+          sub: `due at signing · ACH or wire · covers your first ${f.term} months · no setup fee · later terms ${f.fee}/mo`,
           accent: "blue",
         }
       : { label: "Agency fee", value: `${f.fee}/mo`, sub: "first one at signing · then autopay · no setup fee", accent: "blue" },
@@ -209,7 +209,7 @@ export function DrsPerformanceAtAGlance({ terms }: { terms: PerformanceLetterTer
     {
       n: 1,
       title: "Pay the first invoice",
-      sub: f.prepay ? `${f.prepay} at signing · card, ACH or wire` : `${f.fee} at signing · card or ACH`,
+      sub: f.prepay ? `${f.prepay} at signing · ACH or wire` : `${f.fee} at signing · card or ACH`,
     },
     { n: 2, title: "Launch Pad opens, build begins", sub: "Opens once paid · submit your items within 5 days" },
     { n: 3, title: "Launch: your ads go live", sub: `About ${LAUNCH_TARGET_DAYS} days after your materials` },
