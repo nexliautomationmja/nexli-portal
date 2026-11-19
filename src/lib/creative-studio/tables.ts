@@ -4,6 +4,7 @@ import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle
 import { users } from "@/db/schema";
 import type { CaptionWord, EditOverlays, EditStyle, PipTrack } from "@/remotion/types";
 import type { HookBasis, HookIdea, HookOrigin, HookRead } from "@/lib/creative-studio/hook-shared";
+import type { ScriptScore } from "@/lib/creative-studio/script-score-shared";
 
 /**
  * Creative Studio tables (admin-only tab: frame → script → Kling clips →
@@ -437,6 +438,8 @@ export const creativeProjects = pgTable("creative_projects", {
   media: jsonb("media").$type<MediaInfo | null>(),
   /** Made from a hook test: the original video, the hook, and the original's trims and edit look. Null on every other video. */
   hookOf: jsonb("hook_of").$type<HookOrigin | null>(),
+  /** The script's score out of 100 on the grader's points (Nexli's studio, videos to recreate; script-score-shared.ts). */
+  scriptScore: jsonb("script_score").$type<ScriptScore | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -450,6 +453,8 @@ export interface BatchPlanItem {
   shot: string;
   /** Index into the frames the user pasted, or null = Manus makes one. */
   frame: number | null;
+  /** A video to recreate (Nov 19 2026): its reference is uploaded to it, and Manus makes its look from that. */
+  recreate?: boolean;
 }
 
 /** Several videos made together from one idea (up to 10 ads or 5 VSLs). */
@@ -1132,6 +1137,8 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(sql`ALTER TABLE "creative_studios" ADD COLUMN IF NOT EXISTS "default_presenter_id" uuid`);
       // Nov 2026 Hook Tester.
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "hook_of" jsonb`);
+      // Nov 19 2026 script score (recreated videos).
+      await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "script_score" jsonb`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_hook_tests" (
           "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

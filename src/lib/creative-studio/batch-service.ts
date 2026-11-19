@@ -9,7 +9,10 @@ import {
   creativeProjects,
   isWaiting,
   type CreativeFormat,
+  type SourceMeta,
 } from "@/lib/creative-studio/tables";
+import { claimLive } from "@/lib/creative-studio/reaction-shared";
+import { nextScoreStep, pendingLive, scoreEligible, scriptKey } from "@/lib/creative-studio/script-score-shared";
 import { CREDITS_PER_SECOND } from "@/lib/creative-studio/prompts";
 import { signPaths } from "@/lib/creative-studio/storage";
 import { studioById, studioRef, type StudioRef } from "@/lib/creative-studio/studios";
@@ -32,6 +35,17 @@ export interface BatchVideo {
   finalCut: boolean;
   edit: { status: string; style: string; progress: number; version: number; waiting: boolean } | null;
   adCopy: boolean;
+  /** A video to recreate (Nov 19 2026): its reference video, uploaded and read before anything else. Null for every other video. */
+  recreate: { assetId: string | null; filename: string; analyzed: boolean; reading: boolean; error: string | null } | null;
+  /** Scripts recreated in Nexli's studio: the score out of 100 and what to do next with it (script-score-shared.ts). */
+  score: {
+    value: number | null;
+    band: string | null;
+    before: number | null;
+    /** A score or improvement running now. */
+    running: "score" | "improve" | null;
+    next: "score" | "improve" | null;
+  } | null;
 }
 
 export interface BatchSummary {
@@ -77,12 +91,13 @@ export async function batchSummary(batch: typeof creativeBatches.$inferSelect): 
         error: creativeAssets.error,
         sort: creativeAssets.sort,
         createdAt: creativeAssets.createdAt,
+        metadata: creativeAssets.metadata,
       })
       .from(creativeAssets)
-      .where(and(inArray(creativeAssets.projectId, ids), inArray(creativeAssets.kind, ["frame", "frame_option", "manus_task", "final_cut", "ad_copy"])))
+      .where(and(inArray(creativeAssets.projectId, ids), inArray(creativeAssets.kind, ["frame", "frame_option", "manus_task", "final_cut", "ad_copy", "media_video"])))
       .orderBy(asc(creativeAssets.createdAt)),
     db
-      .select({ projectId: creativeClips.projectId, status: creativeClips.status, durationS: creativeClips.durationS })
+      .select({ projectId: creativeClips.projectId, status: creativeClips.status, durationS: creativeClips.durationS, section: creativeClips.section, line: creativeClips.line, idx: creativeClips.idx })
       .from(creativeClips)
       .where(inArray(creativeClips.projectId, ids)),
     db
@@ -119,6 +134,13 @@ export async function batchSummary(batch: typeof creativeBatches.$inferSelect): 
     const edit = edits.find((e) => e.projectId === p.id);
     const framePath = firstFrame.get(p.id);
     const item = batch.plan[p.batchIndex ?? -1];
+    // A video to recreate: its reference (uploaded by the browser right after the batch was made).
+    const refId = p.media?.mode === "recreate" ? p.media.ids[0] ?? null : null;
+    const ref = refId ? mine.find((a) => a.id === refId && a.kind === "media_video") : undefined;
+    const refMeta = (ref?.metadata ?? {}) as SourceMeta;
+    const ordered = [...pc].sort((a, b) => a.idx - b.idx);
+    const scored = p.scriptScore ? { ...p.scriptScore, stale: p.scriptScore.key !== scriptKey(ordered) } : null;
+    const eligible = scoreEligible(p);
     return {
       id: p.id,
       index: p.batchIndex ?? 0,
@@ -142,6 +164,25 @@ export async function batchSummary(batch: typeof creativeBatches.$inferSelect): 
       finalCut: mine.some((a) => a.kind === "final_cut"),
       edit: edit ? { status: edit.status, style: edit.style, progress: edit.progress, version: edit.version, waiting: isWaiting(edit) } : null,
       adCopy: mine.some((a) => a.kind === "ad_copy"),
+      recreate:
+        p.media?.mode === "recreate" || (batch.plan[p.batchIndex ?? -1]?.recreate ?? false)
+          ? {
+              assetId: ref?.id ?? null,
+              filename: refMeta.filename ?? "video",
+              analyzed: Boolean(refMeta.analyzedAt),
+              reading: claimLive(refMeta.claims?.analyze),
+              error: refMeta.analyzeError ?? null,
+            }
+          : null,
+      score: eligible
+        ? {
+            value: scored && !scored.stale && scored.subs.length ? scored.score : null,
+            band: scored && !scored.stale && scored.subs.length ? scored.band : null,
+            before: scored && !scored.stale ? scored.before : null,
+            running: scored?.pending && pendingLive(scored) ? scored.pending.kind : null,
+            next: nextScoreStep({ eligible, status: p.status, clips: pc.length, score: scored }),
+          }
+        : null,
     };
   });
   return { id: batch.id, studio, format: batch.format, count: batch.count, brief: batch.brief, createdAt: batch.createdAt.toISOString(), videos };

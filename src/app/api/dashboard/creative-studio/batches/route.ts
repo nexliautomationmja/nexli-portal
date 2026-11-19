@@ -8,6 +8,7 @@ import { cleanFormatRig } from "@/lib/creative-studio/validate";
 import { requireStudioAdmin } from "@/lib/creative-studio/access";
 import { inStudio, studioFromRequest, studioNotFound } from "@/lib/creative-studio/studios";
 import { BATCH_MAX } from "@/lib/creative-studio/batch-shared";
+import { RECREATE_BATCH_MAX } from "@/lib/creative-studio/reaction-shared";
 
 /** Batches for one studio's home (`?studio=`), with how far their videos have got. */
 export async function GET(req: NextRequest) {
@@ -52,13 +53,17 @@ export async function GET(req: NextRequest) {
  * video (same as "New video", with its own brief). Pasted frames are
  * uploaded to their projects by the browser afterwards.
  * POST { format, brief, items: [{ title, direction, shot, frame }] }
+ * POST { format, brief, recreate: true, items: [{ title, direction? }] } —
+ *   videos to recreate (Nov 19 2026, up to 5): each gets its reference video
+ *   from the browser right after, and Manus makes its look from that (no shot).
  */
 export async function POST(req: NextRequest) {
   const access = await requireStudioAdmin();
   if (!access.ok) return access.response;
   const studio = await studioFromRequest(access.ownerId, req);
   if (!studio) return studioNotFound();
-  const body = (await req.json().catch(() => null)) as { format?: unknown; brief?: unknown; items?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { format?: unknown; brief?: unknown; items?: unknown; recreate?: unknown } | null;
+  const recreate = body?.recreate === true;
   const { format, rig } = cleanFormatRig(body?.format, null);
   const brief = typeof body?.brief === "string" ? body.brief.trim().slice(0, 6000) : "";
   const raw = Array.isArray(body?.items) ? (body.items as Record<string, unknown>[]) : [];
@@ -68,10 +73,15 @@ export async function POST(req: NextRequest) {
       direction: typeof i?.direction === "string" ? i.direction.trim().slice(0, 4000) : "",
       shot: typeof i?.shot === "string" ? i.shot.trim().slice(0, 600) : "",
       frame: typeof i?.frame === "number" && Number.isInteger(i.frame) && i.frame >= 0 ? i.frame : null,
+      ...(recreate ? { recreate: true, shot: "", frame: null } : {}),
     }))
-    .filter((i) => i.direction);
-  if (items.length < 2) return NextResponse.json({ error: "A batch needs at least 2 videos with a description" }, { status: 400 });
-  if (items.length > BATCH_MAX[format]) {
+    // A video to recreate needs no description: Claude takes it from the reference.
+    .filter((i) => recreate || i.direction);
+  if (items.length < 2) return NextResponse.json({ error: recreate ? "Recreating several videos needs at least 2" : "A batch needs at least 2 videos with a description" }, { status: 400 });
+  if (recreate && items.length > RECREATE_BATCH_MAX) {
+    return NextResponse.json({ error: `You can recreate up to ${RECREATE_BATCH_MAX} videos at once` }, { status: 400 });
+  }
+  if (!recreate && items.length > BATCH_MAX[format]) {
     return NextResponse.json({ error: `A batch can be at most ${BATCH_MAX[format]} ${format === "vsl_16x9" ? "VSLs" : "ads"}` }, { status: 400 });
   }
 

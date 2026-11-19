@@ -10,6 +10,7 @@ import { api, send } from "@/components/creative-studio/client";
 import { AssistantCard, Chip, SP, SvgIcon, UserBubble } from "@/components/creative-studio/canvas";
 import { WatchPart } from "@/components/creative-studio/source-card";
 import { ShowPart } from "@/components/creative-studio/show-part";
+import { ScriptScoreCard } from "@/components/creative-studio/script-score-card";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -163,6 +164,8 @@ export function ScriptCard({
             </div>
           ))}
         </div>
+
+        <ScriptScoreCard detail={detail} locked={locked} onChange={onChange} onError={onError} />
 
         {p.scriptNotes && (
           <div className="mt-3 rounded-xl border border-violet-500/20 bg-violet-500/[0.07] px-3.5 py-2.5 text-xs leading-relaxed text-violet-100/90 whitespace-pre-line">

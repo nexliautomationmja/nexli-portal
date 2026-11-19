@@ -7,7 +7,7 @@ import { loadProject, notFound, requireStudioAdmin } from "@/lib/creative-studio
 import { projectDetail } from "@/lib/creative-studio/service";
 import { createUploadTarget, removePaths } from "@/lib/creative-studio/storage";
 import { assetFiles, mediaItems, sourceOf } from "@/lib/creative-studio/source";
-import { SOURCE_MAX_BYTES, SOURCE_MAX_SECONDS, SOURCE_TYPES, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
+import { SOURCE_MAX_BYTES, SOURCE_TYPES, maxSecondsFor, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const shape = new RegExp(`^${project.id}/media/[0-9a-f-]{36}\\.(mp4|mov)$`, "i");
     if (!shape.test(path)) return NextResponse.json({ error: "Invalid path" }, { status: 400 });
     const durationS = num(body.durationS, 36_000);
-    if (durationS && durationS > SOURCE_MAX_SECONDS + 0.5) return NextResponse.json({ error: tooLongMessage(durationS) }, { status: 400 });
+    if (durationS && durationS > maxSecondsFor(mode) + 0.5) return NextResponse.json({ error: tooLongMessage(durationS, maxSecondsFor(mode)) }, { status: 400 });
 
     const startOver = body.replace === true || project.media?.mode !== mode || mode === "recreate";
     const keep = startOver ? [] : project.media?.ids ?? [];

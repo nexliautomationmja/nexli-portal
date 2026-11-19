@@ -425,6 +425,8 @@ export interface ScriptInput {
   presenter?: PresenterInfo;
   /** A video to recreate: Claude copies its structure, hook and pacing (never its words). */
   reference?: ReferenceVideo;
+  /** Nexli's studio, a video to recreate: the current offer, the grader's points and his hook results (recreate-focus.ts). */
+  addendum?: string;
 }
 
 /** A reference video as Claude reads it: length, timed phrases, stills. */
@@ -479,8 +481,9 @@ function frameBlocks(urls: string[]): Anthropic.ImageBlockParam[] {
   return urls.slice(0, 4).map((url) => ({ type: "image", source: { type: "url", url } }));
 }
 
-async function callClaude(content: Anthropic.ContentBlockParam[], schema: object, maxTokens: number, firm = "", story = false, reference = false): Promise<unknown> {
-  const base = `${story ? STORY_SYSTEM : SYSTEM}${reference ? `\n${REFERENCE_RULES}` : ""}`;
+async function callClaude(content: Anthropic.ContentBlockParam[], schema: object, maxTokens: number, firm = "", story = false, reference = false, addendum = ""): Promise<unknown> {
+  // `addendum`: only a video to recreate in Nexli's studio has one (recreate-focus.ts); every other request is unchanged.
+  const base = `${story ? STORY_SYSTEM : SYSTEM}${reference ? `\n${REFERENCE_RULES}` : ""}${addendum && !firm ? addendum : ""}`;
   return askClaude({
     // A client studio: Nexli's own walkthrough and offer facts are cut out, the firm's brief added.
     system: firm ? `${withoutNexliSections(base)}${firm}` : base,
@@ -596,7 +599,8 @@ export async function reviseScript(args: {
       48_000,
       input.firm,
       true,
-      Boolean(input.reference)
+      Boolean(input.reference),
+      input.addendum
     )) as RawStory;
     return toStoryResult(raw, input);
   }
@@ -620,7 +624,8 @@ export async function reviseScript(args: {
     48_000,
     input.firm,
     false,
-    Boolean(input.reference)
+    Boolean(input.reference),
+    input.addendum
   )) as RawScript;
   return toResult(raw, input.format);
 }
@@ -633,7 +638,8 @@ export async function generateScript(input: ScriptInput): Promise<ScriptResult> 
       48_000,
       input.firm,
       true,
-      Boolean(input.reference)
+      Boolean(input.reference),
+      input.addendum
     )) as RawStory;
     return toStoryResult(raw, input);
   }
@@ -649,7 +655,8 @@ export async function generateScript(input: ScriptInput): Promise<ScriptResult> 
     48_000,
     input.firm,
     false,
-    Boolean(input.reference)
+    Boolean(input.reference),
+    input.addendum
   )) as RawScript;
   return toResult(raw, input.format);
 }
@@ -689,7 +696,8 @@ export async function rewriteClip(args: {
       8_000,
       input.firm,
       true,
-      Boolean(input.reference)
+      Boolean(input.reference),
+      input.addendum
     )) as { clip: RawStoryClip; notes: string };
     const specs = frame?.scenes ?? [];
     const slots = input.story.scenes;
@@ -724,7 +732,8 @@ export async function rewriteClip(args: {
     8_000,
     input.firm,
     false,
-    Boolean(input.reference)
+    Boolean(input.reference),
+    input.addendum
   )) as { clip: RawClip; notes: string };
   return { clip: toClipFields(raw.clip), notes: raw.notes?.trim() ?? "" };
 }

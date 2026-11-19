@@ -9,6 +9,13 @@ import type { TranscriptWord } from "@/lib/creative-studio/tables";
 
 /** Longest video she can react to (Claude reads all of it; the light copy has to fit one 300 s request). */
 export const SOURCE_MAX_SECONDS = 180;
+/**
+ * Longest video to RECREATE (Nov 19 2026, Marcel recreating his VSLs): it is
+ * only read — stills + words, no light copy — so it can run much longer.
+ */
+export const RECREATE_MAX_SECONDS = 15 * 60;
+/** Most videos one recreate can take at once: each becomes its own new video (a batch). */
+export const RECREATE_BATCH_MAX = 5;
 /** Biggest upload (it's downloaded into a function's ~500 MB of scratch space). */
 export const SOURCE_MAX_BYTES = 400 * 1024 * 1024;
 /** What it can be: the same files the final cut takes. */
@@ -41,10 +48,13 @@ export function claimLive(at: string | null | undefined, now = Date.now()): bool
   return Boolean(at && now - new Date(at).getTime() < CLAIM_STALE_S * 1000);
 }
 
-/** The video is too long to react to. */
-export function tooLongMessage(durationS: number): string {
-  return `This video is ${clock(durationS)} long. Trim it to ${clock(SOURCE_MAX_SECONDS)} or less and upload it again.`;
+/** The video is too long (to react to, show on screen or — with `max` — recreate). */
+export function tooLongMessage(durationS: number, max: number = SOURCE_MAX_SECONDS): string {
+  return `This video is ${clock(durationS)} long. Trim it to ${clock(max)} or less and upload it again.`;
 }
+
+/** The longest a video can be for what it's used for. */
+export const maxSecondsFor = (mode: "onscreen" | "recreate" | "react"): number => (mode === "recreate" ? RECREATE_MAX_SECONDS : SOURCE_MAX_SECONDS);
 
 /** A watch window from untrusted input ({ from, to } in seconds), to the tenth; null when it isn't one. */
 export function readWatch(v: unknown): { from: number; to: number } | null {

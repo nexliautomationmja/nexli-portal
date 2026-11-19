@@ -2,7 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { ProjectDetail } from "@/lib/creative-studio/service";
-import { SOURCE_MAX_BYTES, SOURCE_MAX_SECONDS, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
+import { SOURCE_MAX_BYTES, SOURCE_MAX_SECONDS, maxSecondsFor, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
 
 /**
  * Frame prep + direct-to-storage upload.
@@ -218,7 +218,8 @@ export async function uploadMedia(projectId: string, files: File[], mode: "onscr
       throw new Error(`${file.name} is ${Math.round(file.size / 1024 / 1024)} MB. Upload one under ${SOURCE_MAX_BYTES / 1024 / 1024} MB (export it at 1080p).`);
     }
     const meta = await readVideo(file);
-    if (meta && meta.durationS > SOURCE_MAX_SECONDS + 0.5) throw new Error(`${file.name}: ${tooLongMessage(meta.durationS)}`);
+    const max = maxSecondsFor(mode);
+    if (meta && meta.durationS > max + 0.5) throw new Error(`${file.name}: ${tooLongMessage(meta.durationS, max)}`);
     const sign = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sign", mime, size: file.size }) });
     const target = await sign.json().catch(() => null);
     if (!sign.ok || !target?.token) throw new Error(target?.error || "Couldn't start the upload");

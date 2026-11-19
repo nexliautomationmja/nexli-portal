@@ -188,7 +188,53 @@ export function StudioHome({ studio }: { studio: StudioView }) {
     }
   }
 
+  /**
+   * Several videos to recreate (Nov 19 2026, up to 5): a batch with one new
+   * video per reference. Each reference is uploaded to its video, then the
+   * batch page reads them, has Manus make each look, writes and scores every
+   * script for the current offer.
+   */
+  async function recreateMany(files: File[], text: string, fmt: CreativeFormat): Promise<boolean> {
+    if (plan) dropPlan();
+    setCreating(`Creating ${files.length} videos…`);
+    setError(null);
+    try {
+      const name = (f: File) => f.name.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim().slice(0, 80) || "video";
+      const r = await fetch(`/api/dashboard/creative-studio/batches${qs}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format: fmt,
+          brief: text || `Recreate ${files.length} ${fmt === "vsl_16x9" ? "VSLs" : "videos"} for the current offer`,
+          recreate: true,
+          items: files.map((f) => ({ title: `Recreate · ${name(f)}`, direction: text })),
+        }),
+      });
+      const b = await r.json().catch(() => null);
+      if (!r.ok || !b?.id) throw new Error(b?.error || "Couldn't start recreating the videos");
+      const made = (b.projects as { id: string; index: number }[]).sort((x, y) => x.index - y.index);
+      const failed: string[] = [];
+      for (let i = 0; i < made.length; i++) {
+        setCreating(`Uploading video ${i + 1} of ${made.length}…`);
+        try {
+          await uploadMedia(made[i].id, [files[made[i].index]], "recreate");
+        } catch (err) {
+          failed.push(`${files[made[i].index]?.name ?? `Video ${i + 1}`}: ${err instanceof Error ? err.message : "the upload failed"}`);
+        }
+      }
+      // A failed upload can be redone on that video's own page; the batch page shows which.
+      if (failed.length) alert(`These didn't upload. Open them from the batch page to try again:\n\n${failed.join("\n")}`);
+      router.push(`/dashboard/creative-studio/batch/${b.id}`);
+      return true;
+    } catch (err) {
+      setCreating(null);
+      setError(err instanceof Error ? err.message : "Couldn't start recreating the videos");
+      return false;
+    }
+  }
+
   async function start({ text, images, video, videos, videoMode, format: fmt, count: n, recreate }: ComposerSubmit): Promise<boolean> {
+    if (videos.length > 1 && videoMode === "recreate") return recreateMany(videos, text, fmt);
     if (video && n > 1) {
       setError("Videos with an uploaded video are made one at a time. Set it to 1 video, or take the video off to plan a batch.");
       return false;
@@ -306,6 +352,12 @@ export function StudioHome({ studio }: { studio: StudioView }) {
             videoModes={count === 1}
             onSubmit={start}
           />
+          {creating && !plan && (
+            <p className="mt-3 flex items-center justify-center gap-2 text-sm text-cyan-200">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" aria-hidden="true" />
+              {creating}
+            </p>
+          )}
           {error && (
             <div className="mt-3">
               <ErrorStrip onClose={() => setError(null)}>{error}</ErrorStrip>

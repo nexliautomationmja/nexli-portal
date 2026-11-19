@@ -17,13 +17,23 @@ type Tone = "neutral" | "blue" | "red" | "amber" | "green";
 
 /** Where a video is, in words, and whether it's waiting on Marcel. */
 function stageOf(v: BatchVideo): { label: string; tone: Tone; step: number; needsYou?: string } {
+  // A video to recreate: its reference is read first, then Manus makes its look from it.
+  if (v.recreate && !v.hasFrame) {
+    if (!v.recreate.assetId) return { label: "No video uploaded", tone: "red", step: 0, needsYou: "Upload it" };
+    if (v.recreate.error) return { label: "Couldn't read the video", tone: "red", step: 0 };
+    if (!v.recreate.analyzed) return { label: "Reading the video", tone: "blue", step: 0 };
+  }
   if (!v.hasFrame) {
     if (v.manus?.waiting) return { label: "Manus has a question", tone: "amber", step: 0, needsYou: "Answer Manus" };
     if (v.manus?.status === "failed") return { label: "Frame failed", tone: "red", step: 0 };
     return { label: "Making the frame", tone: "blue", step: 0 };
   }
   if (v.clips.total === 0) return { label: "Writing the script", tone: "blue", step: 1 };
-  if (v.status === "scripted") return { label: "Script ready", tone: "amber", step: 2, needsYou: "Review" };
+  // Recreated in Nexli's studio: scored (and the weak points rewritten once) before review.
+  if (v.status === "scripted" && v.score && (v.score.running || v.score.next)) {
+    return { label: (v.score.running ?? v.score.next) === "improve" ? "Improving weak points" : "Scoring the script", tone: "blue", step: 1 };
+  }
+  if (v.status === "scripted") return { label: v.score?.value != null ? `Script ready · ${v.score.value}/100` : "Script ready", tone: "amber", step: 2, needsYou: "Review" };
   if (v.status === "approved" || v.status === "rendering") {
     return { label: `Kling ${v.clips.done}/${v.clips.total}${v.clips.failed ? ` · ${v.clips.failed} failed` : ""}`, tone: v.clips.failed ? "red" : "blue", step: 3 };
   }
@@ -44,7 +54,7 @@ function stageOf(v: BatchVideo): { label: string; tone: Tone; step: number; need
 const STEPS = ["Frame", "Script", "Review", "Kling", "Cut", "Edit", "Render", "Done"];
 
 /** How many of each automatic step run at once across the batch. */
-const LIMIT = { manus: 3, script: 2, cut: 1, edit: 2, copy: 2 };
+const LIMIT = { manus: 3, script: 2, cut: 1, edit: 2, copy: 2, read: 2, score: 2 };
 
 type Kind = keyof typeof LIMIT | "poll" | "pick";
 
@@ -136,17 +146,42 @@ export function BatchBoard({ batchId }: { batchId: string }) {
       for (const v of s.videos) {
         if (inflight.current.has(v.id) || errorsRef.current[v.id]) continue;
         const p = v.id;
+        // A video to recreate: read its reference first (its stills and words), one request per video.
+        if (v.recreate && !v.hasFrame && !v.recreate.analyzed) {
+          if (v.recreate.assetId && !v.recreate.error && !v.recreate.reading && count("read") < LIMIT.read) {
+            const assetId = v.recreate.assetId;
+            run(p, "read", "Reading the video…", () => send(api(`${p}/source/prepare`), "POST", { step: "analyze", assetId }));
+          }
+          continue;
+        }
         if (!v.hasFrame) {
           if (v.firstOptionId) run(p, "pick", "Using Manus's frame…", () => send(api(`${p}/frame/pick`), "POST", { assetId: v.firstOptionId }));
           else if (v.manus && (v.manus.status === "running" || v.manus.status === "waiting")) {
             if (due(p, 8000)) run(p, "poll", "Manus is working…", () => send(api(`${p}/frame/poll`), "POST"));
-          } else if (!v.manus && v.shot && manusRunning + count("manus") < LIMIT.manus) {
-            run(p, "manus", "Starting Manus…", () => send(api(`${p}/frame/generate`), "POST", { shot: v.shot, count: 1 }));
+          } else if (!v.manus && (v.shot || v.recreate) && manusRunning + count("manus") < LIMIT.manus) {
+            // A video to recreate: Manus makes the reference's look with the presenter (from its first still).
+            run(p, "manus", "Starting Manus…", () => send(api(`${p}/frame/generate`), "POST", v.recreate ? { referenceStill: 0 } : { shot: v.shot, count: 1 }));
           }
           continue;
         }
         if (v.clips.total === 0) {
           if (count("script") < LIMIT.script) run(p, "script", "Claude is writing the script…", () => send(api(`${p}/script`), "POST", {}));
+          continue;
+        }
+        // Recreated in Nexli's studio: score the script, then rewrite its weak points once (it's scored again after).
+        if (v.status === "scripted" && v.score?.next && !v.score.running) {
+          const action = v.score.next;
+          if (count("score") < LIMIT.score) {
+            run(p, "score", action === "improve" ? "Rewriting the weak points…" : "Scoring the script…", async () => {
+              const r = await send(api(`${p}/script/score`), "POST", { action });
+              // Already running elsewhere (the video's own page): not an error.
+              return r.ok || /already|nothing to improve/i.test(r.error) ? { ok: true } : r;
+            });
+          }
+          continue;
+        }
+        if (v.status === "scripted" && v.score?.running) {
+          if (due(p, 10000)) void refresh();
           continue;
         }
         if ((v.status === "approved" || v.status === "rendering") && due(p, 20000)) {
@@ -179,7 +214,8 @@ export function BatchBoard({ batchId }: { batchId: string }) {
   const vids = summary.videos;
   const isAd = summary.format === "ad_9x16";
   const noun = isAd ? "ads" : "VSLs";
-  const scripted = vids.filter((v) => v.status === "scripted" && v.clips.total > 0);
+  // A script still being scored or improved isn't ready to send to Kling.
+  const scripted = vids.filter((v) => v.status === "scripted" && v.clips.total > 0 && !(v.score && (v.score.running || v.score.next)));
   const cutsReady = vids.filter((v) => !v.finalCut && v.cut?.status === "ready");
   const toEdit = vids.filter((v) => v.finalCut && !v.edit);
   const toRender = vids.filter((v) => v.edit && (v.edit.status === "draft" || v.edit.status === "failed"));
@@ -344,7 +380,9 @@ export function BatchBoard({ batchId }: { batchId: string }) {
                     ) : (
                       <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-[11px] text-neutral-500">
                         <span className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" />
-                        <span className="hidden sm:inline">{v.shot ? `Manus: ${v.shot}` : "Waiting for a frame"}</span>
+                        <span className="hidden sm:inline">
+                          {v.recreate ? `Recreating ${v.recreate.filename}` : v.shot ? `Manus: ${v.shot}` : "Waiting for a frame"}
+                        </span>
                       </div>
                     )}
                     <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-[11px] font-black text-white">{v.index + 1}</span>
@@ -382,8 +420,13 @@ export function BatchBoard({ batchId }: { batchId: string }) {
                           type="button"
                           onClick={() => {
                             clearError(v.id);
-                            if (!v.hasFrame && v.manus?.status === "failed" && v.shot) {
-                              run(v.id, "manus", "Starting Manus again…", () => send(api(`${v.id}/frame/generate`), "POST", { shot: v.shot, count: 1 }));
+                            if (v.recreate?.error && v.recreate.assetId && !v.hasFrame) {
+                              const assetId = v.recreate.assetId;
+                              run(v.id, "read", "Reading the video again…", () => send(api(`${v.id}/source/prepare`), "POST", { step: "analyze", assetId }));
+                            } else if (!v.hasFrame && v.manus?.status === "failed" && (v.shot || v.recreate)) {
+                              run(v.id, "manus", "Starting Manus again…", () =>
+                                send(api(`${v.id}/frame/generate`), "POST", v.recreate ? { referenceStill: 0 } : { shot: v.shot, count: 1 })
+                              );
                             } else if (v.cut?.status === "failed") {
                               run(v.id, "cut", "Auto-cutting again…", () => runCut(v.id));
                             } else if (v.edit?.status === "failed") {

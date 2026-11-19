@@ -20,6 +20,9 @@ import { framesToRedescribe, takeOutdated } from "@/lib/creative-studio/remake-s
 import { normalizeCopy } from "@/lib/creative-studio/ad-copy";
 import { firmBrief, studioById, studioRef } from "@/lib/creative-studio/studios";
 import type { ReferenceVideo, ScriptInput } from "@/lib/creative-studio/script";
+import { recreateEvidence, recreateFocus } from "@/lib/creative-studio/recreate-focus";
+import { scoreEligible, scriptKey } from "@/lib/creative-studio/script-score-shared";
+export { scoreEligible };
 
 type Project = typeof creativeProjects.$inferSelect;
 type Clip = typeof creativeClips.$inferSelect;
@@ -108,6 +111,8 @@ export async function scriptInputFor(
   const story = storyVideo(project, scenes, mode);
   const studio = await studioById(project.ownerId, project.studioId);
   const reference = await referenceVideoOf(project);
+  // Recreating in Nexli's own studio: written for the current offer and to the grader's points, with his hook results.
+  const addendum = reference && studio.id === null ? recreateFocus(await recreateEvidence(project.ownerId)) : "";
   const base = {
     title: project.title,
     format: project.format,
@@ -115,6 +120,7 @@ export async function scriptInputFor(
     brief: project.brief,
     firm: firmBrief(studio),
     ...(reference ? { reference } : {}),
+    ...(addendum ? { addendum } : {}),
   };
   if (!story) {
     const pick = classicFrames === "all" ? frames : frames.slice(0, 1);
@@ -270,6 +276,12 @@ export async function projectDetail(project: Project) {
       studio: studioRef(studio),
       /** The chosen presenter (null = the studio's default: Daniela in Nexli's studio). */
       presenter: project.presenter ?? null,
+      /** Scripts recreated in Nexli's studio are scored out of 100 on the grader's points (script-score-shared.ts). */
+      scoreEligible: scoreEligible(project),
+      /** The script's score; `stale` once the lines changed since it was scored. */
+      scriptScore: project.scriptScore
+        ? { ...project.scriptScore, stale: project.scriptScore.key !== scriptKey(clips.map((c) => ({ section: c.section, line: c.line }))) }
+        : null,
       /** Made from a hook test: the original video, the new hook, and whether the original's edit can be put on it. */
       hookOf: project.hookOf
         ? {

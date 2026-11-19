@@ -9,7 +9,7 @@ import { extractStills, makeSourceProxy, probeSpecs, tempDir } from "@/lib/creat
 import { transcribeUrl } from "@/lib/creative-studio/transcribe";
 import { writeStorage } from "@/lib/creative-studio/frames";
 import { removePaths, signPaths } from "@/lib/creative-studio/storage";
-import { CLAIM_STALE_S, SOURCE_MAX_SECONDS, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
+import { CLAIM_STALE_S, RECREATE_MAX_SECONDS, SOURCE_MAX_SECONDS, tooLongMessage } from "@/lib/creative-studio/reaction-shared";
 
 /**
  * Reaction videos (Nov 2026): the video the presenter reacts to. Uploaded
@@ -145,9 +145,10 @@ async function downloadTo(url: string, file: string): Promise<void> {
 
 type Specs = Awaited<ReturnType<typeof probeSpecs>> & { durationS: number };
 
-/** Stills (6–16, long edge 768 px) and the words, for Claude. */
+/** Stills (6–16, long edge 768 px; up to 24 for a long video to recreate) and the words, for Claude. */
 async function analyze(source: Asset, file: string, specs: Specs, url: string, dir: string) {
-  const count = Math.min(16, Math.max(6, Math.ceil(specs.durationS / 6)));
+  const most = sourceMeta(source).role === "recreate" ? 24 : 16;
+  const count = Math.min(most, Math.max(6, Math.ceil(specs.durationS / 6)));
   const [heard, grabbed] = await Promise.all([
     specs.hasAudio ? transcribeUrl(url, () => fs.readFile(file), { language: null }) : Promise.resolve(null),
     extractStills(file, dir, count, specs.durationS),
@@ -208,7 +209,9 @@ export async function runSourceStep(source: Asset, step: SourceStep, deadline: n
     const probed = await probeSpecs(file);
     if (!probed.durationS || probed.durationS <= 0) throw new SourceError(UNREADABLE);
     if (probed.durationS < 2) throw new SourceError(`This video is too short${source.kind === "source_video" ? " to react to" : ""}. Upload one that's at least a few seconds long.`);
-    if (probed.durationS > SOURCE_MAX_SECONDS + 0.5) throw new SourceError(tooLongMessage(probed.durationS));
+    // A video to recreate is only read (no light copy), so it may run longer.
+    const max = source.kind === "media_video" && sourceMeta(source).role === "recreate" ? RECREATE_MAX_SECONDS : SOURCE_MAX_SECONDS;
+    if (probed.durationS > max + 0.5) throw new SourceError(tooLongMessage(probed.durationS, max));
     const specs: Specs = { ...probed, durationS: probed.durationS };
     const done = step === "analyze" ? await analyze(source, file, specs, url, dir) : await proxy(source, file, specs, dir, deadline);
     const kept = await settleStep(source.id, step, done.patch as Record<string, unknown>, done.columns);

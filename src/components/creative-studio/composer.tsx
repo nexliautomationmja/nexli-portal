@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CreativeFormat } from "@/lib/creative-studio/tables";
+import { RECREATE_BATCH_MAX } from "@/lib/creative-studio/reaction-shared";
 import { SP, SvgIcon } from "@/components/creative-studio/canvas";
 
 export interface ComposerSubmit {
@@ -186,8 +187,9 @@ export function Composer({
   const recreating = recreatable && recreateOn;
   const videoIds = files.filter((a) => a.file.type.startsWith("video/")).map((a) => a.id);
   const videoIndex = new Map(videoIds.map((id, i) => [id, i]));
-  // Several videos can only be shown on screen.
-  const videoMode: VideoMode = videoIds.length > 1 ? "onscreen" : videoModeOn;
+  // Several videos: shown on screen, or recreated (up to 5, each its own new video). Never all reacted to.
+  const recreateMany = videoIds.length > 1 && videoIds.length <= RECREATE_BATCH_MAX;
+  const videoMode: VideoMode = videoIds.length > 1 ? (videoModeOn === "recreate" && recreateMany ? "recreate" : "onscreen") : videoModeOn;
   const askVideo = videoModes && videoIds.length > 0;
 
   return (
@@ -232,7 +234,9 @@ export function Composer({
                     ? videoMode === "onscreen"
                       ? `Clip ${videoIndex.get(a.id)! + 1}`
                       : videoMode === "recreate"
-                        ? "To recreate"
+                        ? videoIds.length > 1
+                          ? `Recreate ${videoIndex.get(a.id)! + 1}`
+                          : "To recreate"
                         : videoLabel
                     : videoLabel
                   : recreating ? "To recreate" : imageCount > 1 && count === 1 ? `Scene ${imageIndex.get(a.id)! + 1}` : "Frame"}
@@ -257,7 +261,7 @@ export function Composer({
                     ["recreate", "Recreate it"],
                   ] as const
                 ).map(([value, label]) => {
-                  const blocked = videoIds.length > 1 && value !== "onscreen";
+                  const blocked = videoIds.length > 1 && (value === "react" || (value === "recreate" && !recreateMany));
                   return (
                     <button
                       key={value}
@@ -268,7 +272,7 @@ export function Composer({
                         area.current?.focus();
                       }}
                       aria-pressed={videoMode === value}
-                      title={blocked ? "Several videos can only be shown on screen" : undefined}
+                      title={blocked ? (value === "react" ? "React to one video at a time" : `Recreate up to ${RECREATE_BATCH_MAX} videos at once`) : undefined}
                       className={`min-h-8 rounded-full px-3 py-1 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
                         videoMode === value
                           ? value === "react"
@@ -288,7 +292,9 @@ export function Composer({
                 {videoMode === "onscreen"
                   ? `Shown on screen while the presenter talks. Add up to ${ONSCREEN_MAX} clips and say how each should appear (full screen, split, or you in the corner).`
                   : videoMode === "recreate"
-                    ? "Claude copies its structure, hook and pacing for your offer, and Manus recreates its look with your presenter."
+                    ? videoIds.length > 1
+                      ? `Each video becomes its own new one: Claude copies its structure, hook and pacing for your offer, Manus recreates its look with your presenter, and the scripts are scored before Kling. Up to ${RECREATE_BATCH_MAX}.`
+                      : "Claude copies its structure, hook and pacing for your offer, and Manus recreates its look with your presenter."
                     : "The presenter watches it on a phone and reacts, with it in the corner."}
               </span>
             </div>
