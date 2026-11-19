@@ -18,8 +18,8 @@ import { hasBookedTag } from "@/lib/ghl-attribution";
  * sync: any GHL contact with a non-cancelled booked calendar event lands on
  * the "open" side (once — a lead marked won/lost, or removed, is never
  * re-added; removal soft-deletes so the tombstone blocks re-import). Each
- * lead's value defaults to the expected client LTV
- * (PIPELINE.DEFAULT_DEAL_VALUE_CENTS) and is editable per lead.
+ * lead's value defaults to one Initial Term of Agency Fees
+ * (PIPELINE.DEFAULT_DEAL_VALUE_CENTS, $60,000) and is editable per lead.
  *
  * The sync is time-gated (15 min per owner, tracked in analyticsSnapshots)
  * so dashboard loads and rapid board actions don't hammer the GHL API.

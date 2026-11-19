@@ -325,19 +325,24 @@ export const ADVISORY_ENGAGEMENT = {
 export const LAUNCH_TARGET_DAYS = 21;
 
 /**
- * Pipeline economics: expected lifetime value of one DRS client, used as
- * the default deal value for each open pipeline lead. Industry benchmarks
- * (Focus Digital 2026 churn report; Agiled/Promethean): retainer agencies
- * average ~18–20% annual churn (top shops 8–10%), typical client lifespan
- * 2–5 years — but ~25% of agencies see tenures under a year, and a new
- * agency should assume the conservative end. Marcel's own estimate is 6–8
- * months; on the Nov 19 2026 pricing that is 8 × $10,000 = $80,000 of
- * agency fees per client (performance pay is not counted — it can't be
- * known ahead; the ad budget never passes through Nexli). Editable per lead.
+ * Pipeline economics: the default deal value of each open pipeline lead.
+ * Nov 19 2026 (Marcel: "the pipeline value should be 60k for each lead …
+ * tied to our existing pricing"): one Initial Term of Agency Fees —
+ * AGENCY.TERM_MONTHS × AGENCY.FEE_MONTHLY_CENTS = 6 × $10,000 = $60,000,
+ * the least a signed client pays. It follows the pricing constants, so a
+ * price or term change moves it too. Performance pay isn't counted (it can't
+ * be known ahead) and the ad budget never passes through Nexli. Editable per lead.
  */
 export const PIPELINE = {
-  EXPECTED_LIFETIME_MONTHS: 8,
-  DEFAULT_DEAL_VALUE_CENTS: 8 * AGENCY.FEE_MONTHLY_CENTS, // $80,000
+  /** How many months of the Agency Fee the default counts: the Initial Term. */
+  MONTHS: AGENCY.TERM_MONTHS,
+  DEFAULT_DEAL_VALUE_CENTS: AGENCY.TERM_MONTHS * AGENCY.FEE_MONTHLY_CENTS, // $60,000
+  /**
+   * The defaults earlier pricing gave new leads ($39,976, $40,000, $71,976,
+   * $79,976, $80,000). An open lead still holding one of them was never
+   * valued by hand, so it moves to today's default (lib/pipeline-table.ts).
+   */
+  PREVIOUS_DEFAULTS_CENTS: [3_997_600, 4_000_000, 7_197_600, 7_997_600, 8_000_000],
 } as const;
 
 /**

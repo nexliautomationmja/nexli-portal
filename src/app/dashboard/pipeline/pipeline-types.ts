@@ -67,8 +67,8 @@ export const contactName = (c: ContactResult) => [c.firstName, c.lastName].filte
 export const shortDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
 
-/** "8 × $10,000/mo = $80,000, before performance pay" — what an open lead counts for until it's edited. */
-export const DEFAULT_VALUE_TEXT = `${PIPELINE.EXPECTED_LIFETIME_MONTHS} × ${money(AGENCY.FEE_MONTHLY_CENTS)}/mo = ${money(
+/** "6 × $10,000/mo (the six-month term) = $60,000, before performance pay" — what an open lead counts for until it's edited. */
+export const DEFAULT_VALUE_TEXT = `${PIPELINE.MONTHS} × ${money(AGENCY.FEE_MONTHLY_CENTS)}/mo (the ${PIPELINE.MONTHS}-month term) = ${money(
   PIPELINE.DEFAULT_DEAL_VALUE_CENTS
 )}, before performance pay`;
 

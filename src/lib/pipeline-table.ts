@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { sql } from "drizzle-orm";
+import { PIPELINE } from "@/lib/drs-pricing";
 
 /**
  * Runtime bootstrap for the pipeline_leads table.
@@ -51,10 +52,40 @@ export function ensurePipelineTable(): Promise<void> {
       await db.execute(
         sql`CREATE UNIQUE INDEX IF NOT EXISTS "pipeline_leads_owner_ghl_idx" ON "pipeline_leads" ("owner_id", "ghl_contact_id") WHERE "ghl_contact_id" IS NOT NULL`
       );
+      await revalueDefaultLeads();
     })().catch((err) => {
       ensured = null;
       throw err;
     });
   }
   return ensured;
+}
+
+/**
+ * Nov 19 2026: the default lead value became one Initial Term of Agency Fees
+ * ($60,000). Open leads still holding a default an earlier pricing gave them
+ * — never valued by hand — move to it. Only rows last touched before this
+ * change: a value set by hand afterwards, even one equal to an old default,
+ * is left alone. Won and lost leads keep the value they closed at.
+ * Idempotent (a moved lead no longer holds an old default); never throws.
+ */
+const REVALUED_BEFORE = "2026-11-19T20:00:00Z";
+
+async function revalueDefaultLeads(): Promise<void> {
+  try {
+    const olds = sql.join(
+      PIPELINE.PREVIOUS_DEFAULTS_CENTS.map((v) => sql`${v}`),
+      sql`, `
+    );
+    await db.execute(sql`
+      UPDATE "pipeline_leads"
+      SET "value_cents" = ${PIPELINE.DEFAULT_DEAL_VALUE_CENTS}
+      WHERE "stage" = 'open'
+        AND "deleted_at" IS NULL
+        AND "value_cents" IN (${olds})
+        AND "updated_at" < ${REVALUED_BEFORE}::timestamp
+    `);
+  } catch (err) {
+    console.error("[pipeline] revaluing default leads failed (continuing):", err);
+  }
 }
