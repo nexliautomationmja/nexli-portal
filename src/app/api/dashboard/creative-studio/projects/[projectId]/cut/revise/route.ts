@@ -42,6 +42,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         number: i + 1,
         section: c.section,
         line: c.line,
+        own: Boolean(c.upload),
         transcript: c.transcript && c.transcript.version === c.version ? c.transcript : null,
         overrides: current.get(i) ?? [],
       })),
@@ -55,7 +56,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const next = applyRevision(base.settings, current, rev, clips.length, wordCounts);
   const rerender = rev.rerender
     .map((r) => ({ clip: clips[r.clip - 1], note: r.note }))
-    .filter((r) => r.clip)
+    // Your own video is never sent to Kling.
+    .filter((r) => r.clip && !r.clip.upload)
     .map((r) => ({ clipId: r.clip!.id, number: r.clip!.idx + 1, note: r.note }));
   const changed =
     rev.edits.length > 0 || rerender.length > 0 || next.settings.speed !== base.settings.speed || next.settings.gap !== base.settings.gap;

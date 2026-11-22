@@ -63,6 +63,10 @@ export async function remakeClips(
   opts: { note?: string; line?: string; cues?: string } = {}
 ): Promise<{ report: SubmitReport; notes: string }> {
   if (chosen.length === 0) throw new RemakeError("Pick the clips to re-make.");
+  const own = chosen.find((c) => c.upload);
+  if (own) {
+    throw new RemakeError(`Clip ${own.idx + 1} is your own video, so it can't be made on Kling. Trim it in the auto-cut, or remove it and add another.`);
+  }
   if (chosen.some((c) => c.status === "rendering" || c.status === "queued")) {
     throw new RemakeError(chosen.length === 1 ? "That clip is already rendering." : "Some of those clips are still rendering. Wait for them first.");
   }

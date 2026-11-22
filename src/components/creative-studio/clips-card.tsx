@@ -8,6 +8,7 @@ import { NUM_FONT } from "@/components/engagement-launch-pad/styles";
 import { api, send, videoFileName } from "@/components/creative-studio/client";
 import { SaveVideoLink } from "@/components/creative-studio/save-video";
 import { AssistantCard, Chip, SP, SvgIcon } from "@/components/creative-studio/canvas";
+import { AddClipButton, AddClipVideo } from "@/components/creative-studio/add-clip-video";
 
 type Clip = ProjectDetail["clips"][number];
 
@@ -16,6 +17,7 @@ const CLIP_PILL: Record<string, { label: string; tone: "neutral" | "blue" | "gre
   queued: { label: "Queued", tone: "blue" },
   rendering: { label: "Rendering", tone: "blue" },
   done: { label: "Done", tone: "green" },
+  preparing: { label: "Getting ready", tone: "blue" },
   failed: { label: "Failed", tone: "red" },
   blocked: { label: "Blocked", tone: "red" },
 };
@@ -43,6 +45,8 @@ export function ClipsCard({
   // Re-making clips: the open picker (null = closed) and the step running.
   const [picker, setPicker] = useState<"any" | null>(null);
   const [remaking, setRemaking] = useState<string | null>(null);
+  // "Add your own video": its panel, open below the header.
+  const [adding, setAdding] = useState(false);
   const polling = useRef(false);
   // Confetti once, when the last clip lands while you're on the page.
   const [doneOnLoad] = useState(() => p.status === "clips_ready");
@@ -69,7 +73,9 @@ export function ClipsCard({
   const done = detail.clips.filter((c) => c.status === "done").length;
   const rendering = detail.clips.some((c) => c.status === "rendering");
   const unsent = detail.clips.filter((c) => c.status === "draft");
-  const allDone = p.status === "clips_ready" || (total > 0 && done === total);
+  // Your own video still getting ready (or failed) means not every clip is ready, whatever the video's status says.
+  const ownWaiting = detail.clips.some((c) => c.upload && c.status !== "done");
+  const allDone = (p.status === "clips_ready" && !ownWaiting) || (total > 0 && done === total);
 
   const burst = allDone && !doneOnLoad ? 1 : 0;
 
@@ -89,6 +95,32 @@ export function ClipsCard({
       clearInterval(t);
     };
   }, [rendering, p.id, onChange]);
+
+  // Your own video, just added: the server makes its take (one request each; another tab on it = check back).
+  const preparingKey = detail.clips
+    .filter((c) => c.upload && c.status === "preparing")
+    .map((c) => c.id)
+    .join(",");
+  const preparingNow = useRef(new Set<string>());
+  useEffect(() => {
+    for (const id of preparingKey ? preparingKey.split(",") : []) {
+      if (preparingNow.current.has(id)) continue;
+      preparingNow.current.add(id);
+      void (async () => {
+        for (let tries = 0; tries < 60; tries++) {
+          const r = await send(api(`${p.id}/clips/${id}/prepare`), "POST");
+          if (!r.ok) {
+            onError(r.error);
+            break;
+          }
+          onChange(r.data);
+          if (!(r.data as unknown as { pending?: boolean }).pending) break;
+          await new Promise((res) => setTimeout(res, 8000));
+        }
+        preparingNow.current.delete(id);
+      })();
+    }
+  }, [preparingKey, p.id, onChange, onError]);
 
   async function sendRemaining() {
     const credits = unsent.reduce((s, c) => s + c.durationS * CREDITS_PER_SECOND, 0);
@@ -149,10 +181,11 @@ export function ClipsCard({
   }
 
   const outdated = detail.clips.filter((c) => c.outdated && !["rendering", "queued"].includes(c.status));
-  const remakeable = detail.clips.filter((c) => ["done", "failed", "blocked"].includes(c.status));
+  // Your own videos aren't made on Kling.
+  const remakeable = detail.clips.filter((c) => !c.upload && ["done", "failed", "blocked"].includes(c.status));
   const cutsExist = detail.cuts.length > 0;
   const aspect = p.format === "vsl_16x9" ? "16 / 9" : "9 / 16";
-  const numberClips = detail.clips.filter((c) => /\$|\d/.test(c.line)).map((c) => c.idx + 1);
+  const numberClips = detail.clips.filter((c) => !c.upload && /\$|\d/.test(c.line)).map((c) => c.idx + 1);
 
   return (
     <div className="space-y-4">
@@ -168,7 +201,7 @@ export function ClipsCard({
           <p className="text-lg font-bold text-white" style={SYNE}>
             Your clips are ready
           </p>
-          <p className="mt-1 text-sm text-neutral-300">All {total} clips are rendered and saved. Download them below, edit your cut, then upload it.</p>
+          <p className="mt-1 text-sm text-neutral-300">All {total} clips are ready and saved. Download them below, edit your cut, then upload it.</p>
         </ShimmerCard>
       )}
 
@@ -176,7 +209,7 @@ export function ClipsCard({
         id="stage-clips"
         accent="cyan"
         icon={SP.film}
-        title="Kling clips"
+        title={detail.clips.some((c) => c.upload) ? "Clips" : "Kling clips"}
         right={
           kling?.connected ? (
             <Chip tone="green">Kling connected{kling.credits !== null ? ` · ${kling.credits.toLocaleString("en-US")} credits` : ""}</Chip>
@@ -200,7 +233,9 @@ export function ClipsCard({
                 ? "Kling usually takes a few minutes per clip. This page checks every 20 seconds and saves each finished clip, so nothing expires."
                 : allDone
                   ? "Everything is saved to your storage."
-                  : unsent.length > 0
+                  : detail.clips.some((c) => c.upload && c.status === "preparing")
+                    ? "Getting your video ready. The whole video is auto-cut again with it once it is."
+                    : unsent.length > 0
                     ? `${unsent.length} clip${unsent.length === 1 ? " hasn't" : "s haven't"} been sent yet.`
                     : "Some clips need a fix — see below."}
             </p>
@@ -209,7 +244,7 @@ export function ClipsCard({
                 {sending ? "Sending to Kling…" : `Send ${unsent.length} to Kling`}
               </button>
             )}
-            {kling?.connected && remakeable.length > 0 && outdated.length === 0 && !picker && !remaking && (
+            {kling?.connected && remakeable.length > 0 && outdated.length === 0 && !picker && !remaking && !adding && (
               <button
                 type="button"
                 onClick={() => setPicker("any")}
@@ -218,9 +253,12 @@ export function ClipsCard({
                 <SvgIcon d={SP.undo} size={13} /> Re-make clips…
               </button>
             )}
+            {!adding && !picker && !remaking && <AddClipButton onClick={() => setAdding(true)} />}
             {report && <p className="text-xs text-neutral-300">{report}</p>}
           </div>
         </div>
+
+        {adding && <AddClipVideo detail={detail} onClose={() => setAdding(false)} onChange={onChange} onError={onError} />}
 
         {remaking ? (
           <div className="mt-4 flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-sm text-neutral-200">
@@ -294,6 +332,26 @@ function ClipTile({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const pill = CLIP_PILL[clip.status] ?? CLIP_PILL.draft;
+  const own = clip.upload;
+  const frameAspect = aspect === "16 / 9" ? 16 / 9 : 9 / 16;
+  const offShape = Boolean(own?.aspect && Math.abs(own.aspect - frameAspect) > 0.05);
+
+  async function removeOwn() {
+    if (!confirm(`Remove your video (clip ${clip.idx + 1})? The video is auto-cut again without it.`)) return;
+    setBusy(true);
+    const r = await send(api(`${projectId}/clips/${clip.id}`), "DELETE");
+    setBusy(false);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
+
+  async function prepareAgain() {
+    setBusy(true);
+    const r = await send(api(`${projectId}/clips/${clip.id}/prepare`), "POST");
+    setBusy(false);
+    if (r.ok) onChange(r.data);
+    else onError(r.error);
+  }
 
   async function redo() {
     if (!confirm(`Redo clip ${clip.idx + 1}? About ${clip.durationS * CREDITS_PER_SECOND} credits. The current take is kept.`)) return;
@@ -307,34 +365,58 @@ function ClipTile({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+    <div id={`clip-${clip.id}`} className={`overflow-hidden rounded-2xl border bg-white/[0.03] ${own ? "border-cyan-400/30" : "border-white/10"}`}>
       <div className="relative bg-black" style={{ aspectRatio: aspect }}>
         {clip.videoUrl ? (
           <video src={clip.videoUrl} controls playsInline preload="metadata" className="h-full w-full object-contain" />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center">
-            {clip.status === "rendering" || clip.status === "queued" ? (
+            {clip.status === "rendering" || clip.status === "queued" || clip.status === "preparing" || (own && busy) ? (
               <>
                 <span className="h-7 w-7 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" />
-                <span className="text-[11px] font-semibold text-neutral-400">Rendering…</span>
+                <span className="text-[11px] font-semibold text-neutral-400">{own ? "Getting your video ready…" : "Rendering…"}</span>
               </>
+            ) : own ? (
+              <span className="text-[11px] text-neutral-500">Not ready</span>
             ) : (
               <span className="text-[11px] text-neutral-500">{clip.durationS}s</span>
             )}
           </div>
         )}
         <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white" style={NUM_FONT}>
-          #{clip.idx + 1} · {clip.durationS}s{clip.version > 1 ? ` · v${clip.version}` : ""}
+          #{clip.idx + 1}
+          {own && clip.status !== "done" ? "" : ` · ${clip.durationS}s`}
+          {clip.version > 1 ? ` · v${clip.version}` : ""}
         </span>
         <span className="absolute left-2 top-9 flex flex-col items-start gap-1 sm:left-auto sm:right-2 sm:top-2 sm:items-end">
           <Chip tone={pill.tone}>{pill.label}</Chip>
+          {own && <Chip tone="blue">Your video</Chip>}
           {clip.outdated && <Chip tone="amber">Old frame</Chip>}
         </span>
       </div>
       <div className="space-y-2 p-3">
-        <p className="line-clamp-3 text-xs font-medium leading-relaxed text-white" title={clip.line || clip.action}>
-          {clip.kind === "silent" ? <span className="text-neutral-300">🎬 {clip.action}</span> : clip.line}
-        </p>
+        {own ? (
+          <div className="space-y-1">
+            <p className="truncate text-[11px] font-semibold text-cyan-200" title={own.filename}>
+              {own.filename}
+            </p>
+            {clip.status === "done" && (
+              <p className="line-clamp-3 text-xs font-medium leading-relaxed text-white" title={clip.line}>
+                {clip.line || <span className="text-neutral-400">No talking, so the cut keeps all of it.</span>}
+              </p>
+            )}
+            {offShape && <p className="text-[11px] text-neutral-400">A different shape from this video: it gets black bars to fit.</p>}
+            {own.hdr && (
+              <p className="text-[11px] text-amber-200/90">
+                Recorded in HDR: its colors may look flat next to the other clips. Export it as SDR (or turn off HDR Video in the iPhone&apos;s Camera settings) and add it again if they do.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="line-clamp-3 text-xs font-medium leading-relaxed text-white" title={clip.line || clip.action}>
+            {clip.kind === "silent" ? <span className="text-neutral-300">🎬 {clip.action}</span> : clip.line}
+          </p>
+        )}
         {clip.error && <p className="text-[11px] font-semibold text-rose-300">{clip.error}</p>}
         <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
           {clip.videoUrl && (
@@ -346,7 +428,17 @@ function ClipTile({
               <SvgIcon d={SP.download} size={12} /> Download
             </SaveVideoLink>
           )}
-          {canRedo && ["done", "failed", "blocked"].includes(clip.status) && (
+          {own && clip.status === "failed" && (
+            <button type="button" onClick={() => void prepareAgain()} disabled={busy} className="inline-flex min-h-9 items-center rounded-full bg-white/5 px-3 text-neutral-300 hover:text-white disabled:opacity-50">
+              Try again
+            </button>
+          )}
+          {own && clip.status !== "preparing" && (
+            <button type="button" onClick={() => void removeOwn()} disabled={busy} className="inline-flex min-h-9 items-center gap-1 rounded-full bg-white/5 px-3 text-neutral-300 hover:text-rose-200 disabled:opacity-50">
+              <SvgIcon d={SP.trash} size={12} /> Remove
+            </button>
+          )}
+          {!own && canRedo && ["done", "failed", "blocked"].includes(clip.status) && (
             <button type="button" onClick={() => setFixing((v) => !v)} className="inline-flex min-h-9 items-center rounded-full bg-white/5 px-3 text-neutral-300 hover:text-white">
               Fix this clip
             </button>

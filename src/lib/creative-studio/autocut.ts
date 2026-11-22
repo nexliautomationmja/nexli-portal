@@ -128,7 +128,9 @@ export async function probeDuration(file: string): Promise<number> {
 }
 
 /** Resolution, frame rate, duration and audio presence of a delivered file (ffmpeg header). */
-export async function probeSpecs(file: string): Promise<{ width: number | null; height: number | null; fps: number | null; durationS: number | null; hasAudio: boolean }> {
+export async function probeSpecs(
+  file: string
+): Promise<{ width: number | null; height: number | null; fps: number | null; durationS: number | null; hasAudio: boolean; hdr: boolean }> {
   const bin = await ffmpegBinary();
   const stderr: string = await new Promise((resolve) => {
     execFile(bin, ["-hide_banner", "-i", file], { timeout: 30_000 }, (_err, _o, se) => resolve(String(se)));
@@ -143,6 +145,8 @@ export async function probeSpecs(file: string): Promise<{ width: number | null; 
     fps: fps ? Number(fps[1]) : null,
     durationS: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : null,
     hasAudio: /Stream #.*Audio:/.test(stderr),
+    // HLG / PQ (an iPhone records HLG by default).
+    hdr: /arib-std-b67|smpte2084/.test(video),
   };
 }
 
@@ -212,6 +216,62 @@ export async function extractAt(file: string, outDir: string, times: number[], d
     }
   }
   return out;
+}
+
+/**
+ * The clean copy of a video the user adds as a clip (upload-clip.ts): upright
+ * (ffmpeg applies a phone's rotation), long edge at most 1920 px, H.264
+ * 4:2:0 and AAC stereo, always with a sound track (a silent one when the file
+ * has none), so the auto-cut treats it exactly like a Kling take. Loudness,
+ * frame size and frame rate are evened out later, by the cut.
+ */
+export async function makeClipCopy(input: string, output: string, opts: { maxSeconds: number; hasAudio: boolean; timeoutMs: number }) {
+  await run(
+    [
+      "-hide_banner",
+      "-y",
+      "-filter_threads",
+      "1",
+      "-threads",
+      "2",
+      "-i",
+      input,
+      ...(opts.hasAudio ? [] : ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]),
+      "-t",
+      String(opts.maxSeconds),
+      "-map",
+      "0:v:0",
+      "-map",
+      opts.hasAudio ? "0:a:0" : "1:a:0",
+      "-vf",
+      `${fitLongEdge(1920)},setsar=1,format=yuv420p`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "20",
+      "-maxrate",
+      "8M",
+      "-bufsize",
+      "16M",
+      "-threads",
+      "2",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+      "-ar",
+      "48000",
+      "-ac",
+      "2",
+      ...(opts.hasAudio ? [] : ["-shortest"]),
+      "-movflags",
+      "+faststart",
+      output,
+    ],
+    opts.timeoutMs
+  );
 }
 
 /**
@@ -404,13 +464,14 @@ Match the words the user quotes to the closest clip and word indexes (they parap
 export async function reviseCut(args: {
   note: string;
   settings: CutSettings;
-  clips: { number: number; section: string; line: string; transcript: ClipTranscript | null; overrides: CutOverride[] }[];
+  clips: { number: number; section: string; line: string; own?: boolean; transcript: ClipTranscript | null; overrides: CutOverride[] }[];
 }): Promise<CutRevision> {
   const listing = args.clips
     .map((c) => {
       const words = (c.transcript?.words ?? []).map((w, i) => `[${i}]${w.text}@${w.start.toFixed(2)}`).join(" ");
       const ov = c.overrides.length ? ` | current overrides: ${JSON.stringify(c.overrides)}` : "";
-      return `Clip ${c.number} (${c.section}) — script: "${c.line}"\n  words: ${words || "(no transcript)"}${ov}`;
+      const what = c.own ? `the user's own video, added to the Kling clips (never rerender it: timing edits only); heard: "${c.line}"` : `script: "${c.line}"`;
+      return `Clip ${c.number} (${c.section}) — ${what}\n  words: ${words || "(no transcript)"}${ov}`;
     })
     .join("\n");
   const client = new Anthropic({ timeout: 120_000, maxRetries: 1 });

@@ -538,9 +538,34 @@ export const creativeClips = pgTable("creative_clips", {
   error: text("error"),
   /** Word timings from speech-to-text of the rendered clip (for the auto-cut). */
   transcript: jsonb("transcript").$type<ClipTranscript | null>(),
+  /** The user's own video, added as a clip after the clips were made (null = a Kling clip). */
+  upload: jsonb("upload").$type<ClipUpload | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * A video the user added to a video's clips (Nov 22 2026, Marcel: "add a
+ * new clip … even once Kling has generated all the clips and everything has
+ * auto-cut … add this video into it and have you recut it"). It's never made
+ * on Kling: its take is a clean copy of the file (upload-clip.ts), and the
+ * auto-cut treats it like any other take.
+ */
+export interface ClipUpload {
+  filename: string;
+  /** The file as uploaded; the take (videoAssetId) is the clean copy made from it. */
+  originalPath: string;
+  mime: string;
+  addedAt: string;
+  /** A request is making the clean copy now (stale after 320 s). */
+  claimedAt?: string | null;
+  /** Read off the file once it's ready. */
+  hasAudio?: boolean;
+  /** Recorded in HDR (an iPhone's default): its colors can look flat next to the other clips. */
+  hdr?: boolean;
+  /** Width ÷ height as it plays (upright). */
+  aspect?: number | null;
+}
 
 export interface TranscriptWord {
   text: string;
@@ -1139,6 +1164,8 @@ export function ensureCreativeStudioTables(): Promise<void> {
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "hook_of" jsonb`);
       // Nov 19 2026 script score (recreated videos).
       await db.execute(sql`ALTER TABLE "creative_projects" ADD COLUMN IF NOT EXISTS "script_score" jsonb`);
+      // Nov 22 2026: your own video added as a clip.
+      await db.execute(sql`ALTER TABLE "creative_clips" ADD COLUMN IF NOT EXISTS "upload" jsonb`);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS "creative_hook_tests" (
           "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

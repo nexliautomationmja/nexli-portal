@@ -31,6 +31,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (!project) return notFound();
   const clip = await loadClip(project.id, clipId);
   if (!clip) return NextResponse.json({ error: "Clip not found" }, { status: 404 });
+  if (clip.upload) return NextResponse.json({ error: "That clip is your own video: trim it in the auto-cut, or remove it." }, { status: 409 });
 
   const body = (await req.json().catch(() => null)) as Partial<ClipFields> | null;
   const current = clipFieldsOf(clip);

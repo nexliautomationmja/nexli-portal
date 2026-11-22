@@ -425,6 +425,10 @@ export async function projectDetail(project: Project) {
       /** Its take was made from another frame than the one it uses now (re-make it from the new one). */
       outdated: takeOutdated(c),
       words: c.transcript && c.transcript.version === c.version ? c.transcript.words : null,
+      /** Your own video added as a clip (never made on Kling); null for a Kling clip. */
+      upload: c.upload
+        ? { filename: c.upload.filename, hasAudio: c.upload.hasAudio ?? null, hdr: Boolean(c.upload.hdr), aspect: c.upload.aspect ?? null }
+        : null,
     })),
   };
 }
@@ -550,6 +554,8 @@ export async function touchProject(project: Project): Promise<void> {
 export async function rebuildPrompts(project: Project): Promise<void> {
   const clips = await clipsOf(project.id);
   for (const c of clips) {
+    // Your own video has no Kling prompt, and its length is the file's.
+    if (c.upload) continue;
     const d = derivedClip(project, clipFieldsOf(c));
     await db
       .update(creativeClips)

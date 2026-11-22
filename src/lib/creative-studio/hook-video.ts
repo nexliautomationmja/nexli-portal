@@ -214,6 +214,7 @@ export function planHookVideo(o: {
       version: c.version,
       previous: [],
       transcript: c.transcript,
+      upload: c.upload ?? null,
     })),
   ];
   return { project, assets, clips: clipRows, copies: [...copies.entries()].map(([from, to]) => ({ from, to })) };

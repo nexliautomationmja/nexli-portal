@@ -42,11 +42,14 @@ export function CutCard({
   const started = useRef<string | null>(null);
   const video = useRef<HTMLVideoElement>(null);
 
-  // Start the first cut, or a new one when clips got new takes.
+  // Start the first cut, or a new one when clips got new takes — or a clip was added (your own video) or removed.
   const takesKey = clips.map((c) => `${c.id}:${c.version}`).join(",");
   useEffect(() => {
     if (!allDone) return;
-    const stale = latest && latest.status !== "cutting" && latest.plan.some((pl) => clips.find((c) => c.id === pl.clipId)?.version !== pl.version);
+    const stale =
+      latest &&
+      latest.status !== "cutting" &&
+      (latest.plan.some((pl) => clips.find((c) => c.id === pl.clipId)?.version !== pl.version) || clips.some((c) => !latest.plan.some((pl) => pl.clipId === c.id)));
     if ((latest && !stale) || started.current === takesKey) return;
     started.current = takesKey;
     void send(api(`${p.id}/cut/start`), "POST", latest ? { note: "New takes" } : {}).then((r) => {

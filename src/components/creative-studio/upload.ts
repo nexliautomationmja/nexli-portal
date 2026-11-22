@@ -237,6 +237,35 @@ export async function uploadMedia(projectId: string, files: File[], mode: "onscr
   return detail;
 }
 
+/**
+ * Add your own video as a clip after clip `afterIdx` (−1 = at the start),
+ * once the script is approved: checked in the browser first (type, size,
+ * length), then sign → direct upload → add. The clips card then has the
+ * server get it ready, and the cut card cuts the whole video again.
+ */
+export async function addClipVideo(projectId: string, file: File, afterIdx: number): Promise<ProjectDetail & { clipId?: string }> {
+  const mime = file.type === "video/mp4" || file.type === "video/quicktime" ? file.type : /\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : "";
+  if (!mime) throw new Error("Add an MP4 or MOV video.");
+  if (file.size > SOURCE_MAX_BYTES) {
+    throw new Error(`That file is ${Math.round(file.size / 1024 / 1024)} MB. Add one under ${SOURCE_MAX_BYTES / 1024 / 1024} MB (export it at 1080p).`);
+  }
+  const meta = await readVideo(file);
+  if (meta && meta.durationS > SOURCE_MAX_SECONDS + 0.5) throw new Error(tooLongMessage(meta.durationS));
+  const base = `/api/dashboard/creative-studio/projects/${projectId}/clips/upload`;
+  const sign = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sign", mime, size: file.size }) });
+  const target = await sign.json().catch(() => null);
+  if (!sign.ok || !target?.token) throw new Error(target?.error || "Couldn't start the upload");
+  await uploadToTarget(target, file, mime);
+  const add = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "add", path: target.path, mime, filename: file.name, afterIdx, durationS: meta?.durationS ?? null }),
+  });
+  const detail = await add.json().catch(() => null);
+  if (!add.ok || !detail?.project) throw new Error(detail?.error || "Couldn't add the video");
+  return detail as ProjectDetail & { clipId?: string };
+}
+
 /** Kling accepts PNG/JPG only — convert a WebP frame to PNG in the browser. */
 async function toPng(blob: Blob): Promise<{ blob: Blob; mime: string }> {
   const bitmap = await createImageBitmap(blob);
